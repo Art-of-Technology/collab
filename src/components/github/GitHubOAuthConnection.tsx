@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,43 +70,10 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   const connectedRepositories = useRef(new Set<number>());
   const [hasMore, setHasMore] = useState(false);
 
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    const error = url.searchParams.get('github_error');
-    if (error) toast.error(error);
-    if (error || url.searchParams.has('github_connected')) {
-      url.searchParams.delete('github_error');
-      url.searchParams.delete('github_connected');
-      url.searchParams.delete('github_user');
-      window.history.replaceState(window.history.state, '', url);
-    }
-    checkGitHubConnection();
-  }, []);
+  const markConnected = useCallback((repo: GitHubRepository) =>
+    connectedRepositories.current.has(repo.id) ? { ...repo, isConnected: true } : repo, []);
 
-  useEffect(() => {
-    if (!isConnected) return;
-    if (failedPageRollback.current?.page === currentPage && failedPageRollback.current.search === searchTerm) {
-      failedPageRollback.current = null;
-      return;
-    }
-    failedPageRollback.current = null;
-    const controller = new AbortController();
-    // Set before the debounce, so a search is not answered "no match" before the server was asked.
-    setLoading(true);
-    const load = () => fetchRepositories(currentPage, searchTerm, controller.signal);
-    // Debounced: a search makes the server read every repository the account can see.
-    const timer = searchTerm ? setTimeout(load, 300) : void load();
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [isConnected, currentPage, searchTerm]);
-
-  useEffect(() => {
-    filterRepositories();
-  }, [repositories, searchTerm]);
-
-  const checkGitHubConnection = async () => {
+  const checkGitHubConnection = useCallback(async () => {
     setCheckingConnection(true);
     setConnectionError('');
     try {
@@ -131,12 +98,9 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
     } finally {
       setCheckingConnection(false);
     }
-  };
+  }, [markConnected]);
 
-  const markConnected = (repo: GitHubRepository) =>
-    connectedRepositories.current.has(repo.id) ? { ...repo, isConnected: true } : repo;
-
-  const fetchRepositories = async (page: number, search: string, signal: AbortSignal) => {
+  const fetchRepositories = useCallback(async (page: number, search: string, signal: AbortSignal) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/github/oauth/repositories?${new URLSearchParams({ page: String(page), search })}`, { signal });
@@ -170,7 +134,43 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
     } finally {
       if (!signal.aborted) setLoading(false);
     }
-  };
+  }, [markConnected]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const error = url.searchParams.get('github_error');
+    if (error) toast.error(error);
+    if (error || url.searchParams.has('github_connected')) {
+      url.searchParams.delete('github_error');
+      url.searchParams.delete('github_connected');
+      url.searchParams.delete('github_user');
+      window.history.replaceState(window.history.state, '', url);
+    }
+    checkGitHubConnection();
+  }, [checkGitHubConnection]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    if (failedPageRollback.current?.page === currentPage && failedPageRollback.current.search === searchTerm) {
+      failedPageRollback.current = null;
+      return;
+    }
+    failedPageRollback.current = null;
+    const controller = new AbortController();
+    // Set before the debounce, so a search is not answered "no match" before the server was asked.
+    setLoading(true);
+    const load = () => fetchRepositories(currentPage, searchTerm, controller.signal);
+    // Debounced: a search makes the server read every repository the account can see.
+    const timer = searchTerm ? setTimeout(load, 300) : void load();
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isConnected, currentPage, searchTerm, fetchRepositories]);
+
+  useEffect(() => {
+    filterRepositories();
+  }, [repositories, searchTerm]);
 
   const filterRepositories = () => {
     if (!searchTerm) {
