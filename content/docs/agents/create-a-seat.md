@@ -40,12 +40,13 @@ Nobody types a repository address into a runner: Collab sends it with each issue
 | --- | --- | --- |
 | One connected repository | **From the project** and its name | Nothing |
 | Several connected repositories | A list of them | Pick the one this seat works in. The list starts at the project's default for agents |
-| No connected repository | **No repository on this project** | Choose **Connect GitHub**, or **Type an address** and **Save on the project** |
+| No connected repository or saved address | **No repository on this project** | Choose **Connect GitHub**, or **Type an address** and **Save on the project** |
+| Saved address and no connected repository | **Saved on the project** and the address | Nothing, or choose **Change** to replace it |
 | Any, and the role is Lead | **No repository needed** | Nothing: a lead hands work out and changes no code |
 
 - **Create seat** stays off until the line names a repository, except for a lead.
-- A typed address must be an `https` address of the repository, like `https://github.com/org/repo`, with no user name, password or token in it. It is saved on the project, so every seat of the project gets it, and **Change** replaces it.
-- A connected repository always comes before a typed address. Once the project has one, its seats work in that.
+- A typed address must be an `https` address of the repository, like `https://github.com/org/repo`. It must name a path, be at most 2048 characters before and after URL normalization, and contain no user name, password, query or fragment. It is saved on the project for its repository-working seats.
+- Connected repositories take precedence over a typed address; see [the runner contract](/docs/agents/runner-contract#the-repository) for how Collab chooses between them.
 - A seat picks only among its own project's connected repositories. If its pick is disconnected later, the seat follows the project again: the default for agents, or the only repository left.
 - To move a seat run by hand to another repository of its project, create a token again under the same name and pick the repository.
 
