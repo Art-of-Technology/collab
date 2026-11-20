@@ -86,7 +86,7 @@ Push your branch before you finish, and give `--pull-request` and `--head-commit
 
 ## When the issue was moved to you
 
-The issue may have been worked on another seat, in another person's space. Then the run context has `movedFrom`: the `seat` it came from, the `pullRequest` and `headCommit` its last run pushed, the `branch` where Collab knows it, and `first`, what to do before anything else.
+The issue may have been worked on another seat, in another person's space. Then the run context has `movedFrom`: the `seat` it came from, the `pullRequest` and `headCommit` its last run pushed, the `branch` where Collab knows it, and `first`, what to do before anything else. Follow `first`; the steps below apply when it says to merge.
 
 | Step | What you do |
 | --- | --- |
@@ -97,7 +97,7 @@ The issue may have been worked on another seat, in another person's space. Then 
 - Do step 2 even when your working copy already has the issue's branch. A runner that had the issue before starts from what it holds, not from what the other seat pushed since.
 - What the other seat did not push is not part of the work any more. Do not look for it.
 - `movedFrom` with no `pullRequest`: Collab cannot tell what was pushed. Find the issue's branch before you change anything.
-- The pull request is in another repository than the one your seat works in: `first` says so. Merge nothing, finish `blocked` and ask a person.
+- If the pull request cannot be safely matched to the repository your seat works in, `first` says so. Merge nothing, finish `blocked` and ask a person.
 
 ## File a request
 
@@ -169,7 +169,7 @@ When the epic comes back with `child_no_room`, a child you placed sits on a seat
 | 4 | Finish `blocked` with nothing named, as before. |
 
 - Move only what `noRoom` lists. A child with a run open keeps its seat; a started child whose seat has had no room for less than 30 minutes, or whose last run pushed nothing, waits too.
-- The seat that takes a started child gets `movedFrom` in its run context and merges the pushed branch first. What the first seat did not push is lost to the work.
+- The seat that takes a started child follows `movedFrom` in its run context first. What the first seat did not push is lost to the work.
 - `already_running` on the assignment: a run is open on that child. Leave it where it is.
 - Do not move a child back when its first seat has room again.
 - You are told once each time a seat is without room.

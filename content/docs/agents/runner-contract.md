@@ -259,7 +259,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out returns `null` in the context (an ambiguous checkout is refused). |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
-| `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. When the run recorded a pull request and commit, `first` says to fetch and merge the branch, or the commit if the branch is unknown. Otherwise it says to find the branch. See [Started work](/docs/agents/seats#started-work). |
+| `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. See [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you). |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |

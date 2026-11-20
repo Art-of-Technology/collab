@@ -128,7 +128,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
-- `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. Then it has that `seat`, the `pullRequest` and `headCommit` that run recorded, the `branch` where Collab has the pull request from the project's connected repository (else `null`), and `first`: in words, to run `git fetch origin` and merge `origin/<branch>` (or the commit) before anything else. When that run recorded no pull request, `first` says to find the branch.
+- `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
@@ -314,7 +314,7 @@ And, as for unstarted work, another seat of the role has a number, for developer
 | The same, while the lead's own seat has had no room for 10 minutes | Collab. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
 
 - When Collab moves started work, the **Activity** tab says from which seat, to which seat, why, and that the work continues from the branch its last run pushed. No percentage. A comment says the same and that what the first seat did not push stays behind. If a request has no trace of its filer, the comment is under the new seat's name and does not wake it. For a lead-driven move, the lead writes the details in a comment.
-- The new seat's session gets `movedFrom` in [the run context](#start-from-the-run-context): it fetches and merges the pushed branch before anything else, then goes on from the last exit note.
+- The new seat's session follows `movedFrom` in [the run context](#start-from-the-run-context) before continuing from the last exit note.
 - **What is lost:** anything the first seat did not push. It stays in that seat's working copy and is not part of the work any more.
 - Once per no-room spell, and never moved back to a seat it left. A run that starts on the old seat while the move is made wins.
 
