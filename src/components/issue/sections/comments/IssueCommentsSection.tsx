@@ -59,7 +59,7 @@ export function IssueCommentsSection({
           {soundError === 'blocked' ? 'Your browser blocked comment sound.' : 'Comment sound could not play.'}
         </span>}
         <button type="button" className="shrink-0 underline underline-offset-2" onClick={playSound}
-          aria-label={soundError === 'blocked' ? 'Enable comment sound' : 'Test comment sound'}>
+          aria-label={soundError === 'blocked' ? 'Enable comment sound' : soundError ? 'Retry comment sound' : 'Test comment sound'}>
           {soundError === 'blocked' ? 'Enable sound' : soundError ? 'Retry sound' : 'Test sound'}
         </button>
       </div>

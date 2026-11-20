@@ -146,6 +146,7 @@ test('comment section renders loading, authoritative empty results, and retryabl
   soundError = 'unavailable';
   assert.match(render(), /Comment sound could not play/);
   assert.match(render(), /Retry sound/);
+  assert.match(render(), /aria-label="Retry comment sound"/);
   soundError = null;
   assert.doesNotMatch(render(), /STALE/);
   state = { isLoading: false, isError: true, refetch() {} };
