@@ -41,7 +41,7 @@ const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
   // The real Repository line, with the GitHub connection flow stood in for: that flow is its own component.
   '@/components/workspace/SeatRepositoryField': load('src/components/workspace/SeatRepositoryField.tsx', {
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'), '@tanstack/react-query': { useQuery, useQueryClient: () => queryClient }, ...ui,
-    '@/components/github/GitHubOAuthConnection': { GitHubOAuthConnection: ({ projectId }) => React.createElement('p', null, `GitHub connection flow for ${projectId}`) },
+    '@/components/github/GitHubOAuthConnection': { GitHubOAuthConnection: ({ projectId, onSeatOAuthStart }) => React.createElement('button', { onClick: onSeatOAuthStart }, `GitHub connection flow for ${projectId}`) },
   }, { fetch, encodeURIComponent }),
   '@/components/ui/card': parts(['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle']),
   '@/components/ui/confirm-dialog': { ConfirmDialog: ({ open, confirmText, onConfirm }) => open ? React.createElement('button', { onClick: onConfirm }, `Confirm: ${confirmText}`) : null },
@@ -51,7 +51,7 @@ const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
     React.createElement('input', { type: 'checkbox', id, checked, disabled, onChange: event => onCheckedChange(event.target.checked) }) },
   '@/components/ui/table': { Table: el('table'), TableBody: el('tbody'), TableCell: el('td'), TableHead: el('th'), TableHeader: el('thead'), TableRow: el('tr') },
   '@/hooks/use-toast': { useToast: () => ({ toast: notice => notices.push(notice) }) },
-}, { fetch }).default;
+}, { fetch, window: dom.window, URL }).default;
 
 const three = { id: 'w3', name: 'Three', slug: 'three' }, four = { id: 'w4', name: 'Four', slug: 'four' }, five = { id: 'w5', name: 'Five', slug: 'five' };
 const token = (id, name, workspaces) => ({ id, name, workspaces, access: 'write', createdAt: '2026-11-12', expiresAt: '2027-11-12', expired: false });
@@ -317,6 +317,36 @@ test('a removed repository cannot be submitted after the list refreshes', async 
     await React.act(async () => buttons('Create seat')[0].click());
     assert.equal(calls.at(-1)[2].repositoryId, 'r3');
   } finally { await React.act(async () => root.unmount()); }
+});
+
+test('GitHub authorization restores the seat draft and connection flow', async () => {
+  repositoryStates.p3 = { repositories: [], repository: null };
+  const props = { workspaces: [], tokens: [], projects: [{ id: 'p3', name: 'None' }], people: [{ id: 'u1', name: 'Cem' }] };
+  let root = await render(props);
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'My seat');
+    await choose(0, 'p3');
+    await shows('No repository on this project');
+    await choose(1, 'reviewer');
+    await choose(2, 'u1');
+    await React.act(async () => document.getElementById('agent-token-by-runner').click());
+    await React.act(async () => buttons('Connect GitHub')[0].click());
+    await React.act(async () => buttons('GitHub connection flow for p3')[0].click());
+    await React.act(async () => root.unmount());
+    dom.window.history.replaceState(null, '', '?github_seat_return=true&github_connected=true');
+    root = await render(props);
+    await shows('GitHub connection flow for p3');
+    assert.equal(document.getElementById('agent-token-name').value, 'My seat');
+    assert.equal(document.querySelectorAll('select')[0].value, 'p3');
+    assert.equal(document.querySelectorAll('select')[1].value, 'reviewer');
+    assert.equal(document.querySelectorAll('select')[2].value, 'u1');
+    assert.equal(document.getElementById('agent-token-by-runner').checked, true);
+    assert.equal(dom.window.sessionStorage.getItem('seat-oauth:w1'), null);
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.history.replaceState(null, '', '/workspaces/w1/settings/agent-tokens');
+  }
 });
 
 test('the Owner choice says who pays for the seat and that it is fixed once the seat is made', async () => {

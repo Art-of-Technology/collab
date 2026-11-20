@@ -32,11 +32,11 @@ const chip = (text: string, warn = false) => (
  * The Repository line of the create-seat form. One repository: shown, nothing to pick. Several: the seat picks one.
  * None: connect GitHub, or type an address that is saved on the project. A role that works in none: said so.
  */
-export function SeatRepositoryField({ projectId, roleName, needed, query, pick, onPick }: {
-  projectId: string; roleName: string; needed: boolean; query: UseQueryResult<State>; pick: string; onPick: (repositoryId: string) => void;
+export function SeatRepositoryField({ projectId, roleName, needed, query, pick, onPick, onSeatOAuthStart, returningFromGitHub }: {
+  projectId: string; roleName: string; needed: boolean; query: UseQueryResult<State>; pick: string; onPick: (repositoryId: string) => void; onSeatOAuthStart: () => void; returningFromGitHub: boolean;
 }) {
   const client = useQueryClient();
-  const [mode, setMode] = useState<'github' | 'typing' | null>(null);
+  const [mode, setMode] = useState<'github' | 'typing' | null>(returningFromGitHub ? 'github' : null);
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
@@ -92,7 +92,7 @@ export function SeatRepositoryField({ projectId, roleName, needed, query, pick, 
               </div>
             )}
             {mode === 'typing' && failure && <p role="alert" className="mt-2 text-xs text-destructive">{failure}</p>}
-            {mode === 'github' && <div className="mt-2 max-h-72 overflow-y-auto"><GitHubOAuthConnection projectId={projectId} compact /></div>}
+            {mode === 'github' && <div className="mt-2 max-h-72 overflow-y-auto"><GitHubOAuthConnection projectId={projectId} compact onSeatOAuthStart={onSeatOAuthStart} /></div>}
           </>}
       </div>
     </div>

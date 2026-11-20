@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, KeyRound, Loader2, Plus } from 'lucide-react';
@@ -75,6 +75,30 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   // What the seat will work in. With several repositories the seat picks one, starting at the project's default; a
   // seat is not created while a role that works in a repository has none to work in.
   const [repositoryId, setRepositoryId] = useState('');
+  const [returningFromGitHub, setReturningFromGitHub] = useState(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('github_seat_return')) return;
+    url.searchParams.delete('github_seat_return');
+    window.history.replaceState(window.history.state, '', url);
+    try {
+      const key = `seat-oauth:${workspaceId}`;
+      const saved = window.sessionStorage.getItem(key);
+      window.sessionStorage.removeItem(key);
+      if (!saved) return;
+      const draft = JSON.parse(saved);
+      if (!projects.some(project => project.id === draft.projectId)) return;
+      setName(typeof draft.name === 'string' ? draft.name : '');
+      setDays(['30', '90', '365'].includes(draft.days) ? draft.days : '90');
+      setProjectId(draft.projectId);
+      setRole(Object.hasOwn(roleLabel, draft.role) ? draft.role : 'developer');
+      setOwnerId(people.some(person => person.id === draft.ownerId) ? draft.ownerId : NONE);
+      setByRunner(draft.byRunner === true);
+      setRepositoryId(typeof draft.repositoryId === 'string' ? draft.repositoryId : '');
+      setReturningFromGitHub(true);
+      setCreating(true);
+    } catch {}
+  }, [workspaceId, projects, people]);
   const repository = useSeatRepository(asSeat ? projectId : null);
   const needsRepository = NEEDS_REPOSITORY.includes(role);
   const several = (repository.data?.repositories.length ?? 0) > 1;
@@ -112,6 +136,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       setDays('90');
       setProjectId(NONE);
       setRepositoryId('');
+      setReturningFromGitHub(false);
       setRole('developer');
       setOwnerId(NONE);
       setByRunner(false);
@@ -290,7 +315,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         </CardContent>
       </Card>
 
-      <Dialog open={creating} onOpenChange={setCreating}>
+      <Dialog open={creating} onOpenChange={open => { setCreating(open); if (!open) setReturningFromGitHub(false); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New agent token</DialogTitle>
@@ -305,7 +330,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
             </div>
             <div className="space-y-2">
               <Label htmlFor="agent-token-project">Seat in a project</Label>
-              <Select value={projectId} onValueChange={value => { setProjectId(value); setRepositoryId(''); }}>
+              <Select value={projectId} onValueChange={value => { setProjectId(value); setRepositoryId(''); setReturningFromGitHub(false); }}>
                 <SelectTrigger id="agent-token-project"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>No seat: a token for the whole workspace</SelectItem>
@@ -325,7 +350,8 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   </Select>
                 </div>
                 <SeatRepositoryField key={projectId} projectId={projectId} roleName={roleLabel[role] ?? role} needed={needsRepository} query={repository}
-                  pick={pick} onPick={setRepositoryId} />
+                  pick={pick} onPick={setRepositoryId} returningFromGitHub={returningFromGitHub}
+                  onSeatOAuthStart={() => window.sessionStorage.setItem(`seat-oauth:${workspaceId}`, JSON.stringify({ name, days, projectId, role, ownerId, byRunner, repositoryId }))} />
                 <div className="space-y-2">
                   <Label htmlFor="agent-token-owner">Owner</Label>
                   <Select value={ownerId} onValueChange={setOwnerId}>
@@ -378,7 +404,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
             </div>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreating(false)} disabled={busy}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setCreating(false); setReturningFromGitHub(false); }} disabled={busy}>Cancel</Button>
             <Button onClick={create} disabled={busy || !name.trim() || (asSeat && byRunner && ownerId === NONE) || !repositorySettled}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {asSeat ? 'Create seat' : 'Create token'}

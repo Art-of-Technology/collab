@@ -28,15 +28,20 @@ export async function GET(request: NextRequest) {
     }
     const project = state.projectId ? await prisma.project.findFirst({
       where: { id: state.projectId, workspace: postWorkspaceAccessWhere(actor.id) },
-      select: { slug: true, workspace: { select: { slug: true } } },
+      select: { slug: true, workspace: { select: { id: true, slug: true } } },
     }) : null;
     if (state.projectId && !project) {
       redirectUrl.searchParams.set('github_error', 'Project access changed');
       return finish();
     }
     if (project) {
-      redirectUrl.pathname = `/${project.workspace.slug}/projects/${project.slug}/settings`;
-      redirectUrl.searchParams.set('tab', 'github');
+      if (state.returnToSeat) {
+        redirectUrl.pathname = `/workspaces/${encodeURIComponent(project.workspace.id)}/settings/agent-tokens`;
+        redirectUrl.searchParams.set('github_seat_return', 'true');
+      } else {
+        redirectUrl.pathname = `/${project.workspace.slug}/projects/${project.slug}/settings`;
+        redirectUrl.searchParams.set('tab', 'github');
+      }
     }
     if (searchParams.has('error')) {
       redirectUrl.searchParams.set('github_error', 'GitHub authorization was not completed');

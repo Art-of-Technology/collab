@@ -12,7 +12,7 @@ function fixture(options = {}) {
     if (options.encryptError) throw new Error('raw state=' + 'a'.repeat(64) + ' token=provider-token key=' + globals.process.env.ENCRYPTION_KEY + ' sensitive provider payload');
     return crypto.createCipheriv(...args);
   } } } }, globals).EncryptionService;
-  const project = { id: 'p1', slug: 'project', workspace: { slug: 'workspace', ownerId: options.access ? 'bob' : 'alice', members: options.access === 'member' || options.access === 'revoked' ? [{ userId: 'alice', status: options.access === 'member' }] : [] } };
+  const project = { id: 'p1', slug: 'project', workspace: { id: 'w1', slug: 'workspace', ownerId: options.access ? 'bob' : 'alice', members: options.access === 'member' || options.access === 'revoked' ? [{ userId: 'alice', status: options.access === 'member' }] : [] } };
   const response = (body, init = {}) => ({ body, status: init.status || 200, headers: new Headers(init.headers), cookies: { values: [], set(...args) { this.values.push(args); } } });
   const deps = {
     'next/server': { NextResponse: { json: response, redirect: url => ({ ...response(null, { status: 307, headers: { Location: String(url) } }), url: String(url) }) } },
@@ -48,6 +48,17 @@ test('issuer seals fresh opaque browser state and preserves project input only a
   const done = await f.callback('code=valid&state=' + r.body.state, cookie); assert.equal(new URL(done.url).pathname, '/workspace/projects/project/settings'); assert.equal(new URL(done.url).searchParams.get('tab'), 'github'); cleared(done);
 });
 test('issuer denies inaccessible projects without granting transaction', async () => { const f = fixture({ denied: true }); const r = await f.issue('?state=project:p1'); assert.equal(r.status, 404); assert.deepEqual(f.effects, []); });
+test('seat authorization returns to the workspace draft on success and refusal', async () => {
+  for (const query of ['code=valid', 'error=access_denied']) {
+    const f = fixture();
+    const issued = await f.issue('?state=project:p1&returnTo=seat');
+    const response = await f.callback(query + '&state=' + issued.body.state, issued.cookies.values[0][1]);
+    const url = new URL(response.url);
+    assert.equal(url.pathname, '/workspaces/w1/settings/agent-tokens');
+    assert.equal(url.searchParams.get('github_seat_return'), 'true');
+    assert.ok(url.searchParams.has(query.startsWith('code') ? 'github_connected' : 'github_error'));
+  }
+});
 test('missing or mismatched state and cookie deny before provider effects', async () => {
   for (const [query, cookie] of [['code=evil', null], ['code=evil&state=x', null], ['code=evil&state=x', 'sealed']]) { const f = fixture(); denied(f, await f.callback(query, cookie)); }
   const f = fixture(); denied(f, await f.callback('code=evil&state=' + 'b'.repeat(64), f.envelope()));

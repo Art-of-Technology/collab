@@ -52,9 +52,10 @@ interface GitHubOAuthConnectionProps {
   projectId: string;
   onSuccess?: () => void;
   compact?: boolean;
+  onSeatOAuthStart?: () => void;
 }
 
-export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }: GitHubOAuthConnectionProps) {
+export function GitHubOAuthConnection({ projectId, onSuccess, compact = false, onSeatOAuthStart }: GitHubOAuthConnectionProps) {
   const queryClient = useQueryClient();
   const [checkingConnection, setCheckingConnection] = useState(true);
   const [connectionError, setConnectionError] = useState('');
@@ -164,12 +165,13 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       const state = `project:${projectId}`;
       
       // Get OAuth URL from server
-      const response = await fetch(`/api/github/oauth/auth-url?state=${encodeURIComponent(state)}`);
+      const response = await fetch(`/api/github/oauth/auth-url?state=${encodeURIComponent(state)}${onSeatOAuthStart ? '&returnTo=seat' : ''}`);
       if (!response.ok) {
         throw new Error('Failed to generate OAuth URL');
       }
       
       const { authUrl } = await response.json();
+      onSeatOAuthStart?.();
       
       // Same-tab authorization works with popup blockers and refreshes on return.
       window.location.assign(authUrl);

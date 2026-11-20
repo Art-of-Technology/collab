@@ -9,13 +9,13 @@ export const GITHUB_OAUTH_COOKIE_OPTIONS = {
 
 type GitHubOAuthState = {
   kind: 'github-oauth-state'; version: 1; nonce: string; userId: string;
-  projectId: string | null; expiresAt: number;
+  projectId: string | null; returnToSeat?: boolean; expiresAt: number;
 };
 
-export function createGitHubOAuthState(userId: string, projectId: string | null) {
+export function createGitHubOAuthState(userId: string, projectId: string | null, returnToSeat = false) {
   const state = randomBytes(32).toString('hex');
   const payload: GitHubOAuthState = {
-    kind: 'github-oauth-state', version: 1, nonce: state, userId, projectId,
+    kind: 'github-oauth-state', version: 1, nonce: state, userId, projectId, returnToSeat,
     expiresAt: Date.now() + GITHUB_OAUTH_COOKIE_OPTIONS.maxAge * 1000,
   };
   return { state, cookie: EncryptionService.encrypt(payload) };
@@ -32,7 +32,8 @@ export function readGitHubOAuthState(cookie: string | undefined, nonce: string |
       typeof value.userId !== 'string' || value.userId !== userId ||
       !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= now ||
       value.expiresAt > now + GITHUB_OAUTH_COOKIE_OPTIONS.maxAge * 1000 ||
-      !(value.projectId === null || (typeof value.projectId === 'string' && value.projectId.length > 0 && value.projectId.length <= 256))) return null;
+      !(value.projectId === null || (typeof value.projectId === 'string' && value.projectId.length > 0 && value.projectId.length <= 256)) ||
+      !(value.returnToSeat === undefined || typeof value.returnToSeat === 'boolean') || (value.returnToSeat && !value.projectId)) return null;
     return value;
   } catch {
     return null;
