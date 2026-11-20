@@ -49,6 +49,9 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
   const http = load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals);
+  let forgeConnected = false;
+  const updates = [];
+  class ForgeProjectWriteError extends Error {}
   const deps = {
     '@/lib/redis': { publishEvent: async () => true }, zod, '@prisma/client': require('@prisma/client'), 'next/server': response,
     '@/lib/prisma': { prisma, issueTrashPrisma: raw }, '@/lib/issue-finder': finder, '@/lib/issue-assignee': assignee, '@/lib/agent-seats': seats, '@/lib/agent-tokens': tokens,
@@ -57,9 +60,9 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     '@/lib/permissions': { Permission: {}, canActOnOwnContent: () => true, checkUserPermission: async () => ({ hasPermission: true }),
       checkUserPermissions: async () => ({ undefined: { hasPermission: true } }) },
     '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
-    '@/lib/forge/legacy-write-guard': { assertLegacyProjectWriteAllowed: async () => {}, assertLegacyIssueWriteAllowed: async () => {}, assertLegacyIssueDeleteAllowed: async () => {}, ForgeProjectWriteError: class extends Error {} },
+    '@/lib/forge/legacy-write-guard': { assertLegacyProjectWriteAllowed: async () => { if (forgeConnected) throw new ForgeProjectWriteError(); }, assertLegacyIssueWriteAllowed: async () => {}, assertLegacyIssueDeleteAllowed: async () => {}, ForgeProjectWriteError },
     '@/lib/apps/auth-middleware': middleware,
-    '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async () => {}, emitIssueDeleted: async () => {} },
+    '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async (...args) => { updates.push(args); }, emitIssueDeleted: async () => {} },
   };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
   deps['@/lib/agent-requests'] = load('src/lib/agent-requests.ts', deps, { Date });
@@ -169,6 +172,10 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     assert.equal(await holder(moved), revCem.userId, 'the read of a seat that takes no such request moves none');
     assert.deepEqual(await inbox(revBob), [[moved.issueKey, 'assigned']], 'the read that moved it already lists it');
     assert.equal(await holder(moved), revBob.userId);
+    const emitted = updates.filter(([issue]) => issue.id === moved.id);
+    assert.equal(emitted.length, 1);
+    assert.equal(emitted[0][0].assigneeId, revBob.userId);
+    assert.equal(+emitted[0][0].updatedAt, +(await raw.issue.findUniqueOrThrow({ where: { id: moved.id } })).updatedAt);
     assert.deepEqual(await inbox(revCem), []);
 
     const [entry, ...more] = await moves(moved);
@@ -197,6 +204,21 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     assert.deepEqual(await inbox(revDeniz), [[moved.issueKey, 'assigned']]);
     assert.deepEqual((await moves(moved)).map(entry => [entry.details.from, entry.details.to]), [['rev-cem', 'rev-bob'], ['rev-bob', 'rev-deniz']]);
     await settle();
+  });
+
+  await t.test('a Forge-connected project keeps its request and still answers the inbox', async () => {
+    const kept = await request(revCem);
+    await report(bob, 60); await report(cem, 0); await passes(cem, 11);
+    forgeConnected = true;
+    try {
+      assert.deepEqual(await inbox(revBob), []);
+      assert.equal(await holder(kept), revCem.userId);
+      assert.deepEqual(await moves(kept), []);
+      assert.equal(updates.filter(([issue]) => issue.id === kept.id).length, 0);
+    } finally {
+      forgeConnected = false;
+      await settle();
+    }
   });
 
   await t.test('a seat that gets room back inside the 10 minutes keeps its work, and a spell that ended earlier does not count', async () => {

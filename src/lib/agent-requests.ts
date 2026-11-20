@@ -6,7 +6,7 @@ import { NOT_DONE } from '@/lib/agent-runs';
 import { ASSIGN_CAP, byRoom, countSeatHandoff, HandoffError, IDLE_MS, NO_ROOM_MOVE_MS, noRoomDue, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
-import { emitIssueCreated } from '@/lib/event-bus';
+import { emitIssueCreated, emitIssueUpdated } from '@/lib/event-bus';
 import { assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { assertAssignable } from '@/lib/issue-assignee';
 import { allocateIssueKey } from '@/lib/issue-key-allocation';
@@ -206,6 +206,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
   const now = new Date();
   const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
   if (!seats.some(seat => seat.room.kind === 'room')) return;
+  await assertLegacyProjectWriteAllowed(reader.projectId);
   const dues = new Map<string, Date | null>();
   for (const request of waiting) {
     const from = seats.find(seat => seat.userId === request.assigneeId);
@@ -214,7 +215,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     const due = dues.get(from.id);
     if (!due || due > now) continue;
     const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${from.room.reason})`;
-    await prisma.$transaction(async tx => {
+    const updated = await prisma.$transaction(async tx => {
       const left = (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true } }))
         .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
       // As when it was filed: never the seat that asked.
@@ -229,7 +230,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
       if (!issue) return;
       await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
-      await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
+      const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
       const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: issue.reporterId } as const;
       await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
@@ -238,7 +239,11 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: issue.reporterId ?? to.userId, workspaceId: issue.workspaceId,
         projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
         details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
+      return updated;
     });
+    if (updated) emitIssueUpdated(updated, [{ fieldName: 'assigneeId', oldValue: from.userId, newValue: updated.assigneeId }],
+      { userId: context.user.id, workspaceId: context.workspace.id, workspaceName: context.workspace.name || '', workspaceSlug: context.workspace.slug || '', source: 'agent-request' },
+      { async: true }).catch(() => {});
   }
 }
 
