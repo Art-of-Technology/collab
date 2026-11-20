@@ -13,6 +13,7 @@ function matches(row, where = {}) {
     if('in'in value)return value.in.includes(actual);
     if('notIn'in value)return !value.notIn.includes(actual);
     if('not'in value)return actual!==value.not;
+    if('gt'in value)return actual>value.gt;
     if('gte'in value&&!(actual>=value.gte))return false;
     if('lte'in value&&!(actual<=value.lte))return false;
     if('lt'in value&&!(actual<value.lt))return false;
@@ -51,6 +52,9 @@ function fixture(options={}){
  const visibleParent=issue('visible-parent');
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
  const activity = [];
+ if (options.paged) {
+  for (let i=0;i<520;i++) issues.push(issue(`paged-${i}`, { dueDate:null }));
+ }
  if (options.overviewHistory) {
   const blockedStatus = { ...statuses[0], id:'blocked', category:'blocked' };
   statuses.push(blockedStatus);
@@ -58,7 +62,7 @@ function fixture(options={}){
   completed.finishedAt = date(-4);
   issues.push(issue('blocked', { statusId: 'blocked', projectStatus: blockedStatus }));
   const transition = (itemId, newStatus, createdAt, seat) => ({
-   itemId, itemType: 'ISSUE', workspaceId: target.workspaceId, projectId: target.id,
+   id: itemId + '-change', itemId, itemType: 'ISSUE', workspaceId: target.workspaceId, projectId: target.id,
    action: 'STATUS_CHANGED', oldStatusId: 'todo', oldStatus: statuses[0], newStatus, createdAt,
    user: { agentSeat: seat ? { workspaceId: target.workspaceId } : null },
   });
@@ -85,12 +89,19 @@ function fixture(options={}){
   { usage:{estimatedUSD:17.25}, workspaceId:target.workspaceId, issue:issues[0], state:'finished', seatId:'seat', seat:{workspaceId:target.workspaceId} },
   { usage:{estimatedUSD:400}, workspaceId:target.workspaceId, issue:hidden, state:'finished', seatId:'seat', seat:{workspaceId:target.workspaceId} },
   { usage:{estimatedUSD:900}, workspaceId:target.workspaceId, issue:issues[0], state:'finished', seatId:null, seat:null },
- ] : [];
- target.workspace.agentRuns=runs;
- const db={projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length},
+ ].map((run, index) => ({ ...run, id: 'run-' + index, workspace: target.workspace })) : [];
+ if (options.paged) {
+  const [run] = runs;
+  for (let i=0;i<520;i++) runs.push({ ...run, id: `paged-run-${i}`, usage: { estimatedUSD: 1 } });
+ }
+ const boundedQuery = (rows, args) => {
+  if (options.paged) assert.ok(args.take > 0 && args.take <= 500, 'fixture database rejects oversized reads');
+  return query(rows, args);
+ };
+ const db={projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length,findMany:async args=>boundedQuery(runs,args)},
  workspace:{findFirst:async args=>query(spaces,args)[0]??null},
- issueActivity:{findMany:async args=>query(activity,args)},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
- findMany:async args=>{reads.push('issues');return query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
+ issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
+ findMany:async args=>{reads.push('issues');return args.select?.milestoneId ? boundedQuery(issues,args) : query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
  repository:{findFirst:async args=>{reads.push('repository');const value=query(options.noRepository?[]:[repo],args)[0]||null;if(value&&options.revokeRepository)revoke();return value;}},
  gitConnection:{findMany:async args=>{reads.push('gitConnections');return query(connections,args);}},
  commit:{findMany:async args=>query(commits,args)},pullRequest:{findMany:async args=>query(pulls,args)},release:{findMany:async args=>query(releases,args)},featureRequest:{findMany:async args=>query(features,args)},note:{findMany:async args=>query(notes,args)}};
@@ -164,4 +175,13 @@ test('Overview attributes recorded closures to seats and reports the age of a bl
  assert.equal(result.body.overview.closedByAgents, 1);
  assert.equal(result.body.overview.closedByAgentsPercent, 100);
  assert.equal(result.body.overview.blocked.find(issue => issue.id === 'blocked').blockedDays, 6);
+});
+
+test('pagination preserves Overview issue counts and the authorized spend total', async () => {
+ const result = await fixture({ target:'own', costs:true, paged:true }).call();
+ assert.equal(result.status, 200);
+ assert.equal(result.body.overview.stats.open, 523);
+ assert.equal(result.body.overview.unplanned.length, 523);
+ assert.equal(result.body.overview.runCount, 521);
+ assert.equal(result.body.overview.agentSpendUsd, 537.25);
 });

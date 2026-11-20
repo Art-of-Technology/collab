@@ -5,6 +5,18 @@ import { prisma } from '@/lib/prisma';
 
 const DAY = 86_400_000;
 const PACE_DAYS = 21;
+const PAGE_SIZE = 500;
+const pageOrder = { id: 'asc' } as const;
+
+async function* pages<Row extends { id: string }>(read: (after: string | undefined) => Promise<Row[]>) {
+  let after: string | undefined;
+  while (true) {
+    const batch = await read(after);
+    if (batch.length) yield batch;
+    if (batch.length < PAGE_SIZE) return;
+    after = batch[batch.length - 1].id;
+  }
+}
 type Verdict = 'on_track' | 'at_risk' | 'behind';
 const day = (date: Date) => Math.floor(date.getTime() / DAY);
 const dateOf = (value: number | null) => value === null ? null : new Date(value * DAY).toISOString();
@@ -118,76 +130,114 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
   const issueWhere = { projectId, workspaceId, deletedAt: null, AND: [issueReadAccessWhere(userId)] };
   const projectWhere = { id: projectId, workspaceId, workspace: postWorkspaceAccessWhere(userId) };
   const seatRunWhere = { workspaceId, issue: issueWhere, state: 'finished', seatId: { not: null }, seat: { workspaceId } };
-  const [issues, baseline, runCount, billing] = await Promise.all([
-    prisma.issue.findMany({
-      where: issueWhere,
-      select: {
-        ...overviewIssueSelect,
-        targetRelations: {
-          where: {
-            relationType: 'BLOCKS',
-            sourceIssue: {
-              deletedAt: null,
-              AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
-            },
-          },
-          select: { createdAt: true },
-          orderBy: { createdAt: 'asc' },
-          take: 1,
+  const billingWhere = {
+    id: workspaceId,
+    OR: [
+      { ownerId: userId },
+      { members: { some: { userId, status: true, role: { in: ['OWNER', 'ADMIN'], mode: 'insensitive' as const } } } },
+    ],
+  };
+  const issueSelect = {
+    ...overviewIssueSelect,
+    targetRelations: {
+      where: {
+        relationType: 'BLOCKS',
+        sourceIssue: {
+          deletedAt: null,
+          AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
         },
       },
-    }),
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
+      take: 1,
+    },
+  } satisfies Prisma.IssueSelect;
+  const issues: Prisma.IssueGetPayload<{ select: typeof issueSelect }>[] = [];
+  const latestChange = new Map<string, { createdAt: Date; byAgent: boolean }>();
+
+  async function readIssues() {
+    for await (const batch of pages(after => prisma.issue.findMany({
+      where: { ...issueWhere, id: after ? { gt: after } : undefined },
+      select: issueSelect,
+      take: PAGE_SIZE,
+      orderBy: pageOrder,
+    }))) {
+      issues.push(...batch);
+      const closedIds = batch.filter(issue => issue.type !== 'MILESTONE' && isDone(issue)).map(issue => issue.id);
+      const blockedIds = batch.filter(issue => !isDone(issue) && issue.projectStatus?.category === 'blocked').map(issue => issue.id);
+      if (!closedIds.length && !blockedIds.length) continue;
+      for await (const changes of pages(after => prisma.issueActivity.findMany({
+        where: {
+          workspaceId, projectId, itemType: 'ISSUE', action: 'STATUS_CHANGED',
+          id: after ? { gt: after } : undefined,
+          OR: [
+            {
+              itemId: { in: closedIds },
+              newStatus: { project: projectWhere, isFinal: true },
+              OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, isFinal: false } }],
+            },
+            {
+              itemId: { in: blockedIds },
+              newStatus: { project: projectWhere, isFinal: false, category: 'blocked' },
+              OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, OR: [{ category: null }, { category: { not: 'blocked' } }] } }],
+            },
+          ],
+        },
+        orderBy: pageOrder,
+        take: PAGE_SIZE,
+        select: { id: true, itemId: true, createdAt: true, user: { select: { agentSeat: { select: { workspaceId: true } } } } },
+      }))) {
+        for (const change of changes) {
+          const previous = latestChange.get(change.itemId);
+          if (!previous || change.createdAt >= previous.createdAt) {
+            latestChange.set(change.itemId, {
+              createdAt: change.createdAt, byAgent: change.user.agentSeat?.workspaceId === workspaceId,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  const agentSpend = async () => {
+    // Run finish usage attaches per-run estimates. The managed worker's cumulative
+    // ledger stays on its heartbeat and is not a project run cost.
+    let total: number | null = null;
+    for await (const batch of pages(after => prisma.agentRun.findMany({
+      where: { ...seatRunWhere, workspace: billingWhere, id: after ? { gt: after } : undefined },
+      select: { id: true, usage: true },
+      orderBy: pageOrder,
+      take: PAGE_SIZE,
+    }))) {
+      for (const { usage } of batch) {
+        if (!usage || typeof usage !== 'object' || Array.isArray(usage)) continue;
+        const amount = usage.estimatedUSD;
+        if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) total = (total ?? 0) + amount;
+      }
+    }
+    const allowed = await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+    return allowed ? { agentSpendUsd: total } : {};
+  };
+
+  const [baseline, runCount, billing] = await Promise.all([
     prisma.projectBaseline.findFirst({
       where: { project: projectWhere },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: { createdAt: true },
     }),
     prisma.agentRun.count({ where: seatRunWhere }),
-    prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        OR: [
-          { ownerId: userId },
-          { members: { some: { userId, status: true, role: { in: ['OWNER', 'ADMIN'], mode: 'insensitive' } } } },
-        ],
-      },
-      select: { agentRuns: { where: seatRunWhere, select: { usage: true } } },
-    }),
+    agentSpend(),
+    readIssues(),
   ]);
   const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now);
   const closed = issues.filter(issue => issue.type !== 'MILESTONE' && isDone(issue));
   const blocked = issues.filter(issue => !isDone(issue) &&
     (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
-  const blockedInStatus = blocked.filter(issue => issue.projectStatus?.category === 'blocked');
-  const statusChanges = closed.length || blockedInStatus.length ? await prisma.issueActivity.findMany({
-    where: {
-      workspaceId, projectId, itemType: 'ISSUE', action: 'STATUS_CHANGED',
-      OR: [
-        {
-          itemId: { in: closed.map(issue => issue.id) },
-          newStatus: { project: projectWhere, isFinal: true },
-          OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, isFinal: false } }],
-        },
-        {
-          itemId: { in: blockedInStatus.map(issue => issue.id) },
-          newStatus: { project: projectWhere, isFinal: false, category: 'blocked' },
-          OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, OR: [{ category: null }, { category: { not: 'blocked' } }] } }],
-        },
-      ],
-    },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    select: { itemId: true, createdAt: true, user: { select: { agentSeat: { select: { workspaceId: true } } } } },
-  }) : [];
-  const latestChange = new Map<string, (typeof statusChanges)[number]>();
-  for (const change of statusChanges) {
-    if (!latestChange.has(change.itemId)) latestChange.set(change.itemId, change);
-  }
   const closedByAgents = closed.filter(issue => {
     const change = latestChange.get(issue.id);
     // Event timestamps from a transaction can precede the finish trigger's
     // statement timestamp, so compare the recorded calendar dates.
-    return change && issue.finishedAt && day(change.createdAt) >= day(issue.finishedAt) &&
-      change.user.agentSeat?.workspaceId === workspaceId;
+    return change?.byAgent && issue.finishedAt && day(change.createdAt) >= day(issue.finishedAt);
   }).length;
 
   return {
@@ -199,21 +249,8 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
       return { ...issueRef(issue), blockedDays: Math.max(0, elapsed) };
     }),
     closedByAgents, closedByAgentsPercent: percent(closedByAgents, closed.length),
-    runCount,
-    ...(billing ? { agentSpendUsd: sumReportedRunCosts(billing.agentRuns) } : {}),
+    runCount, ...billing,
   };
-}
-
-function sumReportedRunCosts(runs: { usage: Prisma.JsonValue }[]) {
-  // Run finish usage is attached to a finished run. The managed worker's cumulative
-  // ledger stays on its heartbeat and is not a project run cost.
-  let total: number | null = null;
-  for (const { usage } of runs) {
-    if (!usage || typeof usage !== 'object' || Array.isArray(usage)) continue;
-    const amount = usage.estimatedUSD;
-    if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) total = (total ?? 0) + amount;
-  }
-  return total;
 }
 
 export type ProjectOverview = Awaited<ReturnType<typeof loadProjectOverview>>;

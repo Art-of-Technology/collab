@@ -72,11 +72,11 @@ function ProjectOverview({
   const issueLink = (issue: { id: string }) => `/${workspaceSlug}/issues/${issue.id}`;
   const attention = [
     ...late.map(milestone => ({
-      href: planLink(milestone), key: milestone.id, color: 'bg-amber-400',
+      href: planLink(milestone), key: `late-${milestone.id}`, color: 'bg-amber-400',
       label: `${milestone.issueKey ?? milestone.title} is forecast ${days(milestone.driftDays)} after its baseline`,
     })),
     ...blocked.map(issue => ({
-      href: issueLink(issue), key: issue.id, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
+      href: issueLink(issue), key: `blocked-${issue.id}`, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
         : `${issue.issueKey ?? issue.title} is blocked`,
     })),
     ...(unplanned.length ? [{

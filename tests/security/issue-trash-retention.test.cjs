@@ -91,7 +91,7 @@ test('stored projections disappear on Trash and return unchanged on Restore acro
     versionFile: { findFirst: async ({ where }) => useFile && allows(file, where) ? file : null },
     release: { findMany: async ({ where }) => [release].filter(v => allows(v, where)) },
     projectBaseline: { findFirst: async () => null },
-    agentRun: { count: async () => 0 },
+    agentRun: { count: async () => 0, findMany: async () => [] },
     workspace: { findFirst: async ({ where }) => allows(workspace, where) ? { ...workspace, agentRuns: [] } : null },
   };
   for (const name of ['issue', 'projectStatus', 'commit', 'pullRequest', 'gitConnection', 'featureRequest', 'note']) {
