@@ -193,6 +193,40 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
       const to = reporterId ? revBob : revDeniz;
       assert.equal(await holder(target), to.userId);
       assert.equal((await moves(target))[0].userId, reporterId ?? to.userId);
+      assert.equal((await raw.issueAssignee.findUniqueOrThrow({ where: { issueId_userId: { issueId: target.id, userId: to.userId } } })).approvedBy, reporterId ?? to.userId);
+      if (!reporterId) {
+        await report(deniz, 0); await passes(deniz, 11);
+        await inbox(revBob);
+        assert.equal(await holder(target), revBob.userId);
+        assert.deepEqual((await moves(target)).map(entry => entry.userId), [revDeniz.userId, revDeniz.userId]);
+        assert.equal((await raw.issueAssignee.findUniqueOrThrow({ where: { issueId_userId: { issueId: target.id, userId: revBob.userId } } })).approvedBy, revDeniz.userId);
+      }
+      await settle();
+    }
+  });
+
+  await t.test('a reporter or link added while the move waits excludes that seat', async () => {
+    for (const trace of ['reporter', 'link']) {
+      const target = await request(revCem);
+      await report(bob, 90); await report(deniz, 60); await report(cem, 0); await passes(cem, 11);
+      const linked = await issue();
+      let release;
+      const held = raw.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${target.id} FOR UPDATE`;
+        if (trace === 'reporter') await tx.issue.update({ where: { id: target.id }, data: { reporterId: revBob.userId } });
+        else await tx.issueRelation.create({ data: { sourceIssueId: target.id, targetIssueId: linked.id, relationType: 'RELATES_TO', createdBy: revBob.userId } });
+        await new Promise(resolve => { release = resolve; });
+      });
+      while (!release) await new Promise(resolve => setImmediate(resolve));
+      let answered = false;
+      const reading = items(revBob).finally(() => { answered = true; });
+      while (!answered && !(await raw.$queryRaw`SELECT 1 AS waiting FROM pg_stat_activity WHERE wait_event_type = 'Lock'`).length);
+      assert.equal(answered, false);
+      release(); await held; await reading;
+      assert.equal(await holder(target), revCem.userId);
+      assert.deepEqual(await moves(target), []);
+      await inbox(revDeniz);
+      assert.equal(await holder(target), revDeniz.userId);
       await settle();
     }
   });

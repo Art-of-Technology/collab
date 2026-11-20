@@ -216,13 +216,12 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     const due = dues.get(from.id);
     if (!due || due > now) continue;
     const updated = await prisma.$transaction(async tx => {
-      const placements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true, userId: true } });
-      const initial = placements.find(entry => !JSON.parse(entry.details ?? '{}').fromSeatId);
+      const placements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { details: true, userId: true } });
       const links = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
       // Who filed it is read from what filing wrote, the surest first: the entry of its first placing, the link to its
       // source, then its reporter, because a person can change a request's reporter and remove its link. Any of them
       // may be the filer, so none of them is given the request; with no trace left it is moved all the same.
-      const filers = [initial?.userId, ...links.map(link => link.createdBy), request.reporterId].filter((id): id is string => !!id);
+      const filers = [placements[0]?.userId, ...links.map(link => link.createdBy), request.reporterId].filter((id): id is string => !!id);
       const left = placements.map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
       // As when it was filed: never the seat that asked.
       const others = seats.filter(seat => seat.id !== from.id && !filers.includes(seat.userId) && !left.includes(seat.id));
@@ -233,8 +232,12 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${reader.projectId} AND "role" = ${reader.role}
         AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) return;
       await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
-      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true } });
+      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
       if (!issue) return;
+      const currentPlacements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { details: true, userId: true } });
+      const currentLinks = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
+      const currentFilers = [currentPlacements[0]?.userId, ...currentLinks.map(link => link.createdBy), issue.reporterId].filter((id): id is string => !!id);
+      if (currentFilers.includes(to.userId) || currentPlacements.some(entry => JSON.parse(entry.details ?? '{}').fromSeatId === to.id)) return;
       // What was read before the locks chose the seats; whether it still holds is read again behind them. A seat that
       // got room back while this waited keeps its work, and a seat that lost its room is given none: the next read looks again.
       const at = new Date(), current = await seatsWithRoom(tx, reader.projectId, reader.role, at);
@@ -246,11 +249,12 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
       const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
-      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: filers[0] ?? null } as const;
+      const attributedTo = currentFilers[0] ?? to.userId;
+      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: attributedTo } as const;
       await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
       await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
       // Under the name of whoever filed the request, as its placing is: Collab has no account of its own.
-      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: filers[0] ?? to.userId, workspaceId: issue.workspaceId,
+      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: attributedTo, workspaceId: issue.workspaceId,
         projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
         details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
       return updated;
