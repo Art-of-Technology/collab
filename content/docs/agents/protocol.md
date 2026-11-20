@@ -154,8 +154,24 @@ When the epic comes back with `child_no_room`, a child you placed sits on a seat
 - Move only what `noRoom` lists. A child a run has started on keeps its seat and waits.
 - `already_running` on the assignment: a run is open on that child. Leave it where it is.
 - Do not move a child back when its first seat has room again.
-- You are told once each time a seat is without room. Collab moves no developer work itself.
+- You are told once each time a seat is without room.
+- If your own seat had no room too, Collab may have moved the child already: see the next section.
 - A review or security request in the same state is moved by Collab, not by you: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes).
+
+### When Collab moved a child
+
+When your own seat has had no room for 10 minutes, Collab may move an unstarted child you placed off a seat without room. This is the one case where Collab assigns developer work. The [seat rules](/docs/agents/seats#when-the-leads-own-seat-has-no-room) give the conditions. It leaves one comment on the child and one on the epic, under your name, starting `Collab moved`.
+
+When you run again, read the epic's comments and check each child Collab moved:
+
+| Check | If it does not hold |
+| --- | --- |
+| No seat now holds two children that change the same files. | Move one of them to another seat, or leave it for after the other is done. |
+| The order the epic gives still holds: a child that must wait for another is not ahead of it. | Assign it so that it follows the child it waits for, for example to the seat that has that child. |
+| Lanes, if the epic names them. | Assign as the lanes say. |
+
+- Collab chose by room alone. It knew nothing of files, order or lanes.
+- Do not move a child back only because its first seat has room again.
 
 The exact rules are under [Lead seat](/docs/agents/seats#lead-seat).
 

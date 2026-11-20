@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE } from '@/lib/agent-runs';
-import { ASSIGN_CAP, byRoom, countSeatHandoff, HandoffError, IDLE_MS, NO_ROOM_MOVE_MS, noRoomDue, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
+import { ASSIGN_CAP, byRoom, countSeatHandoff, fromLead, HandoffError, IDLE_MS, LEAD_CAP, NO_ROOM_MOVE_MS, noRoomDue, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated, emitIssueUpdated } from '@/lib/event-bus';
@@ -197,6 +197,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
  */
 export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'workspace'>) {
   const reader = await seatFor(prisma, context);
+  if (reader?.role === 'developer') return moveStories(context, reader);
   const role = reader && (Object.keys(REQUESTS) as RequestRole[]).find(name => name !== 'developer' && REQUESTS[name].seat === reader.role);
   if (!reader || !role) return;
   const unstarted = { projectId: reader.projectId, agentRequestRole: role, agentRuns: { none: {} }, ...NOT_DONE };
@@ -209,7 +210,8 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
   // A Forge-connected project's issues change through its Forge board: nothing is moved there, and that is no failure.
   if (await assertLegacyProjectWriteAllowed(reader.projectId).then(() => false, error => { if (error instanceof ForgeProjectWriteError) return true; throw error; })) return;
   const dues = new Map<string, Date | null>();
-  for (const request of waiting) {
+  // Each request on its own: one that fails is logged and the next one is still tried; the next read tries it again.
+  for (const request of waiting) try {
     const from = seats.find(seat => seat.userId === request.assigneeId);
     if (from?.room.kind !== 'no_room') continue;
     if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
@@ -262,6 +264,108 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     if (updated) emitIssueUpdated(updated, [{ fieldName: 'assigneeId', oldValue: from.userId, newValue: updated.assigneeId }],
       { userId: context.user.id, workspaceId: context.workspace.id, workspaceName: context.workspace.name || '', workspaceSlug: context.workspace.slug || '', source: 'agent-request' },
       { async: true }).catch(() => {});
+  } catch (error) {
+    console.error('Moving an unstarted request failed', request.id, error);
+  }
+}
+
+/**
+ * CLB-793: the one case where Collab assigns developer work. A story the lead placed (its hand is on the row that made
+ * the seat the assignee), under an issue the lead holds and has no run open on, on which no run ever started, leaves a
+ * developer seat that has had no room for `NO_ROOM_MOVE_MS`, but only while the lead's own seat has had none for as
+ * long: a lead that can run moves its stories itself (`child_no_room`). It goes to the developer seat `byRoom` puts
+ * first among those with a number and under `LEAD_CAP` issues from the lead, never back to a seat it was moved off,
+ * and stays the lead's to place. Called on a developer seat's inbox read, the seat that could take it; most reads
+ * cost the read of the lead seat and one indexed read of such stories, which finds none. One comment on the story and
+ * one on the lead's issue say from which seat, to which, and why, under the lead's name: Collab has no account of its
+ * own, and the lead's own comment does not wake it (it cannot run now; a child's progress wakes it later).
+ * shortcut: two moves onto one seat are held apart by its row; a lead's own assignment, already refused while it has
+ * no room, is held to the limit by its serializable read only, so it could pass the limit by one in that moment.
+ */
+async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, reader: { projectId: string }) {
+  const { projectId } = reader;
+  const lead = await prisma.agentSeat.findFirst({ where: { projectId, role: 'lead', retiredAt: null }, select: { userId: true } });
+  if (!lead) return;
+  const unstarted = { workspaceId: context.workspace.id, projectId, agentRequestRole: null, agentRuns: { none: {} }, ...NOT_DONE,
+    parent: { assigneeId: lead.userId, agentRuns: { none: { endedAt: null } }, ...NOT_DONE }, helpers: { some: { approvedBy: lead.userId } } };
+  const placedByLead = (issue: { assigneeId: string | null; helpers: { userId: string }[] }) => issue.helpers.some(row => row.userId === issue.assigneeId);
+  const helpers = { where: { approvedBy: lead.userId }, select: { userId: true } };
+  const parent = { select: { createdAt: true, helpers: { where: { userId: lead.userId }, select: { approvedAt: true, assignedAt: true } },
+    agentRuns: { orderBy: { startedAt: 'desc' as const }, take: 1, select: { startedAt: true, endedAt: true, outcome: true } } } };
+  const unseen = (parent: { createdAt: Date; helpers: { approvedAt: Date | null; assignedAt: Date }[]; agentRuns: { startedAt: Date; endedAt: Date | null; outcome: string | null }[] } | null, due: Date) => {
+    const run = parent?.agentRuns[0], assigned = parent?.helpers[0]?.approvedAt ?? parent?.helpers[0]?.assignedAt ?? parent?.createdAt;
+    return !!run?.endedAt && !!assigned && run.endedAt >= assigned && run.outcome === 'blocked' && due > run.startedAt;
+  };
+  const waiting = (await prisma.issue.findMany({ where: { ...unstarted, assignee: { agentSeat: { role: 'developer' } } }, orderBy: { createdAt: 'asc' },
+    select: { id: true, parentId: true, parent, assigneeId: true, helpers } })).filter(placedByLead);
+  if (!waiting.length) return;
+  const now = new Date();
+  const leadDue = async (db: Prisma.TransactionClient | typeof prisma, at: Date) => {
+    const [seat] = await seatsWithRoom(db, projectId, 'lead', at);
+    if (seat?.room.kind !== 'no_room') return null;
+    const due = await noRoomDue(db, seat, at);
+    return due && due <= at ? seat : null;
+  };
+  const leadSeat = await leadDue(prisma, now);
+  if (!leadSeat) return;
+  const seats = await seatsWithRoom(prisma, projectId, 'developer', now);
+  if (!seats.some(seat => seat.room.kind === 'room')) return;
+  if (await assertLegacyProjectWriteAllowed(projectId).then(() => false, error => { if (error instanceof ForgeProjectWriteError) return true; throw error; })) return;
+  const dues = new Map<string, Date | null>();
+  for (const story of waiting) try {
+    const from = seats.find(seat => seat.userId === story.assigneeId);
+    if (from?.room.kind !== 'no_room') continue;
+    if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
+    const due = dues.get(from.id);
+    if (!due || due > now || !unseen(story.parent, due)) continue;
+    for (const to of byRoom(seats.filter(seat => seat.id !== from.id && seat.room.kind === 'room'))) {
+      const updated = await prisma.$transaction(async tx => {
+        const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: 'STORY_MOVED' }, select: { details: true } }))
+          .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
+        if ((await leftOf()).includes(to.id) || await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;
+        // As a request moves: the seat's row, then the issue's, the order a checkout takes them in, and whichever gets the
+        // issue first decides. The seat's row is held for update, so two moves onto one seat count its limit in turn.
+        if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = 'developer'
+          AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR UPDATE`).length) return null;
+        await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ANY(${[story.id, story.parentId]}) ORDER BY "id" FOR UPDATE`;
+        const issue = await tx.issue.findFirst({ where: { ...unstarted, id: story.id, parentId: story.parentId, assigneeId: from.userId },
+          select: { id: true, workspaceId: true, projectId: true, issueKey: true, parentId: true, parent, assigneeId: true, helpers } });
+        if (!issue || !placedByLead(issue)) return;
+        if ((await leftOf()).includes(to.id)) return null;
+        // Read again behind the locks: a seat that got room back keeps its work, and a lead that got room back moves it itself.
+        const at = new Date(), current = await seatsWithRoom(tx, projectId, 'developer', at);
+        const source = current.find(seat => seat.id === from.id);
+        if (source?.room.kind !== 'no_room') return;
+        if (current.find(seat => seat.id === to.id)?.room.kind !== 'room') return null;
+        const since = await noRoomDue(tx, source, at);
+        if (!since || since > at || !unseen(issue.parent, since)) return;
+        const stuck = await leadDue(tx, at);
+        if (!stuck || stuck.room.kind !== 'no_room') return;
+        if (await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;
+        await assertAssignable(tx, { ...issue, agentRequestRole: null }, to.userId);
+        const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
+        // The lead's hand stays on the row, stamped now: the story counts toward its limit, the lead may still move it,
+        // and the new seat's inbox offers it as `assigned`.
+        const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: lead.userId } as const;
+        await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
+        await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
+        const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${source.room.reason}), and so had the lead seat ${stuck.name} (${stuck.room.reason})`;
+        await tx.issueActivity.create({ data: { action: 'STORY_MOVED', itemType: 'ISSUE', itemId: issue.id, userId: lead.userId, workspaceId: issue.workspaceId,
+          projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId, details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
+        await tx.issueComment.create({ data: { issueId: issue.id, authorId: lead.userId,
+          content: `Collab moved this story from ${from.name} to ${to.name}, because ${why}. No run had started on it.` } });
+        await tx.issueComment.create({ data: { issueId: issue.parentId!, authorId: lead.userId,
+          content: `Collab moved ${issue.issueKey ?? issue.id} from ${from.name} to ${to.name}, because ${why}. Collab chose by room alone. `
+            + 'Lead, when you run again: check whether a seat now holds two stories that change the same files, whether the order this epic gives still holds, and the lanes.' } });
+        return updated;
+      });
+      if (updated) emitIssueUpdated(updated, [{ fieldName: 'assigneeId', oldValue: from.userId, newValue: updated.assigneeId }],
+        { userId: context.user.id, workspaceId: context.workspace.id, workspaceName: context.workspace.name || '', workspaceSlug: context.workspace.slug || '', source: 'agent-request' },
+        { async: true }).catch(() => {});
+      if (updated !== null) break;
+    }
+  } catch (error) {
+    console.error('Moving an unstarted story failed', story.id, error);
   }
 }
 

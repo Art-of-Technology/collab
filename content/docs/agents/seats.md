@@ -249,7 +249,7 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 - The seats of one role are in the order above. Prefer the first seat that is under its limit of issues from the lead. A seat with no room gets nothing.
 - When every seat of a role is unknown, their order is the one from before room: oldest first.
 - Only the lead seat is given these fields and this order. Any other reader gets the list as it was.
-- Collab assigns no developer work by itself, and who may assign is unchanged.
+- Collab assigns developer work by itself in one case only: [when the lead's own seat has no room too](#when-the-leads-own-seat-has-no-room). Who may assign is otherwise unchanged.
 
 ### When a seat has had no room for 10 minutes
 
@@ -258,7 +258,8 @@ Eligible work that no run has started on can move to a seat that can start it, w
 | The work | Who moves it | How |
 | --- | --- | --- |
 | A review or security request | Collab | Places it again on the seat of the role with the most room. |
-| A developer issue the lead placed | The lead | Is woken with `child_no_room`, assigns it to another developer seat and writes one comment. |
+| A developer issue the lead placed | The lead | Is woken with `child_no_room` and can assign it to another developer seat and write one comment. |
+| The same, while the lead's own seat has had no room for 10 minutes | Collab | May assign it to another developer seat and write one comment on it and one on the epic. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
 | Anything a run has started on | Nobody | It keeps its seat and waits. |
 
 When it moves, all of these hold:
@@ -286,13 +287,33 @@ Collab looks for requests when a seat of the role reads its inbox. There is no t
 
 Limits of this version:
 
-- Collab does not move requests in a Forge-connected project; its issues are changed through the Forge board.
+- Collab does not move requests or developer issues in a Forge-connected project; its issues are changed through the Forge board.
 - A release request never moves: a project has one release seat.
-- A `developer` request is not moved by Collab, and neither is any other developer work.
-- A lead whose own seat has no room cannot take its turn. Nothing wakes someone else.
+- A `developer` request is not moved by Collab. Other developer work is moved by Collab only when the lead's own seat has no room: see below.
 - The lead is not woken for a developer issue a person assigned, or for one outside the epic it waits on: it may not move those.
 - The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours.
 - If a seat is retired during a no-room spell and made again while its runner stays paused or full, its earlier spell can make work eligible to move up to 10 minutes early. See `markNoRoom` in `src/lib/agent-seats.ts`.
+
+### When the lead's own seat has no room
+
+This is the one case where Collab assigns developer work. A developer issue moves without the lead when all of these hold:
+
+1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, no run has ever started on it, and its developer seat has had no room for 10 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due after that run started.
+2. The lead's own seat has had no room for 10 minutes too, counted as for any seat. A lead seat run by hand, or one whose figure is unknown, is not full: Collab does not move the issue.
+3. No run of the lead's is open on that parent issue.
+4. Another developer seat has a number, holds fewer than 3 open issues from the lead, and is not a seat the issue was moved off before.
+
+| What Collab does | How |
+| --- | --- |
+| Picks the seat | The first eligible seat in the [placing order](#placed-by-room): most room, then fewest open runs. |
+| Assigns it | The lead's hand stays on the assignment: the issue counts toward the lead's limit, and the lead may move it again. |
+| Says so | One comment on the issue and one on its parent, under the lead seat's name: from which seat, to which seat, and that the lead's seat had no room. No percentage. The issue's **Activity** tab has `Collab moved this issue from <seat> to <seat>: <why>`. |
+
+- Collab looks when a developer seat of the project reads its inbox. There is no timer.
+- Moved work is not moved back when the first seat has room again.
+- An issue a person assigned, or one a run has started on, stays. A run that starts before the move wins; a later checkout on the old seat is refused.
+- Collab chooses by room alone. It does not know which issues change the same files, the order the epic gives, or lanes: the lead checks those when it runs again. See [When Collab moved a child](/docs/agents/protocol#when-collab-moved-a-child).
+- The comments are the lead's own, so they do not wake it. The epic comes back when a child is done, blocked or idle, as before.
 
 ## Lead seat
 
