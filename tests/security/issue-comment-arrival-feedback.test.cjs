@@ -36,13 +36,21 @@ async function fixture(t, { reducedMotion = false, blockedAudio = false } = {}) 
   global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
   const { createRoot } = require('react-dom/client');
   const root = createRoot(document.getElementById('root'));
-  let output, plays = 0, pauses = 0, scrolls = [], next = 0, audioUrl;
+  let output, plays = 0, pauses = 0, reloads = 0, scrolls = [], next = 0, audioUrl;
+  let pendingPlayback;
+  let playbackError = blockedAudio ? Object.assign(new Error('Blocked'), { name: 'NotAllowedError' }) : null;
   const frames = new Map(), timers = new Map();
   const helpers = load(file + 'utils/commentArrivals.ts', {}, { window: dom.window, getComputedStyle: element => dom.window.getComputedStyle(element) });
   dom.window.matchMedia = () => ({ matches: reducedMotion });
   class Audio {
-    constructor(url) { audioUrl = url; }
-    play() { plays++; return blockedAudio ? Promise.reject(new Error('NotAllowedError')) : Promise.resolve(); }
+    constructor(url) { audioUrl = url; this.error = null; }
+    load() { reloads++; this.error = null; }
+    play() {
+      plays++;
+      if (pendingPlayback) return pendingPlayback;
+      if (playbackError?.name === 'NotSupportedError') this.error = playbackError;
+      return this.error || playbackError ? Promise.reject(this.error || playbackError) : Promise.resolve();
+    }
     pause() { pauses++; }
   }
   const { useCommentArrivalFeedback } = load(file + 'hooks/useCommentArrivalFeedback.ts', {
@@ -71,10 +79,13 @@ async function fixture(t, { reducedMotion = false, blockedAudio = false } = {}) 
     global.window = old.window; global.document = old.document; global.IS_REACT_ACT_ENVIRONMENT = old.flag;
   });
   return {
+    setPlaybackPromise: promise => { pendingPlayback = promise; },
+    setPlaybackError: error => { playbackError = error; },
+    testSound: () => act(async () => { output.playSound(); await Promise.resolve(); }),
     render: props => act(() => root.render(h(Harness, props))),
     frame: () => act(async () => { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn()); await Promise.resolve(); }),
     expire: () => act(() => { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); }),
-    get state() { return { plays, pauses, scrolls, audioUrl, ids: [...output.highlightedIds], frames: frames.size, timers: timers.size }; },
+    get state() { return { plays, pauses, reloads, scrolls, audioUrl, soundError: output.soundError, ids: [...output.highlightedIds], frames: frames.size, timers: timers.size }; },
   };
 }
 
@@ -167,4 +178,55 @@ test('arrivals wait for viewer identity, then announce remote comments and keep 
   await f.render({ comments: [...comments], ready: true, viewer: 'me' });
   await f.frame();
   assert.equal(f.state.plays, 1);
+});
+
+
+test('blocked audio is visible and a user-triggered retry enables later arrival sounds', async t => {
+  const f = await fixture(t, { blockedAudio: true });
+  await f.render({ comments: [], ready: true });
+  assert.equal(f.state.soundError, null);
+  await f.render({ comments: [comment('first')], ready: true });
+  await f.frame();
+  assert.equal(f.state.soundError, 'blocked');
+  assert.deepEqual(f.state.ids, ['first']);
+  f.setPlaybackError(null);
+  await f.testSound();
+  assert.equal(f.state.soundError, null);
+  assert.equal(f.state.plays, 2);
+  await f.render({ comments: [comment('first'), comment('next')], ready: true });
+  await f.frame();
+  assert.equal(f.state.plays, 3);
+  assert.equal(f.state.soundError, null);
+});
+
+test('load failures remain retryable, and issue switches reset sound errors', async t => {
+  const f = await fixture(t);
+  await f.render({ comments: [], ready: true });
+  f.setPlaybackError(Object.assign(new Error('Missing media'), { name: 'NotSupportedError' }));
+  await f.testSound();
+  assert.equal(f.state.soundError, 'unavailable');
+  f.setPlaybackError(null);
+  await f.testSound();
+  assert.equal(f.state.reloads, 1);
+  assert.equal(f.state.soundError, null);
+  f.setPlaybackError(Object.assign(new Error('Missing media'), { name: 'NotSupportedError' }));
+  await f.testSound();
+  await f.render({ issue: 'other', comments: [], ready: true });
+  assert.equal(f.state.soundError, null);
+  f.setPlaybackError(null);
+  await f.testSound();
+  assert.equal(f.state.soundError, null);
+});
+
+
+test('late playback rejection from a previous issue cannot show an error in the new issue', async t => {
+  const f = await fixture(t);
+  await f.render({ comments: [], ready: true });
+  let reject;
+  f.setPlaybackPromise(new Promise((_, fail) => { reject = fail; }));
+  await f.testSound();
+  await f.render({ issue: 'other', comments: [], ready: true });
+  await act(async () => { reject(Object.assign(new Error('Blocked'), { name: 'NotAllowedError' })); await Promise.resolve(); });
+  assert.equal(f.state.soundError, null);
+  assert.equal(f.state.pauses, 1);
 });
