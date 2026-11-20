@@ -51,6 +51,7 @@ export interface IssueComment {
   createdAt: Date;
   updatedAt: Date;
   parentId?: string;
+  milestoneId?: string | null;
   replies?: IssueComment[];
 }
 

@@ -71,7 +71,7 @@ const noteScope = oneOf('WORKSPACE', 'PROJECT', 'PUBLIC');
 
 const issueFields = {
   description: text, type: issueType, priority, status: { ...text, description: 'A status name from projects_statuses' },
-  assigneeId: id, parentId: id, dueDate: dateTime, startDate: dateTime, storyPoints: integer(1), color: text, labels: labelIds,
+  assigneeId: id, parentId: id, milestoneId: { ...id, description: 'A Milestone issue ID in the same project.' }, dueDate: dateTime, startDate: dateTime, storyPoints: integer(1), color: text, labels: labelIds,
 };
 const noteFields = {
   title: { type: 'string', minLength: 1, maxLength: 500 }, content: text, type: noteType, scope: noteScope,
@@ -98,7 +98,7 @@ export const tools: McpTool[] = [
   tool('projects_statuses', 'The statuses an issue can have in a project.', ['projects:read'], 'GET', 'projects/:projectId/statuses', projectStatuses.GET, { projectId: id }, ['projectId']),
   tool('labels_list', 'Labels in the workspace, with the IDs that issues_create and issues_update take.', ['workspace:read'], 'GET', 'labels', labels.GET, { search: text }),
   tool('issues_list', 'List issues, newest first, with filters and paging.', ['issues:read'], 'GET', 'issues', issues.GET, {
-    projectId: id, assigneeId: id, status: text, type: issueType, priority, search: text, page: integer(1), limit: integer(1, 100),
+    projectId: id, assigneeId: id, milestoneId: id, status: text, type: issueType, priority, search: text, page: integer(1), limit: integer(1, 100),
   }),
   tool('issues_get', 'One issue with its details.', ['issues:read'], 'GET', 'issues/:issueIdOrKey', issue.GET, { issueIdOrKey }, ['issueIdOrKey']),
   tool('issues_create', 'Create an issue. The token\'s identity is recorded as its creator.', ['issues:write'], 'POST', 'issues', issues.POST, {
@@ -106,7 +106,7 @@ export const tools: McpTool[] = [
   }, ['title', 'projectId']),
   tool('issues_update', 'Change fields of an issue. Send null to clear a field; labels replaces the whole set.', ['issues:write'], 'PATCH', 'issues/:issueIdOrKey', issue.PATCH, {
     issueIdOrKey, title: { type: 'string', minLength: 1, maxLength: 200 }, ...issueFields,
-    description: orNull(text), assigneeId: orNull(id), parentId: orNull(id), dueDate: orNull(dateTime), startDate: orNull(dateTime),
+    description: orNull(text), assigneeId: orNull(id), parentId: orNull(id), milestoneId: orNull(issueFields.milestoneId), dueDate: orNull(dateTime), startDate: orNull(dateTime),
     storyPoints: orNull(integer(1)), color: orNull(text), progress: integer(0, 100), timeEstimateMinutes: orNull(integer(1)),
   }, ['issueIdOrKey']),
   tool('comments_list', 'Comments on an issue. With since, only those made after that time.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/comments', comments.GET, { issueIdOrKey, flat: flag, since: dateTime }, ['issueIdOrKey']),

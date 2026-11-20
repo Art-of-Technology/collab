@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
+    const milestoneId = searchParams.get('milestoneId');
     const projectIds = searchParams.get('projectIds')?.split(',').filter(Boolean);
 
     if (!workspaceId) {
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
     // Build query with filters
     const whereClause: any = {
       workspaceId,
+      ...(milestoneId && { milestoneId }),
       ...(projectIds && projectIds.length > 0 && {
         projectId: { in: projectIds }
       }),

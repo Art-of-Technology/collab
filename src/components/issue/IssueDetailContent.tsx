@@ -46,6 +46,7 @@ import { IssueReporterSelector } from "@/components/issue/selectors/IssueReporte
 import { IssueLabelSelector } from "@/components/issue/selectors/IssueLabelSelector";
 import { IssueTypeSelector } from "@/components/issue/selectors/IssueTypeSelector";
 import { IssueProjectSelector } from "@/components/issue/selectors/IssueProjectSelector";
+import { IssueMilestoneSelector } from "@/components/issue/selectors/IssueMilestoneSelector";
 import { IssueDateSelector } from "@/components/issue/selectors/IssueDateSelector";
 import { LoadingState } from "@/components/issue/sections/activity/components/LoadingState";
 import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
@@ -1156,6 +1157,16 @@ export function IssueDetailContent({
                   value={issue.projectId}
                   onChange={(value) => handleUpdate({ projectId: value })}
                   workspaceId={workspaceId || ''}
+                  disabled={isUpdating}
+                />
+              </div>
+              <div className="py-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Milestone</h3>
+                <IssueMilestoneSelector
+                  projectId={issue.projectId}
+                  issueId={issue.id}
+                  value={issue.milestoneId}
+                  onChange={value => handleUpdate({ milestoneId: value })}
                   disabled={isUpdating}
                 />
               </div>

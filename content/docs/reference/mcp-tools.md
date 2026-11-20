@@ -65,6 +65,7 @@ Reads. Scope: `issues:read`.
 | --- | --- | --- |
 | `projectId` | string | minimum length: 1 · maximum length: 128 |
 | `assigneeId` | string | minimum length: 1 · maximum length: 128 |
+| `milestoneId` | string | minimum length: 1 · maximum length: 128 |
 | `status` | string |  |
 | `type` | string | values: EPIC, STORY, TASK, BUG, MILESTONE, SUBTASK |
 | `priority` | string | values: low, medium, high, urgent |
@@ -98,6 +99,7 @@ Writes. Scope: `issues:write`.
 | `status` | string | A status name from projects_statuses |
 | `assigneeId` | string | minimum length: 1 · maximum length: 128 |
 | `parentId` | string | minimum length: 1 · maximum length: 128 |
+| `milestoneId` | string | A Milestone issue ID in the same project. · minimum length: 1 · maximum length: 128 |
 | `dueDate` | string | UTC time in ISO 8601, for example 2026-11-12T09:00:00Z · format: date-time |
 | `startDate` | string | UTC time in ISO 8601, for example 2026-11-12T09:00:00Z · format: date-time |
 | `storyPoints` | integer | minimum: 1 |
@@ -120,6 +122,7 @@ Writes. Scope: `issues:write`.
 | `status` | string | A status name from projects_statuses |
 | `assigneeId` | string or null | minimum length: 1 · maximum length: 128 |
 | `parentId` | string or null | minimum length: 1 · maximum length: 128 |
+| `milestoneId` | string or null | A Milestone issue ID in the same project. · minimum length: 1 · maximum length: 128 |
 | `dueDate` | string or null | UTC time in ISO 8601, for example 2026-11-12T09:00:00Z · format: date-time |
 | `startDate` | string or null | UTC time in ISO 8601, for example 2026-11-12T09:00:00Z · format: date-time |
 | `storyPoints` | integer or null | minimum: 1 |

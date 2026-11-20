@@ -127,6 +127,19 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual(await activities(target, 'AGENT_RUN_FINISHED'), []);
   };
 
+  await t.test('finishing a run sets the issue finish date and a run that reopens it clears the date', async () => {
+    const { target, run } = await started(devA);
+    assert.equal((await fresh(target)).finishedAt, null);
+    assert.equal((await finish(devA, run.id, { outcome: 'done' }))[0], 200);
+    const finished = await fresh(target);
+    assert.ok(finished.finishedAt instanceof Date);
+    // An assignee may explicitly start an issue in a final status; starting it records the reopen.
+    const reopened = await checkout(devA, target, 'reopen-finished');
+    assert.ok(reopened.id);
+    assert.equal((await fresh(target)).finishedAt, null);
+    assert.equal(await statusOf(target), `${A}-in_progress`);
+  });
+
   await t.test('a project made through the API has statuses a run can move its issue to (CLB-506)', async () => {
     // The rule for a new status gives every status here the group the migration gave it.
     const { statusGroup } = load('src/constants/project-statuses.ts');

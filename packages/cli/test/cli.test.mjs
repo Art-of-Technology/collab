@@ -1373,6 +1373,23 @@ test('project creation, issue updates and comments preserve exact supplied paylo
   }
 });
 
+test('issue CLI commands set, clear and filter by milestone ID', async t => {
+  const f = await fixture(t);
+  const milestoneId = 'cfixturemilestone';
+  const create = await f.run(['issues', 'create', '--project', 'project-one', '--title', 'Plan', '--milestone-id', milestoneId]);
+  assert.equal(create.code, 0);
+  assert.equal(JSON.parse(f.calls.at(-1).body).milestoneId, milestoneId);
+  const update = await f.run(['issues', 'update', 'APP-1', '--milestone-id', milestoneId]);
+  assert.equal(update.code, 0);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { milestoneId });
+  const clear = await f.run(['issues', 'update', 'APP-1', '--input', '-'], { input: JSON.stringify({ milestoneId: null }) });
+  assert.equal(clear.code, 0);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { milestoneId: null });
+  const list = await f.run(['issues', 'list', '--milestone-id', milestoneId]);
+  assert.equal(list.code, 0);
+  assert.equal(new URL(f.calls.at(-1).url, f.url).searchParams.get('milestoneId'), milestoneId);
+});
+
 test('Notes create uses project scope; updates do not silently move Notes', async t => {
   const f = await fixture(t);
   assert.equal((await f.run(['notes', 'create', '--title', 'Decision', '--content-file', '-', '--project', 'project-one', '--type', 'DECISION', '--is-ai-context', 'true'], { input: '# Decision\nUse Collab.\n' })).code, 0);

@@ -45,10 +45,14 @@ function fixture(options={}){
  const target=projects.find(x=>x.id===(options.target||'joined')),foreign=projects.find(x=>x.id==='foreign');const sibling={...target,id:'sibling'};projects.push(sibling);
  const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
- const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],...overrides});
+ const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],...overrides});
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
  const visibleParent=issue('visible-parent');
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
+ if (options.large) {
+  for (let i=0;i<11;i++) issues.push(issue(`extra-overdue-${i}`), issue(`extra-upcoming-${i}`,{dueDate:date(1)}));
+  issues.push(issue('trashed-overdue',{deletedAt:now}), issue('trashed-upcoming',{dueDate:date(1),deletedAt:now}));
+ }
  const repo={id:'repo',fullName:'org/repo',isActive:!options.inactiveRepository,projectId:target.id,project:target};
  const connections=options.providers?['gitlab','forgejo'].map((provider,index)=>({id:provider,provider,repositoryPath:`team/${provider}`,projectId:target.id,project:target,isActive:true,createdAt:date(-index),credentials:'never-expose',activity:[{id:provider,kind:'commit',title:`${provider} commit`,date:now}]})):[];
  connections.push({id:'foreign-git',provider:'gitlab',repositoryPath:'secret/repo',projectId:target.id,project:foreign,isActive:true,createdAt:now,activity:[]},{id:'inactive-git',provider:'forgejo',repositoryPath:'old/repo',projectId:target.id,project:target,isActive:false,createdAt:now,activity:[]});
@@ -105,4 +109,13 @@ test('provider-only projects are connected; inactive and absent repositories are
 });
 test('provider summary rechecks access before returning persisted metadata or activity',async()=>{
  const r=await fixture({providers:true,noRepository:true,revokeLookup:true}).call();assert.equal(r.status,200);assert.deepEqual(plain(r.body.repositories),{connections:[],activities:[]});
+});
+
+test('overdue and at-risk totals include all 12 active issues while each preview shows 10', async () => {
+ const result = await fixture({large:true}).call();
+ assert.equal(result.status,200);
+ assert.equal(result.body.stats.overdueCount,12);
+ assert.equal(result.body.stats.atRiskCount,12);
+ assert.equal(result.body.atRisk.overdue.length,10);
+ assert.equal(result.body.atRisk.upcoming.length,10);
 });

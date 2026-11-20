@@ -193,6 +193,22 @@ test('a write tool sends exactly its arguments as the body, and path arguments b
   ]);
 });
 
+test('MCP issue tools set, clear and filter by milestone ID', async () => {
+  const f = fixture();
+  const milestoneId = 'cfixturemilestone';
+  const commands = [
+    ['issues_create', { projectId: 'p1', title: 'Plan', milestoneId }, { projectId: 'p1', title: 'Plan', milestoneId }],
+    ['issues_update', { issueIdOrKey: 'CLB-1', milestoneId }, { milestoneId }],
+    ['issues_update', { issueIdOrKey: 'CLB-1', milestoneId: null }, { milestoneId: null }],
+  ];
+  for (const [name, args, body] of commands) {
+    assert.equal((await f.call('full', name, args)).isError, false);
+    assert.deepEqual(f.calls.at(-1).body, body);
+  }
+  assert.equal((await f.call('full', 'issues_list', { milestoneId })).isError, false);
+  assert.equal(f.calls.at(-1).query.milestoneId, milestoneId);
+});
+
 test('every tool forwards to its own route and method', async () => {
   const f = fixture();
   const args = { projects_statuses: { projectId: 'p1' }, issues_get: { issueIdOrKey: 'CLB-1' }, issues_create: { title: 't', projectId: 'p1' },
