@@ -258,7 +258,7 @@ Eligible work that no run has started on can move to a seat that can start it, w
 | The work | Who moves it | How |
 | --- | --- | --- |
 | A review or security request | Collab | Places it again on the seat of the role with the most room. |
-| A developer issue the lead placed | The lead | Is woken with `child_no_room`, assigns it to another developer seat and writes one comment. |
+| A developer issue the lead placed | The lead | Is woken with `child_no_room` and can assign it to another developer seat and write one comment. |
 | The same, while the lead's own seat has had no room for 10 minutes | Collab | May assign it to another developer seat and write one comment on it and one on the epic. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
 | Anything a run has started on | Nobody | It keeps its seat and waits. |
 
@@ -301,11 +301,11 @@ This is the one case where Collab assigns developer work. A developer issue move
 1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, no run has ever started on it, and its developer seat has had no room for 10 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due after that run started.
 2. The lead's own seat has had no room for 10 minutes too, counted as for any seat. A lead seat run by hand, or one whose figure is unknown, is not full: Collab does not move the issue.
 3. No run of the lead's is open on that parent issue.
-4. Another developer seat has a number and holds fewer than 3 open issues from the lead.
+4. Another developer seat has a number, holds fewer than 3 open issues from the lead, and is not a seat the issue was moved off before.
 
 | What Collab does | How |
 | --- | --- |
-| Picks the seat | The first in the [placing order](#placed-by-room) among those under the lead's limit: most room, then fewest open runs. Never a seat the issue was moved off before. |
+| Picks the seat | The first eligible seat in the [placing order](#placed-by-room): most room, then fewest open runs. |
 | Assigns it | The lead's hand stays on the assignment: the issue counts toward the lead's limit, and the lead may move it again. |
 | Says so | One comment on the issue and one on its parent, under the lead seat's name: from which seat, to which seat, and that the lead's seat had no room. No percentage. The issue's **Activity** tab has `Collab moved this issue from <seat> to <seat>: <why>`. |
 
