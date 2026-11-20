@@ -309,5 +309,21 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     assert.equal((await row(rev.id)).room, 30);
     const again = await seat('rev', 'reviewer', person, { byRunner: true });
     assert.deepEqual([again.id, again.ownerId, await row(rev.id)], [rev.id, person, none]);
+
+    const find = prisma.agentSeat.findMany;
+    prisma.agentSeat.findMany = async (...args) => {
+      const found = await find.apply(prisma.agentSeat, args);
+      await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: rev.id });
+      await seat('rev', 'reviewer', person, { byRunner: true });
+      return found;
+    };
+    let response;
+    try { response = await ask(third, { have: [], rooms: [{ seat: rev.id, room: 90, program: 'Codex' }] }); }
+    finally { prisma.agentSeat.findMany = find; }
+    assert.equal(response[0], 200);
+    assert.ok(response[1].refused.includes(rev.id));
+    assert.deepEqual(await row(rev.id), none);
+    assert.equal((await ask(third, { have: [], rooms: [{ seat: rev.id, room: 50, program: 'Codex' }] }))[0], 200);
+    assert.equal((await row(rev.id)).room, 50);
   });
 });

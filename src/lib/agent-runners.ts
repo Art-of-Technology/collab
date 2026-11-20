@@ -253,6 +253,9 @@ export async function fetchSeats(credential: string, have: string[],
 
   // The seats that are this runner's to run. A figure is stored under the same conditions, stated again on the seat's row.
   const mine = { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } };
+  const versions = report.rooms?.length ? await prisma.$queryRaw<{ id: string; version: string }[]>`
+    SELECT "id", xmin::text AS "version" FROM "AgentSeat"
+    WHERE "workspaceId" = ${workspaceId} AND "ownerId" = ${ownerId} AND "id" = ANY(${report.rooms.map(room => room.seat)})` : [];
   const seats = await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
   const notStored: string[] = [];
@@ -264,7 +267,8 @@ export async function fetchSeats(credential: string, have: string[],
     if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
     if (report.state) await tx.agentRunner.update({ where: { id: runner.id }, data: { state: report.state } });
     for (const { seat: id, room, program } of report.rooms ?? []) {
-      if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
+      const version = versions.find(seat => seat.id === id)?.version;
+      if (!version || !seats.some(seat => seat.id === id) || !(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${id} AND xmin::text = ${version} FOR UPDATE`).length || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
         data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
     }
   });
