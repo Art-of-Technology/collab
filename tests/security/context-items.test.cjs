@@ -69,7 +69,7 @@ function fixture(userId = 'alice') {
     '@prisma/client': client,
     '@/lib/prisma': { prisma: db },
     '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'),
-    '@/utils/cloudinary-server': { cloudinary: { url: id => id, uploader: { destroy: async () => ({}) } } },
+    '@/lib/file-storage': { FileStorageError: Error, fileStorageConfigured: () => false },
   };
   // Folders, files and the reply that reports their errors share one error class, so each module is
   // loaded once here and handed to the next: two copies of the class would answer 500 instead of 404.
