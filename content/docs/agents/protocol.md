@@ -131,7 +131,6 @@ Which seat gets the next issue. `lead.seats` lists the seats of a role with the 
 | `unknown` | It comes after the seats with a number. Use it when none of those is under its limit. |
 | `no_room` | Give it nothing. |
 
-- Equal room: the seat whose owner has the fewest open runs is listed first, then the default seat.
 - When every seat is `unknown`, the order is the one from before room: the oldest seat first. Assign as you did then.
 
 The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).

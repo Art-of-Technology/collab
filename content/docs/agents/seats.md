@@ -242,7 +242,7 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 | Field | What it is |
 | --- | --- |
 | `owner` | The person whose runner works the seat, with `id` and `name`, or `null`. |
-| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` and the time `at`; the other two have a `reason`. |
+| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` (which can be `null`) and the time `at`; the other two have a `reason`. |
 | `openRuns` | The runs the owner has open right now. |
 
 - The seats of one role are in the order above. Prefer the first seat that is under its limit of issues from the lead. A seat with no room gets nothing.
