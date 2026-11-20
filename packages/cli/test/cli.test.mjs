@@ -2656,6 +2656,41 @@ test('seat run: a program that ignores the request to stop is killed, so a fence
   assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: null }]);
 });
 
+test('issues attach sends a file as base64 with its name, and refuses what it cannot send', async t => {
+  const f = await fixture(t);
+  const directory = mkdtempSync(path.join(tmpdir(), 'collab-attach-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3, 255]);
+  const file = path.join(directory, 'overview.png');
+  writeFileSync(file, png);
+
+  // The bytes travel as they are, not as text, and the file's own name is used unless another is given.
+  const sent = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--workspace', 'w']);
+  assert.equal(sent.code, 0, sent.stderr);
+  assert.equal(f.calls.at(-1).method, 'POST');
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/issues/APP-1/attachments?workspaceId=w');
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { contentBase64: png.toString('base64'), name: 'overview.png' });
+  await f.run(['issues', 'attach', 'APP-1', '--file', file, '--name', 'first screen.png', '--workspace', 'w']);
+  assert.equal(JSON.parse(f.calls.at(-1).body).name, 'first screen.png');
+
+  // Nothing is sent for a file that is missing, empty or over the stated limit, or when no file is named.
+  const calls = f.calls.length;
+  const empty = path.join(directory, 'empty.png'), large = path.join(directory, 'large.bin');
+  writeFileSync(empty, '');
+  writeFileSync(large, Buffer.alloc(5 * 1024 * 1024 + 1));
+  for (const [args, error] of [
+    [['--file', path.join(directory, 'missing.png')], 'invalid_input'],
+    [['--file', empty], 'invalid_input'],
+    [['--file', large], 'input_too_large'],
+    [['--name', 'overview.png'], 'required_field'],
+    [['--file', file, '--content-base64', 'AAAA'], 'invalid_input'],
+  ]) {
+    const refused = await f.run(['issues', 'attach', 'APP-1', ...args, '--workspace', 'w']);
+    assert.equal(refused.error?.error, error, JSON.stringify(args.slice(0, 1)));
+  }
+  assert.equal(f.calls.length, calls);
+});
+
 test('folder and file reads forward their ids and project through authenticated GETs', async t => {
   const f = await fixture(t);
   for (const [args, expected] of [

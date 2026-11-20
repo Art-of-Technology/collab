@@ -135,6 +135,10 @@ export const commands = {
   'issues restore': command('POST', 'issues/:id/restore', {}, projectQuery, { requiredQuery: ['projectId'] }),
   'issues assign': command('POST', 'issues/:id/assign', { assigneeId: string, role: string, unassign: boolean }),
   'issues activity': command('GET', 'issues/:id/activity', {}, { limit: integer, action: string }),
+  'issues attach': command('POST', 'issues/:id/attachments', { name: string, contentBase64: string }, {}, {
+    required: ['name', 'contentBase64'], localOptions: { file: string },
+    description: 'Attach a file to an issue: --file PATH reads it (at most 5 MiB; --name when it is read from stdin with --file -). The file is kept in the Issue attachments folder of the issue\'s project. The reply has its "markdown": put that line in a comment or in the description and the image shows there, or the file is offered as a download.',
+  }),
   'comments list': command('GET', 'issues/:id/comments', {}, { flat: boolean }),
   'comments add': command('POST', 'issues/:id/comments', { content: string, parentId: string }, {}, { required: ['content'] }),
   'comments wait': command('GET', 'issues/:id/comments', {}, { since: string }, {

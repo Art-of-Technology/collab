@@ -63,15 +63,16 @@ function validDateTime(value) {
     Number.isFinite(Date.parse(value)) &&
     new Date(value.slice(0, 10)).toISOString().slice(0, 10) === value.slice(0, 10);
 }
-async function boundedInput(file) {
+async function boundedBytes(file, limit, message) {
   const stream = file === '-' ? process.stdin : fs.createReadStream(file);
   const chunks = []; let size = 0;
   const timer = setTimeout(() => stream.destroy(new Error('input timeout')), 30000);
   try {
-    for await (const chunk of stream) { size += chunk.length; if (size > 1024 * 1024) throw new CliError('input_too_large', 'Input is limited to 1 MiB.'); chunks.push(Buffer.from(chunk)); }
-    return Buffer.concat(chunks).toString('utf8');
+    for await (const chunk of stream) { size += chunk.length; if (size > limit) throw new CliError('input_too_large', message); chunks.push(Buffer.from(chunk)); }
+    return Buffer.concat(chunks);
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
+const boundedInput = async file => (await boundedBytes(file, 1024 * 1024, 'Input is limited to 1 MiB.')).toString('utf8');
 function help() {
   return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], workerCommands, coordinatorCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
@@ -219,6 +220,15 @@ async function main() {
   for (const key of textFiles) if (options[`${key}-file`]) {
     if (Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
+  }
+  if (name === 'issues attach' && options.file !== undefined) {
+    if (Object.hasOwn(body, 'contentBase64')) throw new CliError('invalid_input', 'Give the file with --file or with --content-base64, not both.');
+    let bytes;
+    try { bytes = await boundedBytes(options.file, 5 * 1024 * 1024, 'A file to attach is limited to 5 MiB.'); }
+    catch (error) { if (error instanceof CliError) throw error; throw new CliError('invalid_input', 'The file given with --file could not be read.'); }
+    if (!bytes.length) throw new CliError('invalid_input', 'The file given with --file is empty.');
+    body.contentBase64 = bytes.toString('base64');
+    if (body.name === undefined && options.file !== '-') body.name = path.basename(options.file);
   }
   if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
       (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {
