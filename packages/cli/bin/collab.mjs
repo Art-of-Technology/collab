@@ -228,6 +228,7 @@ async function main() {
     catch (error) { if (error instanceof CliError) throw error; throw new CliError('invalid_input', 'The file given with --file could not be read.'); }
     if (!attachmentBytes.length) throw new CliError('invalid_input', 'The file given with --file is empty.');
     if (body.name === undefined && options.file !== '-') body.name = path.basename(options.file);
+    if (body.name === undefined || body.name === null || body.name === '') throw new CliError('required_field', 'Missing required --name.');
   }
   if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
       (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {

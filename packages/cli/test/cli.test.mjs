@@ -2658,6 +2658,9 @@ test('seat run: a program that ignores the request to stop is killed, so a fence
 
 test('issues attach sends a file as base64 with its name, and refuses what it cannot send', async t => {
   const f = await fixture(t);
+  const spec = (await f.run(['schema'])).data.commands['issues attach'];
+  assert.deepEqual(spec.requiredOptions, ['file']);
+  assert.ok(!spec.required?.includes('name'));
   const directory = mkdtempSync(path.join(tmpdir(), 'collab-attach-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3, 255]);
@@ -2672,6 +2675,13 @@ test('issues attach sends a file as base64 with its name, and refuses what it ca
   assert.deepEqual(JSON.parse(f.calls.at(-1).body), { contentBase64: png.toString('base64'), name: 'overview.png' });
   await f.run(['issues', 'attach', 'APP-1', '--file', file, '--name', 'first screen.png', '--workspace', 'w']);
   assert.equal(JSON.parse(f.calls.at(-1).body).name, 'first screen.png');
+  const stdin = await f.run(['issues', 'attach', 'APP-1', '--file', '-', '--name', 'stdin.png', '--workspace', 'w'], { input: 'image' });
+  assert.equal(stdin.code, 0, stdin.stderr);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { name: 'stdin.png', contentBase64: 'aW1hZ2U=' });
+  const beforeUnnamed = f.calls.length;
+  const unnamed = await f.run(['issues', 'attach', 'APP-1', '--file', '-', '--workspace', 'w'], { input: 'image' });
+  assert.equal(unnamed.error?.error, 'required_field');
+  assert.equal(f.calls.length, beforeUnnamed);
 
   // Nothing is sent for a file that is missing, empty or over the stated limit, or when no file is named.
   const calls = f.calls.length;
