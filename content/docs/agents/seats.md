@@ -128,6 +128,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
+- `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
@@ -254,18 +255,18 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 
 ### When a seat has had no room for 10 minutes
 
-Eligible work that no run has started on can move to a seat that can start it, without waiting for an allowance to reset.
+Eligible work that no run has started on can move to a seat that can start it, without waiting for an allowance to reset. Work a run has started on can move too, between runs and after 30 minutes: see [Started work](#started-work).
 
 | The work | Who moves it | How |
 | --- | --- | --- |
 | A review or security request | Collab | Places it again on the seat of the role with the most room. |
 | A developer issue the lead placed | The lead | Is woken with `child_no_room` and can assign it to another developer seat and write one comment. |
 | The same, while the lead's own seat has had no room for 10 minutes | Collab | May assign it to another developer seat and write one comment on it and one on the epic. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
-| Anything a run has started on | Nobody | It keeps its seat and waits. |
+| Work a run has started on | As above | Only between runs, after 30 minutes, and only when its last run pushed. See [Started work](#started-work). |
 
-When it moves, all of these hold:
+When unstarted work moves, all of these hold:
 
-1. No run has started on it. A run that was started and stopped, lost or finished counts as started.
+1. No run has started on it. A run that was started and stopped, lost or finished counts as started, and [started work](#started-work) has its own rules.
 2. Its seat reads as **no room**, and has for 10 minutes. A seat whose room is unknown keeps its work. A seat run by hand is unknown; an old figure is unknown when the runner is connected, online and working.
 3. Another seat of the role has a number. A seat whose room is unknown or none takes nothing, also when its runner is working: standing level with the most room is for new work, a move needs a real figure.
 
@@ -277,7 +278,7 @@ How the 10 minutes are counted:
 | The runner is offline | Its last call. Offline already means 10 minutes of silence, so nothing more is waited for. |
 | No runner is connected | When the last runner was removed, or when the seat was made, whichever is later. |
 
-A request Collab moved:
+An unstarted request Collab moved:
 
 - has a line on its **Activity** tab: `Collab moved this request from <seat> to <seat>: <seat> had no room for 10 minutes (<why>)`. It names no percentage.
 - arrives in the new seat's inbox as `assigned`.
@@ -292,14 +293,37 @@ Limits of this version:
 - A release request never moves: a project has one release seat.
 - A `developer` request is not moved by Collab. Other developer work is moved by Collab only when the lead's own seat has no room: see below.
 - The lead is not woken for a developer issue a person assigned, or for one outside the epic it waits on: it may not move those.
-- The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours.
-- If a seat is retired during a no-room spell and made again while its runner stays paused or full, its earlier spell can make work eligible to move up to 10 minutes early. See `markNoRoom` in `src/lib/agent-seats.ts`.
+- The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours. So a started child that waits for a person or another issue when its 30 minutes come, and is ready for its next run only after the lead has looked, does not move in that spell.
+- If a seat is retired during a no-room spell and made again while its runner stays paused or full, its earlier spell can make work eligible to move up to 10 minutes early (30 for started work). See `markNoRoom` in `src/lib/agent-seats.ts`.
+
+### Started work
+
+Work a run has started on moves to another seat too, so a half-done issue does not wait days for one person's allowance. It moves the way unstarted work does, by the same people, with three limits:
+
+| Limit | What it means |
+| --- | --- |
+| **Between runs only** | No run is open on it, and its seat's inbox offers it for its next run: to resume, a review came back, a reply, a blocker is done. An issue that waits for a person or for another issue is not offered, so it does not move: there is nothing to run. |
+| **30 minutes** | Its seat has had no room for 30 minutes, counted as in the table above with 30 instead of 10. An offline runner counts from its last call. Unknown room never counts. |
+| **The last run pushed** | The last run on the issue finished with `--pull-request` and `--head-commit`. A pull request exists only for a pushed branch. A last run that stopped, was lost, or finished without them: Collab cannot tell, and the issue stays. |
+
+And, as for unstarted work, another seat of the role has a number, for developer work is under the lead's limit, and is not a seat the issue was moved off before.
+
+| What moves | Who moves it |
+| --- | --- |
+| A review or security request | Collab. |
+| A developer issue the lead placed | The lead, woken with `child_no_room`. The `noRoom` entry has the `pullRequest`. |
+| The same, while the lead's own seat has had no room for 10 minutes | Collab. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
+
+- When Collab moves started work, the **Activity** tab says from which seat, to which seat, why, and that the work continues from the branch its last run pushed. No percentage. A comment says the same and that what the first seat did not push stays behind. If a request has no trace of its filer, the comment is under the new seat's name and does not wake it. For a lead-driven move, the lead writes the details in a comment.
+- The new seat's session follows `movedFrom` in [the run context](#start-from-the-run-context) before continuing from the last exit note.
+- **What is lost:** anything the first seat did not push. It stays in that seat's working copy and is not part of the work any more.
+- Once per no-room spell, and never moved back to a seat it left. A run that starts on the old seat while the move is made wins.
 
 ### When the lead's own seat has no room
 
 This is the one case where Collab assigns developer work. A developer issue moves without the lead when all of these hold:
 
-1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, no run has ever started on it, and its developer seat has had no room for 10 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due after that run started.
+1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, and either no run has ever started on it and its developer seat has had no room for 10 minutes, or it is [started work](#started-work) that may move and its seat has had no room for 30 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due after that run started.
 2. The lead's own seat has had no room for 10 minutes too, counted as for any seat. A lead seat run by hand, or one whose figure is unknown, is not full: Collab does not move the issue.
 3. No run of the lead's is open on that parent issue.
 4. Another developer seat has a number, holds fewer than 3 open issues from the lead, and is not a seat the issue was moved off before.
@@ -312,7 +336,7 @@ This is the one case where Collab assigns developer work. A developer issue move
 
 - Collab looks when a developer seat of the project reads its inbox. There is no timer.
 - Moved work is not moved back when the first seat has room again.
-- An issue a person assigned, or one a run has started on, stays. A run that starts before the move wins; a later checkout on the old seat is refused.
+- An issue a person assigned stays, and so does started work outside the limits of [Started work](#started-work). A run that starts before the move wins; a later checkout on the old seat is refused.
 - Collab chooses by room alone. It does not know which issues change the same files, the order the epic gives, or lanes: the lead checks those when it runs again. See [When Collab moved a child](/docs/agents/protocol#when-collab-moved-a-child).
 - The comments are the lead's own, so they do not wake it. The epic comes back when a child is done, blocked or idle, as before.
 
@@ -335,7 +359,7 @@ What the lead may assign:
 - Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, assigning to a person or to itself, and assigning an issue that is done or that the same call marks done are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
 - Only an issue with no assignee that no lead has placed before, or an issue whose current assignee the lead itself set. Anything else was decided by someone else and stands: `403 assign_by_person`. So an issue a person assigned is not moved, and an issue the lead placed that was then unassigned, by a person or because its seat was retired, waits for a person.
 - A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns, and a done issue cannot be assigned: reopening an issue that was done after the lead placed it, or restoring one from Trash, is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
-- Not an issue a run is open on: `409 already_running`. It keeps its seat until the run has ended.
+- Not an issue a run is open on: `409 already_running`. It keeps its seat until the run has ended. An issue a run has started on may be moved between runs: see [Started work](#started-work).
 - Every assignment is on the issue's **Activity** tab under the lead's name, with the seat it went to.
 
 What brings the epic back, each as the `reason` in the lead's inbox:
@@ -343,7 +367,7 @@ What brings the epic back, each as the `reason` in the lead's inbox:
 - `child_done`: a child issue reached a done status after the lead's last run started.
 - `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
 - `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
-- `child_no_room`: a child issue the lead placed, on which no run ever started, sits on a developer seat that has had [no room for 10 minutes](#when-a-seat-has-had-no-room-for-10-minutes), and another developer seat has a number and is under its limit. The item has `noRoom`: a list of `{ issueKey, seat, reason }`, one per such child. Offered once per time the seat is without room: after the lead's next run it is not offered again until the seat has had room and lost it again.
+- `child_no_room`: a child issue the lead placed sits on a developer seat without room, and another developer seat has a number and is under its limit. Either no run ever started on it and the seat has had [no room for 10 minutes](#when-a-seat-has-had-no-room-for-10-minutes), or it is [started work](#started-work) that may move after 30 minutes. The item has `noRoom`: a list of `{ issueKey, seat, reason }`, one per such child, and a started child's entry also has the `pullRequest` its last run pushed. Offered once per time the seat is without room: after the lead's next run it is not offered again until the seat has had room and lost it again.
 - `reply`, as for any blocked issue: someone else commented on the epic.
 
 When two of these hold, the first in this list is the reason given.

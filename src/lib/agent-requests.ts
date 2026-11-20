@@ -2,8 +2,8 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
-import { NOT_DONE } from '@/lib/agent-runs';
-import { ASSIGN_CAP, byRoom, countSeatHandoff, fromLead, HandoffError, IDLE_MS, LEAD_CAP, NO_ROOM_MOVE_MS, noRoomDue, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
+import { NOT_DONE, pushedWork, waitsPushed, type Pushed } from '@/lib/agent-runs';
+import { ASSIGN_CAP, byRoom, countSeatHandoff, fromLead, HandoffError, IDLE_MS, LEAD_CAP, NO_ROOM_MOVE_MS, noRoomDue, STARTED_MOVE_MS, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated, emitIssueUpdated } from '@/lib/event-bus';
@@ -189,6 +189,18 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
 }
 
 /**
+ * CLB-809: started work moves between runs only. Behind the locks the issue is as it was when its move was decided: still
+ * unstarted, or with the same last run, which pushed its work and so is not open, and still offered in its seat's inbox
+ * (a blocker reopened meanwhile keeps it). A run that started meanwhile wins.
+ */
+const asDecided = async (tx: Prisma.TransactionClient, issue: { id: string; workspaceId: string; projectId: string }, pushed: Pushed | undefined,
+  from: { userId: string; role: string }) => pushed
+  ? (await pushedWork(tx, issue.id))?.runId === pushed.runId && (await waitsPushed(issue.workspaceId, issue.projectId, from, tx)).has(issue.id)
+  : !await tx.agentRun.count({ where: { issueId: issue.id } });
+/** What the timeline says of started work that moved: it goes on from the branch its last run pushed. */
+const continues = (pushed: Pushed | undefined) => pushed ? `; the work continues from the branch its last run pushed (${pushed.pullRequest})` : '';
+
+/**
  * CLB-780: a request no run has started on leaves a seat that has had no room for `NO_ROOM_MOVE_MS`. Called before a
  * seat's inbox is read; there is no scheduler, and the seat that could take such a request is one that reads its
  * inbox, so the read that moves a request already lists it. It looks only for a reader whose role takes requests
@@ -198,29 +210,35 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
  * unknown, or inside the time, it waits where it is. It never returns to a seat it was moved off. The timeline says
  * from which seat and why, and names no figure. Started means a run exists on the issue, whatever became of it.
  * Nothing is moved in a Forge-connected project. The caller answers the inbox whether or not this fails.
+ * CLB-809: a request a run has started on moves the same way between runs, after `STARTED_MOVE_MS`, when its seat's
+ * inbox offers it for its next run and its last run pushed its work (`waitsPushed`).
  */
 export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'workspace'>) {
   const reader = await seatFor(prisma, context);
   if (reader?.role === 'developer') return moveStories(context, reader);
   const role = reader && (Object.keys(REQUESTS) as RequestRole[]).find(name => name !== 'developer' && REQUESTS[name].seat === reader.role);
   if (!reader || !role) return;
-  const unstarted = { projectId: reader.projectId, agentRequestRole: role, agentRuns: { none: {} }, ...NOT_DONE };
-  const waiting = await prisma.issue.findMany({ where: { ...unstarted, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
-    select: { id: true, assigneeId: true, reporterId: true } });
+  const requests = { projectId: reader.projectId, agentRequestRole: role, ...NOT_DONE };
+  const waiting = await prisma.issue.findMany({ where: { ...requests, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
+    select: { id: true, assigneeId: true, reporterId: true, agentRuns: { take: 1, select: { id: true } } } });
   if (!waiting.length) return;
   const now = new Date();
   const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
   if (!seats.some(seat => seat.room.kind === 'room')) return;
   // A Forge-connected project's issues change through its Forge board: nothing is moved there, and that is no failure.
   if (await assertLegacyProjectWriteAllowed(reader.projectId).then(() => false, error => { if (error instanceof ForgeProjectWriteError) return true; throw error; })) return;
-  const dues = new Map<string, Date | null>();
+  const dues = new Map<string, Date | null>(), offered = new Map<string, Map<string, Pushed>>();
   // Each request on its own: one that fails is logged and the next one is still tried; the next read tries it again.
   for (const request of waiting) try {
     const from = seats.find(seat => seat.userId === request.assigneeId);
     if (from?.room.kind !== 'no_room') continue;
-    if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
-    const due = dues.get(from.id);
+    const wait = request.agentRuns.length ? STARTED_MOVE_MS : NO_ROOM_MOVE_MS;
+    if (!dues.has(`${from.id}:${wait}`)) dues.set(`${from.id}:${wait}`, await noRoomDue(prisma, from, now, wait));
+    const due = dues.get(`${from.id}:${wait}`);
     if (!due || due > now) continue;
+    if (request.agentRuns.length && !offered.has(from.id)) offered.set(from.id, await waitsPushed(context.workspace.id, reader.projectId, from));
+    const pushed = offered.get(from.id)?.get(request.id);
+    if (request.agentRuns.length && !pushed) continue;
     const updated = await prisma.$transaction(async tx => {
       const placements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { details: true, userId: true } });
       const links = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
@@ -240,8 +258,8 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${reader.projectId} AND "role" = ${reader.role}
         AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) return;
       await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
-      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
-      if (!issue) return;
+      const issue = await tx.issue.findFirst({ where: { ...requests, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
+      if (!issue || !await asDecided(tx, issue, pushed, from)) return;
       const currentPlacements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { details: true, userId: true } });
       const currentLinks = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
       const currentFilers = [currentPlacements[0]?.userId, ...currentLinks.map(link => link.createdBy), issue.reporterId].filter((id): id is string => !!id);
@@ -251,9 +269,9 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       const at = new Date(), current = await seatsWithRoom(tx, reader.projectId, reader.role, at);
       const source = current.find(seat => seat.id === from.id);
       if (source?.room.kind !== 'no_room' || current.find(seat => seat.id === to.id)?.room.kind !== 'room') return;
-      const since = await noRoomDue(tx, source, at);
+      const since = await noRoomDue(tx, source, at, wait);
       if (!since || since > at) return;
-      const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${source.room.reason})`;
+      const why = `${from.name} had no room for ${wait / 60_000} minutes (${source.room.reason})${continues(pushed)}`;
       await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
       const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
@@ -264,7 +282,11 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       // Under the name of whoever filed the request, as its placing is: Collab has no account of its own.
       await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: attributedTo, workspaceId: issue.workspaceId,
         projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
-        details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
+        details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why, ...(pushed && { pullRequest: pushed.pullRequest, headCommit: pushed.headCommit }) }) } });
+      // Started work in review or blocked is offered only for something said after its new assignment: this comment, as
+      // a moved story's is, so the new seat's inbox offers what was ready on the seat it left.
+      if (pushed) await tx.issueComment.create({ data: { issueId: issue.id, authorId: attributedTo, createdAt: new Date(at.getTime() + 1),
+        content: `Collab moved this request from ${from.name} to ${to.name}, because ${why}. What ${from.name} did not push stays behind.` } });
       return updated;
     });
     if (updated) emitIssueUpdated(updated, [{ fieldName: 'assigneeId', oldValue: from.userId, newValue: updated.assigneeId }],
@@ -285,6 +307,9 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
  * cost the read of the lead seat and one indexed read of such stories, which finds none. One comment on the story and
  * one on the lead's issue say from which seat, to which, and why, under the lead's name: Collab has no account of its
  * own, and the lead's own comment does not wake it (it cannot run now; a child's progress wakes it later).
+ * CLB-809: a story a run has started on moves the same way between runs, after `STARTED_MOVE_MS` on its seat, when that
+ * seat's inbox offers it for its next run and its last run pushed its work (`waitsPushed`); the lead's own seat still
+ * counts `NO_ROOM_MOVE_MS`.
  * shortcut: two moves onto one seat are held apart by its row; a lead's own assignment, already refused while it has
  * no room, is held to the limit by its serializable read only, so it could pass the limit by one in that moment.
  */
@@ -292,7 +317,7 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
   const { projectId } = reader;
   const lead = await prisma.agentSeat.findFirst({ where: { projectId, role: 'lead', retiredAt: null }, select: { userId: true } });
   if (!lead) return;
-  const unstarted = { workspaceId: context.workspace.id, projectId, agentRequestRole: null, agentRuns: { none: {} }, ...NOT_DONE,
+  const stories = { workspaceId: context.workspace.id, projectId, agentRequestRole: null, ...NOT_DONE,
     parent: { assigneeId: lead.userId, agentRuns: { none: { endedAt: null } }, ...NOT_DONE }, helpers: { some: { approvedBy: lead.userId } } };
   const placedByLead = (issue: { assigneeId: string | null; helpers: { userId: string }[] }) => issue.helpers.some(row => row.userId === issue.assigneeId);
   const helpers = { where: { approvedBy: lead.userId }, select: { userId: true } };
@@ -302,8 +327,8 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
     const run = parent?.agentRuns[0], assigned = parent?.helpers[0]?.approvedAt ?? parent?.helpers[0]?.assignedAt ?? parent?.createdAt;
     return !!run?.endedAt && !!assigned && run.endedAt >= assigned && run.outcome === 'blocked' && due > run.startedAt;
   };
-  const waiting = (await prisma.issue.findMany({ where: { ...unstarted, assignee: { agentSeat: { role: 'developer' } } }, orderBy: { createdAt: 'asc' },
-    select: { id: true, parentId: true, parent, assigneeId: true, helpers } })).filter(placedByLead);
+  const waiting = (await prisma.issue.findMany({ where: { ...stories, assignee: { agentSeat: { role: 'developer' } } }, orderBy: { createdAt: 'asc' },
+    select: { id: true, parentId: true, parent, assigneeId: true, helpers, agentRuns: { take: 1, select: { id: true } } } })).filter(placedByLead);
   if (!waiting.length) return;
   const now = new Date();
   const leadDue = async (db: Prisma.TransactionClient | typeof prisma, at: Date) => {
@@ -317,33 +342,37 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
   const seats = await seatsWithRoom(prisma, projectId, 'developer', now);
   if (!seats.some(seat => seat.room.kind === 'room')) return;
   if (await assertLegacyProjectWriteAllowed(projectId).then(() => false, error => { if (error instanceof ForgeProjectWriteError) return true; throw error; })) return;
-  const dues = new Map<string, Date | null>();
+  const dues = new Map<string, Date | null>(), offered = new Map<string, Map<string, Pushed>>();
   for (const story of waiting) try {
     const from = seats.find(seat => seat.userId === story.assigneeId);
     if (from?.room.kind !== 'no_room') continue;
-    if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
-    const due = dues.get(from.id);
+    const wait = story.agentRuns.length ? STARTED_MOVE_MS : NO_ROOM_MOVE_MS;
+    if (!dues.has(`${from.id}:${wait}`)) dues.set(`${from.id}:${wait}`, await noRoomDue(prisma, from, now, wait));
+    const due = dues.get(`${from.id}:${wait}`);
     if (!due || due > now || !unseen(story.parent, due)) continue;
+    if (story.agentRuns.length && !offered.has(from.id)) offered.set(from.id, await waitsPushed(context.workspace.id, projectId, from));
+    const pushed = offered.get(from.id)?.get(story.id);
+    if (story.agentRuns.length && !pushed) continue;
     for (const to of byRoom(seats.filter(seat => seat.id !== from.id && seat.room.kind === 'room'))) {
       const updated = await prisma.$transaction(async tx => {
-        const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: 'STORY_MOVED' }, select: { details: true } }))
-          .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
-        if ((await leftOf()).includes(to.id) || await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;
+        const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: { in: ['STORY_MOVED', 'LEAD_ASSIGNED'] } }, select: { details: true, oldValue: true } }))
+          .flatMap(entry => [JSON.parse(entry.details ?? '{}').fromSeatId, entry.oldValue]);
+        if ((await leftOf()).some(id => id === to.id || id === to.userId) || await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;
         // As a request moves: the seat's row, then the issue's, the order a checkout takes them in, and whichever gets the
         // issue first decides. The seat's row is held for update, so two moves onto one seat count its limit in turn.
         if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = 'developer'
           AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR UPDATE`).length) return null;
         await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ANY(${[story.id, story.parentId]}) ORDER BY "id" FOR UPDATE`;
-        const issue = await tx.issue.findFirst({ where: { ...unstarted, id: story.id, parentId: story.parentId, assigneeId: from.userId },
+        const issue = await tx.issue.findFirst({ where: { ...stories, id: story.id, parentId: story.parentId, assigneeId: from.userId },
           select: { id: true, workspaceId: true, projectId: true, issueKey: true, parentId: true, parent, assigneeId: true, helpers } });
-        if (!issue || !placedByLead(issue)) return;
-        if ((await leftOf()).includes(to.id)) return null;
+        if (!issue || !placedByLead(issue) || !await asDecided(tx, issue, pushed, from)) return;
+        if ((await leftOf()).some(id => id === to.id || id === to.userId)) return null;
         // Read again behind the locks: a seat that got room back keeps its work, and a lead that got room back moves it itself.
         const at = new Date(), current = await seatsWithRoom(tx, projectId, 'developer', at);
         const source = current.find(seat => seat.id === from.id);
         if (source?.room.kind !== 'no_room') return;
         if (current.find(seat => seat.id === to.id)?.room.kind !== 'room') return null;
-        const since = await noRoomDue(tx, source, at);
+        const since = await noRoomDue(tx, source, at, wait);
         if (!since || since > at || !unseen(issue.parent, since)) return;
         const stuck = await leadDue(tx, at);
         if (!stuck || stuck.room.kind !== 'no_room') return;
@@ -355,11 +384,13 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
         const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: lead.userId } as const;
         await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
         await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
-        const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${source.room.reason}), and so had the lead seat ${stuck.name} (${stuck.room.reason})`;
+        const why = `${from.name} had no room for ${wait / 60_000} minutes (${source.room.reason}), and so had the lead seat ${stuck.name} (${stuck.room.reason})${continues(pushed)}`;
         await tx.issueActivity.create({ data: { action: 'STORY_MOVED', itemType: 'ISSUE', itemId: issue.id, userId: lead.userId, workspaceId: issue.workspaceId,
-          projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId, details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
-        await tx.issueComment.create({ data: { issueId: issue.id, authorId: lead.userId,
-          content: `Collab moved this story from ${from.name} to ${to.name}, because ${why}. No run had started on it.` } });
+          projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId, details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why,
+            ...(pushed && { pullRequest: pushed.pullRequest, headCommit: pushed.headCommit }) }) } });
+        // After the assignment's stamp, so a started story in review or blocked is offered to its new seat for it.
+        await tx.issueComment.create({ data: { issueId: issue.id, authorId: lead.userId, createdAt: new Date(at.getTime() + 1),
+          content: `Collab moved this story from ${from.name} to ${to.name}, because ${why}. ${pushed ? `What ${from.name} did not push stays behind.` : 'No run had started on it.'}` } });
         await tx.issueComment.create({ data: { issueId: issue.parentId!, authorId: lead.userId,
           content: `Collab moved ${issue.issueKey ?? issue.id} from ${from.name} to ${to.name}, because ${why}. Collab chose by room alone. `
             + 'Lead, when you run again: check whether a seat now holds two stories that change the same files, whether the order this epic gives still holds, and the lanes.' } });

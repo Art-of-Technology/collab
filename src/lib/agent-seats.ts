@@ -23,6 +23,8 @@ export const IDLE_MS = 10 * 60_000;
 export const ROOM_FRESH_MS = 15 * 60_000;
 /** A seat that has had no room for this long gives up the work no run has started on. */
 export const NO_ROOM_MOVE_MS = 10 * 60_000;
+/** A seat that has had no room for this long gives up, between runs, the work a run has started on and pushed (CLB-809). */
+export const STARTED_MOVE_MS = 30 * 60_000;
 /** The audit rows that open and end a spell in which a seat's runner says the seat has no room: see `markNoRoom`. */
 const NO_ROOM = 'agent_seat.no_room', ROOM_BACK = 'agent_seat.room_back';
 /** The issues that are not in a status of the done group. */
@@ -241,25 +243,27 @@ export async function markNoRoom(tx: Prisma.TransactionClient, workspaceId: stri
 }
 
 /**
- * For a seat that has no room now (`seatRoom`): the moment it had had none for `NO_ROOM_MOVE_MS`, from which the work
- * no run has started on leaves it, or null when Collab cannot tell since when. A runner that is offline has by then
- * been silent for `IDLE_MS`, and that is not waited for a second time. With no runner it is counted from when the
- * last one was removed, or from the seat's first day. Otherwise the runner said so, and the seat's open spell says
- * since when (`markNoRoom`); a seat with no open spell is not moved from.
+ * For a seat that has no room now (`seatRoom`): the moment it had had none for `wait`, from which its work leaves it:
+ * `NO_ROOM_MOVE_MS` for work no run has started on, `STARTED_MOVE_MS` for started work. Null when Collab cannot tell
+ * since when. A runner that is offline has had none since its last call: the `IDLE_MS` of silence that made it offline
+ * count toward the wait and are not waited for a second time. With no runner it is counted from when the last one was
+ * removed, or from the seat's first day. Otherwise the runner said so, and the seat's open spell says since when
+ * (`markNoRoom`); a seat with no open spell is not moved from.
  */
-export async function noRoomDue(db: DB, seat: { userId: string; workspaceId: string; ownerId: string | null; createdAt: Date }, now = new Date()): Promise<Date | null> {
+export async function noRoomDue(db: DB, seat: { userId: string; workspaceId: string; ownerId: string | null; createdAt: Date }, now = new Date(),
+  wait = NO_ROOM_MOVE_MS): Promise<Date | null> {
   // The same runner `seatsWithRoom` reads: the one admitted last that was not removed.
   const runners = seat.ownerId ? await db.agentRunner.findMany({ where: { workspaceId: seat.workspaceId, ownerId: seat.ownerId }, orderBy: { admittedAt: 'desc' },
     select: { lastSeenAt: true, admittedAt: true, removedAt: true } }) : [];
   const runner = runners.find(row => !row.removedAt);
-  if (!runner) return new Date(Math.max(seat.createdAt.getTime(), ...runners.map(row => row.removedAt!.getTime())) + NO_ROOM_MOVE_MS);
+  if (!runner) return new Date(Math.max(seat.createdAt.getTime(), ...runners.map(row => row.removedAt!.getTime())) + wait);
   if (!(runner.lastSeenAt && runner.lastSeenAt.getTime() > now.getTime() - IDLE_MS)) {
     const seen = runner.lastSeenAt ?? runner.admittedAt;
-    return seen && new Date(seen.getTime() + IDLE_MS);
+    return seen && new Date(seen.getTime() + Math.max(IDLE_MS, wait));
   }
   const last = await db.appAuditLog.findFirst({ where: { actorId: seat.userId, action: { in: [NO_ROOM, ROOM_BACK] } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { action: true, createdAt: true } });
-  return last?.action === NO_ROOM ? new Date(last.createdAt.getTime() + NO_ROOM_MOVE_MS) : null;
+  return last?.action === NO_ROOM ? new Date(last.createdAt.getTime() + wait) : null;
 }
 
 /**

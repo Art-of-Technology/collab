@@ -10,7 +10,7 @@ One run is one fresh session on one issue.
 
 1. Read the inbox. Take the first issue it lists.
 2. Check the issue out. That opens your run. A seat's run holds a lease of 60 seconds.
-3. Read the run context before anything else: `collab run context KEY`. It has the issue, the last exit note and the comments made since.
+3. Read the run context before anything else: `collab run context KEY`. It has the issue, the last exit note and the comments made since. If its `movedFrom` is not `null`, do what it says first: see [When the issue was moved to you](#when-the-issue-was-moved-to-you).
 4. Do the work. The lease is renewed while your session lives; a runner does that for you.
 5. Finish the run with an outcome and an exit note.
 6. Stop. The next issue is a new session.
@@ -82,6 +82,23 @@ collab run finish RUN_ID --generation VALUE --outcome in_review --review-request
 
 A note without a heading, or with a fact that is wrong or missing, is refused with `exit_note_required`. An outcome without what it waits for is refused with `exit_state_required`. Both replies list what is missing: add it and finish again.
 
+Push your branch before you finish, and give `--pull-request` and `--head-commit`. Started work can move to another seat between runs only when its last run recorded them: see [Started work](/docs/agents/seats#started-work).
+
+## When the issue was moved to you
+
+The issue may have been worked on another seat, in another person's space. Then the run context has `movedFrom`: the `seat` it came from, the `pullRequest` and `headCommit` its last run pushed, the `branch` where Collab knows it, and `first`, what to do before anything else. Follow `first`; the steps below apply when it says to merge.
+
+| Step | What you do |
+| --- | --- |
+| 1 | `git fetch origin` |
+| 2 | Merge what was pushed: `git merge origin/BRANCH`, with the `branch` from `movedFrom`. When `branch` is `null`, merge the `headCommit`. |
+| 3 | Read the last exit note and go on from its `## Next`. |
+
+- Do step 2 even when your working copy already has the issue's branch. A runner that had the issue before starts from what it holds, not from what the other seat pushed since.
+- What the other seat did not push is not part of the work any more. Do not look for it.
+- `movedFrom` with no `pullRequest`: Collab cannot tell what was pushed. Find the issue's branch before you change anything.
+- If the pull request cannot be safely matched to the repository your seat works in, `first` says so. Merge nothing, finish `blocked` and ask a person.
+
 ## File a request
 
 Ask for a review, a release, a security review or work in another project by filing a request. A request is a new issue, assigned to the seat that has that role in the target project.
@@ -143,16 +160,17 @@ The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).
 
 ### When a child's seat has no room
 
-When the epic comes back with `child_no_room`, a child you placed sits on a seat that has had no room for 10 minutes, and no run has started on it. The item's `noRoom` lists each such child with its `seat` and the `reason`.
+When the epic comes back with `child_no_room`, a child you placed sits on a seat without room. Either no run has started on it and the seat has had no room for 10 minutes, or it is [started work](/docs/agents/seats#started-work): no run is open on it, it waits for its next run, its seat has had no room for 30 minutes, and its last run pushed. The item's `noRoom` lists each such child with its `seat` and the `reason`, and a started child also with the `pullRequest` its last run pushed.
 
 | Step | What you do |
 | --- | --- |
-| 1 | Read the run context again. Skip a child of `noRoom` whose `lastRun` is no longer `null`: a run started on it meanwhile. |
-| 2 | For each remaining child, pick the first developer seat with a number that is under its limit, and assign it: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. Count the child you just gave a seat: the next child may need the next seat. |
-| 3 | Write one comment on each child you moved: from which seat, to which seat and why. For example: `Moved from Collab Developer to Collab Developer (Bob): its runner reports no room and no run had started.` |
+| 1 | Read the run context again. Skip a child of `noRoom` whose `lastRun` is `running`: a run is open on it. Skip a child listed without `pullRequest` whose `lastRun` is no longer `null`: a run started on it meanwhile, and Collab cannot tell what it pushed. |
+| 2 | For each remaining child, pick the first developer seat with a number that is under its limit and whose user ID is not in the child’s `movedOff` list, and assign it: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. Count the child you just gave a seat: the next child may need the next seat. |
+| 3 | Write one comment on each child you moved: from which seat, to which seat and why, and for a started child that the work continues from the pushed branch. For example: `Moved from Collab Developer to Collab Developer (Bob): its runner reports no room and no run had started.` Or: `Moved from Collab Developer to Collab Developer (Bob): its runner had no room for 30 minutes; the work continues from the branch of acme/app#12. What the first seat did not push stays behind.` |
 | 4 | Finish `blocked` with nothing named, as before. |
 
-- Move only what `noRoom` lists. A child a run has started on keeps its seat and waits.
+- Move only what `noRoom` lists. A child with a run open keeps its seat; a started child whose seat has had no room for less than 30 minutes, or whose last run pushed nothing, waits too.
+- The seat that takes a started child follows `movedFrom` in its run context first. What the first seat did not push is lost to the work.
 - `already_running` on the assignment: a run is open on that child. Leave it where it is.
 - Do not move a child back when its first seat has room again.
 - You are told once each time a seat is without room.
@@ -161,7 +179,7 @@ When the epic comes back with `child_no_room`, a child you placed sits on a seat
 
 ### When Collab moved a child
 
-When your own seat has had no room for 10 minutes, Collab may move an unstarted child you placed off a seat without room. This is the one case where Collab assigns developer work. The [seat rules](/docs/agents/seats#when-the-leads-own-seat-has-no-room) give the conditions. It leaves one comment on the child and one on the epic, under your name, starting `Collab moved`.
+When your own seat has had no room for 10 minutes, Collab may move a child you placed off a seat without room: an unstarted one, or [started work](/docs/agents/seats#started-work) between runs. This is the one case where Collab assigns developer work. The [seat rules](/docs/agents/seats#when-the-leads-own-seat-has-no-room) give the conditions. It leaves one comment on the child and one on the epic, under your name, starting `Collab moved`.
 
 When you run again, read the epic's comments and check each child Collab moved:
 
