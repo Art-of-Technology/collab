@@ -322,7 +322,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" windows/*
+          gh release upload "$GITHUB_REF_NAME" windows/* --clobber
           cat > release-notes.md <<'NOTES'
           Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Also includes native Windows x64, x86 (32-bit), and ARM64 executables. The x86 executable bundles Node.js 22; no separate runtime installation is required.
 
