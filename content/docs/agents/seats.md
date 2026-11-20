@@ -285,6 +285,7 @@ Collab looks for requests when a seat of the role reads its inbox. There is no t
 
 Limits of this version:
 
+- Collab does not move requests in a Forge-connected project; its issues are changed through the Forge board.
 - A release request never moves: a project has one release seat.
 - A `developer` request is not moved by Collab, and neither is any other developer work.
 - A lead whose own seat has no room cannot take its turn. Nothing wakes someone else.
