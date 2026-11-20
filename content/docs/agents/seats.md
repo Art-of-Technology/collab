@@ -22,7 +22,8 @@ The owner is fixed when the seat is created: creating a token again under the sa
 1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need permission to manage workspace permissions.
 2. Type a name. Everything the seat does is shown under this name.
 3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner.
-4. Choose **Create seat** and copy the token. It is shown once.
+4. The **Repository** line says what the seat will work in. Pick one only when the project has several; see [Which repository](/docs/agents/create-a-seat#which-repository).
+5. Choose **Create seat** and copy the token. It is shown once.
 
 The first seat of a role in a project is the default for that role.
 

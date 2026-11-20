@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { SeatRepositoryField, useSeatRepository } from '@/components/workspace/SeatRepositoryField';
+import { NEEDS_REPOSITORY } from '@/lib/agent-repository';
 
 export interface WorkspaceRef {
   id: string;
@@ -70,6 +72,14 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   const [retiring, setRetiring] = useState<{ name: string; seat: NonNullable<AgentTokenRow['seat']> } | null>(null);
   const orphanSeats = seats.filter(seat => !tokens?.some(token => token.seat?.id === seat.id));
   const asSeat = projectId !== NONE;
+  // What the seat will work in. With several repositories the seat picks one, starting at the project's default; a
+  // seat is not created while a role that works in a repository has none to work in.
+  const [repositoryId, setRepositoryId] = useState('');
+  const repository = useSeatRepository(asSeat ? projectId : null);
+  const needsRepository = NEEDS_REPOSITORY.includes(role);
+  const several = (repository.data?.repositories.length ?? 0) > 1;
+  const pick = needsRepository && several ? repositoryId || repository.data?.repository?.id || '' : '';
+  const repositorySettled = !asSeat || !needsRepository || (several ? !!pick : !!repository.data?.repository);
   const [busy, setBusy] = useState(false);
   const [minted, setMinted] = useState<{ name: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -89,7 +99,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(asSeat
-          ? { name, projectId, role, ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days), ...(byRunner && { byRunner }) }
+          ? { name, projectId, role, ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days), ...(byRunner && { byRunner }), ...(pick && { repositoryId: pick }) }
           : { name, access, expiresInDays: Number(days) }),
       });
       const data = await response.json().catch(() => ({}));
@@ -100,6 +110,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       setAccess('read');
       setDays('90');
       setProjectId(NONE);
+      setRepositoryId('');
       setRole('developer');
       setOwnerId(NONE);
       setByRunner(false);
@@ -293,7 +304,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
             </div>
             <div className="space-y-2">
               <Label htmlFor="agent-token-project">Seat in a project</Label>
-              <Select value={projectId} onValueChange={setProjectId}>
+              <Select value={projectId} onValueChange={value => { setProjectId(value); setRepositoryId(''); }}>
                 <SelectTrigger id="agent-token-project"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>No seat: a token for the whole workspace</SelectItem>
@@ -312,6 +323,8 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                     </SelectContent>
                   </Select>
                 </div>
+                <SeatRepositoryField key={projectId} projectId={projectId} roleName={roleLabel[role] ?? role} needed={needsRepository} query={repository}
+                  pick={pick} onPick={setRepositoryId} />
                 <div className="space-y-2">
                   <Label htmlFor="agent-token-owner">Owner</Label>
                   <Select value={ownerId} onValueChange={setOwnerId}>
@@ -365,7 +378,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)} disabled={busy}>Cancel</Button>
-            <Button onClick={create} disabled={busy || !name.trim() || (asSeat && byRunner && ownerId === NONE)}>
+            <Button onClick={create} disabled={busy || !name.trim() || (asSeat && byRunner && ownerId === NONE) || !repositorySettled}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {asSeat ? 'Create seat' : 'Create token'}
             </Button>

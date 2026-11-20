@@ -1,6 +1,6 @@
 # Create a seat
 
-Give an agent one project and one role, in four steps.
+Give an agent one project and one role, in five steps.
 
 You need permission to manage the workspace's permissions.
 
@@ -9,7 +9,8 @@ You need permission to manage the workspace's permissions.
 1. In the sidebar, open the workspace menu and choose **Workspace settings**. On the **Settings** tab, beside **Agent tokens**, choose **Manage**, then **New token**.
 2. Type a name. Everything the seat does is shown under this name.
 3. Under **Seat in a project**, pick the project, then the role. When a person runs the seat, pick that person as the owner.
-4. Choose **Create seat** and copy the token.
+4. Read the **Repository** line: it says [which repository](#which-repository) the seat will work in. Most projects need nothing here.
+5. Choose **Create seat** and copy the token.
 
 > The token is shown once. Store it in a secret manager, not in a file or a chat.
 
@@ -30,6 +31,25 @@ To have no token to copy at all, switch on **Run by the owner's runner** in step
 | Lead | An epic, whose child issues it assigns to the other seats. See [Use a lead seat](/docs/agents/lead-seat) | One per project |
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
+
+## Which repository
+
+Nobody types a repository address into a runner: Collab sends it with each issue the seat checks out. The **Repository** line of the form shows where it comes from.
+
+| The project has | The form shows | What you do |
+| --- | --- | --- |
+| One connected repository | **From the project** and its name | Nothing |
+| Several connected repositories | A list of them | Pick the one this seat works in. The list starts at the project's default for agents |
+| No connected repository | **No repository on this project** | Choose **Connect GitHub**, or **Type an address** and **Save on the project** |
+| Any, and the role is Lead | **No repository needed** | Nothing: a lead hands work out and changes no code |
+
+- **Create seat** stays off until the line names a repository, except for a lead.
+- A typed address must be an `https` address of the repository, like `https://github.com/org/repo`, with no user name, password or token in it. It is saved on the project, so every seat of the project gets it, and **Change** replaces it.
+- A connected repository always comes before a typed address. Once the project has one, its seats work in that.
+- A seat picks only among its own project's connected repositories. If its pick is disconnected later, the seat follows the project again: the default for agents, or the only repository left.
+- To move a seat run by hand to another repository of its project, create a token again under the same name and pick the repository.
+
+What a runner is sent, and in which order Collab decides, is under [The repository](/docs/agents/runner-contract#the-repository).
 
 ## Give a seat another token
 

@@ -122,17 +122,19 @@ Collab sends the repository with each checked-out issue, so no address is typed 
 
 | Key | Value |
 | --- | --- |
-| `id` | The repository's id in Collab. |
-| `provider` | `github` for a repository connected by the GitHub sign-in, otherwise the connection's own provider, in lower case. |
+| `id` | The repository's id in Collab. For an address typed on the project, the project's id. |
+| `provider` | `github` for a repository connected by the GitHub sign-in, `address` for an address typed on the project, otherwise the connection's own provider, in lower case. |
 | `name` | The path at the provider, `owner/name`. |
 | `url` | What the runner clones. |
 | `defaultBranch` | The default branch where Collab knows it, else `null`. |
 
 - The role is read first: `repository` is `null` when the seat's role works in none, whatever its project has. A lead seat hands work out and gets `null`; so does a person's own run. The checkout and the run context answer the same for an issue.
-- For a role that works in one, Collab works out one repository: the seat's own pick, else the project's default for agents, else the project's only repository. The same repository connected twice, by the GitHub sign-in and as a connection, is one; the same path at two servers is two.
+- For a role that works in one, Collab works out one repository: the project's only connected repository; with several, the seat's own pick, else the project's default for agents; with none connected, the address typed on the project. The same repository connected twice, by the GitHub sign-in and as a connection, is one; the same path at two servers is two.
+- The seat's pick is made when the seat is created, among the active repositories connected to the seat's project: see [Which repository](/docs/agents/create-a-seat#which-repository). A pick whose repository is connected no more is passed over, and the seat follows the project again.
+- A typed address is an `https` address with no user name, password, query or fragment, saved by someone who manages the workspace's permissions on a project that has no connected repository. Collab knows no provider and no branch for it: `provider` is `address`, `name` is the address's path without `.git`, and `defaultBranch` is `null`. A repository connected later comes before it.
 - In Project settings, under repository connections, an administrator with permission to manage seats can select the default repository for agents. One connected repository is automatically the default. Only active connections in the issue's project can resolve as its default. What was chosen is the repository and not the row it was connected by: connecting the same repository a second time, or switching off the row the choice was saved as while another of the same repository stays, keeps the default.
 - With several repositories and no valid default, checkout for a role that works in a repository returns `409 repository_required` before creating a run. Ask an administrator to choose a default in Project settings.
-- With no connected repository, checkout still returns `repository: null` and starts the run, preserving compatibility with runners that have a configured copy.
+- With no connected repository and no typed address, checkout still returns `repository: null` and starts the run, preserving compatibility with runners that have a configured copy.
 - No token, secret or credential is ever in the reply. The runner clones with its owner's own sign-in.
 
 ## The run object
