@@ -235,10 +235,55 @@ test('Collab moves an unstarted story the lead placed when the lead cannot run e
     await raw.agentRun.create({ data: { workspaceId: 'w', issueId: epic.id, seatId: lead.id, userId: lead.userId, runner: 'test', generation: 'g-open', state: 'running' } });
     await inbox(devBob);
     assert.deepEqual([await holder(ran), await holder(lone), await holder(waits)], [devCem.userId, devCem.userId, devCem.userId]);
-    await raw.agentRun.updateMany({ where: { issueId: epic.id, endedAt: null }, data: { endedAt: new Date(), state: 'stopped' } });
+    await raw.agentRun.deleteMany({ where: { issueId: epic.id, generation: 'g-open' } });
     await inbox(devBob);
     assert.deepEqual([await holder(ran), await holder(lone), await holder(waits)], [devCem.userId, devCem.userId, devBob.userId]);
     await raw.issue.update({ where: { id: lone.id }, data: { statusId: `${A}-done` } });
+    await settle();
+  });
+
+  await t.test('a lead that already saw the no-room spell keeps its story', async () => {
+    const [kept] = await place([[devCem]]);
+    await cemFull(); await report(lee, 0); await passes(lee, 11);
+    const latest = await raw.agentRun.findFirstOrThrow({ where: { issueId: epic.id }, orderBy: { startedAt: 'desc' } });
+    await raw.agentRun.updateMany({ where: { issueId: epic.id, id: { not: latest.id } }, data: { startedAt: ago(301), endedAt: ago(300) } });
+    await raw.agentRun.update({ where: { id: latest.id }, data: { startedAt: ago(1), endedAt: ago(0.5) } });
+    await inbox(devBob);
+    assert.equal(await holder(kept), devCem.userId);
+    await raw.agentRun.update({ where: { id: latest.id }, data: { startedAt: ago(101), endedAt: ago(100), outcome: 'done' } });
+    await inbox(devBob);
+    assert.equal(await holder(kept), devCem.userId);
+    await raw.agentRun.update({ where: { id: latest.id }, data: { outcome: 'blocked' } });
+    await raw.issueAssignee.update({ where: { issueId_userId: { issueId: epic.id, userId: lead.userId } }, data: { approvedAt: ago(1) } });
+    await inbox(devBob);
+    assert.equal(await holder(kept), devCem.userId);
+    await raw.issueAssignee.update({ where: { issueId_userId: { issueId: epic.id, userId: lead.userId } }, data: { approvedAt: ago(1000) } });
+    await inbox(devBob);
+    assert.equal(await holder(kept), devBob.userId);
+    await settle();
+  });
+
+  await t.test('a lead checkout committed while the move waits on the parent wins', async () => {
+    const [kept] = await place([[devCem]]);
+    await cemFull(); await report(lee, 0); await passes(lee, 11);
+    let moving;
+    let entered;
+    const ready = new Promise(resolve => { entered = resolve; });
+    const observed = new Proxy(prisma, { get(target, key) {
+      if (key === '$transaction') return (...args) => { entered(); return target.$transaction(...args); };
+      const value = target[key];
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
+    const sweep = load('src/lib/agent-requests.ts', { ...deps, '@/lib/prisma': { prisma: observed, issueTrashPrisma: raw } }, { Date, console });
+    await raw.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${epic.id} FOR UPDATE`;
+      moving = sweep.moveUnstarted({ user: { id: devBob.userId }, workspace: { id: 'w', name: 'w', slug: 'w' } });
+      await ready;
+      await tx.agentRun.create({ data: { workspaceId: 'w', issueId: epic.id, seatId: lead.id, userId: lead.userId, runner: 'test', generation: 'parent-race', state: 'running' } });
+    });
+    await moving;
+    assert.equal(await holder(kept), devCem.userId);
+    assert.equal((await moves(kept)).length, 0);
     await settle();
   });
 

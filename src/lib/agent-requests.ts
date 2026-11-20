@@ -287,11 +287,17 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
   const lead = await prisma.agentSeat.findFirst({ where: { projectId, role: 'lead', retiredAt: null }, select: { userId: true } });
   if (!lead) return;
   const unstarted = { workspaceId: context.workspace.id, projectId, agentRequestRole: null, agentRuns: { none: {} }, ...NOT_DONE,
-    parent: { assigneeId: lead.userId, agentRuns: { none: { endedAt: null } } }, helpers: { some: { approvedBy: lead.userId } } };
+    parent: { assigneeId: lead.userId, agentRuns: { none: { endedAt: null } }, ...NOT_DONE }, helpers: { some: { approvedBy: lead.userId } } };
   const placedByLead = (issue: { assigneeId: string | null; helpers: { userId: string }[] }) => issue.helpers.some(row => row.userId === issue.assigneeId);
   const helpers = { where: { approvedBy: lead.userId }, select: { userId: true } };
+  const parent = { select: { createdAt: true, helpers: { where: { userId: lead.userId }, select: { approvedAt: true, assignedAt: true } },
+    agentRuns: { orderBy: { startedAt: 'desc' as const }, take: 1, select: { startedAt: true, endedAt: true, outcome: true } } } };
+  const unseen = (parent: { createdAt: Date; helpers: { approvedAt: Date | null; assignedAt: Date }[]; agentRuns: { startedAt: Date; endedAt: Date | null; outcome: string | null }[] } | null, due: Date) => {
+    const run = parent?.agentRuns[0], assigned = parent?.helpers[0]?.approvedAt ?? parent?.helpers[0]?.assignedAt ?? parent?.createdAt;
+    return !!run?.endedAt && !!assigned && run.endedAt >= assigned && run.outcome === 'blocked' && due > run.startedAt;
+  };
   const waiting = (await prisma.issue.findMany({ where: { ...unstarted, assignee: { agentSeat: { role: 'developer' } } }, orderBy: { createdAt: 'asc' },
-    select: { id: true, assigneeId: true, helpers } })).filter(placedByLead);
+    select: { id: true, parentId: true, parent, assigneeId: true, helpers } })).filter(placedByLead);
   if (!waiting.length) return;
   const now = new Date();
   const leadDue = async (db: Prisma.TransactionClient | typeof prisma, at: Date) => {
@@ -311,7 +317,7 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
     if (from?.room.kind !== 'no_room') continue;
     if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
     const due = dues.get(from.id);
-    if (!due || due > now) continue;
+    if (!due || due > now || !unseen(story.parent, due)) continue;
     const updated = await prisma.$transaction(async tx => {
       const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: 'STORY_MOVED' }, select: { details: true } }))
         .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
@@ -325,16 +331,16 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
       // issue first decides. The seat's row is held for update, so two moves onto one seat count its limit in turn.
       if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = 'developer'
         AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR UPDATE`).length) return;
-      await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${story.id} FOR UPDATE`;
-      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: story.id, assigneeId: from.userId },
-        select: { id: true, workspaceId: true, projectId: true, issueKey: true, parentId: true, assigneeId: true, helpers } });
+      await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ANY(${[story.id, story.parentId]}) ORDER BY "id" FOR UPDATE`;
+      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: story.id, parentId: story.parentId, assigneeId: from.userId },
+        select: { id: true, workspaceId: true, projectId: true, issueKey: true, parentId: true, parent, assigneeId: true, helpers } });
       if (!issue || !placedByLead(issue) || (await leftOf()).includes(to.id)) return;
       // Read again behind the locks: a seat that got room back keeps its work, and a lead that got room back moves it itself.
       const at = new Date(), current = await seatsWithRoom(tx, projectId, 'developer', at);
       const source = current.find(seat => seat.id === from.id);
       if (source?.room.kind !== 'no_room' || current.find(seat => seat.id === to.id)?.room.kind !== 'room') return;
       const since = await noRoomDue(tx, source, at);
-      if (!since || since > at) return;
+      if (!since || since > at || !unseen(issue.parent, since)) return;
       const stuck = await leadDue(tx, at);
       if (!stuck || stuck.room.kind !== 'no_room') return;
       if (await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return;
