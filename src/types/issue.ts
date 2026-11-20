@@ -51,7 +51,6 @@ export interface IssueComment {
   createdAt: Date;
   updatedAt: Date;
   parentId?: string;
-  milestoneId?: string | null;
   replies?: IssueComment[];
 }
 
@@ -78,6 +77,7 @@ export interface Issue {
 
   // Hierarchy
   parentId?: string;
+  milestoneId?: string | null;
   parent?: Issue;
   children?: Issue[];
 
