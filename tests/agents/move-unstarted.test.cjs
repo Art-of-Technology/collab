@@ -71,7 +71,9 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
   const item = route('issues/[issueIdOrKey]'), requests = route('seats/me/requests'), inboxRoute = route('seats/me/inbox'), runs = route('runs'), one = route('runs/[id]');
   const pairRoute = load('src/app/api/runner/pair/route.ts', deps, globals), fetchRoute = load('src/app/api/runner/seats/route.ts', deps, globals);
   const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': finder,
-    '@/lib/agent-runs': deps['@/lib/agent-runs'], '@/lib/agent-runners': runners, '@/lib/agent-seats': seats }, { Date });
+    '@/lib/agent-runs': deps['@/lib/agent-runs'], '@/lib/agent-runners': runners, '@/lib/agent-seats': seats,
+    // The real rule for who manages the workspace, as the page's own test gives it.
+    '@/lib/permissions': load('src/lib/permissions.ts', { './prisma': { prisma } }) }, { Date });
   const { getActionText } = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 
   const send = async (handler, token, method, { body, params = {} } = {}) => {
