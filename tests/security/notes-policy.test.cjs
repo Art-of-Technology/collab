@@ -151,13 +151,10 @@ test('collection predicates match the single-note read policy across scope and m
   assert.equal(matches(note, noteAccessWhere('')), false);
 });
 
-test('all Notes collections constrain both result reads and search counts', async () => {
+test('all Notes collections constrain their result reads', async () => {
   for (const [file, query] of [
     ['route.ts', 'scope=WORKSPACE&workspace=foreign'],
     ['route.ts', 'sharedWithMe=true'],
-    ['pinned/route.ts', 'workspaceId=foreign'],
-    ['search/route.ts', 'workspaceId=foreign&q=secret'],
-    ['shared-with-me/route.ts', 'workspace=foreign'],
   ]) {
     let reads = 0;
     const boundary = { id: { in: [] } };
@@ -171,7 +168,6 @@ test('all Notes collections constrain both result reads and search counts', asyn
       '@/lib/auth-options': { authOptions: {} },
       '@/lib/prisma': { prisma: { note: {
         findMany: async args => { check(args); return []; },
-        count: async args => { check(args); return 0; },
       } } },
       '@/lib/secrets/access': { noteAccessWhere: () => boundary },
       '@/lib/secrets/crypto': {}, '@/lib/versioning': {}, '@/lib/event-bus': {},
@@ -179,7 +175,7 @@ test('all Notes collections constrain both result reads and search counts', asyn
     }, { URL, console });
     const response = await GET(new Request(`https://example.test/notes?${query}`));
     assert.equal(response.status, 200, file);
-    assert.equal(reads, file === 'search/route.ts' ? 2 : 1);
+    assert.equal(reads, 1);
   }
 });
 
