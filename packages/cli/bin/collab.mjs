@@ -400,7 +400,7 @@ async function main() {
           { token: selected.token, method: 'POST', body: { content }, timeout: requestTimeout });
         return { ...result, comment: { id: comment?.id } };
       } catch (error) {
-        throw new CliError('comment_failed', `The file is attached, but the comment was not added (${error?.code || 'request failed'}). Do not attach it again: add this line with comments add: ${result?.markdown}`, 2, { file: result?.file, markdown: result?.markdown });
+        throw new CliError('comment_failed', `The file is attached, but the comment outcome is unknown (${error?.code || 'request failed'}). Check the issue before adding the comment with comments add. Do not attach the file again. Markdown: ${result?.markdown}`, 2, { file: result?.file, markdown: result?.markdown });
       }
     }
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);

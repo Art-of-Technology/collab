@@ -2711,10 +2711,10 @@ test('issues attach sends a file as base64 with its name, and refuses what it ca
 });
 
 test('issues attach --comment attaches the file and then adds a comment that shows it', async t => {
-  const state = { failComment: false };
+  const state = { failComment: false, createdComments: 0 };
   const f = await fixture(t, async (req, res) => {
     if (req.url.includes('/attachments')) return res.end(JSON.stringify({ file: { id: 'file1', name: 'overview.png' }, markdown: '![overview.png](/api/context/files/file1/preview)' }));
-    if (state.failComment) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'wrong_project', error_description: 'no' })); }
+    if (state.failComment) { state.createdComments++; res.statusCode = 500; return res.end(JSON.stringify({ error: 'internal_error' })); }
     res.end(JSON.stringify({ id: 'comment1' }));
   });
   const directory = mkdtempSync(path.join(tmpdir(), 'collab-attach-'));
@@ -2731,11 +2731,13 @@ test('issues attach --comment attaches the file and then adds a comment that sho
   assert.equal(JSON.parse(done.stdout).comment.id, 'comment1');
   assert.equal(JSON.parse(done.stdout).markdown, '![overview.png](/api/context/files/file1/preview)');
 
-  // A comment that is refused does not hide that the file is attached, and says what to add by hand.
   state.failComment = true;
   const half = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--workspace', 'w']);
   assert.equal(half.error?.error, 'comment_failed');
   assert.match(half.error.message, /file is attached/);
+  assert.equal(state.createdComments, 1);
+  assert.match(half.error.message, /outcome is unknown/);
+  assert.match(half.error.message, /Check the issue before adding/);
   assert.match(half.error.message, /!\[overview\.png\]\(\/api\/context\/files\/file1\/preview\)/);
 
   // A preview of the one step sends nothing and names the comment it would add.
