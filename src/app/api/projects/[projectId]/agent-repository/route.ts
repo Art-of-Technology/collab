@@ -26,7 +26,7 @@ export async function PATCH(request: NextRequest, context: Context) {
   const scope = await access(context);
   if (scope.error) return scope.error;
   if (!scope.canManage) return reply({ error: 'Forbidden' }, 403);
-  if (request.headers.get('origin') !== new URL(request.url).origin) return reply({ error: 'Invalid request origin' }, 403);
+  if (request.headers.get('origin') !== new URL(process.env.NEXTAUTH_URL || request.url).origin) return reply({ error: 'Invalid request origin' }, 403);
   // Either the default among the project's connected repositories, or an address typed for a project that has none.
   const body = z.object({ repositoryId: z.string().min(1).max(128), url: z.string().trim().min(1).max(2048) }).partial().strict()
     .refine(data => !data.repositoryId !== !data.url).safeParse(await request.json().catch(() => null));
