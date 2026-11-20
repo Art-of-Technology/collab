@@ -262,7 +262,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
 | `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. |
-| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. |
+| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
 An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
@@ -286,7 +286,13 @@ The reply names the new issue:
 { "issue": { "id": "cm3issue000042", "issueKey": "BB-7" } }
 ```
 
-A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person.
+A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person. The same warning is added when placement chooses among multiple seats and all are known to have no room.
+
+When a review, security or release request has more than one seat that could take it, Collab [places it by room](/docs/agents/seats#where-a-request-goes) and the reply says where it went:
+
+```json
+{ "issue": { "id": "cm3issue000042", "issueKey": "BB-7" }, "placed": { "seat": "Reviewer (Bob)", "why": "most room" } }
+```
 
 A `security` request adds `"blocks": true`: it blocks the source issue whatever `blocks` said.
 
@@ -415,6 +421,7 @@ Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields 
 
 - **Only percentages and program names are sent.** No login, account, plan or billing detail is ever sent: a runner has no field to put one in, and any other key is refused.
 - Collab stores a figure with the time it arrived, by its own clock. Send the figures with every call: a figure at least 15 minutes old counts as unknown.
+- A seat that is retired and made again, or given another project, role or owner, starts with no figure. A figure stays when its person's runner is replaced, because it is the same person's allowance: send the figures with your first call after pairing.
 - A call without `state` and `rooms` stores no state and no figure, and is answered exactly as before.
 - A value outside the table is `400 invalid_request`, and a body over 64 KiB is `413 body_too_large`. Nothing of that call is stored and no seats are answered.
 - A figure for a seat that this call's answer does not list is not stored. The call is still answered, and the answer names those seats' ids under `refused`. That happens when a seat was retired since your last call: stop running it, as in step 5.
@@ -429,7 +436,7 @@ What Collab makes of it:
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
-Collab stores the figure today. It does not show it or place work by it yet, so reporting changes nothing else.
+Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It does not show the figure on a page yet.
 
 ### Renewal
 

@@ -60,6 +60,9 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   }
   if (activity.action === 'LEAD_ASSIGNED') return `${userName} assigned this ${itemType} to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}`;
   if (activity.action === 'SECURITY_REQUESTED') return `${userName} asked for a security review`;
+  if (activity.action === 'REQUEST_PLACED') {
+    return `Collab sent this request to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}${typeof activity.details?.why === 'string' ? `: ${activity.details.why}` : ''}`;
+  }
   if (activity.action === 'SECURITY_VERDICT') {
     return `${userName} reviewed ${typeof activity.details?.reviewed === 'string' ? activity.details.reviewed : `this ${itemType}`} for security: ${activity.details?.verdict === 'passed' ? 'passed' : 'failed'}`;
   }

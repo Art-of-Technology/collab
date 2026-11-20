@@ -288,4 +288,16 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     assert.deepEqual(await row(dev.id), stored);
     assert.equal((await prisma.agentRunner.findUniqueOrThrow({ where: { id: current.id } })).state, 'working');
   });
+
+  await t.test('a seat made again starts with no figure: the one it had was reported for another person\'s runner', async () => {
+    assert.equal((await row(rev.id)).room, 30);
+    await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: rev.id });
+    assert.equal((await row(rev.id)).room, 30, 'a retired seat is read by nobody, so nothing is cleared for it');
+    const again = await seat('rev', 'reviewer', person, { byRunner: true });
+    assert.deepEqual([again.id, again.ownerId, await row(rev.id)], [rev.id, person, { room: null, roomProgram: null, roomAt: null }]);
+    // Asking again for the seat as it is gives it a further token and keeps its figure.
+    await prisma.agentSeat.update({ where: { id: hand.id }, data: { room: 20, roomProgram: 'Codex', roomAt: new Date() } });
+    await seat('hand', 'developer', person);
+    assert.equal((await row(hand.id)).room, 20);
+  });
 });

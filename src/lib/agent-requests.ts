@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE } from '@/lib/agent-runs';
-import { ASSIGN_CAP, countSeatHandoff, HandoffError, IDLE_MS, requireSeat, seatHandoffCapReached, seatWriteGuard } from '@/lib/agent-seats';
+import { ASSIGN_CAP, byRoom, countSeatHandoff, HandoffError, IDLE_MS, requireSeat, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated } from '@/lib/event-bus';
@@ -33,12 +33,13 @@ export const requestSchema = z.object({
 /**
  * Rule 8: a seat asks a seat of a role for work on one of its project's issues. The request is a new Task in the target
  * project (the seat's own when none is named, which is how review and release are asked for), its body held to the
- * workspace's issue template, reported by the asking seat, assigned to the target project's default seat for the role,
- * and linked to the issue it came from: it blocks that issue when `blocks`, else it relates to it. A security request
+ * workspace's issue template, reported by the asking seat, assigned to a seat of the role in the target project (see
+ * `placeRequest`), and linked to the issue it came from: it blocks that issue when `blocks`, else it relates to it. A security request
  * always blocks, whatever the caller says, and the reply says so. It takes its source's priority.
  * `agentRequestRole` is what makes it a request; the role's label is added for people to see and hands it to nobody.
  * One project has at most five open requests in another; inside a project there is no cap. A request to a release
- * seat that is away still succeeds, with a warning and a comment that says so.
+ * seat that is away still succeeds, with a warning and a comment that says so. Where Collab chose between seats, the
+ * reply says which seat got the request and why, as the request's timeline does.
  */
 export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'workspace'>, input: z.infer<typeof requestSchema>) {
   const me = context.user.id, workspaceId = context.workspace.id;
@@ -82,21 +83,59 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
   // Fire-and-forget, as for every new issue: this is what makes it searchable.
   emitIssueCreated(made.issue, { userId: me, workspaceId, workspaceName: context.workspace.name || '', workspaceSlug: context.workspace.slug || '', source: 'agent-request' },
     { async: true }).catch(() => {});
-  return { issue: { id: made.issue.id, issueKey: made.issue.issueKey }, ...(input.role === 'security' && { blocks: true as const }), ...(made.idle && { warning: 'seat_idle' as const }) };
+  return { issue: { id: made.issue.id, issueKey: made.issue.issueKey }, ...(input.role === 'security' && { blocks: true as const }), ...(made.idle && { warning: 'seat_idle' as const }),
+    ...(made.placed && { placed: made.placed }) };
 }
 
 /**
- * What every request has, however it was asked for: a Task in `projectId`, reported by `me`, assigned to that project's
- * default seat for the role and linked to its source. Call it inside a transaction in which that seat cannot be retired.
+ * Which of a role's seats a request goes to, and why. `seats` hold the default seat, `fallback`, and at least one other.
+ * The seat with the most room; equal room, the owner with the fewest open runs, then the default seat. With no number
+ * among them it is the default seat, as before room, unless Collab knows that seat has no room: then the first seat
+ * whose room is unknown. When every seat is known to have no room the request waits at the default seat, `full`.
+ * The reason names no figure: room is its owner's to see, and a request's timeline is read by the whole project.
+ */
+function placeRequest<T extends { room: SeatRoom; openRuns: number; isDefault: boolean }>(seats: T[], fallback: T): { seat: T; why: string; full?: true } {
+  const order = byRoom(seats), [top, next] = order;
+  if (top.room.kind === 'room') {
+    const tied = next.room.kind === 'room' && next.room.room === top.room.room;
+    return { seat: top, why: !tied ? 'most room' : top.openRuns < next.openRuns ? 'equal room, fewer open runs'
+      : `equal room and open runs: ${top.isDefault ? 'the default seat first' : 'the older seat first'}` };
+  }
+  const unknown = order.find(seat => seat.room.kind === 'unknown');
+  if (!unknown) return { seat: fallback, why: 'no seat can start now: it waits at the default seat', full: true };
+  if (fallback.room.kind === 'unknown') return { seat: fallback, why: 'no fresh figure: the default seat' };
+  return { seat: unknown, why: 'no fresh figure and the default seat cannot start: the next seat whose figure is unknown' };
+}
+
+/**
+ * What every request has, however it was asked for: a Task in `projectId`, reported by `me`, assigned to a seat of the
+ * role in that project and linked to its source. The seat it goes to cannot be retired until the caller's transaction
+ * ends: its row is held here.
  */
 async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; role: RequestRole;
   title: string; body: string; source: { id: string; issueKey: string | null; projectId: string; priority: string }; blocks?: boolean; labelId?: string }) {
   const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
-  const to = await tx.agentSeat.findFirst({ where: { projectId, role: kind.seat, isDefault: true, retiredAt: null },
-    select: { userId: true, name: true, lastSeenAt: true, byRunner: true } });
-  if (!to) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
-  // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
-  if (to.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
+  const now = new Date();
+  const place = async () => {
+    const seats = await seatsWithRoom(tx, projectId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
+    if (!fallback) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
+    // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
+    if (fallback.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
+    // Developer work is the lead's to place, and a role with one seat to give it to leaves nothing to choose: both go to
+    // the default seat with nothing said, as before room.
+    const able = input.role === 'developer' ? [] : seats.filter(seat => seat.userId !== me);
+    const placed = able.length > 1 ? placeRequest(able, fallback) : null;
+    return { placed, to: placed?.seat ?? fallback };
+  };
+  let { placed, to } = await place();
+  // The row of the seat that gets the request, and only that one: retiring a seat takes its row first and waits, and
+  // holding the role's other rows would deadlock with a retirement that makes one of them the default. `fileRequest`
+  // holds the project's seat lock besides; a label does not, because it already holds its issue, and the other order
+  // could deadlock. The row is asked again for what the seat was placed as: retired meanwhile, or made again for another
+  // person, project or role, it is not that seat any more, and the seats are read again. Its room or the time it was
+  // last seen changing is no reason to: that would place again on every report of a runner.
+  while (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = ${kind.seat}
+    AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) ({ placed, to } = await place());
   await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: input.role }, to.userId);
   if (input.from && input.from !== projectId) {
     // A request is from a project when a seat of that project reported it.
@@ -106,7 +145,6 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
 
   const issueKey = await allocateIssueKey(tx, projectId);
   const status = await tx.projectStatus.findFirst({ where: { projectId, isDefault: true }, orderBy: DEFAULT_STATUS_ORDER, select: { id: true, name: true } });
-  const now = new Date();
   const issue = await tx.issue.create({ data: {
     workspaceId, projectId, issueKey, type: 'TASK', title: input.title, description: input.body, priority: input.source.priority,
     statusId: status?.id, statusValue: status?.name, status: status?.name, reporterId: me, assigneeId: to.userId, agentRequestRole: input.role,
@@ -122,6 +160,10 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
       workspaceId, projectId: target.projectId, details: JSON.stringify(details) });
     await tx.issueActivity.createMany({ data: [asked(issue, { forIssueId: input.source.id, forIssueKey: input.source.issueKey ?? input.source.id }),
       asked(input.source, { requestId: issue.id, requestKey: issue.issueKey ?? issue.id })] });
+  }
+  if (placed) {
+    await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId, projectId,
+      details: JSON.stringify({ toSeatId: to.id, to: to.name, why: placed.why }) } });
   }
   // Only a release seat is expected to be there all the time: a project has one, and a release waits on it.
   const idle = kind.seat === 'release' && !(to.lastSeenAt && to.lastSeenAt.getTime() > now.getTime() - IDLE_MS);
@@ -139,14 +181,14 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
       ? `${to.name} is run by a runner, and the last token a runner fetched for it ran out at ${fetched.tokenExpiresAt.toISOString()}. A token is renewed when its runner asks, so this one has not asked for a week or more. This request waits until a runner fetches a token again.`
       : `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner connects a runner under Agents, Runners.` } });
   }
-  return { issue, idle: idle || waits };
+  return { issue, idle: idle || waits || !!placed?.full, placed: placed && { seat: to.name, why: placed.why } };
 }
 
 /**
  * Rule 9, for labels added to an issue; call inside the issue's write transaction. False for a project that uses
  * handoffs, where the caller hands the labels to their subscribers. In a project that uses seats a label hands work to
- * nobody, and the label of a request role asks for that request: one Task for the project's default seat of the role,
- * reported by whoever added the label and related to the issue. Nothing is filed while a request of that role for the
+ * nobody, and the label of a request role asks for that request: one Task for a seat of the role in the project, placed
+ * as any request is, reported by whoever added the label and related to the issue. Nothing is filed while a request of that role for the
  * issue is still open, so adding the label twice asks once, nor for an issue that is itself a request. With no seat to
  * take it the refusal undoes the whole edit, so the label never sits there asking nobody. The text is the server's
  * and points at the issue, so it is not held to the issue template. An agent token that is not a seat asks for a
@@ -170,9 +212,6 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     }
     if (await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
       sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
-    // The seat's row, not the project's seat lock that `fileRequest` takes before it locks its source issue: this
-    // transaction already holds the issue, and the other order could deadlock with it. Retiring a seat waits for the row.
-    await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "isDefault" AND "retiredAt" IS NULL FOR SHARE`;
     // shortcut: an issue edit is serializable, so it does not see an issue the same token created for a seat after the edit
     // began; in that instant the count can end one over the cap. A counter row per account closes it if that matters.
     if (agent && await seatHandoffCapReached(tx, me)) {

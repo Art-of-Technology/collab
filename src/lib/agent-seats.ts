@@ -112,8 +112,9 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   if ((input.role === 'release' || input.role === 'lead') && others.length) throw new HandoffError(`${input.role}_seat_exists`, `This project already has a ${input.role} seat; retire it first`, 409);
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
+  // A seat made again starts with no figure: the one it kept was reported for the seat it was, perhaps for someone else's runner.
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
-    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner };
+    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner, ...(!same && { room: null, roomProgram: null, roomAt: null }) };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
   const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', seat);
@@ -184,6 +185,39 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
   if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`);
   if (seat.room <= 0) return none('the allowance is used up');
   return { kind: 'room', room: seat.room, program: seat.roomProgram, at: seat.roomAt };
+}
+
+/**
+ * The seats of a project that are not retired, of one role when one is named, oldest first: the order they had before
+ * work was placed by room. Each comes with what placing reads: its room, and the runs its owner has open right now on
+ * any seat of the workspace (a seat without an owner counts its own).
+ */
+export async function seatsWithRoom(db: DB, projectId: string, role?: string, now = new Date()) {
+  const seats = await db.agentSeat.findMany({ where: { projectId, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true,
+      room: true, roomProgram: true, roomAt: true, owner: { select: { id: true, name: true } } } });
+  if (!seats.length) return [];
+  const { workspaceId } = seats[0], owners = seats.flatMap(seat => seat.ownerId ?? []);
+  // A person has one runner per workspace; should two ever stand, the one admitted last is the person's.
+  const runners = await db.agentRunner.findMany({ where: { workspaceId, ownerId: { in: owners }, removedAt: null }, orderBy: { admittedAt: 'desc' }, select: { ownerId: true, state: true, lastSeenAt: true } });
+  const open = await db.agentRun.findMany({ where: { workspaceId, endedAt: null, seat: { OR: [{ ownerId: { in: owners } }, { id: { in: seats.map(seat => seat.id) } }] } },
+    select: { seatId: true, seat: { select: { ownerId: true } } } });
+  return seats.map(({ room, roomProgram, roomAt, ...seat }) => ({ ...seat,
+    room: seatRoom({ byRunner: seat.byRunner, room, roomProgram, roomAt }, runners.find(runner => runner.ownerId === seat.ownerId) ?? null, now),
+    openRuns: open.filter(run => seat.ownerId ? run.seat?.ownerId === seat.ownerId : run.seatId === seat.id).length }));
+}
+
+/**
+ * The one order work is placed by, for the lead's list and for requests. Seats with a number first, most room first;
+ * then the seats whose room is unknown; the seats with no room last. Equal standing: the seat whose owner has the
+ * fewest open runs, then the role's default seat, then the order given. When every seat is unknown there is nothing to
+ * place by, and the order given stands: that is how work was placed before room.
+ */
+export function byRoom<T extends { room: SeatRoom; openRuns: number; isDefault: boolean }>(seats: T[]): T[] {
+  if (seats.every(seat => seat.room.kind === 'unknown')) return [...seats];
+  // A number is above 0, so unknown and no room sort below every number.
+  const standing = ({ room }: T) => room.kind === 'room' ? room.room : room.kind === 'unknown' ? -1 : -2;
+  return [...seats].sort((a, b) => standing(b) - standing(a) || a.openRuns - b.openRuns || +b.isDefault - +a.isDefault);
 }
 
 /**

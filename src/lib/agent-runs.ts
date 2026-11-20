@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { HandoffError, LEAD_CAP, NOT_DONE, fromLead, seatFor, seatWriteGuard } from '@/lib/agent-seats';
+import { HandoffError, LEAD_CAP, NOT_DONE, byRoom, fromLead, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
@@ -483,7 +483,9 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
  * filed for (the ones it blocks or relates to from its own side, which is how filing links it). An issue with child issues
  * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's, the project's other
- * seats come with it, each with the open issues it holds from the lead, and the limit. A run that ended without a note moves nothing:
+ * seats come with it, each with the open issues it holds from the lead, and the limit. The lead itself gets each seat's
+ * owner, room and the owner's open runs too, and the seats of one role in the order to prefer (`byRoom`); room is its
+ * owner's figure, so no other reader is given it or the order that would say it. A run that ended without a note moves nothing:
  * what was said since the last note is still what the next session lacks. A read like any other: every token that
  * reads the workspace's issues gets it.
  */
@@ -499,8 +501,11 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   const lead = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
-  const seats = lead ? await prisma.agentSeat.findMany({ where: { projectId: issue.projectId, retiredAt: null, userId: { not: lead.userId } }, orderBy: { createdAt: 'asc' },
-    select: { userId: true, name: true, role: true } }) : [];
+  const listed = lead ? (await seatsWithRoom(prisma, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
+  const asLead = lead?.userId === context.user.id;
+  // Each role in its own order, in the places its seats had in the list: with nothing known the list is the one it was.
+  const queues = new Map([...new Set(listed.map(seat => seat.role))].map(role => [role, byRoom(listed.filter(seat => seat.role === role))]));
+  const seats = asLead ? listed.map(seat => queues.get(seat.role)!.shift()!) : listed;
   const last = issue.agentRuns[0];
   // The checked facts of that run's note are where finishing wrote them: in its entry on the timeline.
   const entry = last && await prisma.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
@@ -537,8 +542,9 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
     ...(issue.children.length && { children: issue.children.map(child => ({ ...toRef(child), assigneeId: child.assigneeId, assignee: child.assignee?.name ?? null,
       lastRun: child.agentRuns[0] ? child.agentRuns[0].endedAt ? child.agentRuns[0].outcome ?? 'stopped' : 'running' : null })) }),
-    ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ ...seat,
-      openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }) }))) } }),
+    ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ userId: seat.userId, name: seat.name, role: seat.role,
+      openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }),
+      ...(asLead && { owner: seat.owner, room: seat.room, openRuns: seat.openRuns }) }))) } }),
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
       `collab seat request --from-issue ${key} --role review|release|security|developer --title TITLE --body-file FILE`,
