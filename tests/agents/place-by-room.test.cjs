@@ -123,11 +123,21 @@ test('place by room: the lead is given seats in order of room, and a request goe
     assert.deepEqual(names(await listed(), 'developer'), ['dev-cem', 'dev-deniz', 'dev-bob']);
   });
 
-  await t.test('the lead: unknown comes after every number, and no room comes last', async () => {
+  await t.test('the lead: a working runner with no figure stands level with the most room, a seat run by hand comes after every number, and no room comes last', async () => {
     await rooms(stale, { room: 1 }, { room: 90, state: 'paused' });
-    const list = (await listed()).filter(entry => entry.role === 'developer');
-    assert.deepEqual(list.map(entry => [entry.name, entry.room.kind, entry.room.reason]),
-      [['dev-bob', 'room', undefined], ['dev-cem', 'unknown', 'the figure is older than 15 minutes'], ['dev-deniz', 'no_room', 'the runner is paused']]);
+    const order = async () => (await listed()).filter(entry => entry.role === 'developer').map(entry => [entry.name, entry.room.kind, entry.room.reason]);
+    // Cem's runner works and its figure went stale: level with Bob's 1, and the default seat goes first of the two.
+    assert.deepEqual(await order(),
+      [['dev-cem', 'unknown', 'the figure is older than 15 minutes'], ['dev-bob', 'room', undefined], ['dev-deniz', 'no_room', 'the runner is paused']]);
+    // With a run open for Cem the tie goes to Bob.
+    await openRun(rev1);
+    assert.deepEqual((await order()).map(entry => entry[0]), ['dev-bob', 'dev-cem', 'dev-deniz']);
+    await endRuns();
+    // A seat run by hand has no runner to vouch for it: unknown, and behind the number.
+    await raw.agentSeat.update({ where: { id: dev1.id }, data: { byRunner: false } });
+    assert.deepEqual(await order(),
+      [['dev-bob', 'room', undefined], ['dev-cem', 'unknown', 'the seat is run by hand'], ['dev-deniz', 'no_room', 'the runner is paused']]);
+    await raw.agentSeat.update({ where: { id: dev1.id }, data: { byRunner: true } });
     // Among the seats that are not known, the same tie-break.
     await rooms({ room: 0 }, stale, stale);
     await openRun(dev2);
@@ -179,6 +189,40 @@ test('place by room: the lead is given seats in order of room, and a request goe
     await endRuns();
     await rooms({ room: 60 }, { room: 60 }, { room: 10 });
     assert.deepEqual(await review(), ['rev-cem', 'equal room and open runs: the default seat first', undefined]);
+  });
+
+  await t.test('a working runner with no figure counts as the most room: the request goes by open runs, and says why', async () => {
+    const level = 'a working runner with no figure counts as the most room';
+    // Cem's reviewer reports 60; Deniz's runner works and has sent nothing; Bob files, so his seat is out.
+    await rooms({ room: 60 }, { room: 5 }, {});
+    assert.deepEqual(await review(), ['rev-cem', `${level}; equal open runs: the default seat first`, undefined]);
+    await openRun(dev1);
+    assert.deepEqual(await review(), ['rev-deniz', `${level}, fewer open runs`, undefined]);
+    await endRuns();
+    // A runner that is not seen, or says it is paused, vouches for nothing: its seat is no room, and the number wins.
+    for (const off of [{ seen: ago(11) }, { state: 'paused' }]) {
+      await rooms({ room: 60 }, { room: 5 }, off);
+      await openRun(dev1);
+      assert.deepEqual(await review(), ['rev-cem', 'most room', undefined], JSON.stringify(off));
+      await endRuns();
+    }
+  });
+
+  await t.test('a third tied unknown seat changes the reason in the timeline', async () => {
+    await raw.project.update({ where: { id: A }, data: { agentMode: 'seats' } });
+    await rooms({ room: 60 }, { room: 60 }, {});
+    await openRun(dev3);
+    const level = 'a working runner with no figure counts as the most room';
+    for (const [extraRun, reason] of [[false, `${level}; equal open runs: the default seat first`], [true, `${level}, fewer open runs`]]) {
+      if (extraRun) await openRun(dev2);
+      const labelled = await issue();
+      await raw.$transaction(tx => lib.labelRequests(tx, owner, labelled, [{ id: 'review-label', name: 'Review request' }]));
+      const made = await raw.issue.findFirstOrThrow({ where: { agentRequestRole: 'review', sourceRelations: { some: { targetIssueId: labelled.id } } }, include: { assignee: true } });
+      const activity = await raw.issueActivity.findFirstOrThrow({ where: { itemId: made.id, action: 'REQUEST_PLACED' } });
+      assert.equal(made.assignee.name, 'rev-cem');
+      assert.equal(JSON.parse(activity.details).why, reason);
+    }
+    await endRuns();
   });
 
   await t.test('no seat with a number: the default seat, unless Collab knows it has no room', async () => {

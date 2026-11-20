@@ -215,7 +215,7 @@ Room is the percent of allowance a seat's runner has left: see [Report room](/do
 | Order | Seats |
 | --- | --- |
 | 1 | Seats with a number, most room first. |
-| 2 | Seats whose room is unknown. |
+| 2 | Seats whose room is unknown. One exception, a stopgap until every runner reports a figure: an unknown seat whose runner is seen and has reported the state `working` stands level with the most room in row 1. A runner that has never reported a state does not count. |
 | 3 | Seats with no room. |
 
 Equal standing: the seat whose owner has the fewest open runs comes first, then the role's default seat, then the older seat. When every seat is unknown, the original order stands. An owner's open runs are counted over all of that person's seats in the workspace; a seat without an owner counts its own runs.
@@ -226,6 +226,7 @@ Equal standing: the seat whose owner has the fewest open runs comes first, then 
 | --- | --- | --- |
 | One has the most room | That seat. | `most room` |
 | Several share the most room | Of those, the seat whose owner has the fewest open runs, then the default seat, then the older seat. | `equal room, fewer open runs`, `equal room and open runs: the default seat first`, or `equal room and open runs: the older seat first` |
+| At least one seat has a number, and another seat's runner works but has no fresh figure | The highest-numbered seats and the working runner's unknown seat count as having the most room: the owner with the fewest open runs, then the default seat, then the older seat. | `a working runner with no figure counts as the most room, fewer open runs`, `a working runner with no figure counts as the most room; equal open runs: the default seat first`, or `a working runner with no figure counts as the most room; equal open runs: the older seat first` |
 | None has a number, and the default seat is unknown | The default seat, as before. | `no fresh figure: the default seat` |
 | None has a number, the default seat has no room, and another seat is unknown | The first seat whose room is unknown. | `no fresh figure and the default seat cannot start: the next seat whose figure is unknown` |
 | All have no room | The default seat, with `"warning": "seat_idle"`. It waits there. | `no seat can start now: it waits at the default seat` |
@@ -243,7 +244,7 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 | Field | What it is |
 | --- | --- |
 | `owner` | The person whose runner works the seat, with `id` and `name`, or `null`. |
-| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` (which can be `null`) and the time `at`; the other two have a `reason`. |
+| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` (which can be `null`) and the time `at`; the other two have a `reason`. An `unknown` seat also has `live: true` when its runner is seen and has itself reported the state `working`; that is the seat that stands level with the most room. |
 | `openRuns` | The runs the owner has open right now. |
 
 - The seats of one role are in the order above. Prefer the first seat that is under its limit of issues from the lead. A seat with no room gets nothing.
@@ -266,7 +267,7 @@ When it moves, all of these hold:
 
 1. No run has started on it. A run that was started and stopped, lost or finished counts as started.
 2. Its seat reads as **no room**, and has for 10 minutes. A seat whose room is unknown keeps its work. A seat run by hand is unknown; an old figure is unknown when the runner is connected, online and working.
-3. Another seat of the role has a number. A seat whose room is unknown or none takes nothing.
+3. Another seat of the role has a number. A seat whose room is unknown or none takes nothing, also when its runner is working: standing level with the most room is for new work, a move needs a real figure.
 
 How the 10 minutes are counted:
 
