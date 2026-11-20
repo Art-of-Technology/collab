@@ -47,7 +47,7 @@ Room is the percent of allowance a seat has left before its runner stops taking 
 | The card shows | When |
 | --- | --- |
 | A bar and **60% room**, with **next run on** and the program | The runner reported a figure in the last 15 minutes. |
-| **no room** and why | No runner is connected, or the runner is offline, paused or has a full disk, or the allowance is used up. |
+| **no room** and why | No runner is connected, or the runner is offline, paused or has a full disk, or its runner reports no room for the seat. |
 | **unknown** and why | No figure was reported, the figure is older than 15 minutes, or the seat is run by hand. Work is placed as it was before room. |
 | **Room private** | The seats are another person's. |
 

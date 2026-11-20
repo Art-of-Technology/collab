@@ -185,7 +185,7 @@ test('Collab moves an unstarted story the lead placed when the lead cannot run e
 
     const [entry, ...more] = await moves(first);
     assert.deepEqual(more, []);
-    const why = 'dev-cem had no room for 10 minutes (the allowance is used up), and so had the lead seat lead (the allowance is used up)';
+    const why = 'dev-cem had no room for 10 minutes (its runner reports no room), and so had the lead seat lead (its runner reports no room)';
     assert.deepEqual(entry.details, { fromSeatId: devCem.id, from: 'dev-cem', toSeatId: devBob.id, to: 'dev-bob', why });
     assert.deepEqual([entry.userId, entry.oldValue, entry.newValue], [lead.userId, devCem.userId, devBob.userId]);
     assert.equal(getActionText({ ...entry, user: { name: 'lead' } }), `Collab moved this issue from dev-cem to dev-bob: ${why}`);

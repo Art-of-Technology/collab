@@ -136,9 +136,9 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     assert.deepEqual(await read(dev.id), ['room', 45]);
   });
 
-  await t.test('no room, with the reason: the allowance is used up, the runner is paused, its disk is full, it is offline, or none is connected', async () => {
+  await t.test('no room, with the reason: its runner reports no room, the runner is paused, its disk is full, it is offline, or none is connected', async () => {
     await ask(mac, { have, rooms: [{ seat: dev.id, room: 0, program: 'Claude Code' }] });
-    assert.deepEqual(await read(dev.id), ['no_room', 'the allowance is used up']);
+    assert.deepEqual(await read(dev.id), ['no_room', 'its runner reports no room']);
     await ask(mac, { have, state: 'paused', rooms: [{ seat: dev.id, room: 45, program: 'Claude Code' }] });
     assert.deepEqual(await read(dev.id), ['no_room', 'the runner is paused']);
     // The state is the runner's, so it counts for each of its seats, and for one whose figure is old or missing too.

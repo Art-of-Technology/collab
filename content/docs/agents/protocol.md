@@ -148,7 +148,7 @@ When the epic comes back with `child_no_room`, a child you placed sits on a seat
 | --- | --- |
 | 1 | Read the run context again. Skip a child of `noRoom` whose `lastRun` is no longer `null`: a run started on it meanwhile. |
 | 2 | For each remaining child, pick the first developer seat with a number that is under its limit, and assign it: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. Count the child you just gave a seat: the next child may need the next seat. |
-| 3 | Write one comment on each child you moved: from which seat, to which seat and why. For example: `Moved from Collab Developer to Collab Developer (Bob): the allowance is used up and no run had started.` |
+| 3 | Write one comment on each child you moved: from which seat, to which seat and why. For example: `Moved from Collab Developer to Collab Developer (Bob): its runner reports no room and no run had started.` |
 | 4 | Finish `blocked` with nothing named, as before. |
 
 - Move only what `noRoom` lists. A child a run has started on keeps its seat and waits.

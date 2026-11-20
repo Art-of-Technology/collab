@@ -4,6 +4,7 @@ import { commentHtml } from "@/lib/comment-html";
 import { formatDistanceToNow } from "date-fns";
 import { useParams } from "next/navigation";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { Badge } from "@/components/ui/badge";
 import { ActivityItemProps } from "../types/activity";
 import { ActivityIcon } from "./ActivityIcon";
 import { ActivityChangeDetails } from "./ActivityChangeDetails";
@@ -25,7 +26,7 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
 
       <div className="flex-1 min-w-0">
         {/* Main activity text */}
-        <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
           <ActivityIcon action={activity.action} />
           <span className="text-xs text-collab-400">
             {actionText}
@@ -36,6 +37,11 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
           <span className="text-[10px] text-collab-500">
             {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
           </span>
+          {activity.allowance && (
+            <Badge variant="outline" className="ml-auto min-h-5 max-w-full break-all px-2 text-[10px] font-normal border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+              {activity.allowance.owner}&apos;s allowance{activity.allowance.program && ` · ${activity.allowance.program}`}
+            </Badge>
+          )}
         </div>
 
         {/* The checked facts of a run's exit note, above the note */}

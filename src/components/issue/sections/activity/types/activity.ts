@@ -17,6 +17,8 @@ export interface IssueActivity {
   // Status change FK relations — proper displayName from DB
   oldStatus?: ActivityStatusRef | null;
   newStatus?: ActivityStatusRef | null;
+  // On a run's entry: whose allowance the run used, and the program when its runner reported one (CLB-779).
+  allowance?: { owner: string; program: string | null } | null;
   user: {
     id: string;
     name: string | null;
