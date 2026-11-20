@@ -226,6 +226,8 @@ test('started work moves between runs once its seat has had no room for 30 minut
     const original = finish.details;
     await raw.issueActivity.update({ where: { id: finish.id }, data: { details: JSON.stringify({ ...JSON.parse(original), pullRequest: 'private/repo#999' }) } });
     assert.equal((await context(revBob, started)).movedFrom.branch, null, 'another project cannot disclose its branch');
+    assert.match((await context(revBob, started)).movedFrom.first, new RegExp(`pushed to private/repo .*not to acme/${A}, which this seat works in\\. Do not merge anything`),
+      'a pull request of another repository than the seat works in is not merged');
     await raw.issueActivity.update({ where: { id: finish.id }, data: { details: original } });
     await raw.agentRun.delete({ where: { id: checkout } });
     // The seat that ran it last is not told it was moved.

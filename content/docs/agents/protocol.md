@@ -97,6 +97,7 @@ The issue may have been worked on another seat, in another person's space. Then 
 - Do step 2 even when your working copy already has the issue's branch. A runner that had the issue before starts from what it holds, not from what the other seat pushed since.
 - What the other seat did not push is not part of the work any more. Do not look for it.
 - `movedFrom` with no `pullRequest`: Collab cannot tell what was pushed. Find the issue's branch before you change anything.
+- The pull request is in another repository than the one your seat works in: `first` says so. Merge nothing, finish `blocked` and ask a person.
 
 ## File a request
 

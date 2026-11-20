@@ -594,6 +594,9 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const branch = repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { projectId: issue.projectId, isActive: true, fullName: { equals: repo, mode: 'insensitive' } } },
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   const from = last?.seat?.name ?? 'another account';
+  const repository = await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId);
+  // A project can connect several repositories and a seat works in its own: a pull request of another one is not merged here.
+  const elsewhere = !!repo && !!repository && repository.name.toLowerCase() !== repo.toLowerCase();
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
@@ -614,11 +617,13 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   return {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
-    repository: await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId),
+    repository,
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     movedFrom: last && last.userId !== issue.assigneeId ? { seat: last.seat?.name ?? null, pullRequest: pushed?.pullRequest ?? null, headCommit: pushed?.headCommit ?? null, branch,
-      first: pushed ? `This issue was moved here from ${from}. Before anything else: git fetch origin, then git merge ${branch ? `origin/${branch}` : pushed.headCommit}`
+      first: elsewhere ? `This issue was moved here from ${from}, and its last run pushed to ${repo} (${pushed!.pullRequest}), not to ${repository!.name}, which this seat works in. `
+        + 'Do not merge anything: finish the run blocked and ask a person where the work continues.'
+        : pushed ? `This issue was moved here from ${from}. Before anything else: git fetch origin, then git merge ${branch ? `origin/${branch}` : pushed.headCommit}`
         + ` (the branch of ${pushed.pullRequest}, left at ${pushed.headCommit}). Continue from there and from the last exit note. What ${from} did not push is not part of the work any more.`
         : `This issue was moved here from ${from}, and its last run recorded no pull request: Collab cannot tell what was pushed. Read the last exit note and find the issue's branch before you change anything.` } : null,
     commentsSince,
