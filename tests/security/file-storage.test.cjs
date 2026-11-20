@@ -27,7 +27,7 @@ test('a request is signed as Signature Version 4 says, checked against the publi
 test('bucket redirects fail without following for every operation', async () => {
   const requests = [];
   const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
-    URL, console: { error() {} }, process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
+    URL, setTimeout, clearTimeout, AbortController, console: { error() {} }, process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
     fetch: async (url, options) => {
       requests.push(options);
       return options.redirect === 'manual' ? new Response(null, { status: 302, headers: { location: 'https://elsewhere.test/' } }) : new Response('followed');
@@ -41,7 +41,7 @@ test('bucket redirects fail without following for every operation', async () => 
 
 test('a refused read returns even when cancelling a shared response stream is pending', async () => {
   const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
-    URL, console: { error() {} }, process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
+    URL, setTimeout, clearTimeout, AbortController, console: { error() {} }, process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
     fetch: async () => {
       const response = new Response('refused', { status: 403 });
       response.clone(); // A second reader can keep cancellation of the first branch pending.
@@ -61,7 +61,7 @@ test('a write whose answer never arrives is asked back out, and bytes that stay 
   const requests = [], logged = [];
   const state = { deleteWorks: true };
   const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
-    URL, setTimeout, console: { error: (...line) => logged.push(line) },
+    URL, setTimeout, clearTimeout, AbortController, console: { error: (...line) => logged.push(line) },
     process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
     fetch: async (url, { method }) => {
       requests.push(`${method} ${new URL(url).pathname}`);
@@ -91,7 +91,7 @@ test('a write whose answer never arrives is asked back out, and bytes that stay 
 test('a refused write is not followed by a delete: nothing was stored', async () => {
   const requests = [];
   const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
-    URL, setTimeout, console: { error() {} },
+    URL, setTimeout, clearTimeout, AbortController, console: { error() {} },
     process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
     fetch: async (url, { method }) => { requests.push(method); return new Response(null, { status: 403 }); },
   });
@@ -104,7 +104,7 @@ test('an uncertain write is deleted even if a retry is refused', async () => {
   for (const first of ['unreachable', 503]) {
     const requests = [];
     const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
-      URL, setTimeout: resolve => resolve(), console: { error() {} },
+      URL, clearTimeout, AbortController, setTimeout: resolve => resolve(), console: { error() {} },
       process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
       fetch: async (url, { method }) => {
         requests.push(`${method} ${new URL(url).pathname}`);
@@ -119,4 +119,20 @@ test('an uncertain write is deleted even if a retry is refused', async () => {
     const path = requests[0].slice(4);
     assert.deepEqual(requests, [`PUT ${path}`, `PUT ${path}`, `DELETE ${path}`]);
   }
+});
+
+test('a store that accepts the connection and then says nothing is given up on, attempt by attempt', async () => {
+  const requests = [];
+  const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
+    URL, clearTimeout, AbortController, console: { error() {} },
+    // The answer deadline is shortened to a few milliseconds here; the waits between attempts are skipped.
+    setTimeout: (run, ms) => setTimeout(run, ms >= 60000 ? 5 : 0),
+    process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
+    fetch: (url, { method, signal }) => {
+      requests.push(method);
+      return new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))));
+    },
+  });
+  await assert.rejects(storage.openObject('context/key'), error => error.reason === 'read_failed' && error.uncertain === true);
+  assert.deepEqual(requests, ['GET', 'GET', 'GET']);
 });

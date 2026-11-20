@@ -70,6 +70,19 @@ export function signRequest(input: {
 // The store stops for a moment during its daily backup, so a request that finds it away is asked again.
 const RETRY_WAITS_MS = [0, 500, 2000];
 
+// How long the store has to answer one attempt, the body of an upload included. A store that accepts a
+// connection and then says nothing counts as away. The body of a download is not timed: it travels at
+// the pace of whoever reads it.
+const ANSWER_DEADLINE_MS = 60_000;
+
+async function answer(url: URL, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ANSWER_DEADLINE_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally { clearTimeout(timer); }
+}
+
 async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: FileStorageFailure, body?: Uint8Array): Promise<Response> {
   const config = settings();
   if (!config) throw new FileStorageError('not_configured');
@@ -80,7 +93,7 @@ async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: File
   for (const wait of RETRY_WAITS_MS) {
     if (wait) await new Promise(resolve => setTimeout(resolve, wait));
     try {
-      const response = await fetch(url, {
+      const response = await answer(url, {
         method, body: body as BodyInit | undefined, redirect: 'manual',
         headers: signRequest({ method, url, payloadHash, accessKey: config.accessKey, secretKey: config.secretKey, region: config.region, now: new Date() }),
       });

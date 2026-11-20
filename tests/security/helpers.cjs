@@ -66,7 +66,7 @@ function load(file, dependencies = {}, globals = {}) {
       }
       // The real storage client: it signs its requests and sends them through the fixture's fetch.
       if (!(name in dependencies) && name === '@/lib/file-storage') {
-        dependencies[name] = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, { setTimeout, ...globals });
+        dependencies[name] = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, { setTimeout, clearTimeout, AbortController, ...globals });
         return dependencies[name];
       }
       if (!(name in dependencies) && name === '@/lib/forge/legacy-write-guard') {
