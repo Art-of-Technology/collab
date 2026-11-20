@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   const [connecting, setConnecting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const failedPageRollback = useRef<{ page: number; search: string } | null>(null);
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
@@ -83,6 +84,11 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
 
   useEffect(() => {
     if (!isConnected) return;
+    if (failedPageRollback.current?.page === currentPage && failedPageRollback.current.search === searchTerm) {
+      failedPageRollback.current = null;
+      return;
+    }
+    failedPageRollback.current = null;
     const controller = new AbortController();
     const load = () => fetchRepositories(currentPage, searchTerm, controller.signal);
     // Debounced: a search makes the server read every repository the account can see.
@@ -146,6 +152,10 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       setGithubUser(data.githubUser);
     } catch (error) {
       if (signal.aborted) return;
+      if (page > 1) {
+        failedPageRollback.current = { page: page - 1, search };
+        setCurrentPage(page - 1);
+      }
       console.error('Error fetching repositories:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch repositories');
     } finally {

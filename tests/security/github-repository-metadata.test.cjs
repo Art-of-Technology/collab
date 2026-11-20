@@ -29,7 +29,7 @@ function fixture(options = {}) {
     '@/lib/encryption': { EncryptionService: { decrypt: token => { effects.push(['decrypt']); return 'token'; }, encrypt: token => { effects.push(['encrypt']); return 'sealed'; } } },
     crypto: { default: crypto }, '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/github/oauth-config': {
-      getUserRepositories: async (...args) => { effects.push(['list', ...args]); if (options.listError) throw new Error(options.listError); if (options.pages) return { repositories: options.pages[args[1] - 1], hasMore: args[1] < options.pages.length }; return { repositories: providerRows, hasMore: true }; },
+      getUserRepositories: async (...args) => { effects.push(['list', ...args.slice(0, 4)]); options.onList?.(...args); if (options.listError) throw new Error(options.listError); if (options.pages) return { repositories: options.pages[args[1] - 1], hasMore: args[1] < options.pages.length }; return { repositories: providerRows, hasMore: true }; },
       getRepositoryDetails: async () => { effects.push(['details']); return { id: 99, full_name: 'org/repo', default_branch: 'main', permissions: { admin: !options.noAdmin } }; },
       createRepositoryWebhook: async () => { effects.push(['webhook']); if (options.webhookError) throw new Error(options.webhookError); return { id: 12 }; },
     },
@@ -42,7 +42,7 @@ function fixture(options = {}) {
   const list = load('src/app/api/github/oauth/repositories/route.ts', deps, globals).GET;
   const connect = load('src/app/api/github/oauth/connect/route.ts', deps, globals).POST;
   const manual = load('src/app/api/github/repositories/route.ts', deps, globals).POST;
-  return { effects, logs, list: query => list({ url: 'https://collab.example/api/github/oauth/repositories' + (query || '') }), connect: (projectId = 'own', manualMode = false) => (manualMode ? manual : connect)({ json: async () => ({ projectId, repositoryId: 99, githubRepoId: 99, owner: 'org', name: 'repo', accessToken: 'manual-token' }) }) };
+  return { effects, logs, list: (query, signal = new AbortController().signal) => list({ url: 'https://collab.example/api/github/oauth/repositories' + (query || ''), signal }), connect: (projectId = 'own', manualMode = false) => (manualMode ? manual : connect)({ json: async () => ({ projectId, repositoryId: 99, githubRepoId: 99, owner: 'org', name: 'repo', accessToken: 'manual-token' }) }) };
 }
 
 test('list reveals connection metadata only for owner and active member projects', async () => {
@@ -65,6 +65,21 @@ test('search reads every provider page, so it finds a repository the picker has 
 test('search stops after ten provider pages', async () => {
   const f = fixture(); await f.list('?search=repo');
   assert.equal(f.effects.filter(e => e[0] === 'list').length, 10);
+});
+test('aborted searches stop paging and pass cancellation to the provider', async () => {
+  const controller = new AbortController();
+  let received;
+  const f = fixture({ onList: (...args) => { received = args[4]; controller.abort(); } });
+  await f.list('?search=repo', controller.signal);
+  assert.equal(received, controller.signal);
+  assert.equal(f.effects.filter(e => e[0] === 'list').length, 1);
+});
+test('repository provider forwards cancellation to fetch', async () => {
+  const controller = new AbortController();
+  let received;
+  const provider = load('src/lib/github/oauth-config.ts', {}, { URLSearchParams, process: { env: {} }, console: { log() {}, error() {} }, fetch: async (_url, options) => { received = options.signal; return { ok: true, json: async () => [], headers: new Headers() }; } });
+  await provider.getUserRepositories('token', 1, 30, 'updated', controller.signal);
+  assert.equal(received, controller.signal);
 });
 test('both connection entries reject inactive/foreign project before credentials or writes', async () => {
   for (const manual of [false, true]) for (const project of ['revoked', 'foreign', 'missing']) { const f = fixture(); assert.equal((await f.connect(project, manual)).status, 404); assert.deepEqual(f.effects, []); }

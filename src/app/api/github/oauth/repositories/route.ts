@@ -44,12 +44,13 @@ export async function GET(request: NextRequest) {
     if (search) {
       // shortcut: a search reads at most 1,000 repositories (10 pages of 100); use GitHub's search API if an account has more
       for (let searchPage = 1; searchPage <= 10; searchPage++) {
-        const result = await getUserRepositories(accessToken, searchPage, 100, sort);
+        request.signal.throwIfAborted();
+        const result = await getUserRepositories(accessToken, searchPage, 100, sort, request.signal);
         repositories.push(...result.repositories);
         if (!result.hasMore) break;
       }
     } else {
-      ({ repositories, hasMore } = await getUserRepositories(accessToken, page, 30, sort));
+      ({ repositories, hasMore } = await getUserRepositories(accessToken, page, 30, sort, request.signal));
     }
 
     // Filter repositories by search term if provided

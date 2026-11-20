@@ -6,6 +6,7 @@ const React = require('react');
 const { createRoot } = require('react-dom/client');
 
 const requests = [];
+let failPageTwo = false;
 const repo = (id, name) => ({ id, name, full_name: 'org/' + name, description: null, private: false, html_url: 'https://github.test/org/' + name, default_branch: 'main', updated_at: '2026-11-01T00:00:00Z', language: null, stargazers_count: 0, owner: { login: 'org', avatar_url: '' }, permissions: { admin: true, push: true, pull: true } });
 const icons = new Proxy({}, { get: () => () => null });
 const Component = load('src/components/github/GitHubOAuthConnection.tsx', {
@@ -19,6 +20,7 @@ const Component = load('src/components/github/GitHubOAuthConnection.tsx', {
   fetch: async url => {
     requests.push(url);
     const query = new URL(url, 'https://collab.test').searchParams;
+    if (failPageTwo && query.get('page') === '2') { failPageTwo = false; return { ok: false, json: async () => ({ error: 'Temporary failure' }) }; }
     const repositories = query.get('search') ? [repo(9, 'needle')] : query.get('page') === '2' ? [repo(2, 'second-page')] : [repo(1, 'first-page')];
     return { ok: true, json: async () => ({ githubUser: 'alice', repositories, hasMore: !query.get('search') && query.get('page') !== '2' }) };
   },
@@ -45,4 +47,17 @@ test('Load More asks for the next page and search asks the server', async () => 
   await settle(400);
   assert.equal(requests.at(-1), '/api/github/oauth/repositories?page=1&search=needle');
   assert.ok(shown('needle') && !shown('first-page'));
+});
+
+test('a failed page is retried without skipping or duplicating repositories', async () => {
+  await React.act(async () => createRoot(document.getElementById('root')).render(React.createElement(Component, { projectId: 'p1' })));
+  await settle(20);
+  failPageTwo = true;
+  const more = () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Load More'));
+  await React.act(async () => more().click());
+  await settle(20);
+  await React.act(async () => more().click());
+  await settle(20);
+  assert.deepEqual(requests.slice(-2), ['/api/github/oauth/repositories?page=2&search=', '/api/github/oauth/repositories?page=2&search=']);
+  assert.deepEqual(names(), ['first-page', 'second-page']);
 });
