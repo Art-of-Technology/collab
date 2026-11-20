@@ -227,6 +227,14 @@ test('started work moves between runs once its seat has had no room for 30 minut
       await raw.agentSeat.update({ where: { id: revBob.id }, data: { repositoryId: null } });
       await raw.gitConnection.delete({ where: { id: collision.id } });
     }
+    const different = await raw.gitConnection.create({ data: { projectId: A, provider: 'gitlab', baseUrl: 'https://gitlab.com', externalId: 'different',
+      repositoryPath: 'acme/other', name: 'other', url: 'https://gitlab.com/acme/other' } });
+    await raw.agentSeat.update({ where: { id: revBob.id }, data: { repositoryId: different.id } });
+    const elsewhere = (await context(revBob, started)).movedFrom;
+    assert.equal(elsewhere.branch, null);
+    assert.match(elsewhere.first, /Do not merge anything: finish the run blocked and ask a person/);
+    await raw.agentSeat.update({ where: { id: revBob.id }, data: { repositoryId: null } });
+    await raw.gitConnection.delete({ where: { id: different.id } });
     const checkout = await start(revBob, started, 'handoff-checkout');
     assert.equal((await context(revBob, started)).movedFrom.pullRequest, started.pullRequest, 'checkout retains the previous finished run facts');
     await raw.agentRun.update({ where: { id: checkout }, data: { state: 'stopped', endedAt: new Date() } });
@@ -283,13 +291,15 @@ test('started work moves between runs once its seat has had no room for 30 minut
   await t.test('nothing moves when the last run pushed nothing, or when the last run did not finish', async () => {
     const quiet = await startedRequest({ pushed: false });
     const stopped = await startedRequest();
+    const lost = await startedRequest();
     // A later run that stopped without a finish recorded nothing: Collab cannot tell what it pushed.
     await raw.agentRun.create({ data: { workspaceId: 'w', issueId: stopped.id, seatId: revCem.id, userId: revCem.userId, runner: 'test', generation: 'g-stop', state: 'stopped', endedAt: new Date() } });
+    await raw.agentRun.create({ data: { workspaceId: 'w', issueId: lost.id, seatId: revCem.id, userId: revCem.userId, runner: 'test', generation: 'g-lost', state: 'lost', endedAt: new Date() } });
     await cemFull(31);
     assert.ok((await inbox(revCem)).some(([key, reason]) => key === quiet.issueKey && reason === 'reply'), 'it waits in its seat\'s inbox');
     await inbox(revBob);
-    assert.deepEqual([await holder(quiet), await holder(stopped)], [revCem.userId, revCem.userId]);
-    assert.deepEqual([await moves(quiet), await moves(stopped)], [[], []]);
+    assert.deepEqual([await holder(quiet), await holder(stopped), await holder(lost)], [revCem.userId, revCem.userId, revCem.userId]);
+    assert.deepEqual([await moves(quiet), await moves(stopped), await moves(lost)], [[], [], []]);
     await settle();
   });
 
@@ -335,6 +345,27 @@ test('started work moves between runs once its seat has had no room for 30 minut
     assert.match((await moves(kept))[0].details.why, /^rev-cem had no room for 30 minutes \(the runner is offline\)/);
     await report(cem, 50);
     await settle();
+  });
+
+  await t.test('a disconnected runner counts 30 minutes from removal or seat creation', async () => {
+    const runner = await raw.agentRunner.findFirstOrThrow({ where: { ownerId: cem, removedAt: null } });
+    const originalSeat = await raw.agentSeat.findUniqueOrThrow({ where: { id: revCem.id } });
+    for (const since of ['removal', 'creation']) {
+      const kept = await startedRequest();
+      await report(bob, 60);
+      await raw.agentRunner.update({ where: { id: runner.id }, data: { removedAt: ago(since === 'removal' ? 29 : 60) } });
+      await raw.agentSeat.update({ where: { id: revCem.id }, data: { createdAt: ago(since === 'creation' ? 29 : 600) } });
+      await inbox(revBob);
+      assert.equal(await holder(kept), revCem.userId, `${since}: 29 minutes are not 30`);
+      if (since === 'removal') await raw.agentRunner.update({ where: { id: runner.id }, data: { removedAt: ago(31) } });
+      else await raw.agentSeat.update({ where: { id: revCem.id }, data: { createdAt: ago(31) } });
+      await inbox(revBob);
+      assert.equal(await holder(kept), revBob.userId, `${since}: work moves after 30 minutes`);
+      assert.match((await moves(kept))[0].details.why, /no runner is connected/);
+      await raw.agentRunner.update({ where: { id: runner.id }, data: { removedAt: null } });
+      await raw.agentSeat.update({ where: { id: revCem.id }, data: { createdAt: originalSeat.createdAt } });
+      await settle();
+    }
   });
 
   await t.test('a run that starts while the move is made wins', async () => {
