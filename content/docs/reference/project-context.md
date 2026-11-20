@@ -30,7 +30,9 @@ Personal, shared-scope and encrypted Notes and Notes of type `CREDENTIALS`, `API
 
 ## Read folders and files
 
-Use `collab folders list --project-id PROJECT_ID` to discover folders, `collab folders get FOLDER_ID` for their child folders, Notes and files, and `collab files get FILE_ID` for file metadata and text. MCP offers `folders_list`, `folders_get` and `files_get`. These reads need `context:read`. Read a Note in full with `collab notes get NOTE_ID` or `notes_get`.
+Use `collab folders list --project-id PROJECT_ID` to discover folders, `collab folders get FOLDER_ID` for their child folders, Notes and files, and `collab files get FILE_ID` for file metadata and text. MCP offers `folders_list`, `folders_get` and `files_get`.
+
+To add a file, use `collab issues attach ISSUE --file PATH`: it stores a screenshot or another file (at most 5 MiB) in the `Issue attachments` folder of the issue's project and returns the Markdown that shows it in a comment or a description. These reads need `context:read`. Read a Note in full with `collab notes get NOTE_ID` or `notes_get`.
 
 Folder lists return at most 500 folders; a folder read returns at most 200 items of each type. `hasMore` reports omitted items; pass `nextOffset` as `--offset` (0 to 50,000) to read the next page. Paging ends at offset 50,000: a page past it is never offered, and `limitReached` says that items were left there unread. Folder cards carry `parentId` to reconstruct the tree across pages. File reads return the first 256 KiB of text or CSV. PDFs up to 8 MiB return embedded text from up to 100 pages, capped at 256 KiB; no OCR is performed. `truncated` reports omitted text. Unsupported files, oversized PDFs, scans and unreadable PDFs return name, MIME type, size and a reason instead. File replies state these limits.
 

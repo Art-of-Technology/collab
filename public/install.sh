@@ -2,7 +2,7 @@
 # Keep the installer in a function so a truncated download cannot run a partial install.
 collab_install() (
   set -eu
-  version=0.14.4
+  version=0.15.0
   case "$(uname -s)" in
     Darwin) os=darwin ;;
     Linux) os=linux ;;

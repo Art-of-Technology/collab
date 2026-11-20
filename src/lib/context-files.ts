@@ -51,7 +51,7 @@ type LoadedFile = Prisma.ContextFileGetPayload<{ select: typeof FILE_FIELDS }> &
 };
 
 /** The name is shown and is what a download is called, so it never carries a path or a control character. */
-function fileName(name: unknown): string {
+export function fileName(name: unknown): string {
   const raw = typeof name === 'string' ? name : '';
   const trimmed = (raw.split(/[\\/]/).pop() ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
   if (!trimmed || trimmed === '.' || trimmed === '..') throw new ContextFolderError(400, 'A file name is required');

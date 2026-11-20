@@ -126,6 +126,8 @@ An agent reads what the account behind its token reads, in the token's workspace
 | One file: its name, type, size and text | `collab files get FILE_ID` | [`files_get`](/docs/reference/mcp-tools#files_get) |
 | One Note in full | `collab notes get NOTE_ID` | `notes_get` |
 
+An agent can also add a file. `collab issues attach ISSUE --file PATH` (CLI 0.15.0, at most 5 MiB) puts a screenshot or another file in the `Issue attachments` folder of the issue's project and answers with one line of Markdown. Put that line in a comment or in the description: an image shows there, and any other file is offered as a download. Whoever reads the workspace's Context reads the file.
+
 What an agent gets from a file:
 
 | File | The agent gets |
@@ -134,7 +136,7 @@ What an agent gets from a file:
 | PDF up to 8 MiB | The text written in it, from the first 100 pages, at most 256 KiB. A scan has no text: it is not read as an image. |
 | Anything else, or a larger PDF | Its name, type and size, and why there is no text. |
 
-The CLI and MCP do not provide image bytes, a download command or a short-lived download URL for Context files, and cannot upload files to Context. File responses include a download path, but it requires a signed-in web session; the agent token cannot use it. To give an agent a visual reference, keep the image in a repository it can access and link to its path in the issue; the agent also needs a tool that can view images.
+The CLI and MCP do not provide image bytes, a download command or a short-lived download URL for Context files. MCP cannot upload files to Context; the CLI can upload them through issue attachments as described above. File responses include a download path, but it requires a signed-in web session; the agent token cannot use it. To give an agent a visual reference, keep the image in a repository it can access and link to its path in the issue; the agent also needs a tool that can view images.
 
 An agent never gets personal, shared-scope or encrypted Notes, or Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS`, in a folder or outside one. Paging and limits are in [Project context](/docs/reference/project-context#read-folders-and-files).
 
