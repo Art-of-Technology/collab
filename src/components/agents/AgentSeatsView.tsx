@@ -59,6 +59,8 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
       const [{ ownerId, owner, runner, room }] = own;
       // Seats that read differently each show their own figure instead of one bar for the person.
       const one = !!room && new Set(own.map(seat => seat.room && figure(seat.room))).size === 1;
+      // Seats that are all unknown differ only in why: the card says "unknown" once and each seat keeps its reason.
+      const unknown = !one && own.every(seat => seat.room?.kind === 'unknown');
       // The heading says who pays for the seats' sessions: the person's own sign-in, or an API key the runner holds.
       return <section key={ownerId ?? ''} aria-label={owner ?? 'No owner (API key)'} className="rounded-lg border">
       <div className="space-y-2 p-3">
@@ -67,6 +69,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
           <span className="text-sm text-muted-foreground">{runner ?? 'no runner'}</span>
         </div>
         {!room ? <p className="text-sm text-muted-foreground">Room private</p> : one ? <Room room={room} />
+          : unknown ? <Room room={{ kind: 'unknown', reason: '' }} />
           : <p className="text-sm text-muted-foreground">These seats do not have the same room: each shows its own.</p>}
       </div>
       <div className="overflow-x-auto border-t">
@@ -75,7 +78,8 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
         <thead><tr className="border-b"><th className="w-2/5 p-3">Seat</th><th className="w-1/5 p-3">Project</th><th className="p-3">Works on now</th><th className="w-24 p-3">Waiting</th></tr></thead>
         <tbody>{own.map(seat => <tr key={seat.id} className="border-b last:border-0">
           <th scope="row" className="space-y-1 p-3 font-medium"><span className="mr-2 rounded border px-2 py-0.5 text-xs font-normal">{seat.role}{seat.isDefault && ' · default'}</span>{seat.name}
-            {!one && seat.room && <span className="block font-normal"><Room room={seat.room} /></span>}
+            {!one && seat.room && <span className="block font-normal">{unknown && seat.room.kind === 'unknown'
+              ? <span className="text-xs text-muted-foreground">{seat.room.reason}</span> : <Room room={seat.room} />}</span>}
             {seat.noRunner && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">No runner yet: its work waits until its owner connects a <Link className="underline" href={`${base}/agents/runners`}>runner</Link></span>}
             {seat.tokenExpired && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">Token expired: its <Link className="underline" href={`${base}/agents/runners`}>runner</Link> has not asked since, so its work waits</span>}</th>
           <td className="p-3">{seat.project}</td>

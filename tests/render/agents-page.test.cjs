@@ -205,6 +205,12 @@ test('Seats tab: room is a bar with its words, "no room" or "unknown" with the r
   assert.match(text(html), /Each runner reports it\. You see every person&#x27;s room; a member sees their own\./);
 
   // Seats of one person that read differently: no bar for the person, the figure on each seat.
+  // Seats that are all unknown do not "differ": one "unknown" on the card, the reason on each seat.
+  const unknowns = await open([seat('u1', 'Uma', { kind: 'unknown', reason: 'no figure was reported' }), seat('u2', 'Uma', { kind: 'unknown', reason: 'the seat is run by hand' })]);
+  assert.doesNotMatch(unknowns, /do not have the same room/);
+  assert.match(text(card(unknowns, 'Uma')), /^\s*Uma Uma&#x27;s space unknown Seat /);
+  assert.match(text(card(unknowns, 'Uma')), /Seat u1 no figure was reported .* Seat u2 the seat is run by hand /);
+  assert.equal(card(unknowns, 'Uma').match(/>unknown</g).length, 1);
   const mixed = await open([seat('m1', 'Mia', number(60)), seat('m2', 'Mia', number(60, 'Codex')), seat('m3', 'Mia', { kind: 'no_room', reason: 'the allowance is used up' }),
     seat('m4', 'Mia', { kind: 'unknown', reason: 'the seat is run by hand' })]);
   assert.match(text(mixed), /Mia Mia&#x27;s space These seats do not have the same room: each shows its own\. Seat Project Works on now Waiting developer Seat m1 60% room next run on Claude Code Collab Nothing 0 developer Seat m2 60% room next run on Codex Collab Nothing 0 developer Seat m3 no room the allowance is used up Collab Nothing 0 developer Seat m4 unknown the seat is run by hand Collab /);
