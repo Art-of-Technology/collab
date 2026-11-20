@@ -80,7 +80,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   const several = (repository.data?.repositories.length ?? 0) > 1;
   const candidate = repositoryId || repository.data?.repository?.id || '';
   const pick = needsRepository && several && repository.data?.repositories.some(item => item.id === candidate) ? candidate : '';
-  const repositorySettled = !asSeat || !needsRepository || (several ? !!pick : !!repository.data?.repository);
+  const repositorySettled = !asSeat || !needsRepository || (!repository.error && (several ? !!pick : !!repository.data?.repository));
   const [busy, setBusy] = useState(false);
   const [minted, setMinted] = useState<{ name: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);

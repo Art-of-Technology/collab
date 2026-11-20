@@ -5,7 +5,7 @@ global.window = dom.window; global.document = dom.window.document; global.IS_REA
 const React = require('react');
 const { createRoot } = require('react-dom/client');
 const { QueryClient, QueryClientProvider, useQuery } = require('@tanstack/react-query');
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 // A query that was read keeps a timer until it is dropped, and the run would wait for it.
 require('node:test').after(() => queryClient.clear());
 
@@ -20,7 +20,7 @@ const api = { id: 'r2', provider: 'gitlab', name: 'acme/api', url: 'https://gitl
 const repositoryStates = {};
 const fetch = async (url, options) => {
   const project = /^\/api\/projects\/([^/]+)\/agent-repository$/.exec(url)?.[1];
-  if (project && options.method !== 'PATCH') return { ok: true, json: async () => repositoryStates[project] ?? { repositories: [app], repository: app } };
+  if (project && options.method !== 'PATCH') return { ok: repositoryStates[project] !== false, json: async () => repositoryStates[project] ?? { repositories: [app], repository: app } };
   calls.push([url, options.method, options.body ? JSON.parse(options.body) : undefined]);
   return answer;
 };
@@ -295,6 +295,28 @@ test('the Repository line: several are picked from, none is connected or typed, 
     // The address is the project's, so the seat's request names no repository.
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'dev', projectId: 'p3', role: 'developer', ownerId: null, expiresInDays: 90 }]);
   } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a failed repository refresh blocks repository roles until it succeeds', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p6', name: 'Six' }], people: [] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'dev');
+    await choose(0, 'p6');
+    await shows('From the project acme/app');
+    assert.equal(buttons('Create seat')[0].disabled, false);
+    repositoryStates.p6 = false;
+    await React.act(async () => queryClient.refetchQueries({ queryKey: ['projectSummary', 'p6', 'agentRepository'] }));
+    await shows("Could not load the project's repository.");
+    assert.equal(buttons('Create seat')[0].disabled, true);
+    await choose(1, 'lead');
+    assert.equal(buttons('Create seat')[0].disabled, false);
+    await choose(1, 'developer');
+    repositoryStates.p6 = { repositories: [app], repository: app };
+    await React.act(async () => buttons('Retry')[0].click());
+    await shows('From the project acme/app');
+    assert.equal(buttons('Create seat')[0].disabled, false);
+  } finally { delete repositoryStates.p6; await React.act(async () => root.unmount()); }
 });
 
 test('a removed repository cannot be submitted after the list refreshes', async () => {
