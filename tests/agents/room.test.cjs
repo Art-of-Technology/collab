@@ -73,6 +73,8 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
   // The same person's seat in another workspace, which a runner admitted in `w` does not run.
   const elsewhere = (await seats.createSeat({ workspaceId: 'w2', actorId: owner, projectId: B, role: 'developer', ownerId: person, name: 'far', expiresInDays: 30, byRunner: true })).seat;
   const mac = await runner('mac', person), theirs = await runner('their-mac', other);
+  // The backdated reports below must still be newer than their runner's admission.
+  await prisma.agentRunner.updateMany({ where: { workspaceId: 'w' }, data: { admittedAt: new Date(Date.now() - 30 * MINUTE) } });
   let have;
 
   await t.test('a runner that sends none of the new fields is answered as before and changes nothing', async () => {

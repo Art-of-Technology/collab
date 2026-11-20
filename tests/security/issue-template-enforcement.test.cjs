@@ -101,6 +101,7 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     taskLabel: { count: async ({ where }) => where.id.in.filter(id => id !== 'missing').length },
     issueFollower: { findMany: async () => [] },
     projectFollower: { findMany: async () => [] },
+    $executeRaw: async () => 0,
     $transaction: async (operation, options) => {
       state.transactionOptions = options;
       if (state.beforeTransaction) state.beforeTransaction();
