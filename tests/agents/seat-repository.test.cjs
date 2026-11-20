@@ -156,12 +156,16 @@ test('where a seat\'s repository comes from: the project, the seat\'s own pick, 
     assert.equal((await repositoryOf(picked)).id, api.id);
   });
 
-  await t.test('asking again under the same name: a pick moves the seat\'s repository, and no pick leaves it', async () => {
+  await t.test('asking again under the same name gives a further token and leaves the seat\'s pick, whatever the request names', async () => {
     const again = await createSeat('dev-api', MANY);
     assert.deepEqual([again[0], again[1].seat.repositoryId], [201, api.id]);
-    const moved = await createSeat('dev-api', MANY, { repositoryId: web.id });
-    assert.deepEqual([moved[0], moved[1].seat.repositoryId], [201, web.id]);
-    assert.equal((await repositoryOf({ ...moved[1].seat, token: moved[1].token.token })).id, web.id);
+    // The form sends the project's default when nothing else is chosen: that must not move a seat that picked another.
+    const other = await createSeat('dev-api', MANY, { repositoryId: web.id });
+    assert.deepEqual([other[0], other[1].seat.repositoryId], [201, api.id]);
+    assert.equal((await repositoryOf({ ...other[1].seat, token: other[1].token.token })).id, api.id);
+    // And a seat that picked none stays with the project: no pick is slipped onto it either.
+    const plain = await createSeat('dev-plain', MANY, { repositoryId: api.id });
+    assert.deepEqual([plain[0], plain[1].seat.repositoryId], [201, null]);
     // A seat made again after it was retired is a new seat: it starts with the pick its request names, here none.
     const gone = await seat('dev-again', MANY, { repositoryId: api.id });
     await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: gone.id });

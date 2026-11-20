@@ -123,9 +123,10 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   // A seat made again starts with no figure: the one it kept was reported for the seat it was, perhaps for someone else's runner.
-  // Its pick is the one this request names; asking again for the same seat without one leaves the pick it has.
+  // Its pick is the one this request names. Like the owner, the pick is the seat's from then on: asking again for the
+  // same seat, which the form does with the project's default filled in, gives a further token and moves nothing.
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
-    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner, repositoryId: input.repositoryId ?? (same ? existing.repositoryId : null),
+    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner, repositoryId: same ? existing.repositoryId : input.repositoryId ?? null,
     ...(!same && { room: null, roomProgram: null, roomAt: null }) };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
