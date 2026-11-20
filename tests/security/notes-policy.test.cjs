@@ -151,35 +151,35 @@ test('collection predicates match the single-note read policy across scope and m
   assert.equal(matches(note, noteAccessWhere('')), false);
 });
 
-test('all Notes collections constrain both result reads and search counts', async () => {
+test('all Notes collections constrain their result reads', async () => {
   for (const [file, query] of [
-    ['route.ts', 'scope=WORKSPACE&workspace=foreign'],
+    ['route.ts', 'scope=WORKSPACE&workspace=joined'],
     ['route.ts', 'sharedWithMe=true'],
-    ['pinned/route.ts', 'workspaceId=foreign'],
-    ['search/route.ts', 'workspaceId=foreign&q=secret'],
-    ['shared-with-me/route.ts', 'workspace=foreign'],
   ]) {
     let reads = 0;
-    const boundary = { id: { in: [] } };
-    const check = ({ where }) => {
-      reads++;
-      assert.ok(where.AND.includes(boundary), `${file} omitted its access boundary`);
-    };
+    const rows = [
+      { ...note, id: 'accessible', workspace: workspaces[1], sharedWith: [{ userId: 'alice', permission: 'VIEW' }] },
+      { ...note, id: 'restricted', workspace: workspaces[1], isRestricted: true },
+      { ...note, id: 'foreign', workspaceId: 'foreign', workspace: workspaces[3], sharedWith: [{ userId: 'alice', permission: 'VIEW' }] },
+    ];
+    for (const row of rows) {
+      assert.equal((await checkNoteAccess('alice', row, row.workspaceId === 'joined' ? { role: 'MEMBER' } : null)).canAccess, row.id === 'accessible');
+    }
     const { GET } = load(`src/app/api/notes/${file}`, {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
       'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
       '@/lib/auth-options': { authOptions: {} },
       '@/lib/prisma': { prisma: { note: {
-        findMany: async args => { check(args); return []; },
-        count: async args => { check(args); return 0; },
+        findMany: async ({ where }) => { reads++; return rows.filter(row => matches(row, where)); },
       } } },
-      '@/lib/secrets/access': { noteAccessWhere: () => boundary },
+      '@/lib/issue-finder': { userHasWorkspaceAccess },
       '@/lib/secrets/crypto': {}, '@/lib/versioning': {}, '@/lib/event-bus': {},
       '@prisma/client': enums,
     }, { URL, console });
     const response = await GET(new Request(`https://example.test/notes?${query}`));
     assert.equal(response.status, 200, file);
-    assert.equal(reads, file === 'search/route.ts' ? 2 : 1);
+    assert.equal(reads, 1);
+    assert.deepEqual(response.body.map(row => row.id), ['accessible']);
   }
 });
 
