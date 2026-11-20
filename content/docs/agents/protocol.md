@@ -145,10 +145,11 @@ Which seat gets the next issue. `lead.seats` lists the seats of a role with the 
 | The seat's `room.kind` | What you do |
 | --- | --- |
 | `room` | Prefer the first seat that is under its limit: `openFromLead` below `lead.cap`. |
-| `unknown` | It comes after the seats with a number. Use it when none of those is under its limit. |
+| `unknown` | It comes after the seats with a number, unless its runner has reported that it is working (the seat's `room` then has `live: true`): then it stands level with the most room (see below). Use it when no seat ahead of it is under its limit. |
 | `no_room` | Give it nothing. |
 
 - When every seat is `unknown`, the order is the one from before room: the oldest seat first. Assign as you did then.
+- A seat reads `unknown` on a working runner when its next program is signed in and not held, and has simply sent no figure yet: a seat that runs Claude Code first often does, and so does an idle teammate's seat. Such a seat stands level with the most room and the tie goes to the owner with the fewest open runs, so work reaches it. This is a stopgap until every runner reports a figure. A seat run by hand, or one whose runner is offline or paused, does not get this.
 
 The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).
 

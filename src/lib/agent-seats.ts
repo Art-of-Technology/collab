@@ -182,7 +182,9 @@ export async function requireSeat(db: DB, context: Pick<AppAuthContext, 'user'>)
 }
 
 /** What a read of a seat's room gives: a number, no room, or unknown. The last two say why. */
-export type SeatRoom = { kind: 'room'; room: number; program: string | null; at: Date } | { kind: 'no_room' | 'unknown'; reason: string };
+// `live` marks an unknown seat whose runner is seen and working: by the runner's own rules that is a seat whose next
+// program is signed in, not held, and simply has no fresh reading.
+export type SeatRoom = { kind: 'room'; room: number; program: string | null; at: Date } | { kind: 'no_room' | 'unknown'; reason: string; live?: true };
 
 /**
  * A seat's room, for everything that shows it or places work by it. `runner` is the runner of the seat's person: the
@@ -201,8 +203,8 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
   if (runner.state && runner.state !== 'working') {
     return none(runner.state === 'paused' ? 'the runner is paused' : runner.state === 'disk_full' ? "the runner's disk is full" : 'the runner is not working');
   }
-  if (seat.room === null || !seat.roomAt) return unknown('no figure was reported');
-  if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`);
+  if (seat.room === null || !seat.roomAt) return { ...unknown('no figure was reported'), ...(runner.state === 'working' && { live: true as const }) };
+  if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return { ...unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`), ...(runner.state === 'working' && { live: true as const }) };
   if (seat.room <= 0) return none('its runner reports no room');
   return { kind: 'room', room: seat.room, program: seat.roomProgram, at: seat.roomAt };
 }
@@ -292,8 +294,11 @@ export async function seatsWithRoom(db: DB, projectId: string, role?: string, no
  */
 export function byRoom<T extends { room: SeatRoom; openRuns: number; isDefault: boolean }>(seats: T[]): T[] {
   if (seats.every(seat => seat.room.kind === 'unknown')) return [...seats];
-  // A number is above 0, so unknown and no room sort below every number.
-  const standing = ({ room }: T) => room.kind === 'room' ? room.room : room.kind === 'unknown' ? -1 : -2;
+  // A number is above 0, so unknown and no room sort below every number. The one exception is a stopgap until every
+  // runner reports a figure (CLB-812): a seat whose runner works but sent none stands level with the most room, or
+  // work would only ever go to the seats that already report.
+  const best = Math.max(0, ...seats.map(({ room }) => room.kind === 'room' ? room.room : 0));
+  const standing = ({ room }: T) => room.kind === 'room' ? room.room : room.kind === 'unknown' ? (room.live && best) || -1 : -2;
   return [...seats].sort((a, b) => standing(b) - standing(a) || a.openRuns - b.openRuns || +b.isDefault - +a.isDefault);
 }
 
