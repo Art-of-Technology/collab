@@ -82,10 +82,16 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   }, []);
 
   useEffect(() => {
-    if (isConnected) {
-      fetchRepositories();
-    }
-  }, [isConnected, currentPage]);
+    if (!isConnected) return;
+    const controller = new AbortController();
+    const load = () => fetchRepositories(currentPage, searchTerm, controller.signal);
+    // Debounced: a search makes the server read every repository the account can see.
+    const timer = searchTerm ? setTimeout(load, 300) : void load();
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isConnected, currentPage, searchTerm]);
 
   useEffect(() => {
     filterRepositories();
@@ -118,16 +124,17 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
     }
   };
 
-  const fetchRepositories = async (page = 1) => {
+  const fetchRepositories = async (page: number, search: string, signal: AbortSignal) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/github/oauth/repositories?page=${page}`);
+      const response = await fetch(`/api/github/oauth/repositories?${new URLSearchParams({ page: String(page), search })}`, { signal });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch repositories');
       }
 
       const data = await response.json();
+      if (signal.aborted) return;
       
       if (page === 1) {
         setRepositories(data.repositories || []);
@@ -138,10 +145,11 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       setHasMore(data.hasMore || false);
       setGithubUser(data.githubUser);
     } catch (error) {
+      if (signal.aborted) return;
       console.error('Error fetching repositories:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch repositories');
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   };
 
@@ -389,14 +397,17 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
           <Input
             placeholder="Search repositories..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             className="h-10 pl-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
           />
         </div>
 
         {/* Repository List */}
         <div className="space-y-2">
-          {loading && repositories.length === 0 ? (
+          {loading && filteredRepos.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-5 w-5 animate-spin text-collab-500/60" />
             </div>

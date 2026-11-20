@@ -101,7 +101,7 @@ async function settingsFixture(query, connected = false, responseStatus, reposit
   };
   const project = { id: 'project-1', name: 'Project', repository: null, statuses: [] };
   const globals = {
-    window, URL, console: { log() {}, error() {} },
+    window, URL, URLSearchParams, AbortController, setTimeout, clearTimeout, console: { log() {}, error() {} },
     fetch: async url => {
       requests.push(url);
       return { ok: connected, status: responseStatus ?? (connected ? 200 : 400), json: async () => ({ githubUser: 'octocat', repositories, hasMore: false }) };

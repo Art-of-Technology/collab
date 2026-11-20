@@ -29,7 +29,7 @@ function fixture(options = {}) {
     '@/lib/encryption': { EncryptionService: { decrypt: token => { effects.push(['decrypt']); return 'token'; }, encrypt: token => { effects.push(['encrypt']); return 'sealed'; } } },
     crypto: { default: crypto }, '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/github/oauth-config': {
-      getUserRepositories: async (...args) => { effects.push(['list', ...args]); if (options.listError) throw new Error(options.listError); return { repositories: providerRows, hasMore: true }; },
+      getUserRepositories: async (...args) => { effects.push(['list', ...args]); if (options.listError) throw new Error(options.listError); if (options.pages) return { repositories: options.pages[args[1] - 1], hasMore: args[1] < options.pages.length }; return { repositories: providerRows, hasMore: true }; },
       getRepositoryDetails: async () => { effects.push(['details']); return { id: 99, full_name: 'org/repo', default_branch: 'main', permissions: { admin: !options.noAdmin } }; },
       createRepositoryWebhook: async () => { effects.push(['webhook']); if (options.webhookError) throw new Error(options.webhookError); return { id: 12 }; },
     },
@@ -52,8 +52,19 @@ test('list reveals connection metadata only for owner and active member projects
   for (const row of r.body.repositories.slice(2)) assert.equal(row.connectedProject, undefined);
   assert.equal(JSON.stringify(r.body).includes('encrypted-secret'), false); assert.equal(r.headers.get('cache-control'), 'no-store');
 });
-test('list preserves provider pagination, search, sort and disconnected response', async () => {
-  const f = fixture(); const r = await f.list('?page=2&search=repo-own&sort=created'); assert.equal(r.body.repositories.length, 1); assert.equal(r.body.hasMore, false); assert.equal(r.body.currentPage, 2); assert.deepEqual(f.effects.find(e => e[0] === 'list'), ['list', 'token', 2, 30, 'created']); assert.equal((await fixture({ noToken: true }).list()).status, 400);
+test('list preserves provider pagination, sort and disconnected response', async () => {
+  const f = fixture(); const r = await f.list('?page=2&sort=created'); assert.equal(r.body.repositories.length, 4); assert.equal(r.body.hasMore, true); assert.equal(r.body.currentPage, 2); assert.deepEqual(f.effects.find(e => e[0] === 'list'), ['list', 'token', 2, 30, 'created']); assert.equal((await fixture({ noToken: true }).list()).status, 400);
+});
+test('search reads every provider page, so it finds a repository the picker has not loaded', async () => {
+  const row = (id, name) => ({ id, name, full_name: 'org/' + name, description: null, permissions: { admin: true } });
+  const f = fixture({ pages: [[row(1, 'alpha')], [row(2, 'beta')], [row(3, 'needle')]] });
+  const r = await f.list('?page=1&search=NEEDLE');
+  assert.equal(r.body.repositories.map(x => x.name).join(), 'needle'); assert.equal(r.body.hasMore, false);
+  assert.deepEqual(f.effects.filter(e => e[0] === 'list'), [1, 2, 3].map(page => ['list', 'token', page, 100, 'updated']));
+});
+test('search stops after ten provider pages', async () => {
+  const f = fixture(); await f.list('?search=repo');
+  assert.equal(f.effects.filter(e => e[0] === 'list').length, 10);
 });
 test('both connection entries reject inactive/foreign project before credentials or writes', async () => {
   for (const manual of [false, true]) for (const project of ['revoked', 'foreign', 'missing']) { const f = fixture(); assert.equal((await f.connect(project, manual)).status, 404); assert.deepEqual(f.effects, []); }
