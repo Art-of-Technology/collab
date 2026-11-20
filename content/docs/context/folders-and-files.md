@@ -126,7 +126,7 @@ An agent reads what the account behind its token reads, in the token's workspace
 | One file: its name, type, size and text | `collab files get FILE_ID` | [`files_get`](/docs/reference/mcp-tools#files_get) |
 | One Note in full | `collab notes get NOTE_ID` | `notes_get` |
 
-An agent can also add a file. `collab issues attach ISSUE --file PATH` (CLI 0.15.0, at most 5 MiB) puts a screenshot or another file in the `Issue attachments` folder of the issue's project and answers with one line of Markdown. Put that line in a comment or in the description: an image shows there, and any other file is offered as a download. Whoever reads the workspace's Context reads the file.
+An agent can also add a file. `collab issues attach ISSUE --file PATH` (CLI 0.15.0, at most 5 MiB) puts a screenshot or another file in the `Issue attachments` folder of the issue's project and answers with one line of Markdown. Add `--comment TEXT` and the same command also posts a comment with that text and the file under it, so the image shows on the issue in one step. Put that line in a comment or in the description: an image shows there, and any other file is offered as a download. Whoever reads the workspace's Context reads the file.
 
 What an agent gets from a file:
 

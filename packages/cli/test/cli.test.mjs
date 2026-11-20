@@ -2710,6 +2710,41 @@ test('issues attach sends a file as base64 with its name, and refuses what it ca
   assert.equal(f.calls.length, calls);
 });
 
+test('issues attach --comment attaches the file and then adds a comment that shows it', async t => {
+  const state = { failComment: false };
+  const f = await fixture(t, async (req, res) => {
+    if (req.url.includes('/attachments')) return res.end(JSON.stringify({ file: { id: 'file1', name: 'overview.png' }, markdown: '![overview.png](/api/context/files/file1/preview)' }));
+    if (state.failComment) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'wrong_project', error_description: 'no' })); }
+    res.end(JSON.stringify({ id: 'comment1' }));
+  });
+  const directory = mkdtempSync(path.join(tmpdir(), 'collab-attach-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'overview.png');
+  writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]));
+
+  const done = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--workspace', 'w']);
+  assert.equal(done.code, 0, done.stderr);
+  assert.deepEqual(f.calls.map(call => `${call.method} ${call.url}`), [
+    'POST /api/apps/auth/issues/APP-1/attachments?workspaceId=w', 'POST /api/apps/auth/issues/APP-1/comments?workspaceId=w']);
+  // The comment is the text, then the line that shows the file. The comment request carries no file.
+  assert.deepEqual(JSON.parse(f.calls[1].body), { content: 'Overview as built\n\n![overview.png](/api/context/files/file1/preview)' });
+  assert.equal(JSON.parse(done.stdout).comment.id, 'comment1');
+  assert.equal(JSON.parse(done.stdout).markdown, '![overview.png](/api/context/files/file1/preview)');
+
+  // A comment that is refused does not hide that the file is attached, and says what to add by hand.
+  state.failComment = true;
+  const half = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--workspace', 'w']);
+  assert.equal(half.error?.error, 'comment_failed');
+  assert.match(half.error.message, /file is attached/);
+  assert.match(half.error.message, /!\[overview\.png\]\(\/api\/context\/files\/file1\/preview\)/);
+
+  // A preview of the one step sends nothing and names the comment it would add.
+  const calls = f.calls.length;
+  const preview = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--dry-run', '--workspace', 'w']);
+  assert.equal(f.calls.length, calls);
+  assert.equal(JSON.parse(preview.stdout).thenComment, 'Overview as built');
+});
+
 test('folder and file reads forward their ids and project through authenticated GETs', async t => {
   const f = await fixture(t);
   for (const [args, expected] of [

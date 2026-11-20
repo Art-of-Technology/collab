@@ -376,7 +376,7 @@ async function main() {
     await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ setupPreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
   // A preview says how much would be sent, never the file itself: a screenshot does not belong in a transcript.
-  if (options['dry-run'] && attachmentBytes) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: { ...payload, contentBase64: `(${attachmentBytes.length} bytes, not shown)` } };
+  if (options['dry-run'] && attachmentBytes) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: { ...payload, contentBase64: `(${attachmentBytes.length} bytes, not shown)` }, ...(options.comment !== undefined && { thenComment: String(options.comment).trim() }) };
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
   if (spec.seatRun) {
     if (!rest?.length) throw new CliError('required_field', 'Name the program to start after --, for example: collab seat run -- claude -p PROMPT');
@@ -391,6 +391,18 @@ async function main() {
   }
   const send = async (requestTimeout = timeout) => {
     const result = await request(selected.base, apiPath(), { token: selected.token, method: spec.method, body: payload, timeout: requestTimeout });
+    if (name === 'issues attach' && options.comment !== undefined) {
+      // One step: the comment carries the text and the line that shows the file. The file is stored by now, so a
+      // comment that fails says so and gives the line, and nothing has to be uploaded twice.
+      const content = [String(options.comment).trim(), result?.markdown].filter(Boolean).join('\n\n');
+      try {
+        const comment = await request(selected.base, `/api/apps/auth/issues/${args[0]}/comments${query.size ? `?${query}` : ''}`,
+          { token: selected.token, method: 'POST', body: { content }, timeout: requestTimeout });
+        return { ...result, comment: { id: comment?.id } };
+      } catch (error) {
+        throw new CliError('comment_failed', `The file is attached, but the comment was not added (${error?.code || 'request failed'}). Do not attach it again: add this line with comments add: ${result?.markdown}`, 2, { file: result?.file, markdown: result?.markdown });
+      }
+    }
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);
     if (name === 'seat request' && result?.warning === 'seat_idle') process.stderr.write(JSON.stringify({ warning: 'seat_idle', message: 'The request was filed, but the seat it went to has not read its inbox for 10 minutes and may not be running. Tell a person.' }) + '\n');
     return result;
