@@ -4,6 +4,7 @@ import { HandoffError } from '@/lib/agent-handoffs';
 import { AGENT_APP_SLUG, createAgentToken } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { SEAT_TAKES, assertAssignable } from '@/lib/issue-assignee';
+import { NEEDS_REPOSITORY, connectedRepositories } from '@/lib/agent-repository';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -38,6 +39,8 @@ interface SeatInput {
   own?: boolean;
   /** With `own`: the names of the seats this request makes in the same form. One that is someone else's agent refuses this seat too. */
   together?: string[];
+  /** The seat's own pick among its project's connected repositories. Without one the seat follows its project. */
+  repositoryId?: string;
 }
 
 /**
@@ -72,6 +75,13 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   else {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${input.projectId}`}))`;
     if (!await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { id: true } })) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  }
+  if (input.repositoryId) {
+    if (!NEEDS_REPOSITORY.includes(input.role)) throw new HandoffError('repository_not_needed', `A ${input.role} seat works in no repository, so it picks none`);
+    // Read among the seat's own project's rows, so an id of another project's repository names nothing here.
+    if (!(await connectedRepositories(tx, input.projectId)).some(repository => repository.id === input.repositoryId)) {
+      throw new HandoffError('invalid_repository', "Choose one of this project's connected repositories");
+    }
   }
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
   if (input.own) {
@@ -117,14 +127,18 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   // A seat made again starts with no figure: the one it kept was reported for the seat it was, perhaps for someone else's runner.
+  // Its pick is the one this request names. Like the owner, the pick is the seat's from then on: asking again for the
+  // same seat, which the form does with the project's default filled in, gives a further token and moves nothing.
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
-    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner, ...(!same && { room: null, roomProgram: null, roomAt: null }) };
+    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner, repositoryId: same ? existing.repositoryId : input.repositoryId ?? null,
+    ...(!same && { room: null, roomProgram: null, roomAt: null }) };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
   const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', seat);
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
-    details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned, ...(seat.byRunner && { byRunner: true }) },
+    details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned, ...(seat.byRunner && { byRunner: true }),
+      ...(seat.repositoryId && { repositoryId: seat.repositoryId }) },
   } });
   return seat;
 }
