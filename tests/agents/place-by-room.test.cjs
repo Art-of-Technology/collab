@@ -257,6 +257,20 @@ test('place by room: the lead is given seats in order of room, and a request goe
     });
     assert.equal(await assigned(raced), 'rev-bob', 'the next seat by room, not the one that was retired');
     await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: null } });
+    const recreated = await issue();
+    await raw.$transaction(async tx => {
+      const find = tx.agentSeat.findMany;
+      tx.agentSeat.findMany = async (...args) => {
+        const found = await find.apply(tx.agentSeat, args);
+        tx.agentSeat.findMany = find;
+        await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: new Date() } });
+        await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: null, ownerId: bob, room: null, roomProgram: null, roomAt: null } });
+        return found;
+      };
+      await lib.labelRequests(tx, owner, recreated, label);
+    });
+    assert.equal(await assigned(recreated), 'rev-bob');
+    await raw.agentSeat.update({ where: { id: rev3.id }, data: { ownerId: deniz, room: 85, roomProgram: 'Claude Code', roomAt: ago(1) } });
     // As an issue edit runs it, serializable, the seats are read as they were when the edit began: a seat retired since
     // then is a lost race the edit reports, never a request for a retired seat.
     const late = await issue(), before = await raw.issue.count({ where: { agentRequestRole: 'review' } });
