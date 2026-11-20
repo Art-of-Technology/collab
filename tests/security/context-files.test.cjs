@@ -8,7 +8,7 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0
 const PDF = Buffer.from('%PDF-1.7\n1 0 obj\n');
 const HTML = Buffer.from('<!DOCTYPE html><html><body><script>alert(1)</script></body></html>');
 
-function fixture(userId = 'alice', environment = STORE) {
+function fixture(userId = 'alice', environment = STORE, logger = console) {
   const ws = [
     { id: 'joined', slug: 'joined', ownerId: 'bob', members: [
       { userId: 'alice', status: true, role: 'MEMBER' },
@@ -91,7 +91,10 @@ function fixture(userId = 'alice', environment = STORE) {
       stored.set(key, Buffer.from(body));
       return new Response(null, { status: 200 });
     }
-    if (method === 'DELETE') { stored.delete(key); return new Response(null, { status: 204 }); }
+    if (method === 'DELETE') {
+      if (state.failDelete) return new Response(null, { status: 403 });
+      stored.delete(key); return new Response(null, { status: 204 });
+    }
     const bytes = stored.get(key);
     return bytes ? new Response(bytes, { status: 200 }) : new Response(null, { status: 404 });
   }
@@ -103,7 +106,7 @@ function fixture(userId = 'alice', environment = STORE) {
     '@/lib/prisma': { prisma: db },
     '@/lib/rate-limit': { withRateLimit: handler => handler, mediaUploadRateLimit: {} },
   };
-  const globals = { URL, console, TextDecoder, Buffer, Response, fetch: fakeFetch, process: { env: { ...environment } } };
+  const globals = { URL, console: logger, TextDecoder, Buffer, Response, fetch: fakeFetch, process: { env: { ...environment } } };
   const routes = new Map();
   function route(file) {
     if (!routes.has(file)) routes.set(file, load(file, dependencies, globals));
@@ -156,7 +159,7 @@ test('a file goes into a folder its workspace reads, with the type worked out fr
   assert.equal(file.storageUrl, undefined);
   // The bytes went into the bucket, under a name storage made up, in a request this server signed.
   assert.equal(f.requests[0].method, 'PUT');
-  assert.match(f.requests[0].key, /^context\/[0-9a-f-]{36}$/);
+  assert.match(f.requests[0].key, /^context\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.match(f.requests[0].authorization, /^AWS4-HMAC-SHA256 Credential=key\/\d{8}\/us-east-1\/s3\/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=[0-9a-f]{64}$/);
   assert.deepEqual([...f.stored.values()], [PNG]);
 
@@ -241,6 +244,30 @@ test('an upload that fails leaves no half file and says what went wrong', async 
   const refusedUpload = await unconfigured.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } });
   assert.equal(refusedUpload.status, 503);
   assert.equal(unconfigured.files.length, 0);
+});
+
+test('malformed storage names never reach the bucket', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  for (const value of ['storage:context/' + '-'.repeat(36), 'storage:context/' + 'a'.repeat(36),
+    'storage:context/00000000-0000-0000-8000-000000000000']) {
+    const file = f.addFile(value, { storageUrl: value, mimeType: 'application/pdf' });
+    assert.equal((await f.call(DOWNLOAD, 'GET', { id: file.id })).status, 500);
+    assert.equal((await f.call('src/app/api/context/files/[id]/preview/route.ts', 'GET', { id: file.id })).status, 500);
+  }
+  assert.equal(f.requests.length, 0);
+});
+
+test('failed cleanup logs no storage object name', async () => {
+  const logs = [];
+  const f = fixture('alice', STORE, { error: (...args) => logs.push(args) });
+  f.addFolder('ideation');
+  f.state.failCreate = new Error('row failed');
+  f.state.failDelete = true;
+  await f.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } });
+  assert.equal(f.stored.size, 1);
+  assert.equal(JSON.stringify(logs).includes(f.requests[0].key), false);
+  assert.ok(logs.some(args => args[0] === 'file_storage_request_failed' && args[1].method === 'DELETE' && args[1].status === 403));
 });
 
 test('a file over the stated limit is turned away before it is stored', async () => {

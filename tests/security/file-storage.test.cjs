@@ -23,3 +23,18 @@ test('a request is signed as Signature Version 4 says, checked against the publi
   // The HTTP client states the host itself, so it is signed and not sent twice.
   assert.equal('host' in headers, false);
 });
+
+test('bucket redirects fail without following for every operation', async () => {
+  const requests = [];
+  const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
+    URL, console: { error() {} }, process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
+    fetch: async (url, options) => {
+      requests.push(options);
+      return options.redirect === 'manual' ? new Response(null, { status: 302, headers: { location: 'https://elsewhere.test/' } }) : new Response('followed');
+    },
+  });
+  for (const call of [() => storage.storeObject('context', Buffer.from('x')), () => storage.openObject('context/key'), () => storage.removeObject('context/key')]) {
+    await assert.rejects(call);
+  }
+  assert.deepEqual(requests.map(request => request.method), ['PUT', 'GET', 'DELETE']);
+});

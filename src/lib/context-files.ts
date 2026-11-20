@@ -116,7 +116,7 @@ async function storeBytes(bytes: Uint8Array): Promise<{ url: string; key: string
 
 /** This server writes these addresses itself, so what they name is known. */
 export function storageKey(storageUrl: string): string {
-  const match = /^storage:(context\/[0-9a-f-]{36})$/.exec(storageUrl);
+  const match = /^storage:(context\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/.exec(storageUrl);
   if (!match) throw new ContextFolderError(500, 'This file is not where it says it is');
   return match[1];
 }
@@ -153,7 +153,7 @@ export async function uploadContextFile(userId: string, input: { folderId: unkno
     });
   } catch (error) {
     // Without its row the file does not exist, so the bytes do not stay behind either.
-    await removeObject(stored.key).catch(() => console.error('context_file_orphan_bytes', { key: stored.key }));
+    await removeObject(stored.key).catch(() => console.error('context_file_orphan_bytes'));
     throw error;
   }
 }

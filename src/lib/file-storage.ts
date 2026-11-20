@@ -79,7 +79,7 @@ async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: File
     if (wait) await new Promise(resolve => setTimeout(resolve, wait));
     try {
       const response = await fetch(url, {
-        method, body: body as BodyInit | undefined,
+        method, body: body as BodyInit | undefined, redirect: 'manual',
         headers: signRequest({ method, url, payloadHash, accessKey: config.accessKey, secretKey: config.secretKey, region: config.region, now: new Date() }),
       });
       if (response.ok) return response;
