@@ -45,9 +45,9 @@ Nobody types a repository address into a runner: Collab sends it with each issue
 | Any, and the role is Lead | **No repository needed** | Nothing: a lead hands work out and changes no code |
 
 - **Create seat** stays off until the line names a repository, except for a lead.
-- A typed address must be the `https` address of the repository, like `https://github.com/org/repo`: at most 2048 characters, with no user name, password or token in it, and nothing after a `?` or a `#`. It is saved on the project, so every seat of the project that works in a repository gets it.
-- A connected repository always comes before a typed address. Once the project has one, its seats work in that.
-- A seat picks only among its own project's connected repositories. If its pick is disconnected later, the seat follows the project again: the default for agents, or the only repository left.
+- A typed address must be the `https` address of the repository, like `https://github.com/org/repo`. It must name a path, contain no user name, password, query or fragment (including a bare `?` or `#`), and be at most 2048 characters both after trimming and after URL normalization. It is saved on the project for seats that work in a repository.
+- A connected repository always comes before a typed address.
+- A seat picks only among its own project's connected repositories. If its pick is disconnected later, the seat follows the project again; see [The repository](/docs/agents/runner-contract#the-repository).
 - Like the owner, the pick cannot be changed afterwards: retire the seat and create it again. Creating a token again under the same name leaves the seat's repository as it is, whatever the form shows.
 
 What a runner is sent, and in which order Collab decides, is under [The repository](/docs/agents/runner-contract#the-repository).
