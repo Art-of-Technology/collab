@@ -63,6 +63,10 @@ try {
   const tokenHashStart = tokenHash.indexOf('CREATE FUNCTION "clear_replaced_token_hash"');
   if (tokenHashStart < 0 || !tokenHash.endsWith('COMMIT;\n')) throw new Error('Token hash supplements need review.');
   const tokenHashSupplements = tokenHash.slice(tokenHashStart, -'COMMIT;\n'.length);
+  const milestoneMigration = rows.find(row => row.name === '20261120000100_project_milestones')?.sql ?? '';
+  const finishStart = milestoneMigration.indexOf('CREATE FUNCTION "track_issue_finish"');
+  if (finishStart < 0 || !milestoneMigration.endsWith('COMMIT;\n')) throw new Error('Issue finish supplements need review.');
+  const finishSupplements = milestoneMigration.slice(finishStart, -'COMMIT;\n'.length);
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -92,6 +96,7 @@ ${pendingSerializationSupplements}
 ${reviewSupplements}
 ${seatIndexes.join('\n')}
 ${tokenHashSupplements}
+${finishSupplements}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

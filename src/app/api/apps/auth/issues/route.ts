@@ -1,3 +1,4 @@
+import { InvalidMilestone, validateMilestone } from '@/lib/issue-milestones';
 import { allocateIssueKey } from '@/lib/issue-key-allocation';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
@@ -16,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { emitIssueCreated } from '@/lib/event-bus';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
@@ -32,6 +34,7 @@ const CreateIssueSchema = z.object({
   projectId: z.string().cuid(), // Required field in schema
   assigneeId: z.string().cuid().optional(),
   parentId: z.string().cuid().optional(),
+  milestoneId: z.string().cuid().nullable().optional(),
   dueDate: z.string().datetime().optional(),
   startDate: z.string().datetime().optional(),
   storyPoints: z.number().int().positive().optional(),
@@ -50,6 +53,7 @@ export const GET = withAppAuth(
       const page = parseInt(searchParams.get('page') || '1');
       const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
       const projectId = searchParams.get('projectId');
+      const milestoneId = searchParams.get('milestoneId');
       const assigneeId = searchParams.get('assigneeId');
       const status = searchParams.get('status');
       const type = searchParams.get('type');
@@ -66,6 +70,8 @@ export const GET = withAppAuth(
       if (projectId) {
         where.projectId = projectId;
       }
+
+      if (milestoneId) where.milestoneId = milestoneId;
 
       if (assigneeId) {
         where.assigneeId = assigneeId;
@@ -155,6 +161,10 @@ export const GET = withAppAuth(
           priority: issue.priority,
           dueDate: issue.dueDate,
           startDate: issue.startDate,
+          milestoneId: issue.milestoneId,
+          baselineStartDate: issue.baselineStartDate,
+          baselineDueDate: issue.baselineDueDate,
+          finishedAt: issue.finishedAt,
           storyPoints: issue.storyPoints,
           parentId: issue.parentId,
           position: issue.position,
@@ -254,6 +264,7 @@ export const POST = withAppAuth(
       // An agent token over its daily cap of issues for seats still files the issue; it waits unassigned for a person.
       let capped = false;
       const newIssue = await prisma.$transaction(async (tx) => {
+        await validateMilestone(tx, { projectId: project.id, workspaceId: context.workspace.id }, issueData.milestoneId);
         if (issueData.labels?.length) await lockSeatHandoffCap(tx, context.user.id);
         capped = !!issueData.assigneeId && await assignCapReached(tx, context, issueData.assigneeId);
         const assigneeId = capped ? undefined : issueData.assigneeId;
@@ -308,6 +319,7 @@ export const POST = withAppAuth(
             projectId: issueData.projectId,
             assigneeId,
             parentId: issueData.parentId,
+            milestoneId: issueData.milestoneId,
             workspaceId: context.workspace.id,
             reporterId: context.user.id,
             issueKey: issueKey,
@@ -403,7 +415,7 @@ export const POST = withAppAuth(
         }
 
         return created;
-      });
+      }, issueData.milestoneId ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
       // Fire-and-forget Qdrant sync
       emitIssueCreated(
@@ -421,6 +433,10 @@ export const POST = withAppAuth(
       return NextResponse.json(capped ? { ...newIssue, warning: 'assign_cap' } : newIssue, { status: 201 });
 
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; retry creation' }, { status: 409 });
+      }
+      if (error instanceof InvalidMilestone) return NextResponse.json({ error: 'invalid_milestone', error_description: error.message }, { status: 400 });
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });

@@ -4,7 +4,7 @@ const string = 'string', integer = 'integer', boolean = 'boolean', array = 'arra
 const projectQuery = { projectId: string };
 const page = { page: integer, limit: integer };
 const offset = { offset: integer, limit: integer };
-const issueFields = { title: string, description: string, type: string, priority: string, status: string, assigneeId: string, parentId: string, dueDate: string, startDate: string, storyPoints: integer, color: string, labels: array };
+const issueFields = { title: string, description: string, type: string, priority: string, status: string, assigneeId: string, parentId: string, milestoneId: string, dueDate: string, startDate: string, storyPoints: integer, color: string, labels: array };
 const noteFields = { title: string, content: string, type: string, scope: string, projectId: string, isAiContext: boolean, aiContextPriority: integer, tagIds: array };
 const timeFields = { timeSpent: integer, description: string, loggedAt: string };
 const retrievalBounds = { limit: { minimum: 1, maximum: 50 }, offset: { minimum: 0, maximum: 50000 }, maxTokens: { minimum: 1024, maximum: 64000 } };
@@ -123,10 +123,10 @@ export const commands = {
   'projects statuses': command('GET', 'projects/:id/statuses'),
   'projects stats': command('GET', 'projects/:id/stats'),
   'projects activity': command('GET', 'projects/:id/activity', {}, { limit: integer, action: string }),
-  'issues list': command('GET', 'issues', {}, { ...page, ...projectQuery, assigneeId: string, status: string, type: string, priority: string, search: string }, { pagination: ['issues', 'page'] }),
+  'issues list': command('GET', 'issues', {}, { ...page, ...projectQuery, assigneeId: string, milestoneId: string, status: string, type: string, priority: string, search: string }, { pagination: ['issues', 'page'] }),
   'issues get': command('GET', 'issues/:id'),
   'issues create': command('POST', 'issues', { ...issueFields, projectId: string }, {}, { required: ['title', 'projectId'], defaultProject: true }),
-  'issues update': command('PATCH', 'issues/:id', { ...issueFields, progress: integer, timeEstimateMinutes: integer }),
+  'issues update': command('PATCH', 'issues/:id', { ...issueFields, progress: integer, timeEstimateMinutes: integer }, {}, { description: 'Set --milestone-id to a Milestone issue ID in the same project. To clear it, use --input with a JSON body containing "milestoneId": null.' }),
   'issues delete': command('DELETE', 'issues/:id', {}, projectQuery, {
     requiredQuery: ['projectId'], deletePreview: true,
     description: 'Move one issue to trash after reading its identity and affected counts. Requires project context and --yes; --dry-run reads only the preview without --yes.',

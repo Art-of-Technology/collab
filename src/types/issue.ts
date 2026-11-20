@@ -77,6 +77,7 @@ export interface Issue {
 
   // Hierarchy
   parentId?: string;
+  milestoneId?: string | null;
   parent?: Issue;
   children?: Issue[];
 

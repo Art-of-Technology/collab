@@ -1,3 +1,4 @@
+import { assertMilestoneHasNoIssues, InvalidMilestone, validateMilestone } from '@/lib/issue-milestones';
 import { changeIssueTrash, IssueTrashError } from '@/lib/issue-trash';
 import { issueTrashErrorResponse } from '@/lib/issue-trash-response';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
@@ -30,6 +31,7 @@ const UpdateIssueSchema = z.object({
   status: z.string().optional(),
   assigneeId: z.string().cuid().nullable().optional(),
   parentId: z.string().cuid().nullable().optional(),
+  milestoneId: z.string().cuid().nullable().optional(),
   dueDate: z.string().datetime().nullable().optional(),
   startDate: z.string().datetime().nullable().optional(),
   storyPoints: z.number().int().positive().nullable().optional(),
@@ -171,6 +173,10 @@ export const GET = withAppAuth(
         storyPoints: issue.storyPoints,
         dueDate: issue.dueDate,
         startDate: issue.startDate,
+        milestoneId: issue.milestoneId,
+        baselineStartDate: issue.baselineStartDate,
+        baselineDueDate: issue.baselineDueDate,
+        finishedAt: issue.finishedAt,
         progress: issue.progress,
         color: issue.color,
         position: issue.position,
@@ -261,6 +267,7 @@ export const PATCH = withAppAuth(
       if (updateData.storyPoints !== undefined) update.storyPoints = updateData.storyPoints;
       if (updateData.progress !== undefined) update.progress = updateData.progress;
       if (updateData.color !== undefined) update.color = updateData.color;
+      if (updateData.milestoneId !== undefined) update.milestoneId = updateData.milestoneId;
       if (updateData.parentId !== undefined) update.parentId = updateData.parentId;
       if (updateData.timeEstimateMinutes !== undefined) update.timeEstimateMinutes = updateData.timeEstimateMinutes;
       if (updateData.dueDate !== undefined) {
@@ -350,6 +357,16 @@ export const PATCH = withAppAuth(
       // Update issue
       let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
+        if (updateData.milestoneId || (updateData.type && updateData.type !== 'MILESTONE')) {
+          const current = await tx.issue.findUniqueOrThrow({
+            where: { id: existingIssue.id }, select: { projectId: true, workspaceId: true, type: true },
+          });
+          if (current.projectId !== existingIssue.projectId) throw new InvalidMilestone('Issue changed; reload and retry');
+          await validateMilestone(tx, current, updateData.milestoneId, existingIssue.id);
+          if (current.type === 'MILESTONE' && updateData.type && updateData.type !== 'MILESTONE') {
+            await assertMilestoneHasNoIssues(tx, existingIssue.id);
+          }
+        }
         let leadTarget: { name: string } | null = null;
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, assigneeId: true },
@@ -479,6 +496,7 @@ export const PATCH = withAppAuth(
     } catch (error) {
       if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
       if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
+      if (error instanceof InvalidMilestone) return NextResponse.json({ error: 'invalid_milestone', error_description: error.message }, { status: 400 });
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       // P2010 with 40001 is the same lost race, reported by the raw row lock in `leadPlaces`.
       if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === 'P2034' || (error.code === 'P2010' && error.meta?.code === '40001'))) {
