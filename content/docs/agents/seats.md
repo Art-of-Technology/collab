@@ -128,7 +128,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
-- `movedFrom`: information for continuing work last finished by another seat, or `null`. See the run context in the [runner contract](/docs/agents/runner-contract).
+- `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. Then it has that `seat`, the `pullRequest` and `headCommit` that run recorded, the `branch` where Collab has the pull request from the project's connected repository (else `null`), and `first`: in words, to run `git fetch origin` and merge `origin/<branch>` (or the commit) before anything else. When that run recorded no pull request, `first` says to find the branch.
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
@@ -292,7 +292,7 @@ Limits of this version:
 - A release request never moves: a project has one release seat.
 - A `developer` request is not moved by Collab. Other developer work is moved by Collab only when the lead's own seat has no room: see below.
 - The lead is not woken for a developer issue a person assigned, or for one outside the epic it waits on: it may not move those.
-- The lead is not woken again for unstarted work it left on a seat that was already without room when it last looked. Started work can become eligible after that point. `child_idle` still brings the epic back after 2 hours.
+- The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours. So a started child that waits for a person or another issue when its 30 minutes come, and is ready for its next run only after the lead has looked, does not move in that spell.
 - If a seat is retired during a no-room spell and made again while its runner stays paused or full, its earlier spell can make work eligible to move up to 10 minutes early (30 for started work). See `markNoRoom` in `src/lib/agent-seats.ts`.
 
 ### Started work
@@ -322,7 +322,7 @@ And, as for unstarted work, another seat of the role has a number, for developer
 
 This is the one case where Collab assigns developer work. A developer issue moves without the lead when all of these hold:
 
-1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, and either no run has ever started on it and its developer seat has had no room for 10 minutes, or it is [started work](#started-work) that may move and its seat has had no room for 30 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due or the started work became eligible after that run started.
+1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, and either no run has ever started on it and its developer seat has had no room for 10 minutes, or it is [started work](#started-work) that may move and its seat has had no room for 30 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due after that run started.
 2. The lead's own seat has had no room for 10 minutes too, counted as for any seat. A lead seat run by hand, or one whose figure is unknown, is not full: Collab does not move the issue.
 3. No run of the lead's is open on that parent issue.
 4. Another developer seat has a number, holds fewer than 3 open issues from the lead, and is not a seat the issue was moved off before.

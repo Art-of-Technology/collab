@@ -336,12 +336,10 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
     const wait = story.agentRuns.length ? STARTED_MOVE_MS : NO_ROOM_MOVE_MS;
     if (!dues.has(`${from.id}:${wait}`)) dues.set(`${from.id}:${wait}`, await noRoomDue(prisma, from, now, wait));
     const due = dues.get(`${from.id}:${wait}`);
-    if (!due || due > now) continue;
+    if (!due || due > now || !unseen(story.parent, due)) continue;
     if (story.agentRuns.length && !offered.has(from.id)) offered.set(from.id, await waitsPushed(context.workspace.id, projectId, from));
     const pushed = offered.get(from.id)?.get(story.id);
     if (story.agentRuns.length && !pushed) continue;
-    const eligible = new Date(Math.max(due.getTime(), pushed?.eligibleAt?.getTime() ?? 0));
-    if (!unseen(story.parent, eligible)) continue;
     for (const to of byRoom(seats.filter(seat => seat.id !== from.id && seat.room.kind === 'room'))) {
       const updated = await prisma.$transaction(async tx => {
         const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: { in: ['STORY_MOVED', 'LEAD_ASSIGNED'] } }, select: { details: true, oldValue: true } }))
@@ -362,7 +360,7 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
         if (source?.room.kind !== 'no_room') return;
         if (current.find(seat => seat.id === to.id)?.room.kind !== 'room') return null;
         const since = await noRoomDue(tx, source, at, wait);
-        if (!since || since > at || !unseen(issue.parent, new Date(Math.max(since.getTime(), pushed?.eligibleAt?.getTime() ?? 0)))) return;
+        if (!since || since > at || !unseen(issue.parent, since)) return;
         const stuck = await leadDue(tx, at);
         if (!stuck || stuck.room.kind !== 'no_room') return;
         if (await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;

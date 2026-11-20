@@ -30,7 +30,6 @@ export interface InboxItem {
    * a child a run has started on the pull request its last run pushed (CLB-809).
    */
   noRoom?: { issueKey: string | null; seat: string; reason: string; pullRequest?: string }[];
-  eligibleAt?: Date;
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -65,7 +64,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
 }
 
 /** The read of `seatInbox` alone. It marks no run lost and records no sign of life, so a person's page can ask it for a seat. */
-export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null, includeEligibility = false): Promise<{ items: InboxItem[] }> {
+export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null): Promise<{ items: InboxItem[] }> {
   const issues = await prisma.issue.findMany({
     where: {
       workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
@@ -96,7 +95,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
 
   const waiting = candidates.filter(({ stands }) => stands === 'in_review' || stands === 'blocked').map(({ issue }) => issue.id);
   const replies = { where: { authorId: { not: me } }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } as const;
-  const linked = { select: { id: true, agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
+  const linked = { select: { agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
   const details = new Map((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting } }, select: {
     id: true, comments: replies,
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
@@ -138,7 +137,9 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     const held = ranBlocked && child.parentId === issueId ? full.get(child.assigneeId!) : undefined;
     const pushed = child.agentRuns.length ? held?.started?.pushed.get(child.id) : undefined;
     const due = child.agentRuns.length ? pushed && held?.started?.due : held?.due;
-    return held && due && due.getTime() <= now && new Date(Math.max(due.getTime(), pushed?.eligibleAt?.getTime() ?? 0)) > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
+    // shortcut: a started child that waits for a person or another issue when its 30 minutes come, and is ready for its next
+    // run only after the lead has looked in that spell, is not offered in that spell; keeping when it became ready would be exact.
+    return held && due && due.getTime() <= now && due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
   });
 
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
@@ -180,34 +181,15 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
 
-  const selected = candidates
+  return { items: candidates
     .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
-      || a.issue.createdAt.getTime() - b.issue.createdAt.getTime());
-  return { items: await Promise.all(selected.map(async ({ issue, last, category, reason, ranBlocked, since }) => {
-    let eligibleAt = since;
-    if (includeEligibility) {
-      const detail = details.get(issue.id);
-      const related = detail ? [...detail.sourceRelations.map(r => ({ blocks: r.relationType === 'BLOCKED_BY', issue: r.targetIssue })),
-        ...detail.targetRelations.map(r => ({ blocks: r.relationType === 'BLOCKS', issue: r.sourceIssue }))] : [];
-      if (reason === 'reply') {
-        const ids = [issue.id, ...related.filter(r => r.issue.agentRequestRole && r.issue.reporterId === me).map(r => r.issue.id)];
-        const first = await prisma.issueComment.findFirst({ where: { issueId: { in: ids }, authorId: { not: me }, createdAt: { gt: since } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
-        if (first) eligibleAt = first.createdAt;
-      } else if (reason === 'review_returned') {
-        const dates = related.filter(r => r.issue.agentRequestRole === 'review' && isDone(r.issue) && r.issue.updatedAt > since).map(r => r.issue.updatedAt.getTime());
-        if (dates.length) eligibleAt = new Date(Math.min(...dates));
-      } else if (reason === 'blocker_resolved') {
-        eligibleAt = new Date(Math.max(since.getTime(), ...related.filter(r => r.blocks).map(r => r.issue.updatedAt.getTime())));
-      }
-    }
-    return { issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
-      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(includeEligibility && { eligibleAt }),
-      ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) };
-  })) };
+      || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
+    .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
+      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
 }
 
-export type Pushed = { runId: string; pullRequest: string; headCommit: string; eligibleAt?: Date };
+export type Pushed = { runId: string; pullRequest: string; headCommit: string };
 
 /**
  * CLB-809: whether the last run on an issue pushed its work, from what that run recorded and nothing else: it finished,
@@ -232,9 +214,9 @@ export async function pushedWork(db: DB, issueId: string): Promise<Pushed | null
  */
 export async function waitsPushed(workspaceId: string, projectId: string, seat: { userId: string; role: string }) {
   const pushed = new Map<string, Pushed>();
-  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role }, true)).items) {
+  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role })).items) {
     const work = item.lastRunAt && await pushedWork(prisma, item.issueId);
-    if (work) pushed.set(item.issueId, { ...work, eligibleAt: item.eligibleAt });
+    if (work) pushed.set(item.issueId, work);
   }
   return pushed;
 }
