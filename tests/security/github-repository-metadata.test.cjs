@@ -29,7 +29,7 @@ function fixture(options = {}) {
     '@/lib/encryption': { EncryptionService: { decrypt: token => { effects.push(['decrypt']); return 'token'; }, encrypt: token => { effects.push(['encrypt']); return 'sealed'; } } },
     crypto: { default: crypto }, '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/github/oauth-config': {
-      getUserRepositories: async (...args) => { effects.push(['list', ...args.slice(0, 4)]); options.onList?.(...args); if (options.listError) throw new Error(options.listError); if (options.pages) return { repositories: options.pages[args[1] - 1], hasMore: args[1] < options.pages.length }; return { repositories: providerRows, hasMore: true }; },
+      getUserRepositories: async (...args) => { effects.push(['list', ...args.slice(0, 4)]); await options.onList?.(...args); if (options.listError) throw new Error(options.listError); if (options.pages) return { repositories: options.pages[args[1] - 1] || [], hasMore: args[1] < options.pages.length }; return { repositories: providerRows, hasMore: true }; },
       getRepositoryDetails: async () => { effects.push(['details']); return { id: 99, full_name: 'org/repo', default_branch: 'main', permissions: { admin: !options.noAdmin } }; },
       createRepositoryWebhook: async () => { effects.push(['webhook']); if (options.webhookError) throw new Error(options.webhookError); return { id: 12 }; },
     },
@@ -60,19 +60,20 @@ test('search reads every provider page, so it finds a repository the picker has 
   const f = fixture({ pages: [[row(1, 'alpha')], [row(2, 'beta')], [row(3, 'needle')]] });
   const r = await f.list('?page=1&search=NEEDLE');
   assert.equal(r.body.repositories.map(x => x.name).join(), 'needle'); assert.equal(r.body.hasMore, false);
-  assert.deepEqual(f.effects.filter(e => e[0] === 'list'), [1, 2, 3].map(page => ['list', 'token', page, 100, 'updated']));
+  assert.deepEqual(f.effects.filter(e => e[0] === 'list'), Array.from({ length: 10 }, (_, i) => ['list', 'token', i + 1, 100, 'updated']));
 });
-test('search stops after ten provider pages', async () => {
-  const f = fixture(); await f.list('?search=repo');
+test('search asks for its ten provider pages at once, not one after another', async () => {
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  const f = fixture({ onList: () => gate }); const pending = f.list('?search=repo');
+  for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
   assert.equal(f.effects.filter(e => e[0] === 'list').length, 10);
+  release(); assert.equal((await pending).status, 200);
 });
-test('aborted searches stop paging and pass cancellation to the provider', async () => {
-  const controller = new AbortController();
-  let received;
-  const f = fixture({ onList: (...args) => { received = args[4]; controller.abort(); } });
+test('searches pass cancellation to every provider request', async () => {
+  const controller = new AbortController(); const received = [];
+  const f = fixture({ onList: (...args) => { received.push(args[4]); } });
   await f.list('?search=repo', controller.signal);
-  assert.equal(received, controller.signal);
-  assert.equal(f.effects.filter(e => e[0] === 'list').length, 1);
+  assert.equal(received.length, 10); assert.ok(received.every(signal => signal === controller.signal));
 });
 test('repository provider forwards cancellation to fetch', async () => {
   const controller = new AbortController();
