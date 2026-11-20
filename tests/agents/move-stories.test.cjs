@@ -313,6 +313,35 @@ test('Collab moves an unstarted story the lead placed when the lead cannot run e
     await settle();
   });
 
+  await t.test('a target filled while the move waits gives way to the next seat', async () => {
+    const [story, , , filling] = await place([[devCem], [devBob], [devBob], [devBob]]);
+    await raw.issue.update({ where: { id: filling.id }, data: { statusId: `${A}-done` } });
+    await cemFull(); await report(lee, 0); await passes(lee, 11);
+    let entered;
+    const ready = new Promise(resolve => { entered = resolve; });
+    const observed = new Proxy(prisma, { get(target, key) {
+      if (key === '$transaction') return callback => target.$transaction(tx => callback(new Proxy(tx, { get(inner, prop) {
+        if (prop === '$queryRaw') return (...args) => { entered(); return inner.$queryRaw(...args); };
+        const value = inner[prop];
+        return typeof value === 'function' ? value.bind(inner) : value;
+      } })));
+      const value = target[key];
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
+    const sweep = load('src/lib/agent-requests.ts', { ...deps, '@/lib/prisma': { prisma: observed, issueTrashPrisma: raw } }, { Date, console });
+    let moving;
+    await raw.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${devBob.id} FOR UPDATE`;
+      moving = sweep.moveUnstarted({ user: { id: devBob.userId }, workspace: { id: 'w', name: 'w', slug: 'w' } });
+      await ready;
+      await tx.issue.update({ where: { id: filling.id }, data: { statusId: `${A}-to_do` } });
+    });
+    await moving;
+    assert.equal(await holder(story), devDeniz.userId);
+    assert.equal((await moves(story)).length, 1);
+    await settle();
+  });
+
   await t.test('a story is moved or started, never both, and two reads at once move it once', async () => {
     for (let round = 0; round < 4; round++) {
       const [raced] = await place([[devCem]]);
