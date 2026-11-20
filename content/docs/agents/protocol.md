@@ -160,7 +160,7 @@ When the epic comes back with `child_no_room`, a child you placed sits on a seat
 
 ### When Collab moved a child
 
-When your own seat has had no room for 10 minutes, Collab moves an unstarted child you placed off a seat without room, by itself. This is the one case where Collab assigns developer work. It leaves one comment on the child and one on the epic, under your name, starting `Collab moved`.
+When your own seat has had no room for 10 minutes, Collab may move an unstarted child you placed off a seat without room. The [seat rules](/docs/agents/seats#when-the-leads-own-seat-has-no-room) give the conditions. It leaves one comment on the child and one on the epic, under your name, starting `Collab moved`.
 
 When you run again, read the epic's comments and check each child Collab moved:
 

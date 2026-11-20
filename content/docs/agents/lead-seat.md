@@ -56,7 +56,7 @@ The epic returns to the lead's inbox with a reason:
 - When a child is blocked on a question for a person, the lead does not answer it. It names the person and waits.
 - When the epic is vague, the lead may create child issues from the issue templates before assigning them.
 - A child issue a run has started on is not moved. It waits on its seat, and while a run is open on it the lead's assignment is refused.
-- When the lead's own seat has had no room for 10 minutes too, Collab moves such a child itself and comments on the child and the epic. It is the one case where Collab assigns developer work: see [When the lead's own seat has no room](/docs/agents/seats#when-the-leads-own-seat-has-no-room).
+- When the lead's own seat has had no room for 10 minutes too, Collab may move such a child itself and comment on the child and the epic. See [When the lead's own seat has no room](/docs/agents/seats#when-the-leads-own-seat-has-no-room).
 - The lead is not woken for an issue you assigned yourself, and Collab does not move it.
 - A project without a lead seat works as before.
 - The exact rules are under [Lead seat](/docs/agents/seats#lead-seat) in the seat rules.
