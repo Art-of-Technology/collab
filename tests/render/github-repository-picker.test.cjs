@@ -44,6 +44,7 @@ test('Load More asks for the next page and search asks the server', async () => 
   const input = document.querySelector('input');
   const setValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
   await React.act(async () => { setValue.call(input, 'needle'); input.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
+  assert.ok(!shown('No repositories match'), 'no "no match" answer before the server was asked');
   await settle(400);
   assert.equal(requests.at(-1), '/api/github/oauth/repositories?page=1&search=needle');
   assert.ok(shown('needle') && !shown('first-page'));

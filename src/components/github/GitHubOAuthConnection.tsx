@@ -90,6 +90,8 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
     }
     failedPageRollback.current = null;
     const controller = new AbortController();
+    // Set before the debounce, so a search is not answered "no match" before the server was asked.
+    setLoading(true);
     const load = () => fetchRepositories(currentPage, searchTerm, controller.signal);
     // Debounced: a search makes the server read every repository the account can see.
     const timer = searchTerm ? setTimeout(load, 300) : void load();
