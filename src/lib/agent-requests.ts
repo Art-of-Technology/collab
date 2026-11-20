@@ -117,7 +117,6 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
   const now = new Date();
   const place = async () => {
-    const versions = await tx.$queryRaw<{ id: string; version: string }[]>`SELECT "id", xmin::text AS "version" FROM "AgentSeat" WHERE "projectId" = ${projectId} AND "role" = ${kind.seat} AND "retiredAt" IS NULL`;
     const seats = await seatsWithRoom(tx, projectId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
     if (!fallback) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
     // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
@@ -126,15 +125,17 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
     // the default seat with nothing said, as before room.
     const able = input.role === 'developer' ? [] : seats.filter(seat => seat.userId !== me);
     const placed = able.length > 1 ? placeRequest(able, fallback) : null;
-    const to = placed?.seat ?? fallback;
-    return { placed, to, version: versions.find(seat => seat.id === to.id)?.version };
+    return { placed, to: placed?.seat ?? fallback };
   };
-  let { placed, to, version } = await place();
+  let { placed, to } = await place();
   // The row of the seat that gets the request, and only that one: retiring a seat takes its row first and waits, and
   // holding the role's other rows would deadlock with a retirement that makes one of them the default. `fileRequest`
   // holds the project's seat lock besides; a label does not, because it already holds its issue, and the other order
-  // could deadlock. A seat retired between the read and the lock is no seat any more: the seats are read again.
-  while (!version || !(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "retiredAt" IS NULL AND xmin::text = ${version} FOR SHARE`).length) ({ placed, to, version } = await place());
+  // could deadlock. The row is asked again for what the seat was placed as: retired meanwhile, or made again for another
+  // person, project or role, it is not that seat any more, and the seats are read again. Its room or the time it was
+  // last seen changing is no reason to: that would place again on every report of a runner.
+  while (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = ${kind.seat}
+    AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) ({ placed, to } = await place());
   await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: input.role }, to.userId);
   if (input.from && input.from !== projectId) {
     // A request is from a project when a seat of that project reported it.

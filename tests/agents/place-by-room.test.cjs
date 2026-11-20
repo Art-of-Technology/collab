@@ -209,6 +209,10 @@ test('place by room: the lead is given seats in order of room, and a request goe
       const developer = await filed(dev2, { role: 'developer' });
       assert.deepEqual([developer.to, developer.reply, developer.placed], ['dev-cem', { issue: developer.reply.issue }, []], JSON.stringify(known));
     }
+    // A seat that has no owner takes its request as before, too.
+    await raw.agentSeat.update({ where: { id: sec1.id }, data: { ownerId: null } });
+    assert.equal((await filed(dev2, { role: 'security' })).to, 'sec-cem');
+    await raw.agentSeat.update({ where: { id: sec1.id }, data: { ownerId: cem } });
   });
 
   await t.test('a seat is not sent its own request, and a role with no default seat takes none', async () => {
