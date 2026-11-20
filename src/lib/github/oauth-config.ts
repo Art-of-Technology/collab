@@ -146,7 +146,8 @@ export async function getUserRepositories(
   accessToken: string,
   page = 1,
   perPage = 30,
-  sort: 'created' | 'updated' | 'pushed' | 'full_name' = 'updated'
+  sort: 'created' | 'updated' | 'pushed' | 'full_name' = 'updated',
+  signal?: AbortSignal
 ): Promise<{ repositories: GitHubRepository[]; hasMore: boolean }> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -159,6 +160,7 @@ export async function getUserRepositories(
   console.log('Fetching GitHub repositories with params:', params.toString());
 
   const response = await fetch(`${GITHUB_API_BASE}/user/repos?${params.toString()}`, {
+    signal,
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/vnd.github.v3+json',

@@ -37,13 +37,21 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const sort = searchParams.get('sort') as 'created' | 'updated' | 'pushed' | 'full_name' || 'updated';
 
-    // Fetch repositories from GitHub
-    const { repositories, hasMore } = await getUserRepositories(
-      accessToken,
-      page,
-      30,
-      sort
-    );
+    // Fetch repositories from GitHub. A search reads every page, so it also finds
+    // repositories the picker has not loaded yet.
+    let repositories: Awaited<ReturnType<typeof getUserRepositories>>['repositories'] = [];
+    let hasMore = false;
+    if (search) {
+      // shortcut: a search reads at most 1,000 repositories (10 pages of 100); use GitHub's search API if an account has more
+      for (let searchPage = 1; searchPage <= 10; searchPage++) {
+        request.signal.throwIfAborted();
+        const result = await getUserRepositories(accessToken, searchPage, 100, sort, request.signal);
+        repositories.push(...result.repositories);
+        if (!result.hasMore) break;
+      }
+    } else {
+      ({ repositories, hasMore } = await getUserRepositories(accessToken, page, 30, sort, request.signal));
+    }
 
     // Filter repositories by search term if provided
     let filteredRepos = repositories;
