@@ -110,7 +110,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     assert.equal(await page.readRunnersTab(stranger, 'team'), null);
     assert.deepEqual(plain(view.seats[0].working), [{ id: open.id, issueId: busy.id, issueKey: null, title: busy.title, since: open.startedAt.toISOString(), lost: false }]);
     // What waits is the seat's own inbox: the issue to resume first, then the one never started.
-    assert.deepEqual(view.seats[0].waiting.map(item => [item.issueKey, item.reason]), [[resumed.issueKey, 'resume'], [fresh.issueKey, 'assigned']]);
+    assert.deepEqual(plain(view.seats[0].waiting.map(item => [item.issueKey, item.reason])), [[resumed.issueKey, 'resume'], [fresh.issueKey, 'assigned']]);
     assert.deepEqual(plain(view.seats[0].waiting), plain((await runs.seatInbox({ user: { id: dev.userId }, workspace: { id: 'w' } })).items));
     assert.deepEqual(plain([view.seats[1].working, view.seats[1].waiting]), [[], []]);
     assert.deepEqual((await page.readSeats(owner, 'w')).seats.map(row => row.id), ['dev-a', 'rev-a']);
@@ -162,7 +162,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     const lead = await seat('lead-a', 'cseatlead01', A, 'lead');
     const epic = await issue(lead.userId);
     await run(epic, { seatId: lead.id, userId: lead.userId, state: 'finished', outcome: 'blocked', endedAt: ago(60) });
-    const waits = async () => (await page.readSeats(member, 'team')).seats.find(row => row.id === 'lead-a').waiting.map(item => [item.issueKey, item.reason]);
+    const waits = async () => plain((await page.readSeats(member, 'team')).seats.find(row => row.id === 'lead-a').waiting.map(item => [item.issueKey, item.reason]));
     assert.deepEqual(await waits(), []);
     await issue(dev.userId, 'done', { parentId: epic.id });
     assert.deepEqual(await waits(), [[epic.issueKey, 'child_done']]);

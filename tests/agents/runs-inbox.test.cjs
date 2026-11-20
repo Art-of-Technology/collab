@@ -20,7 +20,7 @@ test('waiting issues missing from the visibility-filtered details are omitted', 
   const { seatInbox } = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' },
     '@/lib/agent-seats': { seatFor: async () => null } }, { Date });
   const result = await seatInbox({ user: { id: person }, workspace: { id: 'w' } });
-  assert.deepEqual(result.items.map(item => [item.issueId, item.reason]), [['todo', 'assigned']]);
+  assert.deepEqual(Array.from(result.items, item => [item.issueId, item.reason]), [['todo', 'assigned']]);
 });
 
 let db;

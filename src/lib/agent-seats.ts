@@ -365,7 +365,7 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
     throw new HandoffError('already_running', 'A run is open on this issue: it keeps its seat until the run has ended', 409);
   }
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
-  const from = current.assigneeId && (await seatsWithRoom(tx, issue.projectId)).find(row => row.userId === current.assigneeId);
+  const from = current.assigneeId ? (await seatsWithRoom(tx, issue.projectId)).find(row => row.userId === current.assigneeId) : undefined;
   const due = from?.room.kind === 'no_room' ? await noRoomDue(tx, from, new Date(), STARTED_MOVE_MS) : null;
   const last = due && due <= new Date() && await tx.agentRun.findFirst({ where: { issueId: issue.id }, orderBy: { startedAt: 'desc' }, select: { id: true, state: true } });
   const entry = last && last.state === 'finished' && await tx.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });

@@ -489,7 +489,7 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     assert.deepEqual(woken.noRoom, [{ issueKey: first.issueKey, seat: 'dev-cem', reason: 'its runner reports no room' }]);
     // The Agents page shows the reason to whoever may see the seat, and not whose seat is full.
     const shown = (await page.readSeats(owner, 'w')).seats.find(found => found.name === 'lead').waiting;
-    assert.deepEqual(shown.map(entry => [entry.issueKey, entry.reason, 'noRoom' in entry]), [[epic.issueKey, 'child_no_room', false]]);
+    assert.deepEqual(Array.from(shown, entry => [entry.issueKey, entry.reason, 'noRoom' in entry]), [[epic.issueKey, 'child_no_room', false]]);
 
     // Collab itself moves no developer issue, whoever reads.
     for (const reader of [devBob, devDeniz, revBob, revDeniz, devCem]) await items(reader);
