@@ -197,7 +197,8 @@ test('where a seat\'s repository comes from: the project, the seat\'s own pick, 
 
     for (const url of ['http://github.com/acme/none', 'git@github.com:acme/none.git', 'ssh://git@github.com/acme/none', 'github.com/acme/none',
       'https://user:secret@github.com/acme/none', 'https://token@github.com/acme/none', 'https://github.com', 'https://github.com/',
-      'https://github.com/acme/none?token=secret', 'https://github.com/acme/none#readme', 'javascript:alert(1)', '   ', `https://github.com/${'a'.repeat(2048)}`]) {
+      'https://github.com/acme/none?token=secret', 'https://github.com/acme/none#readme', 'https://github.com/acme/none?', 'https://github.com/acme/none#',
+      `https://github.com/${'é'.repeat(400)}`, 'javascript:alert(1)', '   ', `https://github.com/${'a'.repeat(2048)}`]) {
       assert.equal((await save(NONE, { url }))[0], 400, url);
     }
     assert.equal((await save(NONE, { url: 'https://github.com/acme/none', repositoryId: api.id }))[0], 400, 'an address and a default in one request');
@@ -238,7 +239,10 @@ test('where a seat\'s repository comes from: the project, the seat\'s own pick, 
     assert.equal((await repositoryOf(first)).id, connected.id);
     // And an address that is not an https address any more, however it got there, is never sent to a runner.
     await raw.gitConnection.update({ where: { id: connected.id }, data: { isActive: false } });
-    await raw.project.update({ where: { id: NONE }, data: { agentRepositoryUrl: 'https://user:secret@github.com/acme/none' } });
-    assert.equal(await repositoryOf(first), null);
+    for (const agentRepositoryUrl of ['https://user:secret@github.com/acme/none', 'https://github.com/acme/none?',
+      'https://github.com/acme/none#', `https://github.com/${'é'.repeat(400)}`, `https://github.com/${'a'.repeat(2048)}`]) {
+      await raw.project.update({ where: { id: NONE }, data: { agentRepositoryUrl } });
+      assert.equal(await repositoryOf(first), null, agentRepositoryUrl);
+    }
   });
 });

@@ -110,11 +110,13 @@ export async function connectedRepositories(db: Database, projectId: string): Pr
  * owner's own sign-in. Read by the route that saves it, and again by every read of what was saved.
  */
 export function repositoryAddress(value: string): URL | null {
+  value = value.trim();
+  if (value.length > 2048) return null;
   let address: URL;
-  try { address = new URL(value.trim()); } catch { return null; }
+  try { address = new URL(value); } catch { return null; }
   // A path that names something: a server's address alone is no repository.
   const names = address.pathname.replace(/\//g, '');
-  return address.protocol === 'https:' && names && !address.username && !address.password && !address.search && !address.hash ? address : null;
+  return address.protocol === 'https:' && names && !address.username && !address.password && address.href.length <= 2048 && !address.href.includes('?') && !address.href.includes('#') ? address : null;
 }
 
 /**
