@@ -38,3 +38,21 @@ test('bucket redirects fail without following for every operation', async () => 
   }
   assert.deepEqual(requests.map(request => request.method), ['PUT', 'GET', 'DELETE']);
 });
+
+test('a refused read returns even when cancelling a shared response stream is pending', async () => {
+  const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
+    URL, console: { error() {} }, process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
+    fetch: async () => {
+      const response = new Response('refused', { status: 403 });
+      response.clone(); // A second reader can keep cancellation of the first branch pending.
+      return response;
+    },
+  });
+  let timer;
+  try {
+    await assert.rejects(Promise.race([
+      storage.openObject('context/key'),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('read did not finish')), 1000); }),
+    ]), error => error.reason === 'read_failed');
+  } finally { clearTimeout(timer); }
+});

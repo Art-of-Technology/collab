@@ -84,7 +84,8 @@ async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: File
       });
       if (response.ok) return response;
       last = response.status;
-      await response.body?.cancel().catch(() => {});
+      // A shared response stream can leave cancellation pending until its other reader finishes.
+      void response.body?.cancel().catch(() => {});
       // Only a store that is away is worth asking again; a refusal stays a refusal.
       if (response.status < 500) break;
     } catch {
