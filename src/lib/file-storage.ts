@@ -14,7 +14,8 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 export type FileStorageFailure = 'not_configured' | 'write_failed' | 'read_failed';
 
 export class FileStorageError extends Error {
-  constructor(public readonly reason: FileStorageFailure) {
+  /** `uncertain`: the store did not answer or answered 5xx, so a write may have happened all the same. */
+  constructor(public readonly reason: FileStorageFailure, public readonly uncertain = false) {
     super(reason);
     this.name = 'FileStorageError';
   }
@@ -94,13 +95,22 @@ async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: File
   }
   // Storage failures can name hosts and keys, so the log says what happened, not where.
   console.error('file_storage_request_failed', { method, status: last });
-  throw new FileStorageError(failure);
+  throw new FileStorageError(failure, last === 'unreachable' || last >= 500);
 }
 
 /** Stores the bytes under a name this server makes up, and returns that name. */
 export async function storeObject(prefix: string, bytes: Uint8Array): Promise<string> {
   const key = `${prefix}/${randomUUID()}`;
-  await send('PUT', key, 'write_failed', bytes);
+  try {
+    await send('PUT', key, 'write_failed', bytes);
+  } catch (error) {
+    // The store may have kept the bytes although its answer never arrived, so they are asked back out.
+    // Not waited for: the caller has its answer already. Bytes that stay are named, so they can be removed by hand.
+    if (error instanceof FileStorageError && error.uncertain) {
+      void removeObject(key).catch(() => console.error('file_storage_orphan_object', { object: key }));
+    }
+    throw error;
+  }
   return key;
 }
 

@@ -258,7 +258,7 @@ test('malformed storage names never reach the bucket', async () => {
   assert.equal(f.requests.length, 0);
 });
 
-test('failed cleanup logs no storage object name', async () => {
+test('bytes that could not be taken back are named in the log, and nothing else about the store is', async () => {
   const logs = [];
   const f = fixture('alice', STORE, { error: (...args) => logs.push(args) });
   f.addFolder('ideation');
@@ -266,7 +266,10 @@ test('failed cleanup logs no storage object name', async () => {
   f.state.failDelete = true;
   await f.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } });
   assert.equal(f.stored.size, 1);
-  assert.equal(JSON.stringify(logs).includes(f.requests[0].key), false);
+  // The made-up name is what lets someone remove the bytes by hand; the endpoint, bucket and key stay out.
+  const orphan = logs.find(args => args[0] === 'context_file_orphan_bytes');
+  assert.equal(JSON.stringify(orphan[1]), JSON.stringify({ object: f.requests[0].key }));
+  assert.equal(/s3\.test|collab\/|secret|Credential/.test(JSON.stringify(logs)), false);
   assert.ok(logs.some(args => args[0] === 'file_storage_request_failed' && args[1].method === 'DELETE' && args[1].status === 403));
 });
 

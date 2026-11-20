@@ -153,7 +153,9 @@ export async function uploadContextFile(userId: string, input: { folderId: unkno
     });
   } catch (error) {
     // Without its row the file does not exist, so the bytes do not stay behind either.
-    await removeObject(stored.key).catch(() => console.error('context_file_orphan_bytes'));
+    // Bytes that could not be taken back are named, so they can be removed by hand: the name is made up
+    // here, says nothing about the file, and opens nothing without the server's key.
+    await removeObject(stored.key).catch(() => console.error('context_file_orphan_bytes', { object: stored.key }));
     throw error;
   }
 }
