@@ -336,15 +336,17 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
     const wait = story.agentRuns.length ? STARTED_MOVE_MS : NO_ROOM_MOVE_MS;
     if (!dues.has(`${from.id}:${wait}`)) dues.set(`${from.id}:${wait}`, await noRoomDue(prisma, from, now, wait));
     const due = dues.get(`${from.id}:${wait}`);
-    if (!due || due > now || !unseen(story.parent, due)) continue;
+    if (!due || due > now) continue;
     if (story.agentRuns.length && !offered.has(from.id)) offered.set(from.id, await waitsPushed(context.workspace.id, projectId, from));
     const pushed = offered.get(from.id)?.get(story.id);
     if (story.agentRuns.length && !pushed) continue;
+    const eligible = new Date(Math.max(due.getTime(), pushed?.eligibleAt?.getTime() ?? 0));
+    if (!unseen(story.parent, eligible)) continue;
     for (const to of byRoom(seats.filter(seat => seat.id !== from.id && seat.room.kind === 'room'))) {
       const updated = await prisma.$transaction(async tx => {
-        const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: 'STORY_MOVED' }, select: { details: true } }))
-          .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
-        if ((await leftOf()).includes(to.id) || await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;
+        const leftOf = async () => (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: story.id, action: { in: ['STORY_MOVED', 'LEAD_ASSIGNED'] } }, select: { details: true, oldValue: true } }))
+          .flatMap(entry => [JSON.parse(entry.details ?? '{}').fromSeatId, entry.oldValue]);
+        if ((await leftOf()).some(id => id === to.id || id === to.userId) || await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;
         // As a request moves: the seat's row, then the issue's, the order a checkout takes them in, and whichever gets the
         // issue first decides. The seat's row is held for update, so two moves onto one seat count its limit in turn.
         if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = 'developer'
@@ -353,14 +355,14 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
         const issue = await tx.issue.findFirst({ where: { ...stories, id: story.id, parentId: story.parentId, assigneeId: from.userId },
           select: { id: true, workspaceId: true, projectId: true, issueKey: true, parentId: true, parent, assigneeId: true, helpers } });
         if (!issue || !placedByLead(issue) || !await asDecided(tx, issue.id, pushed)) return;
-        if ((await leftOf()).includes(to.id)) return null;
+        if ((await leftOf()).some(id => id === to.id || id === to.userId)) return null;
         // Read again behind the locks: a seat that got room back keeps its work, and a lead that got room back moves it itself.
         const at = new Date(), current = await seatsWithRoom(tx, projectId, 'developer', at);
         const source = current.find(seat => seat.id === from.id);
         if (source?.room.kind !== 'no_room') return;
         if (current.find(seat => seat.id === to.id)?.room.kind !== 'room') return null;
         const since = await noRoomDue(tx, source, at, wait);
-        if (!since || since > at || !unseen(issue.parent, since)) return;
+        if (!since || since > at || !unseen(issue.parent, new Date(Math.max(since.getTime(), pushed?.eligibleAt?.getTime() ?? 0)))) return;
         const stuck = await leadDue(tx, at);
         if (!stuck || stuck.room.kind !== 'no_room') return;
         if (await tx.issue.count({ where: fromLead(projectId, lead.userId, to.userId) }) >= LEAD_CAP) return null;

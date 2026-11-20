@@ -365,8 +365,16 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
     throw new HandoffError('already_running', 'A run is open on this issue: it keeps its seat until the run has ended', 409);
   }
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
+  const from = current.assigneeId && (await seatsWithRoom(tx, issue.projectId)).find(row => row.userId === current.assigneeId);
+  const due = from?.room.kind === 'no_room' ? await noRoomDue(tx, from, new Date(), STARTED_MOVE_MS) : null;
+  const last = due && due <= new Date() && await tx.agentRun.findFirst({ where: { issueId: issue.id }, orderBy: { startedAt: 'desc' }, select: { id: true, state: true } });
+  const entry = last && last.state === 'finished' && await tx.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
+  const facts = entry ? JSON.parse(entry.details ?? '{}') : {};
+  const pushed = last && facts.runId === last.id && typeof facts.pullRequest === 'string' && typeof facts.headCommit === 'string';
+  const why = pushed && from ? `${from.name} had no room for 30 minutes (${from.room.kind === 'no_room' ? from.room.reason : ''}); the work continues from the branch its last run pushed (${facts.pullRequest})` : undefined;
   await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
-    fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });
+    fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name,
+      ...(from && { fromSeatId: from.id, from: from.name }), ...(why && { why, pullRequest: facts.pullRequest, headCommit: facts.headCommit }) }) } });
   return { name: seat.name };
 }
 

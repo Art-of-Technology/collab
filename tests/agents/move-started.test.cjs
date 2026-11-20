@@ -207,6 +207,19 @@ test('started work moves between runs once its seat has had no room for 30 minut
     const named = (await context(revBob, started)).movedFrom;
     assert.equal(named.branch, `seat/${started.issueKey}`);
     assert.match(named.first, new RegExp(`git fetch origin, then git merge origin/seat/${started.issueKey} \\(the branch of ${started.pullRequest.replace(/[#/]/g, '\\$&')}, left at a{40}\\)`));
+    const checkout = await start(revBob, started, 'handoff-checkout');
+    assert.equal((await context(revBob, started)).movedFrom.pullRequest, started.pullRequest, 'checkout retains the previous finished run facts');
+    await raw.agentRun.update({ where: { id: checkout }, data: { state: 'stopped', endedAt: new Date() } });
+    assert.equal((await context(revBob, started)).movedFrom.pullRequest, started.pullRequest, 'a later stopped run retains the previous finished run facts');
+    await raw.project.create({ data: { id: 'other-project', workspaceId: 'w', name: 'Other', slug: 'other', issuePrefix: 'OT' } });
+    const otherRepo = await raw.repository.create({ data: { projectId: 'other-project', githubRepoId: 'other-repo', owner: 'private', name: 'repo', fullName: 'private/repo', webhookSecret: 'secret' } });
+    await raw.pullRequest.create({ data: { repositoryId: otherRepo.id, githubPrId: 999, title: 'private', state: 'OPEN', headBranchName: 'private-branch' } });
+    const finish = await raw.issueActivity.findFirstOrThrow({ where: { itemId: started.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' } });
+    const original = finish.details;
+    await raw.issueActivity.update({ where: { id: finish.id }, data: { details: JSON.stringify({ ...JSON.parse(original), pullRequest: 'private/repo#999' }) } });
+    assert.equal((await context(revBob, started)).movedFrom.branch, null, 'another project cannot disclose its branch');
+    await raw.issueActivity.update({ where: { id: finish.id }, data: { details: original } });
+    await raw.agentRun.delete({ where: { id: checkout } });
     // The seat that ran it last is not told it was moved.
     await personGives(started, revCem.userId);
     assert.equal((await context(revCem, started)).movedFrom, null);
@@ -350,11 +363,33 @@ test('started work moves between runs once its seat has had no room for 30 minut
     assert.equal(await holder(story), devCem.userId, 'the lead has room: it moves the story itself');
     const placed = await give(story, devBob.userId);
     assert.equal(placed.status, 200, JSON.stringify(placed.body));
+    const audit = await raw.issueActivity.findFirstOrThrow({ where: { itemId: story.id, action: 'LEAD_ASSIGNED', oldValue: devCem.userId } });
+    const details = JSON.parse(audit.details);
+    assert.equal(details.fromSeatId, devCem.id);
+    assert.equal(details.toSeatId, devBob.id);
+    assert.equal(details.pullRequest, story.pullRequest);
+    assert.equal(details.headCommit, HEAD);
+    assert.match(details.why, /30 minutes/);
+    assert.ok((await context(lead, epic)).children.find(child => child.id === story.id).movedOff.includes(devCem.userId));
     assert.equal(await holder(quiet), devCem.userId);
     const told = await context(devBob, story);
     assert.equal(told.lastExitNote, NOTE);
     assert.equal(told.movedFrom.seat, 'dev-cem');
     assert.equal(told.movedFrom.pullRequest, story.pullRequest);
+    await settle();
+  });
+
+  await t.test('a reply after the lead looked makes started work eligible once during the spell', async () => {
+    const story = await startedStory();
+    await raw.issueComment.deleteMany({ where: { issueId: story.id, authorId: owner } });
+    await cemFull(40); await report(lee, 50);
+    await raw.agentRun.updateMany({ where: { issueId: epic.id }, data: { startedAt: ago(5), endedAt: ago(4) } });
+    assert.deepEqual(await inbox(lead), []);
+    await answer(story);
+    assert.equal((await items(lead))[0].reason, 'child_no_room');
+    await raw.agentRun.updateMany({ where: { issueId: epic.id }, data: { startedAt: new Date(Date.now() + 2000), endedAt: new Date(Date.now() + 3000) } });
+    await answer(story);
+    assert.deepEqual(await inbox(lead), [], 'a later reply does not repeat an offer the lead has seen');
     await settle();
   });
 

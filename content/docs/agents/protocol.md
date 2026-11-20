@@ -163,8 +163,8 @@ When the epic comes back with `child_no_room`, a child you placed sits on a seat
 | Step | What you do |
 | --- | --- |
 | 1 | Read the run context again. Skip a child of `noRoom` whose `lastRun` is `running`: a run is open on it. Skip a child listed without `pullRequest` whose `lastRun` is no longer `null`: a run started on it meanwhile, and Collab cannot tell what it pushed. |
-| 2 | For each remaining child, pick the first developer seat with a number that is under its limit and that the child was not moved off before, and assign it: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. Count the child you just gave a seat: the next child may need the next seat. |
-| 3 | Write one comment on each child you moved: from which seat, to which seat and why, and for a started child that the work continues from the pushed branch. For example: `Moved from Collab Developer to Collab Developer (Bob): its runner reports no room and no run had started.` Or: `Moved from Collab Developer to Collab Developer (Bob): its runner had no room for 30 minutes; the work continues from the branch of acme/app#12.` |
+| 2 | For each remaining child, pick the first developer seat with a number that is under its limit and whose user ID is not in the child’s `movedOff` list, and assign it: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. Count the child you just gave a seat: the next child may need the next seat. |
+| 3 | Write one comment on each child you moved: from which seat, to which seat and why, and for a started child that the work continues from the pushed branch. For example: `Moved from Collab Developer to Collab Developer (Bob): its runner reports no room and no run had started.` Or: `Moved from Collab Developer to Collab Developer (Bob): its runner had no room for 30 minutes; the work continues from the branch of acme/app#12. What the first seat did not push stays behind.` |
 | 4 | Finish `blocked` with nothing named, as before. |
 
 - Move only what `noRoom` lists. A child with a run open keeps its seat; a started child whose seat has had no room for less than 30 minutes, or whose last run pushed nothing, waits too.

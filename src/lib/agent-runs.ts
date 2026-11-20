@@ -30,6 +30,7 @@ export interface InboxItem {
    * a child a run has started on the pull request its last run pushed (CLB-809).
    */
   noRoom?: { issueKey: string | null; seat: string; reason: string; pullRequest?: string }[];
+  eligibleAt?: Date;
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -64,7 +65,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
 }
 
 /** The read of `seatInbox` alone. It marks no run lost and records no sign of life, so a person's page can ask it for a seat. */
-export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null): Promise<{ items: InboxItem[] }> {
+export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null, includeEligibility = false): Promise<{ items: InboxItem[] }> {
   const issues = await prisma.issue.findMany({
     where: {
       workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
@@ -95,7 +96,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
 
   const waiting = candidates.filter(({ stands }) => stands === 'in_review' || stands === 'blocked').map(({ issue }) => issue.id);
   const replies = { where: { authorId: { not: me } }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } as const;
-  const linked = { select: { agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
+  const linked = { select: { id: true, agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
   const details = new Map((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting } }, select: {
     id: true, comments: replies,
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
@@ -137,7 +138,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     const held = ranBlocked && child.parentId === issueId ? full.get(child.assigneeId!) : undefined;
     const pushed = child.agentRuns.length ? held?.started?.pushed.get(child.id) : undefined;
     const due = child.agentRuns.length ? pushed && held?.started?.due : held?.due;
-    return held && due && due.getTime() <= now && due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
+    return held && due && due.getTime() <= now && new Date(Math.max(due.getTime(), pushed?.eligibleAt?.getTime() ?? 0)) > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
   });
 
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
@@ -179,15 +180,34 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
 
-  return { items: candidates
+  const selected = candidates
     .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
-      || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
-    .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
-      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
+      || a.issue.createdAt.getTime() - b.issue.createdAt.getTime());
+  return { items: await Promise.all(selected.map(async ({ issue, last, category, reason, ranBlocked, since }) => {
+    let eligibleAt = since;
+    if (includeEligibility) {
+      const detail = details.get(issue.id);
+      const related = detail ? [...detail.sourceRelations.map(r => ({ blocks: r.relationType === 'BLOCKED_BY', issue: r.targetIssue })),
+        ...detail.targetRelations.map(r => ({ blocks: r.relationType === 'BLOCKS', issue: r.sourceIssue }))] : [];
+      if (reason === 'reply') {
+        const ids = [issue.id, ...related.filter(r => r.issue.agentRequestRole && r.issue.reporterId === me).map(r => r.issue.id)];
+        const first = await prisma.issueComment.findFirst({ where: { issueId: { in: ids }, authorId: { not: me }, createdAt: { gt: since } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
+        if (first) eligibleAt = first.createdAt;
+      } else if (reason === 'review_returned') {
+        const dates = related.filter(r => r.issue.agentRequestRole === 'review' && isDone(r.issue) && r.issue.updatedAt > since).map(r => r.issue.updatedAt.getTime());
+        if (dates.length) eligibleAt = new Date(Math.min(...dates));
+      } else if (reason === 'blocker_resolved') {
+        eligibleAt = new Date(Math.max(since.getTime(), ...related.filter(r => r.blocks).map(r => r.issue.updatedAt.getTime())));
+      }
+    }
+    return { issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
+      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(includeEligibility && { eligibleAt }),
+      ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) };
+  })) };
 }
 
-export type Pushed = { runId: string; pullRequest: string; headCommit: string };
+export type Pushed = { runId: string; pullRequest: string; headCommit: string; eligibleAt?: Date };
 
 /**
  * CLB-809: whether the last run on an issue pushed its work, from what that run recorded and nothing else: it finished,
@@ -212,9 +232,9 @@ export async function pushedWork(db: DB, issueId: string): Promise<Pushed | null
  */
 export async function waitsPushed(workspaceId: string, projectId: string, seat: { userId: string; role: string }) {
   const pushed = new Map<string, Pushed>();
-  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role })).items) {
+  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role }, true)).items) {
     const work = item.lastRunAt && await pushedWork(prisma, item.issueId);
-    if (work) pushed.set(item.issueId, work);
+    if (work) pushed.set(item.issueId, { ...work, eligibleAt: item.eligibleAt });
   }
   return pushed;
 }
@@ -585,10 +605,11 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   // CLB-809: the last finished run was another account's, so the issue came here from another seat. A runner that never
   // had the issue starts from its pushed branch; one that had it before starts from what it holds, so the session brings
   // the pushed work in first.
-  const pushed = last && last.userId !== issue.assigneeId ? await pushedWork(prisma, issue.id) : null;
+  const pushed = last && last.userId !== issue.assigneeId && facts.runId === last.id && typeof facts.pullRequest === 'string' && typeof facts.headCommit === 'string'
+    ? { pullRequest: facts.pullRequest as string, headCommit: facts.headCommit as string } : null;
   const [, repo, number] = pushed?.pullRequest.match(/^(.+)#(\d+)$/) ?? [];
   // Collab records no branch with a run: the name is the pull request's, where Collab has the pull request from its connected repository.
-  const branch = repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { fullName: { equals: repo, mode: 'insensitive' } } },
+  const branch = repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { projectId: issue.projectId, isActive: true, fullName: { equals: repo, mode: 'insensitive' } } },
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   const from = last?.seat?.name ?? 'another account';
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
@@ -606,6 +627,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     const details = JSON.parse(row.details ?? '{}');
     if (details.requestId === row.itemId) verdicts.set(row.itemId, details);
   }
+  const history = asLead ? await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: issue.children.map(child => child.id) }, action: { in: ['LEAD_ASSIGNED', 'STORY_MOVED'] }, oldValue: { not: '' } }, select: { itemId: true, oldValue: true } }) : [];
   const security = issue.agentRequestRole === 'security';
   return {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
@@ -626,6 +648,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
     ...(issue.children.length && { children: issue.children.map(child => ({ ...toRef(child), assigneeId: child.assigneeId, assignee: child.assignee?.name ?? null,
+      ...(asLead && { movedOff: history.filter(row => row.itemId === child.id).map(row => row.oldValue).filter(Boolean) }),
       lastRun: child.agentRuns[0] ? child.agentRuns[0].endedAt ? child.agentRuns[0].outcome ?? 'stopped' : 'running' : null })) }),
     ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ userId: seat.userId, name: seat.name, role: seat.role,
       openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }),

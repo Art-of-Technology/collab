@@ -58,7 +58,9 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
     const outcome = typeof activity.details?.outcome === 'string' ? `: ${activity.details.outcome.replace(/_/g, ' ')}` : '';
     return `${userName} finished a run on this ${itemType}${outcome}`;
   }
-  if (activity.action === 'LEAD_ASSIGNED') return `${userName} assigned this ${itemType} to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}`;
+  if (activity.action === 'LEAD_ASSIGNED') return typeof activity.details?.why === 'string'
+    ? `${userName} moved this ${itemType} from ${activity.details.from} to ${activity.details.to}: ${activity.details.why}`
+    : `${userName} assigned this ${itemType} to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}`;
   if (activity.action === 'SECURITY_REQUESTED') return `${userName} asked for a security review`;
   if (activity.action === 'REQUEST_PLACED') {
     const seat = (name: unknown) => typeof name === 'string' ? name : 'a seat';
