@@ -180,6 +180,23 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     }
   });
 
+  await t.test('a request whose first placing and link are gone still moves, and not to its reporter', async () => {
+    // Filed by a reviewer seat, the seat with the most room afterwards: it must not get its own request back.
+    for (const reporterId of [revDeniz.userId, null]) {
+      const target = await request(revCem, 'review', revDeniz);
+      await raw.issueActivity.deleteMany({ where: { itemId: target.id, action: 'REQUEST_PLACED' } });
+      await raw.issueRelation.deleteMany({ where: { sourceIssueId: target.id } });
+      await raw.issue.update({ where: { id: target.id }, data: { reporterId } });
+      await report(bob, 60); await report(deniz, 90); await report(cem, 0); await passes(cem, 11);
+      await inbox(revBob);
+      // With a reporter it goes past the reporter's seat; with no trace of who filed it, it goes where any request would.
+      const to = reporterId ? revBob : revDeniz;
+      assert.equal(await holder(target), to.userId);
+      assert.equal((await moves(target))[0].userId, reporterId ?? to.userId);
+      await settle();
+    }
+  });
+
   let moved;
   await t.test('Collab places a request again, on the seat with room, once its seat has had no room for 10 minutes', async () => {
     moved = await request(revCem);

@@ -201,7 +201,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
   if (!reader || !role) return;
   const unstarted = { projectId: reader.projectId, agentRequestRole: role, agentRuns: { none: {} }, ...NOT_DONE };
   const waiting = await prisma.issue.findMany({ where: { ...unstarted, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
-    select: { id: true, assigneeId: true } });
+    select: { id: true, assigneeId: true, reporterId: true } });
   if (!waiting.length) return;
   const now = new Date();
   const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
@@ -218,12 +218,14 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     const updated = await prisma.$transaction(async tx => {
       const placements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true, userId: true } });
       const initial = placements.find(entry => !JSON.parse(entry.details ?? '{}').fromSeatId);
-      const relation = initial ? null : await tx.issueRelation.findFirst({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
-      const filer = initial?.userId ?? relation?.createdBy;
-      if (!filer) return;
+      const links = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
+      // Who filed it is read from what filing wrote, the surest first: the entry of its first placing, the link to its
+      // source, then its reporter, because a person can change a request's reporter and remove its link. Any of them
+      // may be the filer, so none of them is given the request; with no trace left it is moved all the same.
+      const filers = [initial?.userId, ...links.map(link => link.createdBy), request.reporterId].filter((id): id is string => !!id);
       const left = placements.map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
       // As when it was filed: never the seat that asked.
-      const others = seats.filter(seat => seat.id !== from.id && seat.userId !== filer && !left.includes(seat.id));
+      const others = seats.filter(seat => seat.id !== from.id && !filers.includes(seat.userId) && !left.includes(seat.id));
       const to = others.length ? placeRequest([from, ...others], from).seat : from;
       if (to.room.kind !== 'room') return;
       // The seat's row, then the issue's: the order a checkout and a retirement take them in. Whichever of a checkout
@@ -244,11 +246,11 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
       const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
-      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: filer } as const;
+      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: filers[0] ?? null } as const;
       await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
       await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
       // Under the name of whoever filed the request, as its placing is: Collab has no account of its own.
-      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: filer, workspaceId: issue.workspaceId,
+      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: filers[0] ?? to.userId, workspaceId: issue.workspaceId,
         projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
         details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
       return updated;
