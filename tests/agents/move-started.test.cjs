@@ -359,6 +359,8 @@ test('started work moves between runs once its seat has had no room for 30 minut
     assert.equal(woken.reason, 'child_no_room');
     assert.deepEqual(woken.noRoom, [{ issueKey: story.issueKey, seat: 'dev-cem', reason: 'its runner reports no room', pullRequest: story.pullRequest }],
       'the story whose last run pushed nothing is not listed');
+    const child = (await context(lead, epic)).children.find(found => found.id === story.id);
+    assert.deepEqual([child.lastRun, child.movedOff], ['blocked', []]);
     await inbox(devBob);
     assert.equal(await holder(story), devCem.userId, 'the lead has room: it moves the story itself');
     const placed = await give(story, devBob.userId);
@@ -369,6 +371,34 @@ test('started work moves between runs once its seat has had no room for 30 minut
     assert.equal(told.lastExitNote, NOTE);
     assert.equal(told.movedFrom.seat, 'dev-cem');
     assert.equal(told.movedFrom.pullRequest, story.pullRequest);
+    await settle();
+  });
+
+  await t.test('a lead move keeps Collab from returning started work to the seat it left', async () => {
+    const story = await startedStory();
+    assert.equal((await give(story, devBob.userId)).status, 200);
+    assert.ok((await context(lead, epic)).children.find(found => found.id === story.id).movedOff.includes(devCem.userId));
+    await report(cem, 80); await report(deniz, 0); await report(bob, 0); await passes(bob, 31);
+    await report(lee, 0); await passes(lee, 11);
+    await inbox(devCem);
+    assert.equal(await holder(story), devBob.userId, 'the only seat with a number is the one the lead moved it off');
+    assert.deepEqual(await moves(story), []);
+    await report(deniz, 40);
+    await inbox(devDeniz);
+    assert.equal(await holder(story), devDeniz.userId);
+    await settle();
+  });
+
+  await t.test('a lead that looked in this spell is not woken again, and Collab does not move the story past it', async () => {
+    const story = await startedStory();
+    await cemFull(31); await report(lee, 50);
+    assert.ok((await items(lead)).some(found => found.issueKey === epic.issueKey && found.noRoom?.some(child => child.issueKey === story.issueKey)));
+    await raw.agentRun.updateMany({ where: { issueId: epic.id }, data: { startedAt: ago(1), endedAt: new Date() } });
+    assert.deepEqual(await inbox(lead), []);
+    await report(lee, 0); await passes(lee, 11);
+    await inbox(devBob);
+    assert.equal(await holder(story), devCem.userId);
+    assert.deepEqual(await moves(story), []);
     await settle();
   });
 
@@ -389,6 +419,27 @@ test('started work moves between runs once its seat has had no room for 30 minut
     assert.deepEqual(moreOnStory, []);
     assert.equal(onStory.content, `Collab moved this story from dev-cem to dev-bob, because ${why}. What dev-cem did not push stays behind.`);
     assert.equal((await context(devBob, story)).movedFrom.seat, 'dev-cem');
+    await settle();
+  });
+
+  await t.test('in a project with review and blocked statuses, moved work is offered to its new seat', async () => {
+    await raw.projectStatus.createMany({ data: ['blocked', 'in_review'].map((category, order) => ({ id: `${A}-${category}`, projectId: A,
+      name: category, displayName: category, category, order: order + 3 })) });
+    const moved = await startedRequest();
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: moved.id } })).statusId, `${A}-blocked`, 'the finish put it in the blocked status');
+    await cemFull(31);
+    assert.ok((await inbox(revBob)).some(([key, reason]) => key === moved.issueKey && reason === 'reply'), 'Collab\'s comment came after the new assignment');
+    assert.equal(await holder(moved), revBob.userId);
+    const [said] = await comments(moved);
+    assert.equal(said.content, `Collab moved this request from rev-cem to rev-bob, because ${(await moves(moved))[0].details.why}. What rev-cem did not push stays behind.`);
+    await settle();
+
+    const story = await startedStory();
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: story.id } })).statusId, `${A}-blocked`);
+    await cemFull(31); await report(lee, 0); await passes(lee, 11);
+    await inbox(devDeniz);
+    assert.equal(await holder(story), devBob.userId);
+    assert.ok((await inbox(devBob)).some(([key, reason]) => key === story.issueKey && reason === 'reply'));
     await settle();
   });
 });

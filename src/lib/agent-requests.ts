@@ -186,10 +186,13 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
 
 /**
  * CLB-809: started work moves between runs only. Behind the locks the issue is as it was when its move was decided: still
- * unstarted, or with the same last run, which pushed its work and so is not open. A run that started meanwhile wins.
+ * unstarted, or with the same last run, which pushed its work and so is not open, and still offered in its seat's inbox
+ * (a blocker reopened meanwhile keeps it). A run that started meanwhile wins.
  */
-const asDecided = async (tx: Prisma.TransactionClient, issueId: string, pushed: Pushed | undefined) =>
-  pushed ? (await pushedWork(tx, issueId))?.runId === pushed.runId : !await tx.agentRun.count({ where: { issueId } });
+const asDecided = async (tx: Prisma.TransactionClient, issue: { id: string; workspaceId: string; projectId: string }, pushed: Pushed | undefined,
+  from: { userId: string; role: string }) => pushed
+  ? (await pushedWork(tx, issue.id))?.runId === pushed.runId && (await waitsPushed(issue.workspaceId, issue.projectId, from)).has(issue.id)
+  : !await tx.agentRun.count({ where: { issueId: issue.id } });
 /** What the timeline says of started work that moved: it goes on from the branch its last run pushed. */
 const continues = (pushed: Pushed | undefined) => pushed ? `; the work continues from the branch its last run pushed (${pushed.pullRequest})` : '';
 
@@ -250,7 +253,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
         AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) return;
       await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
       const issue = await tx.issue.findFirst({ where: { ...requests, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
-      if (!issue || !await asDecided(tx, issue.id, pushed)) return;
+      if (!issue || !await asDecided(tx, issue, pushed, from)) return;
       const currentPlacements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { details: true, userId: true } });
       const currentLinks = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
       const currentFilers = [currentPlacements[0]?.userId, ...currentLinks.map(link => link.createdBy), issue.reporterId].filter((id): id is string => !!id);
@@ -274,6 +277,10 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: attributedTo, workspaceId: issue.workspaceId,
         projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
         details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why, ...(pushed && { pullRequest: pushed.pullRequest, headCommit: pushed.headCommit }) }) } });
+      // Started work in review or blocked is offered only for something said after its new assignment: this comment, as
+      // a moved story's is, so the new seat's inbox offers what was ready on the seat it left.
+      if (pushed) await tx.issueComment.create({ data: { issueId: issue.id, authorId: attributedTo, createdAt: new Date(at.getTime() + 1),
+        content: `Collab moved this request from ${from.name} to ${to.name}, because ${why}. What ${from.name} did not push stays behind.` } });
       return updated;
     });
     if (updated) emitIssueUpdated(updated, [{ fieldName: 'assigneeId', oldValue: from.userId, newValue: updated.assigneeId }],
@@ -352,7 +359,7 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
         await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ANY(${[story.id, story.parentId]}) ORDER BY "id" FOR UPDATE`;
         const issue = await tx.issue.findFirst({ where: { ...stories, id: story.id, parentId: story.parentId, assigneeId: from.userId },
           select: { id: true, workspaceId: true, projectId: true, issueKey: true, parentId: true, parent, assigneeId: true, helpers } });
-        if (!issue || !placedByLead(issue) || !await asDecided(tx, issue.id, pushed)) return;
+        if (!issue || !placedByLead(issue) || !await asDecided(tx, issue, pushed, from)) return;
         if ((await leftOf()).some(id => id === to.id || id === to.userId)) return null;
         // Read again behind the locks: a seat that got room back keeps its work, and a lead that got room back moves it itself.
         const at = new Date(), current = await seatsWithRoom(tx, projectId, 'developer', at);
@@ -375,7 +382,8 @@ async function moveStories(context: Pick<AppAuthContext, 'user' | 'workspace'>, 
         await tx.issueActivity.create({ data: { action: 'STORY_MOVED', itemType: 'ISSUE', itemId: issue.id, userId: lead.userId, workspaceId: issue.workspaceId,
           projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId, details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why,
             ...(pushed && { pullRequest: pushed.pullRequest, headCommit: pushed.headCommit }) }) } });
-        await tx.issueComment.create({ data: { issueId: issue.id, authorId: lead.userId,
+        // After the assignment's stamp, so a started story in review or blocked is offered to its new seat for it.
+        await tx.issueComment.create({ data: { issueId: issue.id, authorId: lead.userId, createdAt: new Date(at.getTime() + 1),
           content: `Collab moved this story from ${from.name} to ${to.name}, because ${why}. ${pushed ? `What ${from.name} did not push stays behind.` : 'No run had started on it.'}` } });
         await tx.issueComment.create({ data: { issueId: issue.parentId!, authorId: lead.userId,
           content: `Collab moved ${issue.issueKey ?? issue.id} from ${from.name} to ${to.name}, because ${why}. Collab chose by room alone. `

@@ -313,7 +313,7 @@ And, as for unstarted work, another seat of the role has a number, for developer
 | A developer issue the lead placed | The lead, woken with `child_no_room`. The `noRoom` entry has the `pullRequest`. |
 | The same, while the lead's own seat has had no room for 10 minutes | Collab. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
 
-- The **Activity** tab says from which seat, to which seat, why, and that the work continues from the branch its last run pushed. No percentage.
+- The **Activity** tab says from which seat, to which seat, why, and that the work continues from the branch its last run pushed. No percentage. When Collab moved it, a comment says the same and that what the first seat did not push stays behind; the new seat's inbox offers the issue for that comment, also when it is in a review or blocked status.
 - The new seat's session gets `movedFrom` in [the run context](#start-from-the-run-context): it fetches and merges the pushed branch before anything else, then goes on from the last exit note.
 - **What is lost:** anything the first seat did not push. It stays in that seat's working copy and is not part of the work any more.
 - Once per no-room spell, and never moved back to a seat it left. A run that starts on the old seat while the move is made wins.
