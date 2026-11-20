@@ -60,7 +60,17 @@ Approved layout: **on the issue, beside each run**. A chip names the owner and t
 
 ## When a runner is full (CLB-780)
 
-For the current rules on moving work, see [Started work](/docs/agents/seats#started-work) and [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes).
+Work that no run has started on moves after its seat has had no room for 10 minutes. Collab moves a request by itself:
+
+![Collab moves the request](08-full-collab-moves-request.png)
+
+The lead is woken for a developer story, moves it and writes one comment. Work that has started keeps its seat and waits:
+
+![The lead moves the story](09-full-lead-moves-story.png)
+
+When the first runner has room again, moved work stays where it went:
+
+![After the reset](10-full-after-reset.png)
 
 ## Decided and left out
 
