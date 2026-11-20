@@ -32,7 +32,7 @@ curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/app
 ## The loop
 
 1. Read the inbox. If it is empty, wait and read again. Nothing is pushed to a runner.
-2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read. The exception is `repository_required`, which an administrator's choice alone clears: keep that issue and try it again at the next read of the inbox.
+2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read. The exception is `repository_required`: keep that issue and try it again at the next read of the inbox after a seat pick or project default resolves.
 3. Start a fresh session for the issue. Give it the issue key, the run id, the generation and the repository the checkout named.
 4. Renew the lease while the session lives. A lease lasts 60 seconds from each renewal; renew well inside that.
 5. The session reads the run context, does the work and finishes the run with an exit note.
@@ -110,7 +110,7 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `wrong_project` | The issue is in another project than the seat's. |
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
-| 409 | `repository_required` | Several repositories are connected and no valid default is selected. Ask an administrator to choose the default in Project settings. Nothing else has to happen: the checkout can be repeated once one is chosen, and `collab seat run` 0.14.3 and later waits for the issue rather than leaving it alone. |
+| 409 | `repository_required` | Several repositories are connected and neither the seat's pick nor the project default resolves. Ask an administrator to choose a default in Project settings. The checkout can be repeated once a pick or default resolves, and `collab seat run` 0.14.3 and later waits for the issue rather than leaving it alone. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
 
@@ -133,7 +133,7 @@ Collab sends the repository with each checked-out issue, so no address is typed 
 - The seat's pick is made when the seat is created, among the active repositories connected to the seat's project: see [Which repository](/docs/agents/create-a-seat#which-repository). A pick whose repository is connected no more is passed over, and the seat follows the project again.
 - A typed address is an `https` address with no user name, password, query or fragment, saved by someone who manages the workspace's permissions on a project that has no connected repository. Collab knows no provider and no branch for it: `provider` is `address`, `name` is the address's path without `.git`, and `defaultBranch` is `null`. A repository connected later comes before it.
 - In Project settings, under repository connections, an administrator with permission to manage seats can select the default repository for agents. One connected repository is automatically the default. Only active connections in the issue's project can resolve as its default. What was chosen is the repository and not the row it was connected by: connecting the same repository a second time, or switching off the row the choice was saved as while another of the same repository stays, keeps the default.
-- With several repositories and no valid default, checkout for a role that works in a repository returns `409 repository_required` before creating a run. Ask an administrator to choose a default in Project settings.
+- With several repositories, if neither the seat's pick nor the project default resolves, checkout for a role that works in a repository returns `409 repository_required` before creating a run. Ask an administrator to choose a default in Project settings.
 - With no connected repository and no typed address, checkout still returns `repository: null` and starts the run, preserving compatibility with runners that have a configured copy.
 - No token, secret or credential is ever in the reply. The runner clones with its owner's own sign-in.
 
