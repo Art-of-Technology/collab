@@ -270,7 +270,7 @@ How the 10 minutes are counted:
 
 | Why the seat has no room | Counted from |
 | --- | --- |
-| The allowance is used up, or the runner said `paused` or `disk_full` | The runner's first call that said so. A later call that gives the seat room ends it, and the next time starts at zero. |
+| The allowance is used up, or the runner said `paused` or `disk_full` | The start of the current no-room spell. A later call that gives the seat room ends it; a fresh zero after the previous figure became unknown also starts a new spell. |
 | The runner is offline | Its last call. Offline already means 10 minutes of silence, so nothing more is waited for. |
 | No runner is connected | When the last runner was removed, or when the seat was made, whichever is later. |
 
@@ -279,7 +279,7 @@ A request Collab moved:
 - has a line on its **Activity** tab: `Collab moved this request from <seat> to <seat>: <seat> had no room for 10 minutes (<why>)`. It names no percentage.
 - arrives in the new seat's inbox as `assigned`.
 - stays where it went when the first seat has room again, and never returns to a seat it was moved off.
-- is never placed on the seat that filed it.
+- is not placed on a possible filer's seat found from its first placement, link creators or reporter. If no trace remains, Collab can still move it.
 
 Collab looks for requests when a seat of the role reads its inbox. There is no timer: while no reviewer or security seat of the project reads, Collab moves no requests of that role.
 

@@ -437,7 +437,7 @@ What Collab makes of it:
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
-Collab notes the first call that says a seat has no room. After 10 minutes, eligible work no run has started on can move: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
+Eligible work no run has started on can move after a seat has had no room: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
 
 Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It does not show the figure on a page yet.
 
