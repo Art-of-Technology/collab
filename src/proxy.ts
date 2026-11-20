@@ -35,6 +35,11 @@ function boolFromEnv(name: string, fallback = false) {
 }
 
 export async function proxy(req: NextRequest) {
+  let pathname = req.nextUrl.pathname;
+  try { pathname = decodeURIComponent(pathname); } catch {}
+  if (/^\/api\/notes\/(pinned|search|shared-with-me)\/?$/.test(pathname)) {
+    return new NextResponse(null, { status: 404 });
+  }
   const mode = authMode();
   if (mode === 'invalid') return new NextResponse('Authentication configuration unavailable', { status: 503 });
   if (mode === 'gateway' && !(req.method === 'GET' &&
