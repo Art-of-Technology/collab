@@ -43,6 +43,7 @@ function fixture(options={}){
  const actor={id:'alice',email:'alice@example.test',createdAt:now,updatedAt:now};
  const spaces=structuredClone(workspaces);const projects=spaces.map(workspace=>({id:workspace.id,name:workspace.id,slug:workspace.id,workspaceId:workspace.id,workspace,color:'#fff',description:'description',createdAt:now,updatedAt:now}));
  const target=projects.find(x=>x.id===(options.target||'joined')),foreign=projects.find(x=>x.id==='foreign');const sibling={...target,id:'sibling'};projects.push(sibling);
+ if (options.role) target.workspace.members.find(m => m.userId === actor.id).role = options.role;
  const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
  const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],...overrides});
@@ -66,7 +67,15 @@ function fixture(options={}){
  const note=(id,overrides={})=>({id,title:id,content:id,scope:'PROJECT',projectId:target.id,project:target,workspaceId:null,workspace:null,authorId:'alice',author,isEncrypted:false,isRestricted:false,expiresAt:null,sharedWith:[],type:'NOTE',isFavorite:false,createdAt:now,updatedAt:now,tags:[],comments:[],...overrides});
  const notes=[note('project-only'),note('project-explicit',{workspaceId:target.workspaceId,workspace:target.workspace}),note('workspace',{scope:'WORKSPACE',workspaceId:target.workspaceId,workspace:target.workspace,projectId:null,project:null}),note('workspace-sibling',{scope:'WORKSPACE',workspaceId:target.workspaceId,workspace:target.workspace,projectId:sibling.id,project:sibling}),note('wrong-workspace',{workspaceId:'own',workspace:projects[0].workspace}),note('wrong-project-workspace',{scope:'WORKSPACE',workspaceId:target.workspaceId,workspace:target.workspace,projectId:foreign.id,project:foreign}),note('restricted',{authorId:'bob',isRestricted:true}),note('expired',{authorId:'bob',expiresAt:date(-1)})];
  function revoke(){target.workspace.ownerId='bob';target.workspace.members=[{userId:'alice',status:false}];}
- const db={user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
+ const runs=options.costs ? [
+  { usage:{estimatedUSD:17.25}, workspaceId:target.workspaceId, issue:issues[0], state:'finished', seatId:'seat', seat:{workspaceId:target.workspaceId} },
+  { usage:{estimatedUSD:400}, workspaceId:target.workspaceId, issue:hidden, state:'finished', seatId:'seat', seat:{workspaceId:target.workspaceId} },
+  { usage:{estimatedUSD:900}, workspaceId:target.workspaceId, issue:issues[0], state:'finished', seatId:null, seat:null },
+ ] : [];
+ target.workspace.agentRuns=runs;
+ const db={projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length},
+ workspace:{findFirst:async args=>query(spaces,args)[0]??null},
+ issueActivity:{findMany:async()=>[]},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
  repository:{findFirst:async args=>{reads.push('repository');const value=query(options.noRepository?[]:[repo],args)[0]||null;if(value&&options.revokeRepository)revoke();return value;}},
  gitConnection:{findMany:async args=>{reads.push('gitConnections');return query(connections,args);}},
@@ -74,6 +83,7 @@ function fixture(options={}){
  const deps={'@/lib/prisma':{prisma:db},'@/lib/auth':{authConfig:{}},'@/lib/auth-options':{authOptions:{}},'next-auth/next':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/request-session':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/post-access':load('src/lib/post-access.ts'),'next/server':{NextResponse:{json:(body,init={})=>({body,status:init.status||200,headers:new Headers(init.headers)})}}};
  const globals={Error,console:{error:(...args)=>logs.push(args)}};deps['@/lib/session']=load('src/lib/session.ts',deps,globals);deps['@/lib/issue-finder']=load('src/lib/issue-finder.ts',deps,globals);deps['@/lib/secrets/access']=load('src/lib/secrets/access.ts',deps,globals);
  deps['@/lib/github/version-access']=load('src/lib/github/version-access.ts',{...deps,'./access':load('src/lib/github/access.ts',deps)});
+ deps['@/lib/project-overview']=load('src/lib/project-overview.ts',deps,globals);
  const route=load('src/app/api/projects/[projectId]/summary/route.ts',deps,globals);
  return{reads,logs,call:(id=target.id)=>route.GET({}, {params:Promise.resolve({projectId:id})})};
 }
@@ -118,4 +128,18 @@ test('overdue and at-risk totals include all 12 active issues while each preview
  assert.equal(result.body.stats.atRiskCount,12);
  assert.equal(result.body.atRisk.overdue.length,10);
  assert.equal(result.body.atRisk.upcoming.length,10);
+});
+
+test('project overview returns scoped spend only to workspace owners and active administrators', async () => {
+ for (const [options, expected] of [
+  [{ target: 'own' }, 17.25], [{ role: 'ADMIN' }, 17.25], [{ role: 'MEMBER' }, undefined],
+  [{ role: 'ADMIN', revokeLookup: true }, undefined],
+ ]) {
+  const result = await fixture({ costs: true, ...options }).call();
+  assert.equal(result.status, 200);
+  assert.equal(result.body.overview.agentSpendUsd, expected);
+  assert.equal(Object.hasOwn(result.body.overview, 'agentSpendUsd'), expected !== undefined);
+  assert.doesNotMatch(JSON.stringify(result.body), /estimatedUSD|chargedUSD/);
+  if (expected === undefined) assert.doesNotMatch(JSON.stringify(result.body), /17\.25/);
+ }
 });
