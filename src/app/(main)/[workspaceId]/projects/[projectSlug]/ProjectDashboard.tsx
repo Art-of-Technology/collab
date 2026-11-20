@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import NewIssueModal from '@/components/issue/NewIssueModal';
@@ -255,7 +256,7 @@ function ProjectDetails({ base, summary, workspaceSlug }: { base: string; summar
         {panels.map(({ id, label }) => (
           <Button key={id} type="button" variant="outline" className={controlStyle} aria-expanded={expanded === id}
             aria-controls={`project-details-${id}`} onClick={() => setExpanded(expanded === id ? null : id)}>
-            <span aria-hidden="true">{expanded === id ? '▾' : '▸'}</span>{label}
+            <ChevronRight aria-hidden="true" className={cn('!size-3', expanded === id && 'rotate-90')} />{label}
           </Button>
         ))}
       </div>

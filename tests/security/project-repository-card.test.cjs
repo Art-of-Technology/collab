@@ -6,7 +6,7 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
   const Component = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectDashboard.tsx', {
     react: { useState: initial => [initial === null ? expanded : initial, () => {}] },
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    'next/navigation': { useSearchParams: () => new URLSearchParams(tab) }, 'next/link': { default: 'a' },
+    'next/navigation': { useSearchParams: () => new URLSearchParams(tab) }, 'next/link': { default: 'a' }, 'lucide-react': { ChevronRight: 'svg' },
     '@/components/ui/button': { Button: ({ asChild, children, ...props }) => asChild ? children : jsx('button', { ...props, children }) },
     '@/components/ui/card': { Card: 'div' }, '@/components/issue/NewIssueModal': {},
     '@/hooks/queries/useProjects': { useProjectSummary: () => ({
