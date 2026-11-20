@@ -139,14 +139,14 @@ test('comment section renders loading, authoritative empty results, and retryabl
   assert.match(render(), /Loading comments/);
   state = { data: [], isLoading: false };
   assert.match(render(), /No comments/);
-  assert.match(render(), /aria-label="Test comment sound"/);
+  assert.match(render(), /<button[^>]*>Test sound<\/button>/);
   soundError = 'blocked';
   assert.match(render(), /Your browser blocked comment sound/);
-  assert.match(render(), /aria-label="Enable comment sound"/);
+  assert.match(render(), /<button[^>]*>Enable sound<\/button>/);
   soundError = 'unavailable';
   assert.match(render(), /Comment sound could not play/);
   assert.match(render(), /Retry sound/);
-  assert.match(render(), /aria-label="Retry comment sound"/);
+  assert.match(render(), /<button[^>]*>Retry sound<\/button>/);
   soundError = null;
   assert.doesNotMatch(render(), /STALE/);
   state = { isLoading: false, isError: true, refetch() {} };
