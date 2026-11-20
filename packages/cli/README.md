@@ -268,7 +268,7 @@ The apply operation creates `collab-agent` (agent tokens, no OAuth client), `col
 
 Before enabling CLI 0.7.0 workers, follow the [server migration and compatibility requirements](../../docs/agent-handoffs.md#validation-and-rollout). The final tag must contain both the CLI changes and updated agent guide.
 
-Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
+Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. A complete release has 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars): 10 after the first step, 18 after the second. The app may be deployed once the first step is published. Until the second step is published, `install.ps1` points at Windows downloads that are not there yet, so the release owner verifies all 18 afterwards and reruns a failed Windows job at once.
 
 ```sh
 npm test --prefix packages/cli
@@ -285,7 +285,7 @@ For Windows x86, use a Windows build host with Bun, Node.js and npm configured a
 
 The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64/ARM64 runner. Windows x86 runs under WoW64 with 32-bit PowerShell in CI, not on a physical 32-bit Windows OS. It includes the README and license notices, packages Unix `.tar.gz` archives and Windows `.zip` archives, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the seven archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
-Windows source-Node CLI/auth/ACL coverage runs once on x64. For each Windows architecture (x64, x86 and ARM64), three parallel jobs install the built archive and run shards of the CLI/auth/ACL suite, alongside installer selection, PATH persistence, repeat installation, checksum refusal and PE architecture checks. A gate compares the installed shards with the source suite to require every test and nested subtest exactly once and the expected skips. All Windows jobs and coverage gates must pass before publication.
+Windows source-Node CLI/auth/ACL coverage runs once on x64. For each Windows architecture (x64, x86 and ARM64), three parallel jobs install the built archive and run shards of the CLI/auth/ACL suite, alongside installer selection, PATH persistence, repeat installation, checksum refusal and PE architecture checks. A gate compares the installed shards with the source suite to require every test and nested subtest exactly once and the expected skips. All Windows jobs and coverage gates must pass before the Windows downloads are published. A release is published in two steps: the macOS and Linux downloads and `install.sh` as soon as their builds and tests pass, then the Windows downloads and `install.ps1`, added to the same release when the Windows gates pass.
 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
 
