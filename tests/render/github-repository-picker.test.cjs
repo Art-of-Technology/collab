@@ -7,6 +7,9 @@ const { createRoot } = require('react-dom/client');
 
 const requests = [];
 let failPageTwo = false;
+let failPageOne = false;
+let resolveSearch;
+let holdSearch = false;
 const repo = (id, name) => ({ id, name, full_name: 'org/' + name, description: null, private: false, html_url: 'https://github.test/org/' + name, default_branch: 'main', updated_at: '2026-11-01T00:00:00Z', language: null, stargazers_count: 0, owner: { login: 'org', avatar_url: '' }, permissions: { admin: true, push: true, pull: true } });
 const icons = new Proxy({}, { get: () => () => null });
 const Component = load('src/components/github/GitHubOAuthConnection.tsx', {
@@ -19,7 +22,10 @@ const Component = load('src/components/github/GitHubOAuthConnection.tsx', {
   window: dom.window, URL, URLSearchParams, AbortController, setTimeout, clearTimeout, console: { log() {}, error() {} },
   fetch: async url => {
     requests.push(url);
+    if (url === '/api/github/oauth/connect') return { ok: true, json: async () => ({}) };
     const query = new URL(url, 'https://collab.test').searchParams;
+    if (failPageOne && query.get('page') === '1' && !query.get('search')) { failPageOne = false; return { ok: false, json: async () => ({ error: 'Temporary failure' }) }; }
+    if (holdSearch && query.get('search')) return new Promise(resolve => { resolveSearch = resolve; });
     if (failPageTwo && query.get('page') === '2') { failPageTwo = false; return { ok: false, json: async () => ({ error: 'Temporary failure' }) }; }
     const repositories = query.get('search') ? [repo(9, 'needle')] : query.get('page') === '2' ? [repo(2, 'second-page')] : [repo(1, 'first-page')];
     return { ok: true, json: async () => ({ githubUser: 'alice', repositories, hasMore: !query.get('search') && query.get('page') !== '2' }) };
@@ -61,4 +67,34 @@ test('a failed page is retried without skipping or duplicating repositories', as
   await settle(20);
   assert.deepEqual(requests.slice(-2), ['/api/github/oauth/repositories?page=2&search=', '/api/github/oauth/repositories?page=2&search=']);
   assert.deepEqual(names(), ['first-page', 'second-page']);
+});
+
+test('a failed reload does not retain pages behind a reset cursor', async () => {
+  await React.act(async () => createRoot(document.getElementById('root')).render(React.createElement(Component, { projectId: 'p1' })));
+  await settle(20);
+  await React.act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Load More')).click());
+  await settle(20);
+  const input = document.querySelector('input');
+  const setValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+  await React.act(async () => { setValue.call(input, 'needle'); input.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
+  failPageOne = true;
+  await React.act(async () => { setValue.call(input, ''); input.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
+  await settle(20);
+  assert.deepEqual(names(), []);
+  assert.ok(!shown('Load More Repositories'));
+});
+
+test('an older search response cannot undo a successful connection', async () => {
+  await React.act(async () => createRoot(document.getElementById('root')).render(React.createElement(Component, { projectId: 'p1' })));
+  await settle(20);
+  holdSearch = true;
+  const input = document.querySelector('input');
+  const setValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+  await React.act(async () => { setValue.call(input, 'first'); input.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
+  await settle(400);
+  await React.act(async () => [...document.querySelectorAll('button')].find(button => button.textContent === 'Connect').click());
+  await React.act(async () => resolveSearch({ ok: true, json: async () => ({ githubUser: 'alice', repositories: [repo(1, 'first-page')], hasMore: false }) }));
+  holdSearch = false;
+  assert.ok(shown('Connected'));
+  assert.ok(![...document.querySelectorAll('button')].some(button => button.textContent === 'Connect'));
 });

@@ -67,6 +67,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const failedPageRollback = useRef<{ page: number; search: string } | null>(null);
+  const connectedRepositories = useRef(new Set<number>());
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
@@ -114,7 +115,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
         const data = await response.json();
         setIsConnected(true);
         setGithubUser(data.githubUser);
-        setRepositories(data.repositories || []);
+        setRepositories((data.repositories || []).map(markConnected));
         setHasMore(data.hasMore || false);
       } else if (response.status === 400 || response.status === 401) {
         setIsConnected(false);
@@ -132,6 +133,9 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
     }
   };
 
+  const markConnected = (repo: GitHubRepository) =>
+    connectedRepositories.current.has(repo.id) ? { ...repo, isConnected: true } : repo;
+
   const fetchRepositories = async (page: number, search: string, signal: AbortSignal) => {
     setLoading(true);
     try {
@@ -145,9 +149,9 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       if (signal.aborted) return;
       
       if (page === 1) {
-        setRepositories(data.repositories || []);
+        setRepositories((data.repositories || []).map(markConnected));
       } else {
-        setRepositories(prev => [...prev, ...(data.repositories || [])]);
+        setRepositories(prev => [...prev, ...(data.repositories || []).map(markConnected)]);
       }
       
       setHasMore(data.hasMore || false);
@@ -157,6 +161,9 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       if (page > 1) {
         failedPageRollback.current = { page: page - 1, search };
         setCurrentPage(page - 1);
+      } else {
+        setRepositories([]);
+        setHasMore(false);
       }
       console.error('Error fetching repositories:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch repositories');
@@ -253,6 +260,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
         );
       }
 
+      connectedRepositories.current.add(repo.id);
       // Update repository status
       setRepositories(prev => 
         prev.map(r => 
@@ -291,6 +299,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       }
 
       toast.success('GitHub account disconnected successfully');
+      connectedRepositories.current.clear();
       
       // Reset search term
       setSearchTerm('');
