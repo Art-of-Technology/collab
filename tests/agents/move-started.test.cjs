@@ -444,6 +444,25 @@ test('started work moves between runs once its seat has had no room for 30 minut
     await settle();
   });
 
+  await t.test('a started move needs a real figure: a working runner with no figure is passed over for the seat that has one', async () => {
+    const busy = async () => raw.agentRun.create({ data: { workspaceId: 'w', issueId: (await issue()).id, seatId: devBob.id, userId: devBob.userId, runner: 'test', generation: `busy-${++pulls}` } });
+    const waits = await startedRequest();
+    await report(bob, 60); await report(deniz, 60); await report(cem, 0); await passes(cem, 31);
+    // Deniz's runner works but its figure went stale, and Bob has a run open: for new work her seat would win the tie.
+    await stale(deniz); await busy();
+    assert.deepEqual(await inbox(revDeniz), [], 'not to the seat without a figure');
+    assert.equal(await holder(waits), revBob.userId, 'the seat with the figure gets it');
+    await settle();
+
+    const story = await startedStory();
+    await report(bob, 60); await report(deniz, 60); await report(cem, 0); await passes(cem, 31);
+    await report(lee, 0); await passes(lee, 11);
+    await stale(deniz); await busy();
+    await inbox(devDeniz);
+    assert.equal(await holder(story), devBob.userId);
+    await settle();
+  });
+
   await t.test('in a project with review and blocked statuses, moved work is offered to its new seat', async () => {
     await raw.projectStatus.createMany({ data: ['blocked', 'in_review'].map((category, order) => ({ id: `${A}-${category}`, projectId: A,
       name: category, displayName: category, category, order: order + 3 })) });
