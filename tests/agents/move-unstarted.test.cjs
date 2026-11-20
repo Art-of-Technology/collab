@@ -163,7 +163,13 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
   await t.test('a changed or cleared reporter cannot receive or take credit for a filed request', async () => {
     for (const [reporterId, removePlacement] of [[owner, false], [null, true]]) {
       const target = await request(revCem, 'review', revDeniz);
-      if (removePlacement) await raw.issueActivity.deleteMany({ where: { itemId: target.id, action: 'REQUEST_PLACED' } });
+      if (removePlacement) {
+        await raw.issueActivity.deleteMany({ where: { itemId: target.id, action: 'REQUEST_PLACED' } });
+        await raw.issueRelation.updateMany({ where: { sourceIssueId: target.id }, data: { createdAt: new Date(target.createdAt.getTime() + 1000) } });
+        const later = await issue();
+        await raw.issueRelation.create({ data: { sourceIssueId: target.id, targetIssueId: later.id, relationType: 'RELATES_TO', createdBy: owner,
+          createdAt: new Date(target.createdAt.getTime() + 2000) } });
+      }
       await raw.issue.update({ where: { id: target.id }, data: { reporterId } });
       await report(bob, 60); await report(deniz, 90); await report(cem, 0); await passes(cem, 11);
       await inbox(revBob);

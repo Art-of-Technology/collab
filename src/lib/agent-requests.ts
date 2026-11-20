@@ -201,7 +201,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
   if (!reader || !role) return;
   const unstarted = { projectId: reader.projectId, agentRequestRole: role, agentRuns: { none: {} }, ...NOT_DONE };
   const waiting = await prisma.issue.findMany({ where: { ...unstarted, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
-    select: { id: true, assigneeId: true, createdAt: true } });
+    select: { id: true, assigneeId: true } });
   if (!waiting.length) return;
   const now = new Date();
   const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
@@ -218,7 +218,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     const updated = await prisma.$transaction(async tx => {
       const placements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true, userId: true } });
       const initial = placements.find(entry => !JSON.parse(entry.details ?? '{}').fromSeatId);
-      const relation = initial ? null : await tx.issueRelation.findFirst({ where: { sourceIssueId: request.id, createdAt: request.createdAt }, select: { createdBy: true } });
+      const relation = initial ? null : await tx.issueRelation.findFirst({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
       const filer = initial?.userId ?? relation?.createdBy;
       if (!filer) return;
       const left = placements.map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
