@@ -16,6 +16,8 @@ const bodySchema = z.object({
   expiresInDays: z.number().int().min(1).max(365).default(90),
   isDefault: z.boolean().optional(),
   byRunner: z.boolean().optional(),
+  // The seat's own pick among its project's repositories, where the project has several.
+  repositoryId: z.string().min(1).max(128).optional(),
 }).strict();
 
 // POST /api/workspaces/[workspaceId]/agent-seats - create a seat with its first token; the token is returned once.
