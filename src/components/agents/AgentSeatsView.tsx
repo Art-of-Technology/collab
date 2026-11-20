@@ -8,7 +8,7 @@ type Props = SeatsView & { tab: 'seats' | 'inbox'; handoffs: boolean; canManage:
 
 const REASONS: Record<string, string> = {
   resume: 'To resume', review_returned: 'Review returned', reply: 'New reply', blocker_resolved: 'Blocker resolved', assigned: 'Assigned',
-  child_done: 'Child done', child_blocked: 'Child blocked', child_idle: 'Child idle',
+  child_done: 'Child done', child_blocked: 'Child blocked', child_idle: 'Child idle', child_no_room: 'Child on a full seat',
 };
 
 /** The Seats and the Inbox tab of the Agents page: the same seats, once as a table and once with what waits for each. */

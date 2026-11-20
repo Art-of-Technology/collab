@@ -60,7 +60,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
 4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
 
-A lead seat's blocked issue is also offered with `child_done`, `child_blocked` or `child_idle`: see [Lead seat](#lead-seat).
+A lead seat's blocked issue is also offered with `child_done`, `child_blocked`, `child_idle` or `child_no_room`: see [Lead seat](#lead-seat).
 
 From the CLI: `collab seat inbox`. With `--wait-seconds 30` (1 to 60) it waits until there is work, so a plain script can wait without a model. `collab seat show` names the seat behind the token.
 
@@ -250,6 +250,46 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 - Only the lead seat is given these fields and this order. Any other reader gets the list as it was.
 - Collab assigns no developer work by itself, and who may assign is unchanged.
 
+### When a seat has had no room for 10 minutes
+
+Work that no run has started on does not wait for an allowance to reset. It moves to a seat that can start it.
+
+| The work | Who moves it | How |
+| --- | --- | --- |
+| A review or security request | Collab | Places it again on the seat of the role with the most room. |
+| A developer issue the lead placed | The lead | Is woken with `child_no_room`, assigns it to another developer seat and writes one comment. |
+| Anything a run has started on | Nobody | It keeps its seat and waits. |
+
+When it moves, all of these hold:
+
+1. No run has started on it. A run that was started and stopped, lost or finished counts as started.
+2. Its seat reads as **no room**, and has for 10 minutes. Not as unknown: a seat run by hand, or one whose figure is at least 15 minutes old, keeps its work.
+3. Another seat of the role has a number. A seat whose room is unknown or none takes nothing.
+
+How the 10 minutes are counted:
+
+| Why the seat has no room | Counted from |
+| --- | --- |
+| The allowance is used up, or the runner said `paused` or `disk_full` | The runner's first call that said so. A later call that gives the seat room ends it, and the next time starts at zero. |
+| The runner is offline | Its last call. Offline already means 10 minutes of silence, so nothing more is waited for. |
+| No runner is connected | When the last runner was removed, or when the seat was made, whichever is later. |
+
+A request Collab moved:
+
+- has a line on its **Activity** tab: `Collab moved this request from <seat> to <seat>: <seat> had no room for 10 minutes (<why>)`. It names no percentage.
+- arrives in the new seat's inbox as `assigned`.
+- stays where it went when the first seat has room again, and never returns to a seat it was moved off.
+
+Collab looks when a seat of the role reads its inbox. There is no timer: while no reviewer or security seat of the project reads, nothing moves, and nothing could have started either.
+
+Limits of this version:
+
+- A release request never moves: a project has one release seat.
+- A `developer` request is not moved by Collab, and neither is any other developer work.
+- A lead whose own seat has no room cannot take its turn. Nothing wakes someone else.
+- The lead is not woken for a developer issue a person assigned, or for one outside the epic it waits on: it may not move those.
+- The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours.
+
 ## Lead seat
 
 A lead seat decides which seat works which issue. It is a seat like the others: an issue assigned to it comes to its inbox, one fresh session makes one decision, and the run ends. Nothing keeps a lead session alive between decisions.
@@ -276,7 +316,10 @@ What brings the epic back, each as the `reason` in the lead's inbox:
 - `child_done`: a child issue reached a done status after the lead's last run started.
 - `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
 - `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
+- `child_no_room`: a child issue the lead placed, on which no run ever started, sits on a developer seat that has had [no room for 10 minutes](#when-a-seat-has-had-no-room-for-10-minutes), and another developer seat has a number and is under its limit. The item has `noRoom`: a list of `{ issueKey, seat, reason }`, one per such child. Offered once per time the seat is without room: after the lead's next run it is not offered again until the seat has had room and lost it again.
 - `reply`, as for any blocked issue: someone else commented on the epic.
+
+When two of these hold, the first in this list is the reason given.
 
 Children are measured from the start of the lead's last run, not its end: a child that finishes while the lead's session is running may be unseen by it, so the epic comes back once more.
 

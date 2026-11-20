@@ -20,6 +20,10 @@ export const LEAD_CAP = 3;
 export const IDLE_MS = 10 * 60_000;
 /** A room figure older than this says nothing any more. */
 export const ROOM_FRESH_MS = 15 * 60_000;
+/** A seat that has had no room for this long gives up the work no run has started on. */
+export const NO_ROOM_MOVE_MS = 10 * 60_000;
+/** The audit rows that open and end a spell in which a seat's runner says the seat has no room: see `markNoRoom`. */
+const NO_ROOM = 'agent_seat.no_room', ROOM_BACK = 'agent_seat.room_back';
 /** The issues that are not in a status of the done group. */
 export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
 /** The open issues a seat holds because the lead gave them to it: the lead's hand is on the row that made the seat the assignee. */
@@ -188,13 +192,68 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
 }
 
 /**
+ * What a runner itself says, whatever the clock says about the runner: it is paused or its disk is full, or the seat's
+ * fresh figure is 0. These are the causes of no room that no stored time marks; a runner that is offline or gone has one.
+ */
+export const saysNoRoom = (seat: { room: number | null; roomAt: Date | null }, state: string | null, now: Date) =>
+  (!!state && state !== 'working') || (seat.room !== null && seat.room <= 0 && !!seat.roomAt && seat.roomAt.getTime() > now.getTime() - ROOM_FRESH_MS);
+
+/**
+ * Since when a seat's runner has said the seat has no room is kept as rows of the audit log under the seat's account,
+ * the way the daily cap is counted from rows: `agent_seat.no_room` opens a spell and `agent_seat.room_back` ends it.
+ * Call it in the transaction of every report that says something, for each seat of the runner, with what the runner
+ * had said until then (`before`) and says now (`after`). Afterwards a seat's last row is `agent_seat.no_room` exactly
+ * when the report leaves it without room, so a report that gives the seat room ends the spell and no earlier row can
+ * count again. A spell also opens anew when the runner had not been saying so although the last row is open: a figure
+ * that grew too old in between was unknown, not none.
+ * shortcut: a seat retired during a spell and made again while its runner stays paused or full counts from the row of
+ * its earlier life, so its work can move up to 10 minutes early; an `AgentSeat.noRoomSince` column, reset when a seat
+ * is made, would be exact.
+ */
+export async function markNoRoom(tx: Prisma.TransactionClient, workspaceId: string, seats: { id: string; userId: string; before: boolean; after: boolean }[], now: Date) {
+  if (!seats.length) return;
+  const last = await tx.$queryRaw<{ actorId: string; action: string }[]>`SELECT DISTINCT ON ("actorId") "actorId", "action" FROM "AppAuditLog"
+    WHERE "actorId" = ANY(${seats.map(seat => seat.userId)}) AND "action" IN (${NO_ROOM}, ${ROOM_BACK}) ORDER BY "actorId", "createdAt" DESC, "id" DESC`;
+  const open = new Set(last.filter(row => row.action === NO_ROOM).map(row => row.actorId));
+  const rows = seats.flatMap(seat => {
+    const spell = open.has(seat.userId);
+    const action = seat.after ? (!spell || !seat.before) && NO_ROOM : spell && ROOM_BACK;
+    // Stamped with the report's own time, not the transaction's start: it is the time the figure beside it carries.
+    return action ? [{ workspaceId, actorId: seat.userId, action, details: { seatId: seat.id }, createdAt: now }] : [];
+  });
+  if (rows.length) await tx.appAuditLog.createMany({ data: rows });
+}
+
+/**
+ * For a seat that has no room now (`seatRoom`): the moment it had had none for `NO_ROOM_MOVE_MS`, from which the work
+ * no run has started on leaves it, or null when Collab cannot tell since when. A runner that is offline has by then
+ * been silent for `IDLE_MS`, and that is not waited for a second time. With no runner it is counted from when the
+ * last one was removed, or from the seat's first day. Otherwise the runner said so, and the seat's open spell says
+ * since when (`markNoRoom`); a seat with no open spell is not moved from.
+ */
+export async function noRoomDue(db: DB, seat: { userId: string; workspaceId: string; ownerId: string | null; createdAt: Date }, now = new Date()): Promise<Date | null> {
+  // The same runner `seatsWithRoom` reads: the one admitted last that was not removed.
+  const runners = seat.ownerId ? await db.agentRunner.findMany({ where: { workspaceId: seat.workspaceId, ownerId: seat.ownerId }, orderBy: { admittedAt: 'desc' },
+    select: { lastSeenAt: true, admittedAt: true, removedAt: true } }) : [];
+  const runner = runners.find(row => !row.removedAt);
+  if (!runner) return new Date(Math.max(seat.createdAt.getTime(), ...runners.map(row => row.removedAt!.getTime())) + NO_ROOM_MOVE_MS);
+  if (!(runner.lastSeenAt && runner.lastSeenAt.getTime() > now.getTime() - IDLE_MS)) {
+    const seen = runner.lastSeenAt ?? runner.admittedAt;
+    return seen && new Date(seen.getTime() + IDLE_MS);
+  }
+  const last = await db.appAuditLog.findFirst({ where: { actorId: seat.userId, action: { in: [NO_ROOM, ROOM_BACK] } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { action: true, createdAt: true } });
+  return last?.action === NO_ROOM ? new Date(last.createdAt.getTime() + NO_ROOM_MOVE_MS) : null;
+}
+
+/**
  * The seats of a project that are not retired, of one role when one is named, oldest first: the order they had before
  * work was placed by room. Each comes with what placing reads: its room, and the runs its owner has open right now on
  * any seat of the workspace (a seat without an owner counts its own).
  */
 export async function seatsWithRoom(db: DB, projectId: string, role?: string, now = new Date()) {
   const seats = await db.agentSeat.findMany({ where: { projectId, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true,
+    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true, createdAt: true,
       room: true, roomProgram: true, roomAt: true, owner: { select: { id: true, name: true } } } });
   if (!seats.length) return [];
   const { workspaceId } = seats[0], owners = seats.flatMap(seat => seat.ownerId ?? []);

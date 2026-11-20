@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE } from '@/lib/agent-runs';
-import { ASSIGN_CAP, byRoom, countSeatHandoff, HandoffError, IDLE_MS, requireSeat, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
+import { ASSIGN_CAP, byRoom, countSeatHandoff, HandoffError, IDLE_MS, NO_ROOM_MOVE_MS, noRoomDue, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated } from '@/lib/event-bus';
@@ -182,6 +182,64 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
       : `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner connects a runner under Agents, Runners.` } });
   }
   return { issue, idle: idle || waits || !!placed?.full, placed: placed && { seat: to.name, why: placed.why } };
+}
+
+/**
+ * CLB-780: a request no run has started on leaves a seat that has had no room for `NO_ROOM_MOVE_MS`. Called before a
+ * seat's inbox is read; there is no scheduler, and the seat that could take such a request is one that reads its
+ * inbox, so the read that moves a request already lists it. It looks only for a reader whose role takes requests
+ * Collab places (a developer request is the lead's to move, never Collab's), and only at the unstarted requests of
+ * that role in the reader's project: most reads cost one read of the seat and one of those requests. A request is
+ * placed again by the rule every request is placed by, and only on a seat with a number: with none, with the figure
+ * unknown, or inside the time, it waits where it is. It never returns to a seat it was moved off. The timeline says
+ * from which seat and why, and names no figure. Started means a run exists on the issue, whatever became of it.
+ * The caller answers the inbox whether or not this fails.
+ */
+export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'workspace'>) {
+  const reader = await seatFor(prisma, context);
+  const role = reader && (Object.keys(REQUESTS) as RequestRole[]).find(name => name !== 'developer' && REQUESTS[name].seat === reader.role);
+  if (!reader || !role) return;
+  const unstarted = { projectId: reader.projectId, agentRequestRole: role, agentRuns: { none: {} }, ...NOT_DONE };
+  const waiting = await prisma.issue.findMany({ where: { ...unstarted, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
+    select: { id: true, assigneeId: true, reporterId: true } });
+  if (!waiting.length) return;
+  const now = new Date();
+  const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
+  if (!seats.some(seat => seat.room.kind === 'room')) return;
+  const dues = new Map<string, Date | null>();
+  for (const request of waiting) {
+    const from = seats.find(seat => seat.userId === request.assigneeId);
+    if (from?.room.kind !== 'no_room') continue;
+    if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
+    const due = dues.get(from.id);
+    if (!due || due > now) continue;
+    const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${from.room.reason})`;
+    await prisma.$transaction(async tx => {
+      const left = (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true } }))
+        .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
+      // As when it was filed: never the seat that asked.
+      const others = seats.filter(seat => seat.id !== from.id && seat.userId !== request.reporterId && !left.includes(seat.id));
+      const to = others.length ? placeRequest([from, ...others], from).seat : from;
+      if (to.room.kind !== 'room') return;
+      // The seat's row, then the issue's: the order a checkout and a retirement take them in. Whichever of a checkout
+      // and this gets the issue first decides: the other reads what it left, a run or another assignee, and gives way.
+      if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${reader.projectId} AND "role" = ${reader.role}
+        AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) return;
+      await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
+      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
+      if (!issue) return;
+      await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
+      await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
+      // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
+      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: issue.reporterId } as const;
+      await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
+      await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
+      // Under the name of whoever filed the request, as its placing is: Collab has no account of its own.
+      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: issue.reporterId ?? to.userId, workspaceId: issue.workspaceId,
+        projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
+        details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
+    });
+  }
 }
 
 /**
