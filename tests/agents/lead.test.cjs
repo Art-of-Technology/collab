@@ -250,7 +250,9 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     const context = (await send(contextRoute.GET, leadB.token, 'GET', { params: { issueIdOrKey: epic.issueKey } })).body;
     assert.deepEqual(context.children.map(child => [child.issueKey, child.category, child.assigneeId, child.lastRun]),
       [first, second, third].map(child => [child.issueKey, 'todo', null, null]));
-    assert.deepEqual(context.lead, { cap: 3, seats: [{ userId: devB.userId, name: 'dev-b', role: 'developer', openFromLead: 0 }] });
+    // What was there stays; the lead is also told whose seat it is, its room and its owner's open runs, here the lead's own (CLB-777).
+    assert.deepEqual(context.lead, { cap: 3, seats: [{ userId: devB.userId, name: 'dev-b', role: 'developer', openFromLead: 0,
+      owner: { id: person, name: person }, room: { kind: 'unknown', reason: 'the seat is run by hand' }, openRuns: 1 }] });
     assert.ok(context.commands.includes('collab issues update CHILD_KEY --assignee-id SEAT_USER_ID'));
     assert.deepEqual(await give(leadB.token, first, devB.userId), [200, undefined]);
     // The lead waits for its children: blocked, with nothing named.

@@ -132,7 +132,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
 - `children`: when the issue has child issues, up to 100 of them, oldest first, each with its status, `assigneeId`, `assignee` and `lastRun` (`null`, `running`, `stopped` or the outcome of its last run).
-- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats, each with `userId`, `name`, `role` and `openFromLead`.
+- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. When the lead seat itself reads, each seat also has `owner`, `room` and `openRuns`, and the seats of a role are in the order to prefer: see [Placed by room](#placed-by-room).
 - `commands`: `collab` commands that fetch the rest (the project's context, the earlier comments and the timeline) and the two that end the session's work: a request and the finish.
 
 A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.
@@ -141,7 +141,7 @@ Any token that can read the workspace's issues can read an issue's run context. 
 
 ## Ask another seat: a request
 
-A seat asks for a review, a release, a security review or work in another project by filing a request. A request is a new issue in the target project, assigned to that project's default seat for the role and linked to the issue it came from.
+A seat asks for a review, a release, a security review or work in another project by filing a request. A request is a new issue in the target project, assigned to a seat of the role there and linked to the issue it came from. Which seat it is: see [Placed by room](#placed-by-room).
 
 `POST /api/apps/auth/seats/me/requests`:
 
@@ -162,7 +162,7 @@ A seat asks for a review, a release, a security review or work in another projec
 
 From the CLI: `collab seat request --from-issue AA-12 --role review --title "Review the change for AA-12" --body-file request.md`, with `--project <id or prefix>` for another project and `--blocks true`.
 
-The reply contains `issue` with the request's `id` and `issueKey`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
+The reply contains `issue` with the request's `id` and `issueKey`. When Collab chose between seats, it also has `placed`: the `seat` that got the request and `why`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
 
 - The request takes the priority of its source issue. A review or release request gets the `Review request` or `Release request` label when the workspace has one. The label is for people; it hands the request to no one.
 - Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
@@ -180,7 +180,7 @@ A security seat gives a change an independent read before it goes on. Any seat a
 | Step | Who | What happens |
 | --- | --- | --- |
 | 1 | The asking seat | Files the request with `"role": "security"`, then finishes its run `blocked` with `blockedBy` naming the request. |
-| 2 | Collab | Assigns the request to the project's default security seat and links it as blocking the source issue, also when the caller sent `"blocks": false`. The reply says `"blocks": true`. |
+| 2 | Collab | Assigns the request to a security seat of the project, [by room](#placed-by-room), and links it as blocking the source issue, also when the caller sent `"blocks": false`. The reply says `"blocks": true`. |
 | 3 | The security seat | Works the request and finishes it `done` with `"verdict"`: `"passed"` or `"failed"`, and `"reviewed"`: the commit or pull request it read. The findings go in the exit note. |
 | 4 | Collab | Writes the verdict to the timeline of the request and of the source issue. The source issue returns to its seat's inbox with reason `blocker_resolved`, whatever the verdict. |
 
@@ -207,6 +207,49 @@ The rules:
 - Like any blocking issue, a security request brings its source back once it is in a done status. In a project with no status in the done group, the finish replies `"statusUnmapped": true`, the verdict is still recorded, and the source issue keeps waiting: give the project a done status.
 - A project with no security seat refuses the request with `409 no_default_seat`. No label files a security request.
 
+## Placed by room
+
+Room is the percent of allowance a seat's runner has left: see [Report room](/docs/agents/runner-contract#report-room). Collab puts the seats of one role in one order. The lead reads that order, and Collab places review, security and release requests by it.
+
+| Order | Seats |
+| --- | --- |
+| 1 | Seats with a number, most room first. |
+| 2 | Seats whose room is unknown. |
+| 3 | Seats with no room. |
+
+Equal standing: the seat whose owner has the fewest open runs comes first, then the role's default seat, then the older seat. An owner's open runs are counted over all of that person's seats in the workspace.
+
+### Where a request goes
+
+| The seats of the role | The request goes to | `why` in the reply |
+| --- | --- | --- |
+| One has the most room | That seat. | `most room` |
+| Several share the most room | Of those, the seat whose owner has the fewest open runs, then the default seat. | `equal room, fewer open runs`, or `equal room and open runs: the default seat first` |
+| None has a number, and the default seat is unknown | The default seat, as before. | `no fresh figure: the default seat` |
+| None has a number, and the default seat has no room | The first seat whose room is unknown. | `no fresh figure and the default seat cannot start: the next seat whose figure is unknown` |
+| All have no room | The default seat, with `"warning": "seat_idle"`. It waits there. | `no seat can start now: it waits at the default seat` |
+
+- The reply has `placed` with the `seat`'s name and `why`. The request's **Activity** tab has the same line. Neither names a percentage.
+- A role with one seat leaves nothing to choose: the request goes to it, and the reply and the timeline are as before. The same holds when the only other seat of the role is the one asking: a seat is never sent its own request.
+- A `developer` request goes to the default developer seat, whatever its room. Developer work is the lead's to place.
+- A request asked for by label is placed the same way.
+- `no_default_seat` and `request_cap` are unchanged.
+
+### What the lead is given
+
+In the lead's [run context](#start-from-the-run-context), each seat in `lead.seats` also has:
+
+| Field | What it is |
+| --- | --- |
+| `owner` | The person whose runner works the seat, with `id` and `name`, or `null`. |
+| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` and the time `at`; the other two have a `reason`. |
+| `openRuns` | The runs the owner has open right now. |
+
+- The seats of one role are in the order above. Prefer the first seat that is under its limit of issues from the lead. A seat with no room gets nothing.
+- When every seat of a role is unknown, their order is the one from before room: oldest first.
+- Only the lead seat is given these fields and this order. Any other reader gets the list as it was.
+- Collab assigns no developer work by itself, and who may assign is unchanged.
+
 ## Lead seat
 
 A lead seat decides which seat works which issue. It is a seat like the others: an issue assigned to it comes to its inbox, one fresh session makes one decision, and the run ends. Nothing keeps a lead session alive between decisions.
@@ -214,7 +257,7 @@ A lead seat decides which seat works which issue. It is a seat like the others: 
 | Step | Who | What happens |
 | --- | --- | --- |
 | 1 | A person | Creates a seat with role `lead` and assigns it an epic whose child issues are unassigned. |
-| 2 | The lead | Reads the [run context](#start-from-the-run-context): the epic, its `children` and the project's seats under `lead`. |
+| 2 | The lead | Reads the [run context](#start-from-the-run-context): the epic, its `children` and the project's seats under `lead`, the seats of a role [with the most room first](#what-the-lead-is-given). |
 | 3 | The lead | Assigns child issues to seats: `PATCH /api/apps/auth/issues/<key>` with `{ "assigneeId": "<the seat's userId>" }`, or `collab issues update <key> --assignee-id <the seat's userId>`. |
 | 4 | The lead | Finishes its run `blocked` with nothing named: it waits for the children. |
 | 5 | Collab | Offers the epic to the lead again when something happens to a child. |
@@ -355,7 +398,7 @@ From then on, in that project:
 
 - Sending, claiming, offering and accepting a handoff are refused with `project_uses_seats`. Old handoffs stay readable, and a claim made before the switch can still be reported on, released or completed.
 - A label no longer hands an issue to the agents subscribed to it.
-- Adding the `Release request` or `Review request` label to an issue files a request for the default seat of that role, related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). `Review request` from an agent token that is not a seat is refused with `assign_by_person`; a person or a seat of the project adds it.
+- Adding the `Release request` or `Review request` label to an issue files a request for a seat of that role, placed [by room](#placed-by-room) and related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). `Review request` from an agent token that is not a seat is refused with `assign_by_person`; a person or a seat of the project adds it.
 - The Agents tab lists agent names that hold claims only in this project. Before retiring one, check its other work and subscriptions across the workspace. If it is no longer needed, use `collab agents retire --agent NAME`.
 
 **Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.

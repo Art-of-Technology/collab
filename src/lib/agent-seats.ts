@@ -187,6 +187,38 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
 }
 
 /**
+ * The seats of a project that are not retired, of one role when one is named, oldest first: the order they had before
+ * work was placed by room. Each comes with what placing reads: its room, and the runs its owner has open right now on
+ * any seat of the workspace (a seat without an owner counts its own).
+ */
+export async function seatsWithRoom(db: DB, projectId: string, role?: string, now = new Date()) {
+  const seats = await db.agentSeat.findMany({ where: { projectId, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true,
+      room: true, roomProgram: true, roomAt: true, owner: { select: { id: true, name: true } } } });
+  if (!seats.length) return [];
+  const { workspaceId } = seats[0], owners = seats.flatMap(seat => seat.ownerId ?? []);
+  const runners = await db.agentRunner.findMany({ where: { workspaceId, ownerId: { in: owners }, removedAt: null }, select: { ownerId: true, state: true, lastSeenAt: true } });
+  const open = await db.agentRun.findMany({ where: { workspaceId, endedAt: null, seat: { OR: [{ ownerId: { in: owners } }, { id: { in: seats.map(seat => seat.id) } }] } },
+    select: { seatId: true, seat: { select: { ownerId: true } } } });
+  return seats.map(({ room, roomProgram, roomAt, ...seat }) => ({ ...seat,
+    room: seatRoom({ byRunner: seat.byRunner, room, roomProgram, roomAt }, runners.find(runner => runner.ownerId === seat.ownerId) ?? null, now),
+    openRuns: open.filter(run => seat.ownerId ? run.seat?.ownerId === seat.ownerId : run.seatId === seat.id).length }));
+}
+
+/**
+ * The one order work is placed by, for the lead's list and for requests. Seats with a number first, most room first;
+ * then the seats whose room is unknown; the seats with no room last. Equal standing: the seat whose owner has the
+ * fewest open runs, then the role's default seat, then the order given. When every seat is unknown there is nothing to
+ * place by, and the order given stands: that is how work was placed before room.
+ */
+export function byRoom<T extends { room: SeatRoom; openRuns: number; isDefault: boolean }>(seats: T[]): T[] {
+  if (seats.every(seat => seat.room.kind === 'unknown')) return [...seats];
+  // A number is above 0, so unknown and no room sort below every number.
+  const standing = ({ room }: T) => room.kind === 'room' ? room.room : room.kind === 'unknown' ? -1 : -2;
+  return [...seats].sort((a, b) => standing(b) - standing(a) || a.openRuns - b.openRuns || +b.isDefault - +a.isDefault);
+}
+
+/**
  * Rule 2 for a route that lets seats write: a seat writes only to its own project. No effect for people and
  * for tokens that are not seats. A retired seat writes nothing, so retiring never widens what its tokens may do.
  * Rule 8 is the one way out, and only the route that creates a comment passes `commentOn`: a seat comments on a

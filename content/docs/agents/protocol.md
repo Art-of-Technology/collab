@@ -117,11 +117,24 @@ You do not do the work. You decide which seat gets which child issue of the epic
 
 | Step | What you do |
 | --- | --- |
-| 1 | Read the run context. `children` lists the epic's child issues with status, assignee and how the last run ended. `lead.seats` lists the project's other seats, each with `openFromLead`, and `lead.cap` is the limit. |
-| 2 | Assign child issues in the order the epic gives: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. |
+| 1 | Read the run context. `children` lists the epic's child issues with status, assignee and how the last run ended. `lead.seats` lists the project's other seats, each with `openFromLead`, `room` and its owner's `openRuns`, and `lead.cap` is the limit. |
+| 2 | Assign child issues in the order the epic gives, each to the seat the table below names: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. |
 | 3 | Finish with outcome `blocked` and nothing named. That means: waiting for the children. |
 | 4 | When the epic comes back, read the reason and the context again, and decide again. |
 | 5 | When every child is done, finish the epic with outcome `done`. |
+
+Which seat gets the next issue. `lead.seats` lists the seats of a role with the most room first:
+
+| The seat's `room.kind` | What you do |
+| --- | --- |
+| `room` | Prefer the first seat that is under its limit: `openFromLead` below `lead.cap`. |
+| `unknown` | It comes after the seats with a number. Use it when none of those is under its limit. |
+| `no_room` | Give it nothing. |
+
+- Equal room: the seat whose owner has the fewest open runs is listed first, then the default seat.
+- When every seat is `unknown`, the order is the one from before room: the oldest seat first. Assign as you did then.
+
+The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).
 
 - `lead_cap`: the seat has its limit of open issues from you. Do not try another route. Finish and wait.
 - `assign_by_person`: someone else decided who has that issue. Leave it.

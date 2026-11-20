@@ -262,7 +262,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
 | `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. |
-| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. |
+| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
 An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
@@ -286,7 +286,13 @@ The reply names the new issue:
 { "issue": { "id": "cm3issue000042", "issueKey": "BB-7" } }
 ```
 
-A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person.
+A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person. So does a request to a role whose seats are all known to have no room.
+
+When the role has more than one seat that could take the request, Collab [places it by room](/docs/agents/seats#where-a-request-goes) and the reply says where it went:
+
+```json
+{ "issue": { "id": "cm3issue000042", "issueKey": "BB-7" }, "placed": { "seat": "Reviewer (Bob)", "why": "most room" } }
+```
 
 A `security` request adds `"blocks": true`: it blocks the source issue whatever `blocks` said.
 
@@ -429,7 +435,7 @@ What Collab makes of it:
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
-Collab stores the figure today. It does not show it or place work by it yet, so reporting changes nothing else.
+Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It does not show the figure on a page yet.
 
 ### Renewal
 
