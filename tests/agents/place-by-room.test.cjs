@@ -99,13 +99,6 @@ test('place by room: the lead is given seats in order of room, and a request goe
   };
   const names = (list, role) => list.filter(entry => entry.role === role).map(entry => entry.name);
 
-  await t.test('a replacement runner cannot inherit the previous runner’s figure', async () => {
-    await rooms({ room: 90 }, { room: 50 }, { room: 30 });
-    await raw.agentRunner.updateMany({ where: { ownerId: cem }, data: { admittedAt: new Date() } });
-    const list = (await listed()).filter(entry => entry.role === 'developer');
-    assert.deepEqual(list.map(entry => [entry.name, entry.room.kind]), [['dev-bob', 'room'], ['dev-deniz', 'room'], ['dev-cem', 'unknown']]);
-  });
-
   await t.test('the lead: different room puts the most room first, and every field that was there stays', async () => {
     await rooms({ room: 6 }, { room: 60 }, { room: 85 });
     const list = await listed();
@@ -232,6 +225,38 @@ test('place by room: the lead is given seats in order of room, and a request goe
     const theirs = await issue({ projectId: B, statusId: `${B}-to_do`, assigneeId: devB.userId });
     for (let n = 0; n < 5; n++) assert.equal((await filed(devB, { project: 'AA' }, theirs)).to, 'rev-deniz');
     assert.deepEqual((await file(devB, { project: 'AA' }, theirs)).map(part => part.error ?? part), [429, 'request_cap']);
+  });
+
+  await t.test('a label holds the row of the seat that gets the request and no other, and a seat retired meanwhile gets none', async () => {
+    await raw.project.update({ where: { id: A }, data: { agentMode: 'seats' } });
+    const label = [{ id: 'review-label', name: 'Review request' }];
+    const assigned = async to => (await raw.issue.findFirstOrThrow({ where: { agentRequestRole: 'review', sourceRelations: { some: { targetIssueId: to.id } } }, include: { assignee: true } })).assignee.name;
+    // While the label's transaction is open: the seat that got the request cannot be changed, the role's other seats can,
+    // which is what lets a retirement make one of them the default.
+    const held = await issue();
+    await raw.$transaction(async tx => {
+      await lib.labelRequests(tx, owner, held, label);
+      await raw.agentSeat.update({ where: { id: rev2.id }, data: { lastSeenAt: new Date() } });
+      await assert.rejects(raw.$transaction(async other => {
+        await other.$executeRaw`SET LOCAL lock_timeout = '200ms'`;
+        await other.agentSeat.update({ where: { id: rev3.id }, data: { lastSeenAt: new Date() } });
+      }), 'the row of the seat that got the request is held');
+    });
+    assert.equal(await assigned(held), 'rev-deniz');
+    // Retired between the read of the seats and the lock on the one chosen: the seats are read again.
+    const raced = await issue();
+    await raw.$transaction(async tx => {
+      const find = tx.agentSeat.findMany;
+      tx.agentSeat.findMany = async (...args) => {
+        const found = await find.apply(tx.agentSeat, args);
+        tx.agentSeat.findMany = find;
+        await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: new Date() } });
+        return found;
+      };
+      await lib.labelRequests(tx, owner, raced, label);
+    });
+    assert.equal(await assigned(raced), 'rev-bob', 'the next seat by room, not the one that was retired');
+    await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: null } });
   });
 
   await t.test('a request asked for by label is placed the same way', async () => {

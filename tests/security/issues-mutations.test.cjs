@@ -33,7 +33,6 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
     projectStatus: { findMany: async () => [] },
     taskLabel: { count: async () => 0 },
     issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
-    $executeRaw: async () => 0,
     $transaction: async fn => fn(db),
   };
   const permissionModule = load('src/lib/permissions.ts', { './prisma': { prisma: {} } });
@@ -150,7 +149,6 @@ test('review: issue field grants and atomic same-workspace project moves preserv
     issueAssignee: { upsert: async () => { assignments++; } },
     user: { findUnique: async ({ where }) => ({ id: where.id, name: where.id }) },
     issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
-    $executeRaw: async () => 0,
     $transaction: async (fn, options) => {
       assert.equal(options.isolationLevel, 'Serializable');
       const before = structuredClone(state);

@@ -47,12 +47,18 @@ export async function startPairing(name: string) {
   });
 }
 
-/** End a runner inside a transaction: its credential is refused from now on and the tokens it fetched are revoked. */
+/**
+ * End a runner inside a transaction: its credential is refused from now on, the tokens it fetched are revoked, and the
+ * room it reported is forgotten, so the runner that comes after it starts with no figure. A report takes the runner's
+ * row before it writes, so none of this runner's lands after this.
+ */
 async function end(tx: Prisma.TransactionClient, workspaceId: string, actorId: string, runner: { id: string; name: string }, reason: 'removed' | 'replaced' | 'goodbye') {
   // The row first: a fetch that is making a token holds it, so this waits for that token and revokes it too.
   await tx.$queryRaw`SELECT "id" FROM "AgentRunner" WHERE "id" = ${runner.id} FOR UPDATE`;
   const now = new Date();
-  if (!(await tx.agentRunner.updateMany({ where: { id: runner.id, removedAt: null }, data: { removedAt: now } })).count) return 0;
+  const [ended] = await tx.agentRunner.updateManyAndReturn({ where: { id: runner.id, removedAt: null }, data: { removedAt: now }, select: { ownerId: true } });
+  if (!ended) return 0;
+  if (ended.ownerId) await tx.agentSeat.updateMany({ where: { workspaceId, ownerId: ended.ownerId, roomAt: { not: null } }, data: { room: null, roomProgram: null, roomAt: null } });
   const revoked = await tx.appToken.updateManyAndReturn({ where: { runnerId: runner.id, isRevoked: false }, data: { isRevoked: true, revokedAt: now }, select: { id: true } });
   await tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'agent_runner.removed',
     details: { runnerId: runner.id, name: runner.name, reason, revokedTokens: revoked.map(token => token.id) } } });

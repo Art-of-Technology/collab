@@ -207,7 +207,6 @@ export async function POST(req: Request) {
         if (refusal) return NextResponse.json(refusal, { status: 422 });
 
         const issue = await prisma.$transaction(async (tx) => {
-          if (params.labels?.length) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${project.id}`}))`;
           const issueKey = await allocateIssueKey(tx, project.id);
           const created = await tx.issue.create({
             data: {

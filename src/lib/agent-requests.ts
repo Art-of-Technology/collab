@@ -109,20 +109,30 @@ function placeRequest<T extends { room: SeatRoom; openRuns: number; isDefault: b
 
 /**
  * What every request has, however it was asked for: a Task in `projectId`, reported by `me`, assigned to a seat of the
- * role in that project and linked to its source. Call it inside a transaction in which no seat of the role can be retired.
+ * role in that project and linked to its source. The seat it goes to cannot be retired until the caller's transaction
+ * ends: its row is held here.
  */
 async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; role: RequestRole;
   title: string; body: string; source: { id: string; issueKey: string | null; projectId: string; priority: string }; blocks?: boolean; labelId?: string }) {
   const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
   const now = new Date();
-  const seats = await seatsWithRoom(tx, projectId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
-  if (!fallback) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
-  // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
-  if (fallback.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
-  // Developer work is the lead's to place, and a role with one seat to give it to leaves nothing to choose: both go to
-  // the default seat with nothing said, as before room.
-  const able = input.role === 'developer' ? [] : seats.filter(seat => seat.userId !== me);
-  const placed = able.length > 1 ? placeRequest(able, fallback) : null, to = placed?.seat ?? fallback;
+  const place = async () => {
+    const seats = await seatsWithRoom(tx, projectId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
+    if (!fallback) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
+    // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
+    if (fallback.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
+    // Developer work is the lead's to place, and a role with one seat to give it to leaves nothing to choose: both go to
+    // the default seat with nothing said, as before room.
+    const able = input.role === 'developer' ? [] : seats.filter(seat => seat.userId !== me);
+    const placed = able.length > 1 ? placeRequest(able, fallback) : null;
+    return { placed, to: placed?.seat ?? fallback };
+  };
+  let { placed, to } = await place();
+  // The row of the seat that gets the request, and only that one: retiring a seat takes its row first and waits, and
+  // holding the role's other rows would deadlock with a retirement that makes one of them the default. `fileRequest`
+  // holds the project's seat lock besides; a label does not, because it already holds its issue, and the other order
+  // could deadlock. A seat retired between the read and the lock is no seat any more: the seats are read again.
+  while (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "retiredAt" IS NULL FOR SHARE`).length) ({ placed, to } = await place());
   await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: input.role }, to.userId);
   if (input.from && input.from !== projectId) {
     // A request is from a project when a seat of that project reported it.
@@ -199,7 +209,6 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     }
     if (await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
       sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
-    await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "retiredAt" IS NULL ORDER BY "id" FOR SHARE`;
     // shortcut: an issue edit is serializable, so it does not see an issue the same token created for a seat after the edit
     // began; in that instant the count can end one over the cap. A counter row per account closes it if that matters.
     if (agent && await seatHandoffCapReached(tx, me)) {

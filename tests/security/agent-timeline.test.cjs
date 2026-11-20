@@ -31,6 +31,11 @@ test('agent timeline identifies each agent and the work transition', () => {
   assert.equal(helpers.getActionText({ action: 'CREATED', user: { name: 'Cem' } }), 'Cem created this issue');
 });
 
+test('a request placed by room says on its timeline which seat got it and why', () => {
+  const activity = { action: 'REQUEST_PLACED', details: { toSeatId: 'seat-b', to: 'Reviewer (Bob)', why: 'most room' }, user: { name: 'Developer' }, createdAt: new Date() };
+  assert.match(renderToStaticMarkup(React.createElement(ActivityItem, { activity })), /Collab sent this request to Reviewer \(Bob\): most room/);
+});
+
 
 test('run notes and handoffs render sanitized Markdown', () => {
   for (const action of ['AGENT_RUN_FINISHED', 'AGENT_PROGRESS']) {

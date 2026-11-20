@@ -73,8 +73,6 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
   // The same person's seat in another workspace, which a runner admitted in `w` does not run.
   const elsewhere = (await seats.createSeat({ workspaceId: 'w2', actorId: owner, projectId: B, role: 'developer', ownerId: person, name: 'far', expiresInDays: 30, byRunner: true })).seat;
   const mac = await runner('mac', person), theirs = await runner('their-mac', other);
-  // The backdated reports below must still be newer than their runner's admission.
-  await prisma.agentRunner.updateMany({ where: { workspaceId: 'w' }, data: { admittedAt: new Date(Date.now() - 30 * MINUTE) } });
   let have;
 
   await t.test('a runner that sends none of the new fields is answered as before and changes nothing', async () => {
@@ -287,7 +285,29 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     await prisma.workspaceMember.update({ where: { id: member.id }, data: { status: true } });
 
     assert.equal((await duringRead(() => runners.removeRunner({ workspaceId: 'w', actorId: person, runnerId: current.id }), denied))[0], 401);
-    assert.deepEqual(await row(dev.id), stored);
+    // The refused report stored nothing, and the runner that went took its figure with it.
+    assert.deepEqual(await row(dev.id), { room: null, roomProgram: null, roomAt: null });
     assert.equal((await prisma.agentRunner.findUniqueOrThrow({ where: { id: current.id } })).state, 'working');
+  });
+
+  await t.test('a figure does not outlive its runner or its seat', async () => {
+    const none = { room: null, roomProgram: null, roomAt: null };
+    const figure = { rooms: [{ seat: dev.id, room: 40, program: 'Codex' }] };
+    const second = await runner('second-mac', person);
+    await ask(second, { have: [], ...figure });
+    assert.deepEqual(await read(dev.id), ['room', 40]);
+    // Replaced: the runner that comes after starts with no figure, however new the last one is, and the old one sets none.
+    const third = await runner('third-mac', person);
+    assert.deepEqual(await row(dev.id), none);
+    assert.equal((await ask(second, { have: [], ...figure }))[0], 401);
+    await ask(third, { have: [] });
+    assert.deepEqual(await read(dev.id), ['unknown', 'no figure was reported']);
+    // Only that person's seats: the other person's keeps its own.
+    assert.equal((await row(rev.id)).room, 30);
+    // A seat retired and made again, here for another person, starts with none either.
+    await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: rev.id });
+    assert.equal((await row(rev.id)).room, 30);
+    const again = await seat('rev', 'reviewer', person, { byRunner: true });
+    assert.deepEqual([again.id, again.ownerId, await row(rev.id)], [rev.id, person, none]);
   });
 });

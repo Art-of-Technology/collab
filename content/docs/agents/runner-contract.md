@@ -421,6 +421,7 @@ Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields 
 
 - **Only percentages and program names are sent.** No login, account, plan or billing detail is ever sent: a runner has no field to put one in, and any other key is refused.
 - Collab stores a figure with the time it arrived, by its own clock. Send the figures with every call: a figure at least 15 minutes old counts as unknown.
+- A figure does not outlive its runner. When a runner is removed or replaced, the figures of its person's seats are dropped: send them again after pairing. A seat that is retired and made again starts with none.
 - A call without `state` and `rooms` stores no state and no figure, and is answered exactly as before.
 - A value outside the table is `400 invalid_request`, and a body over 64 KiB is `413 body_too_large`. Nothing of that call is stored and no seats are answered.
 - A figure for a seat that this call's answer does not list is not stored. The call is still answered, and the answer names those seats' ids under `refused`. That happens when a seat was retired since your last call: stop running it, as in step 5.
