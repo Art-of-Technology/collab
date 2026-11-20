@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { cloudinary } from '@/utils/cloudinary-server';
+import { FileStorageError, fileStorageConfigured, openObject, removeObject, storeObject } from '@/lib/file-storage';
 import { detectFileType } from '@/lib/context-file-type';
 import {
   contextPreviewKind, csvPreview, decodePreviewText, isInlinePreview, MAX_CONTEXT_PREVIEW_BYTES, PreviewFile,
@@ -13,8 +13,8 @@ import {
  * Files in Context folders.
  *
  * A file lives in one folder and is read by whoever reads that folder: the members of its workspace.
- * Its bytes are kept with the storage the other uploads use, as an authenticated asset, so the storage
- * address alone serves nothing — a copied link is useless to anyone. Every read goes through
+ * Its bytes are kept in Collab's own bucket, which only this server reaches, so there is no storage
+ * address to copy or pass on. Every read goes through
  * `/api/context/files/[id]/download`, which asks who is calling first and then hands the bytes over as
  * an attachment that cannot run as a page of Collab's site.
  *
@@ -30,7 +30,7 @@ import {
 export const MAX_CONTEXT_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_CONTEXT_FILE_NAME = 200;
 
-const STORAGE_FOLDER = 'collab/context';
+const STORAGE_PREFIX = 'context';
 
 // `storageUrl` is left out of every read: where the bytes are is the server's business.
 const FILE_FIELDS = {
@@ -97,34 +97,26 @@ function assertCanManage(file: LoadedFile, userId: string) {
   }
 }
 
-function storageConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+/** What a storage failure is to a caller: storage that is not there, or bytes that did not arrive. */
+function storageFailure(error: unknown, message: string): unknown {
+  if (!(error instanceof FileStorageError)) return error;
+  return error.reason === 'not_configured'
+    ? new ContextFolderError(503, 'File storage is not configured')
+    : new ContextFolderError(502, message);
 }
 
-/**
- * The bytes go up as a raw, authenticated asset: storage names it, and its address needs a signature
- * this server makes before it serves anything.
- */
-async function storeBytes(bytes: Uint8Array): Promise<{ url: string; publicId: string }> {
-  if (!storageConfigured()) throw new ContextFolderError(503, 'File storage is not configured');
-  const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder: STORAGE_FOLDER, resource_type: 'raw', type: 'authenticated', use_filename: false },
-      (error, uploaded) => {
-        if (!error && uploaded?.secure_url) return resolve(uploaded as { secure_url: string; public_id: string });
-        // Storage failures can name hosts and keys, so the caller is told what happened, not where.
-        console.error('context_file_storage_write_failed', { reason: error ? 'rejected' : 'empty' });
-        reject(new ContextFolderError(502, 'This file could not be stored'));
-      },
-    );
-    stream.end(Buffer.from(bytes));
-  });
-  return { url: result.secure_url, publicId: result.public_id };
+/** The bytes go into the bucket under a name storage makes up, so an upload never replaces another. */
+async function storeBytes(bytes: Uint8Array): Promise<{ url: string; key: string }> {
+  if (!fileStorageConfigured()) throw new ContextFolderError(503, 'File storage is not configured');
+  try {
+    const key = await storeObject(STORAGE_PREFIX, bytes);
+    return { url: `storage:${key}`, key };
+  } catch (error) { throw storageFailure(error, 'This file could not be stored'); }
 }
 
 /** This server writes these addresses itself, so what they name is known. */
-export function storagePublicId(storageUrl: string): string {
-  const match = /\/raw\/authenticated\/(?:s--[^/]+--\/)?(?:v\d+\/)?(.+)$/.exec(storageUrl);
+export function storageKey(storageUrl: string): string {
+  const match = /^storage:(context\/[0-9a-f-]{36})$/.exec(storageUrl);
   if (!match) throw new ContextFolderError(500, 'This file is not where it says it is');
   return match[1];
 }
@@ -161,8 +153,7 @@ export async function uploadContextFile(userId: string, input: { folderId: unkno
     });
   } catch (error) {
     // Without its row the file does not exist, so the bytes do not stay behind either.
-    await cloudinary.uploader.destroy(stored.publicId, { resource_type: 'raw', type: 'authenticated' })
-      .catch(() => console.error('context_file_orphan_bytes', { publicId: stored.publicId }));
+    await removeObject(stored.key).catch(() => console.error('context_file_orphan_bytes', { key: stored.key }));
     throw error;
   }
 }
@@ -210,21 +201,12 @@ export async function restoreContextFile(userId: string, id: unknown) {
   });
 }
 
-/**
- * The stored bytes. The signed address is made here and used here; it never reaches the caller, so
- * nothing that outlives this request can be passed on.
- */
+/** The stored bytes. Only this server can ask storage for them, so nothing that outlives this request is passed on. */
 async function openStorage(file: { storageUrl: string }): Promise<ReadableStream<Uint8Array>> {
-  if (!storageConfigured()) throw new ContextFolderError(503, 'File storage is not configured');
-  const signed = cloudinary.url(storagePublicId(file.storageUrl), {
-    resource_type: 'raw', type: 'authenticated', sign_url: true, secure: true,
-  });
-  const response = await fetch(signed);
-  if (!response.ok || !response.body) {
-    console.error('context_file_storage_read_failed', { status: response.status });
-    throw new ContextFolderError(502, 'This file could not be read from storage');
-  }
-  return response.body;
+  if (!fileStorageConfigured()) throw new ContextFolderError(503, 'File storage is not configured');
+  try {
+    return await openObject(storageKey(file.storageUrl));
+  } catch (error) { throw storageFailure(error, 'This file could not be read from storage'); }
 }
 
 /** The bytes, for whoever may read the folder. */

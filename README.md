@@ -152,6 +152,15 @@ Collab is designed to streamline internal communication and work tracking by off
    CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
    ```
 
+   #### File Storage (your own S3-compatible bucket)
+   Files in Context folders are kept in a bucket that only the server reaches. Without these settings an upload answers `503 File storage is not configured`.
+   ```bash
+   FILE_STORAGE_ENDPOINT="https://s3.example.internal"
+   FILE_STORAGE_BUCKET="collab"
+   FILE_STORAGE_ACCESS_KEY="a-key-limited-to-this-bucket"
+   FILE_STORAGE_SECRET_KEY="its-secret"
+   ```
+
    ### Optional Variables
 
    #### AI Features (OpenAI)

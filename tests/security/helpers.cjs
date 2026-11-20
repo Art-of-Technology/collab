@@ -64,6 +64,11 @@ function load(file, dependencies = {}, globals = {}) {
         if (name !== '@/lib/context-folders') dependencies[name] ||= load(`src/${name.slice(2)}.ts`, shared, globals);
         return dependencies[name];
       }
+      // The real storage client: it signs its requests and sends them through the fixture's fetch.
+      if (!(name in dependencies) && name === '@/lib/file-storage') {
+        dependencies[name] = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, { setTimeout, ...globals });
+        return dependencies[name];
+      }
       if (!(name in dependencies) && name === '@/lib/forge/legacy-write-guard') {
         return load('src/lib/forge/legacy-write-guard.ts', {
           'server-only': {}, './reader': { readForgeBindings: async () => [] },
