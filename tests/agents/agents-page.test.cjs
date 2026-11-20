@@ -222,6 +222,8 @@ test('the Agents page reads the seats a person may see, what each works on and w
 
     // The third person's runner connects: a fresh figure is a number, an old one is unknown, and a paused runner has no room.
     await runner('r-other', other);
+    assert.deepEqual((await rooms(other))['x-old'], { kind: 'unknown', reason: 'the figure is older than 15 minutes' });
+    await raw.agentRunner.update({ where: { id: 'r-other' }, data: { state: 'working' } });
     assert.deepEqual(await rooms(other), { 'o-dev': null, 'o-rev': null, 'm-dev': null, 'm-rev': null, 'm-lead': null, 'n-dev': null,
       'x-dev': { kind: 'room', room: 83, program: 'OtherProgram', at },
       'x-old': { kind: 'unknown', reason: 'the figure is older than 15 minutes', live: true } });
