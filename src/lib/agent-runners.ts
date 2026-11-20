@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { createAgentToken } from '@/lib/agent-tokens';
+import { markNoRoom, saysNoRoom } from '@/lib/agent-seats';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -227,8 +228,9 @@ export async function revokeProjectRunnerTokens(tx: Prisma.TransactionClient, wo
  * The ask may carry a `report` (CLB-774): the runner's own state, and per seat the room it has left and the program it
  * would run next. A figure is stored, with the time it arrived, only for a seat this ask lists; any other seat's id is
  * answered under `refused` and nothing is stored for it, so a seat retired since the runner's last ask does not cost
- * the runner its answer. An ask without a report makes no report writes and is answered as before. The credential
- * does nothing else.
+ * the runner its answer. A report also opens or ends each seat's spell without room (`markNoRoom` in
+ * src/lib/agent-seats.ts), which is how Collab later knows for how long a seat has had none (CLB-780). An ask without
+ * a report makes no report writes and is answered as before. The credential does nothing else.
  */
 export async function fetchSeats(credential: string, have: string[],
   report: { state?: typeof RUNNER_STATES[number]; rooms?: { seat: string; room: number; program: string }[] } = {}) {
@@ -253,14 +255,25 @@ export async function fetchSeats(credential: string, have: string[],
   // The runner and its person are asked again on their rows, as for a token: a runner removed or replaced, or a
   // person switched off, since this ask began stores nothing.
   if (report.state || report.rooms?.length) await prisma.$transaction(async tx => {
-    if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR UPDATE`).length) throw refused();
+    // The state is read on the row this holds: reports of one runner come one at a time, so "until now" is what the one before left.
+    const [held] = await tx.$queryRaw<{ state: string | null }[]>`SELECT "state" FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR UPDATE`;
+    if (!held) throw refused();
     await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${ownerId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
     if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
+    // The report's time, taken behind that row: reports of one runner are timed in the order they are handled.
+    const at = new Date();
+    const until = await tx.agentSeat.findMany({ where: { id: { in: seats.map(seat => seat.id) }, ...mine }, select: { id: true, userId: true, room: true, roomAt: true } });
     if (report.state) await tx.agentRunner.update({ where: { id: runner.id }, data: { state: report.state } });
     for (const { seat: id, room, program } of report.rooms ?? []) {
       if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
-        data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
+        data: { room, roomProgram: program, roomAt: at } })).count) notStored.push(id);
     }
+    // Since when a seat has had no room is what moves its work (CLB-780): each seat's spell is kept in step with what was just said.
+    await markNoRoom(tx, workspaceId, until.map(seat => {
+      const told = notStored.includes(seat.id) ? undefined : report.rooms?.find(row => row.seat === seat.id);
+      return { id: seat.id, userId: seat.userId, before: saysNoRoom(seat, held.state, at),
+        after: saysNoRoom(told ? { room: told.room, roomAt: at } : seat, report.state ?? held.state, at) };
+    }), at);
   });
   const held = seats.length ? await prisma.appToken.findMany({ where: { runnerId: runner.id, userId: { in: seats.map(seat => seat.userId) }, isRevoked: false, tokenExpiresAt: { gt: now } },
     orderBy: { createdAt: 'desc' }, select: { id: true, userId: true, tokenExpiresAt: true, createdAt: true } }) : [];

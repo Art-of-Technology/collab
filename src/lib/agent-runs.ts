@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { HandoffError, LEAD_CAP, NOT_DONE, byRoom, fromLead, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
+import { HandoffError, LEAD_CAP, NOT_DONE, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
@@ -23,7 +23,9 @@ const ORDER: Record<string, number> = { resume: 0, in_review: 1, blocked: 2 };
 
 export interface InboxItem {
   issueId: string; issueKey: string | null; title: string; priority: string; category: string;
-  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'assigned'; lastRunAt: string | null;
+  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'child_no_room' | 'assigned'; lastRunAt: string | null;
+  /** With `child_no_room`: the child issues to move, each with the seat it sits on and why that seat has no room. */
+  noRoom?: { issueKey: string | null; seat: string; reason: string }[];
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -40,8 +42,9 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * last assigned to the caller says nothing: the assignment is new work. An issue in review or blocked is
  * offered only when something happened after its reference time: the end of that run, or without one the
  * time it was last assigned to the caller. For a lead seat whose last run on an issue finished blocked, what happened
- * to the issue's children since that run started counts too: one reached done, one's run finished blocked, or one
- * has sat with a seat for `CHILD_IDLE_MS` without a run.
+ * to the issue's children since that run started counts too: one reached done, one's run finished blocked, one
+ * has sat with a seat for `CHILD_IDLE_MS` without a run, or one that no run ever started on sits on a developer seat
+ * that has had no room for `NO_ROOM_MOVE_MS` while another developer seat could take it (`child_no_room`, CLB-780).
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   await markLost(context.workspace.id);
@@ -96,11 +99,36 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
 
   // Only a lead waits for children, so nobody else pays for this read.
   const children = seat?.role === 'lead' && waiting.length ? await prisma.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
-    parentId: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect, assignee: { select: { agentSeat: { select: { id: true } } } },
-    helpers: { select: { userId: true, assignedAt: true, approvedAt: true } },
+    parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
+    assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
+    helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
     agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
   } }) : [];
   const now = Date.now();
+
+  // CLB-780. Developer work is the lead's to move, and only what the lead may move is offered: a child the lead itself
+  // placed, on a developer seat, on which no run ever started. Its seat has had no room for long enough, and another
+  // developer seat has a number and is under its limit of issues from the lead: otherwise there is nowhere to move it.
+  const unstarted = children.filter(child => !isDone(child) && !child.agentRequestRole && !child.agentRuns.length && child.assignee?.agentSeat?.role === 'developer'
+    && child.helpers.some(row => row.userId === child.assigneeId && row.approvedBy === me));
+  const full = new Map<string, { seat: string; reason: string; due: Date }>();
+  if (seat && unstarted.length) {
+    const developers = await seatsWithRoom(prisma, seat.projectId, 'developer', new Date(now));
+    let free = false;
+    for (const developer of developers) {
+      if (!free && developer.room.kind === 'room') free = await prisma.issue.count({ where: fromLead(seat.projectId, me, developer.userId) }) < LEAD_CAP;
+    }
+    for (const developer of free ? developers : []) {
+      if (developer.room.kind !== 'no_room' || !unstarted.some(child => child.assigneeId === developer.userId)) continue;
+      const due = await noRoomDue(prisma, developer, new Date(now));
+      if (due && due.getTime() <= now) full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due });
+    }
+  }
+  // Once per spell without room: the moment the seat had had none for long enough is after the lead last looked.
+  const noRoomOf = (issueId: string, ranBlocked: Date | null) => unstarted.flatMap(child => {
+    const held = ranBlocked && child.parentId === issueId ? full.get(child.assigneeId!) : undefined;
+    return held && held.due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason }] : [];
+  });
 
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
@@ -136,6 +164,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       const assigned = (held?.approvedAt ?? held?.assignedAt ?? child.createdAt).getTime(), due = assigned + CHILD_IDLE_MS;
       return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && unseen(new Date(due)) && due <= now;
     })) return 'child_idle';
+    if (noRoomOf(issue.id, ranBlocked).length) return 'child_no_room';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
@@ -144,8 +173,8 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
-    .map(({ issue, last, category, reason }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
-      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null })) };
+    .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
+      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
 }
 
 const text = (max: number) => z.string().trim().min(1).max(max);

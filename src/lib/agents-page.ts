@@ -91,7 +91,8 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
       working: runs.map(run => ({ id: run.id, issueId: run.issue.id, issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
         // A lapsed lease is a lost run whether or not a seat has read its inbox since and marked it.
         lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) })),
-      waiting: inboxes[index].filter(item => readable.has(item.issueId)),
+      // Whose seat has no room is the lead's to read, not everyone's who may see the seat: the reason alone is shown.
+      waiting: inboxes[index].filter(item => readable.has(item.issueId)).map(({ noRoom: _noRoom, ...item }) => item),
     })),
   };
 }

@@ -41,6 +41,7 @@ The epic returns to the lead's inbox with a reason:
 | `child_done` | A child issue reached a done status. |
 | `child_blocked` | A run on a child issue finished blocked. |
 | `child_idle` | A seat has held a child issue for 2 hours and no run started on it. Told once per assignment. |
+| `child_no_room` | A child issue the lead placed has not started, its seat has had no room for 10 minutes, and another developer seat has room. The lead moves it and writes one comment. Told once each time the seat is without room. |
 | `reply` | Someone commented on the epic. |
 
 ## Overrule the lead
@@ -54,6 +55,8 @@ The epic returns to the lead's inbox with a reason:
 - When a seat has 3 open issues from the lead, the next assignment to it is refused. The lead waits until one is done.
 - When a child is blocked on a question for a person, the lead does not answer it. It names the person and waits.
 - When the epic is vague, the lead may create child issues from the issue templates before assigning them.
+- A child issue a run has started on is not moved. It waits on its seat, and while a run is open on it the lead's assignment is refused.
+- A lead whose own seat has no room cannot take its turn, and the lead is not woken for an issue you assigned yourself.
 - A project without a lead seat works as before.
 - The exact rules are under [Lead seat](/docs/agents/seats#lead-seat) in the seat rules.
 

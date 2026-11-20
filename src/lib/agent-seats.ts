@@ -21,6 +21,10 @@ export const LEAD_CAP = 3;
 export const IDLE_MS = 10 * 60_000;
 /** A room figure older than this says nothing any more. */
 export const ROOM_FRESH_MS = 15 * 60_000;
+/** A seat that has had no room for this long gives up the work no run has started on. */
+export const NO_ROOM_MOVE_MS = 10 * 60_000;
+/** The audit rows that open and end a spell in which a seat's runner says the seat has no room: see `markNoRoom`. */
+const NO_ROOM = 'agent_seat.no_room', ROOM_BACK = 'agent_seat.room_back';
 /** The issues that are not in a status of the done group. */
 export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
 /** The open issues a seat holds because the lead gave them to it: the lead's hand is on the row that made the seat the assignee. */
@@ -202,13 +206,68 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
 }
 
 /**
+ * What a runner itself says, whatever the clock says about the runner: it is paused or its disk is full, or the seat's
+ * fresh figure is 0. These are the causes of no room that no stored time marks; a runner that is offline or gone has one.
+ */
+export const saysNoRoom = (seat: { room: number | null; roomAt: Date | null }, state: string | null, now: Date) =>
+  (!!state && state !== 'working') || (seat.room !== null && seat.room <= 0 && !!seat.roomAt && seat.roomAt.getTime() > now.getTime() - ROOM_FRESH_MS);
+
+/**
+ * Since when a seat's runner has said the seat has no room is kept as rows of the audit log under the seat's account,
+ * the way the daily cap is counted from rows: `agent_seat.no_room` opens a spell and `agent_seat.room_back` ends it.
+ * Call it in the transaction of every report that says something, for each seat of the runner, with what the runner
+ * had said until then (`before`) and says now (`after`). Afterwards a seat's last row is `agent_seat.no_room` exactly
+ * when the report leaves it without room, so a report that gives the seat room ends the spell and no earlier row can
+ * count again. A spell also opens anew when the runner had not been saying so although the last row is open: a figure
+ * that grew too old in between was unknown, not none.
+ * shortcut: a seat retired during a spell and made again while its runner stays paused or full counts from the row of
+ * its earlier life, so its work can move up to 10 minutes early; an `AgentSeat.noRoomSince` column, reset when a seat
+ * is made, would be exact.
+ */
+export async function markNoRoom(tx: Prisma.TransactionClient, workspaceId: string, seats: { id: string; userId: string; before: boolean; after: boolean }[], now: Date) {
+  if (!seats.length) return;
+  const last = new Map((await tx.$queryRaw<{ actorId: string; action: string; createdAt: Date }[]>`SELECT DISTINCT ON ("actorId") "actorId", "action", "createdAt" FROM "AppAuditLog"
+    WHERE "actorId" = ANY(${seats.map(seat => seat.userId)}) AND "action" IN (${NO_ROOM}, ${ROOM_BACK}) ORDER BY "actorId", "createdAt" DESC, "id" DESC`).map(row => [row.actorId, row]));
+  const rows = seats.flatMap(seat => {
+    const latest = last.get(seat.userId), spell = latest?.action === NO_ROOM;
+    const action = seat.after ? (!spell || !seat.before) && NO_ROOM : spell && ROOM_BACK;
+    // Stamped with the report's own time, which the caller takes once it holds the runner's row, and always after the
+    // seat's last row: the rows are read back in the order of their times, so a report handled later is later, whatever a clock said.
+    return action ? [{ workspaceId, actorId: seat.userId, action, details: { seatId: seat.id }, createdAt: new Date(Math.max(now.getTime(), (latest?.createdAt.getTime() ?? 0) + 1)) }] : [];
+  });
+  if (rows.length) await tx.appAuditLog.createMany({ data: rows });
+}
+
+/**
+ * For a seat that has no room now (`seatRoom`): the moment it had had none for `NO_ROOM_MOVE_MS`, from which the work
+ * no run has started on leaves it, or null when Collab cannot tell since when. A runner that is offline has by then
+ * been silent for `IDLE_MS`, and that is not waited for a second time. With no runner it is counted from when the
+ * last one was removed, or from the seat's first day. Otherwise the runner said so, and the seat's open spell says
+ * since when (`markNoRoom`); a seat with no open spell is not moved from.
+ */
+export async function noRoomDue(db: DB, seat: { userId: string; workspaceId: string; ownerId: string | null; createdAt: Date }, now = new Date()): Promise<Date | null> {
+  // The same runner `seatsWithRoom` reads: the one admitted last that was not removed.
+  const runners = seat.ownerId ? await db.agentRunner.findMany({ where: { workspaceId: seat.workspaceId, ownerId: seat.ownerId }, orderBy: { admittedAt: 'desc' },
+    select: { lastSeenAt: true, admittedAt: true, removedAt: true } }) : [];
+  const runner = runners.find(row => !row.removedAt);
+  if (!runner) return new Date(Math.max(seat.createdAt.getTime(), ...runners.map(row => row.removedAt!.getTime())) + NO_ROOM_MOVE_MS);
+  if (!(runner.lastSeenAt && runner.lastSeenAt.getTime() > now.getTime() - IDLE_MS)) {
+    const seen = runner.lastSeenAt ?? runner.admittedAt;
+    return seen && new Date(seen.getTime() + IDLE_MS);
+  }
+  const last = await db.appAuditLog.findFirst({ where: { actorId: seat.userId, action: { in: [NO_ROOM, ROOM_BACK] } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { action: true, createdAt: true } });
+  return last?.action === NO_ROOM ? new Date(last.createdAt.getTime() + NO_ROOM_MOVE_MS) : null;
+}
+
+/**
  * The seats of a project that are not retired, of one role when one is named, oldest first: the order they had before
  * work was placed by room. Each comes with what placing reads: its room, and the runs its owner has open right now on
  * any seat of the workspace (a seat without an owner counts its own).
  */
 export async function seatsWithRoom(db: DB, projectId: string, role?: string, now = new Date()) {
   const seats = await db.agentSeat.findMany({ where: { projectId, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true,
+    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true, createdAt: true,
       room: true, roomProgram: true, roomAt: true, owner: { select: { id: true, name: true } } } });
   if (!seats.length) return [];
   const { workspaceId } = seats[0], owners = seats.flatMap(seat => seat.ownerId ?? []);
@@ -276,7 +335,8 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
  * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
  * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
  * project, when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
- * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`). The placement is on
+ * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`), and an issue a run is open on keeps its
+ * seat (`already_running`). The placement is on
  * the issue's timeline under the lead's name. It returns the seat for the caller's two checks after its update, where
  * the status the request sets is known: the issue is not done (`seat_scope`), and the seat holds at most `LEAD_CAP`
  * open issues from the lead (`lead_cap`).
@@ -296,6 +356,10 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   const current = await tx.issue.findUniqueOrThrow({ where: { id: issue.id }, select: { assigneeId: true, helpers: { where: { approvedBy: me }, select: { userId: true } } } });
   const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
     : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
+  // Work under a run keeps its seat (CLB-780): a run may have started since the lead read that none had.
+  if (current.assigneeId && await tx.agentRun.count({ where: { issueId: issue.id, endedAt: null } })) {
+    throw new HandoffError('already_running', 'A run is open on this issue: it keeps its seat until the run has ended', 409);
+  }
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
   await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
     fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });

@@ -61,6 +61,9 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   if (activity.action === 'LEAD_ASSIGNED') return `${userName} assigned this ${itemType} to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}`;
   if (activity.action === 'SECURITY_REQUESTED') return `${userName} asked for a security review`;
   if (activity.action === 'REQUEST_PLACED') {
+    const seat = (name: unknown) => typeof name === 'string' ? name : 'a seat';
+    // Placed again, off a seat that could not start it (CLB-780).
+    if (activity.details?.fromSeatId) return `Collab moved this request from ${seat(activity.details.from)} to ${seat(activity.details.to)}${typeof activity.details.why === 'string' ? `: ${activity.details.why}` : ''}`;
     return `Collab sent this request to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}${typeof activity.details?.why === 'string' ? `: ${activity.details.why}` : ''}`;
   }
   if (activity.action === 'SECURITY_VERDICT') {
