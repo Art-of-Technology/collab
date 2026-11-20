@@ -90,6 +90,9 @@ test('stored projections disappear on Trash and return unchanged on Restore acro
       findFirst: async ({ where }) => allows(version, where) ? version : null },
     versionFile: { findFirst: async ({ where }) => useFile && allows(file, where) ? file : null },
     release: { findMany: async ({ where }) => [release].filter(v => allows(v, where)) },
+    projectBaseline: { findFirst: async () => null },
+    agentRun: { count: async () => 0 },
+    workspace: { findFirst: async ({ where }) => allows(workspace, where) ? { ...workspace, agentRuns: [] } : null },
   };
   for (const name of ['issue', 'projectStatus', 'commit', 'pullRequest', 'gitConnection', 'featureRequest', 'note']) {
     raw[name] = { findMany: async () => [], groupBy: async () => [], count: async () => 0 };
@@ -106,6 +109,7 @@ test('stored projections disappear on Trash and return unchanged on Restore acro
     '@/lib/note-tag-access': { noteTagAccessWhere: () => ({}) },
     '@/lib/secrets/access': { noteAccessWhere: () => ({}) }, 'next/server': { NextResponse: Response },
   };
+  deps['@/lib/project-overview'] = load('src/lib/project-overview.ts', deps);
   const routes = [
     'src/app/api/version.json/route.ts',
     'src/app/api/github/repositories/[repositoryId]/versions/route.ts',
