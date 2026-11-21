@@ -38,6 +38,8 @@ test('the board Project notes link renders its destination for a member', { time
       '@/lib/prisma$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/slug-resolvers$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/forge/board$': ${JSON.stringify(join(fixture, 'data.js'))},
+      '@/lib/forge/reader$': ${JSON.stringify(join(fixture, 'data.js'))},
+      './ProjectDashboard$': ${JSON.stringify(join(fixture, 'dashboard.jsx'))},
       '@': ${JSON.stringify(source)},
       ...config.resolve.alias,
     };
@@ -54,9 +56,16 @@ test('the board Project notes link renders its destination for a member', { time
       project: { findFirst: async () => ({ id: 'project', name: 'Test project', slug: 'demo' }) },
       user: { findUnique: async () => ({ id: 'member' }) },
     };
-    export const loadForgeBoard = async () => ({ kind: 'not-connected', projectName: 'Test project' });
+    export const readForgeBindings = async () => [{ workspaceId: 'workspace', projectId: 'project' }];
+    export const loadForgeBoard = async () => ({
+      kind: 'ready', projectName: 'Test project', tasks: [], today: '2026-11-21',
+      fetchedAt: '2026-11-21T00:00:00Z', truncated: false,
+    });
   `);
+  write('dashboard.jsx', "'use client'; export function ProjectDashboard({forgeBoard}) { return forgeBoard; }");
   write('app/layout.jsx', 'export default function Layout({children}) { return <html><body>{children}</body></html>; }');
+  write('app/[workspaceId]/projects/[projectSlug]/page.jsx',
+    `export { default } from ${JSON.stringify(join(source, page, 'page.tsx'))};`);
   for (const route of ['board', 'notes']) {
     write(`app/[workspaceId]/projects/[projectSlug]/${route}/page.jsx`,
       `export { default } from ${JSON.stringify(join(source, page, route, 'page.tsx'))};`);
