@@ -9,6 +9,8 @@ import type { ProjectBurn as BurnData } from '@/lib/project-burn';
 const dayMs = 86_400_000;
 const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const date = (day: number) => dateFormat.format(day * dayMs);
+const fullDateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const fullDate = (day: number) => fullDateFormat.format(day * dayMs);
 const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const cardStyle = 'min-w-0 rounded-[10px] border-white/[.09] bg-[#171719] p-3';
@@ -79,15 +81,20 @@ function BurnUp({ burn, recent }: { burn: BurnData; recent: boolean }) {
   const last = history[history.length - 1];
   const forecast = recent ? null : burn.forecast;
   const milestones = recent ? [] : burn.milestones;
-  const end = Math.max(start + 1, burn.today, forecast?.latest ?? forecast?.day ?? burn.today,
-    ...milestones.map(milestone => milestone.day));
+  const end = recent ? Math.max(start + 1, burn.today) : burn.wholeProjectEnd;
   const x = (day: number) => left + (width - left - right) * (day - start) / (end - start);
   const { y, lines } = chartScale(last?.scope ?? 0);
   const path = (key: 'scope' | 'closed') => history.map(point => `${x(point.day)},${y(point[key])}`).join(' ');
   const ticks = Math.min(4, end - start);
-  const rangeLabel = forecast && (forecast.latest === null ? `forecast, from ${date(forecast.earliest)}`
+  const rangeLabel = forecast && (forecast.latest !== null && forecast.latest > end ? 'forecast range'
+    : forecast.latest === null ? `forecast, from ${date(forecast.earliest)}`
     : forecast.earliest === forecast.latest ? `forecast, ${date(forecast.earliest)}`
       : `forecast, ${date(forecast.earliest)} to ${date(forecast.latest)}`);
+  const forecastY = (day: number | null) => {
+    if (!last) return bottom;
+    const progress = day === null ? 0 : Math.min(1, (end - burn.today) / (day - burn.today));
+    return y(last.closed + progress * (last.scope - last.closed));
+  };
 
   return (
     <>
@@ -96,17 +103,22 @@ function BurnUp({ burn, recent }: { burn: BurnData; recent: boolean }) {
         {lines}
         {milestones.map((milestone, index) => (
           <g key={`${milestone.label}-${milestone.day}`}>
-            <title>{milestone.label} due {date(milestone.day)}</title>
+            <title>{`${milestone.label} due ${date(milestone.day)}`}</title>
             <line x1={x(milestone.day)} y1={top} x2={x(milestone.day)} y2={bottom} stroke={scope} strokeDasharray="2 3" opacity=".5" />
             <text x={Math.min(x(milestone.day), width - 34)} y={index % 2 ? 20 : 10} textAnchor="middle" {...axis}>{milestone.label}</text>
           </g>
         ))}
         {forecast && last && (
           <>
-            <polygon fill={done} opacity=".12" points={`${x(burn.today)},${y(last.closed)} ${x(forecast.earliest)},${y(last.scope)} ${x(forecast.latest ?? end)},${y(last.scope)} ${forecast.latest === null ? `${x(end)},${y(last.closed)}` : ''}`} />
-            <line x1={x(burn.today)} y1={y(last.scope)} x2={x(forecast.latest ?? end)} y2={y(last.scope)} stroke={scope} strokeWidth="2" strokeDasharray="5 4" />
-            <line x1={x(burn.today)} y1={y(last.closed)} x2={x(forecast.day)} y2={y(last.scope)} stroke={done} strokeWidth="2.5" strokeDasharray="5 4" />
-            <text x={Math.min(x(forecast.day), width - 27)} y={y(last.scope) - 5} textAnchor="middle" {...axis} fill={done}>{date(forecast.day)}</text>
+            <polygon fill={done} opacity=".12" points={[
+              `${x(burn.today)},${y(last.closed)}`,
+              `${x(Math.min(forecast.earliest, end))},${forecastY(forecast.earliest)}`,
+              ...(forecast.earliest < end && (forecast.latest ?? Infinity) > end ? [`${x(end)},${y(last.scope)}`] : []),
+              `${x(Math.min(forecast.latest ?? end, end))},${forecastY(forecast.latest)}`,
+            ].join(' ')} />
+            <line x1={x(burn.today)} y1={y(last.scope)} x2={x(Math.min(forecast.latest ?? end, end))} y2={y(last.scope)} stroke={scope} strokeWidth="2" strokeDasharray="5 4" />
+            <line x1={x(burn.today)} y1={y(last.closed)} x2={x(Math.min(forecast.day, end))} y2={forecastY(forecast.day)} stroke={done} strokeWidth="2.5" strokeDasharray="5 4" />
+            {forecast.day <= end && <text x={Math.min(x(forecast.day), width - 27)} y={y(last.scope) - 5} textAnchor="middle" {...axis} fill={done}>{date(forecast.day)}</text>}
           </>
         )}
         {!recent && (
@@ -221,7 +233,7 @@ function Stat({ label, value, detail, color }: { label: string; value: ReactNode
 
 function Contributors({ burn, billing }: { burn: BurnData; billing: boolean }) {
   const na = <span className={muted}>n/a</span>;
-  const headings = ['Who', 'Issues closed', 'PRs merged', 'Runs', 'Run hours', ...(billing ? ['Spend'] : []), 'Hours logged'];
+  const headings = ['Who', 'Issues closed', 'Requests handled', 'PRs merged', 'Runs', 'Run hours', ...(billing ? ['Spend'] : []), 'Hours logged'];
   return (
     <Card className={cardStyle}>
       <h2 className={cn('mb-2 font-semibold', muted)}>Seats and people</h2>
@@ -240,6 +252,7 @@ function Contributors({ burn, billing }: { burn: BurnData; billing: boolean }) {
                   {row.name}
                 </th>
                 <td className="px-2 py-2 text-right">{row.issuesClosed}</td>
+                <td className="px-2 py-2 text-right">{row.requestsHandled}</td>
                 <td className="px-2 py-2 text-right">{row.prsMerged}</td>
                 <td className="px-2 py-2 text-right">{row.agent ? row.runs : na}</td>
                 <td className="px-2 py-2 text-right">{row.agent ? `${number.format(row.runHours)} h` : na}</td>
@@ -261,6 +274,7 @@ export function ProjectBurn({ burn }: { burn: BurnData }) {
   const recent = range === 'recent';
   const total = burn.closures.agents + burn.closures.people + burn.closures.unmatched;
   const billing = 'spendUsd' in burn;
+  const { forecast } = burn;
   return (
     <div className="grid min-w-0 gap-3">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(140px,100%),1fr))] gap-2.5">
@@ -279,8 +293,12 @@ export function ProjectBurn({ burn }: { burn: BurnData }) {
           </div>
           <BurnUp burn={burn} recent={recent} />
           <p className={cn('mt-1.5', muted)}>
-            {recent ? 'History only. Switch to the whole project for the forecast.' : burn.forecast
-              ? `At the pace of the last three weeks, the ${burn.forecast.remaining} issues known today are done around ${date(burn.forecast.day)}.${burn.forecast.latest === null ? ' The slowest week had no closures, so the range has no latest date.' : ''}`
+            {recent ? 'History only. Switch to the whole project for the forecast.' : forecast
+              ? <>
+                At the pace of the last three weeks, the {forecast.remaining} issues known today are done around {forecast.day > burn.wholeProjectEnd ? fullDate(forecast.day) : date(forecast.day)}.
+                {forecast.latest === null ? ' The slowest week had no closures, so the range has no latest date.'
+                  : forecast.latest > burn.wholeProjectEnd && ` At the slowest pace, completion extends beyond the chart to ${fullDate(forecast.latest)}.`}
+              </>
               : burn.remaining ? 'Forecast unavailable for the recorded three-week history.' : 'All known issues are done.'}
           </p>
           {burn.historyLimited && <p className={muted}>Reliable burn-up history starts {date(burn.historyStart)}.</p>}

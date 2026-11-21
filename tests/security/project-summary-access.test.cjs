@@ -42,7 +42,7 @@ function query(rows,args={}){
 function fixture(options={}){
  const reads=[],logs=[];const now=new Date(),day=86400000,date=n=>new Date(now.getTime()+n*day);
  const actor={id:'alice',name:'Alice',agentSeat:null,email:'alice@example.test',createdAt:now,updatedAt:now};
- const spaces=structuredClone(workspaces);const projects=spaces.map(workspace=>({id:workspace.id,name:workspace.id,slug:workspace.id,workspaceId:workspace.id,workspace,color:'#fff',description:'description',createdAt:now,updatedAt:now}));
+ const spaces=structuredClone(workspaces);const projects=spaces.map(workspace=>({id:workspace.id,name:workspace.id,slug:workspace.id,issuePrefix:'DEMO',workspaceId:workspace.id,workspace,color:'#fff',description:'description',createdAt:now,updatedAt:now}));
  const target=projects.find(x=>x.id===(options.target||'joined')),foreign=projects.find(x=>x.id==='foreign');const sibling={...target,id:'sibling'};projects.push(sibling);
  const seat = { id: 'seat', name: 'Working seat', workspaceId: target.workspaceId, project: target, retiredAt: null };
  const agent = { id: 'seat-user', name: 'Seat account', agentSeat: seat };
@@ -110,6 +110,16 @@ function fixture(options={}){
   const closer = options.crossWorkspaceSeat
     ? { ...agent, id: 'cross-seat-user', agentSeat: { ...seat, workspaceId: foreign.workspaceId, name: 'Private seat name' } } : agent;
   activity.push(transition('completed', statuses[1], date(-4), closer), transition('blocked', blockedStatus, date(-6), actor));
+  if (options.requests) {
+   target.createdAt = date(-60);
+   for (let index = 0; index < 15; index++) {
+    const id = `closed-${index}`;
+    const agentRequestRole = index < 9 ? null : ['review', 'security', 'release'][index % 3];
+    issues.push(issue(id, { statusId: 'done', projectStatus: statuses[1], finishedAt: date(-4), agentRequestRole }));
+    activity.push(transition(id, statuses[1], date(-4), agent));
+   }
+   issues.push(issue('open-request', { agentRequestRole: 'review' }));
+  }
   if (options.burn) {
    const finished = new Date(now.getTime() - 3_600_000);
    const nearFinish = seconds => new Date(finished.getTime() + seconds * 1_000);
@@ -155,6 +165,27 @@ function fixture(options={}){
    ['unmatched-merge',null,repo],['foreign-merger',merger({id:'external',name:'External merger',agentSeat:null},[]),repo],
    ['foreign-merge',merger(actor,inWorkspace),{...repo,project:sibling}],
   ]) pulls.push({id,mergedAt,mergedBy,repository,state:'MERGED',updatedAt:now,createdAt:date(-1),githubPrId:pulls.length+1});
+  if (options.linkedMerges) {
+   const linked = issues.find(row => row.id === 'completed');
+   linked.issueKey = 'DEMO-42';
+   const other = issues.find(row => row.id === 'human-completed');
+   other.issueKey = 'DEMO-43';
+   const pull = pulls.find(row => row.id === 'human-merge');
+   for (const attrs of [
+    { id: 'linked', issueId: linked.id },
+    { id: 'branch-key', headBranchName: 'seat/demo-42' },
+    { id: 'title-key', title: 'Finish DEMO-43' },
+    { id: 'pre-assignment', issueId: linked.id, mergedAt: date(-3) },
+    { id: 'inaccessible-issue', issueId: hidden.id },
+   ]) pulls.push({ ...pull, ...attrs, githubPrId: pulls.length + 1 });
+   for (const [id, createdAt, oldValue, fieldName] of [
+    ['assignment-initial', date(-2), '', 'assignee'],
+    ['assignment-later', date(-0.01), agent.id, 'assigneeId'],
+    ['assignment-latest', now, actor.id, 'assignee'],
+   ]) activity.push({
+    id, createdAt, action: 'ASSIGNED', fieldName, oldValue, itemId: linked.id, itemType: 'ISSUE', workspaceId: target.workspaceId,
+   });
+  }
  }
  const version={repository:repo,issueAccessInvalidated:!!options.invalidVersion,issues:options.foreignVersionIssue?[{issue:hidden}]:[]};
  const releases=[{version,id:'release',repositoryId:'repo',repository:repo,tagName:'v1',name:'Release',publishedAt:date(-1)}];
@@ -190,7 +221,10 @@ function fixture(options={}){
    return selected;
   }},
  workspace:{findFirst:async args=>query(spaces,args)[0]??null},
- issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
+ issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{
+  findUnique:async()=>options.deleted?null:actor,
+  findMany:async args=>query([agent,{...actor,workspaceMemberships:[{workspaceId:target.workspaceId}]}],args),
+ },project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return args.select?.milestoneId ? boundedQuery(issues,args) : query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
  repository:{findFirst:async args=>{reads.push('repository');const value=query(options.noRepository?[]:[repo],args)[0]||null;if(value&&options.revokeRepository)revoke();return value;}},
  gitConnection:{findMany:async args=>{reads.push('gitConnections');return query(connections,args);}},
@@ -345,6 +379,31 @@ test('Burn attributes the finish transition and recorded merge actor independent
  assert.equal(burn.humanHours, 1.5);
  assert.equal(burn.contributors.find(row => row.name === 'Unlogged person').hoursLogged, 0);
  assert.doesNotMatch(JSON.stringify(burn), /External merger/);
+});
+
+test('Burn and Overview count ten work closures and report the six seat requests in their own table column', async () => {
+ const result = await fixture({ overviewHistory: true, requests: true }).call();
+ assert.equal(result.status, 200);
+ const { burn, overview } = result.body;
+ assert.deepEqual(plain(burn.closures), { agents: 10, people: 0, unmatched: 0 });
+ assert.deepEqual(plain(burn.recentClosures), plain(burn.closures));
+ assert.equal(burn.weeks.reduce((total, week) => total + week.issues.agents, 0), 10);
+ assert.equal(burn.points.at(-1).closed, 10);
+ assert.equal(burn.points.at(-1).scope, 14);
+ assert.equal(burn.contributors.find(row => row.agent).issuesClosed, 10);
+ assert.equal(burn.contributors.find(row => row.agent).requestsHandled, 6);
+ assert.equal(overview.closedByAgents, 10);
+ assert.equal(overview.closedByAgentsPercent, 100);
+ assert.equal(overview.stats.done, 16);
+});
+
+test('Burn uses the readable linked issue assignee at merge time before the GitHub merge account', async () => {
+ const result = await fixture({ overviewHistory: true, burn: true, linkedMerges: true }).call();
+ assert.equal(result.status, 200);
+ const { burn } = result.body;
+ assert.deepEqual(plain(burn.prCounts), { agents: 4, people: 1, unmatched: 4 });
+ assert.equal(burn.contributors.find(row => row.agent).prsMerged, 4);
+ assert.equal(burn.contributors.find(row => row.id === 'alice').prsMerged, 1);
 });
 
 test('Overview counts seats in its workspace while Burn classifies the account that closed the issue', async () => {
