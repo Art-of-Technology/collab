@@ -231,7 +231,7 @@ test('an agent edit that would leave a complete issue incomplete is refused and 
 
 test('unassigning cannot take away an assignee that the template requires', async () => {
   const templates = { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, requiredFields: ['assigneeId'] } };
-  const assigned = issueRow('TASK', complete('TASK'), { assigneeId: 'someone' });
+  const assigned = issueRow('TASK', complete('TASK'), { assigneeId: 'someone', storyPoints: 3 });
   const on = workspace({ templates, issue: assigned });
   const response = await on.unassign();
   assert.equal(response.status, 422);
@@ -288,6 +288,18 @@ test('the in-app assistant route follows the same create and update rules', asyn
   assert.equal((await older.assistant('update_issue', { issueId: 'issue', description: 'Edited' })).status, 200);
   const off = workspace({ enforced: false });
   assert.equal((await off.assistant('create_issue', { title: 'New', type: 'BUG' })).status, 200);
+});
+
+test('the assistant can supply required points when converting a subtask', async () => {
+  for (const type of ['STORY', 'TASK']) {
+    const on = workspace({ issue: issueRow('SUBTASK', 'Free text') });
+    const params = { issueId: 'issue', type, description: complete(type) };
+    const refused = await on.assistant('update_issue', params);
+    assert.equal(refused.status, 422);
+    assert.deepEqual((await refused.json()).missing_fields, ['storyPoints']);
+    assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 3 })).status, 200);
+    assert.deepEqual(plain(on.state.updated), [{ type, description: params.description, storyPoints: 3 }]);
+  }
 });
 
 test('the assistant update is not written when the issue changed after its template check', async () => {

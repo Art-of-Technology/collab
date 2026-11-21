@@ -254,7 +254,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Issue ID is required' }, { status: 400 });
         }
         if (Object.keys(fields).some(field => ![
-          'title', 'description', 'status', 'priority', 'type', 'assigneeId', 'dueDate',
+          'title', 'description', 'status', 'priority', 'type', 'assigneeId', 'dueDate', 'storyPoints',
         ].includes(field))) {
           return NextResponse.json({ error: 'Unsupported issue update field' }, { status: 400 });
         }
