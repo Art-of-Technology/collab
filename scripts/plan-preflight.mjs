@@ -6,6 +6,7 @@ const MAX_POINTS = 5;
 const PERSON_KINDS = new Set(['release', 'machine']);
 const CARD_FIELDS = ['title', 'type', 'context', 'wave', 'points'];
 const PERSON_FIELDS = ['who', 'word', 'minutes'];
+const TWIN_SEARCH_NOTE = 'search Collab for an unstarted issue on the same screen or file before filing (collab issues list --project-id ID --search WORDS)';
 
 function base(path) {
   return path.replace(/\*\*$/, '').replace(/\/+$/, '');
@@ -33,6 +34,7 @@ function pairDifference(left, right) {
 // Keep the Python pre-flight's list format in the "Starts now" diagnostic.
 function formatIds(ids) {
   const quoted = ids.map(id => {
+    if (typeof id !== 'string') return JSON.stringify(id ?? null);
     const doubleQuoted = JSON.stringify(id);
     if (id.includes("'") && !id.includes('"')) return doubleQuoted;
     const escaped = doubleQuoted.slice(1, -1).replaceAll('\\"', '"').replaceAll("'", "\\'");
@@ -47,6 +49,12 @@ export function check(plan, lookup = null) {
   const warns = [];
   const notes = [];
   const { issues = [], contexts = {}, blocks = [], startsNow = [] } = plan;
+  for (const [index, issue] of issues.entries()) {
+    if (typeof issue.id !== 'string' || issue.id === '') {
+      fails.push(`issue ${index + 1}: the card needs a non-empty string id`);
+    }
+  }
+  if (fails.length) return { fails, warns, notes: [TWIN_SEARCH_NOTE] };
   const byId = new Map(issues.map(issue => [issue.id, issue]));
 
   for (const issue of issues) {
@@ -137,7 +145,7 @@ export function check(plan, lookup = null) {
     fails.push(`'Starts now' says ${formatIds(declared)}; the needs say ${formatIds(ready)}`);
   }
 
-  notes.push('search Collab for an unstarted issue on the same screen or file before filing (collab issues list --project-id ID --search WORDS)');
+  notes.push(TWIN_SEARCH_NOTE);
   return { fails, warns, notes };
 }
 
@@ -146,7 +154,18 @@ function collabIssue(key, workspace) {
   if (workspace) args.push('--workspace', workspace);
   const result = spawnSync('collab', args, { encoding: 'utf8' });
   if (result.error) throw result.error;
-  return result.status === 0 ? JSON.parse(result.stdout) : null;
+  if (result.status === 0) return JSON.parse(result.stdout);
+
+  const stderr = result.stderr.trim();
+  let diagnostic;
+  try {
+    diagnostic = JSON.parse(stderr);
+  } catch {
+    // Fall back to the diagnostic as printed by the executable.
+  }
+  if (diagnostic?.status === 404 && diagnostic.error === 'not_found') return null;
+  const detail = diagnostic?.message || stderr || `exit ${result.status ?? result.signal}`;
+  throw new Error(`collab issues get ${key} failed: ${detail}`);
 }
 
 function main([file, ...args]) {
@@ -166,5 +185,10 @@ function main([file, ...args]) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main(process.argv.slice(2));
+  try {
+    process.exitCode = main(process.argv.slice(2));
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }

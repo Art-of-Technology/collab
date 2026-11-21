@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
-const { join, resolve } = require('node:path');
+const { delimiter, join, resolve } = require('node:path');
 const { test } = require('node:test');
 
 const script = resolve(__dirname, '../../scripts/plan-preflight.mjs');
@@ -104,6 +104,15 @@ test('reports missing card fields, an unknown context and an incomplete person l
   ]);
 });
 
+test('reports a card with a missing or numeric issue ID', async () => {
+  const { check } = await import('../../scripts/plan-preflight.mjs');
+  for (const id of [undefined, 42]) {
+    const plan = goodPlan();
+    plan.issues[0].id = id;
+    assert.deepEqual(check(plan).fails, ['issue 1: the card needs a non-empty string id']);
+  }
+});
+
 test('runs offline and exits 1 only when a check fails', t => {
   const directory = mkdtempSync(join(tmpdir(), 'plan-preflight-'));
   t.after(() => rmSync(directory, { force: true, recursive: true }));
@@ -122,6 +131,39 @@ test('runs offline and exits 1 only when a check fails', t => {
   const fail = spawnSync(process.execPath, [script, file, '--offline'], { encoding: 'utf8' });
   assert.equal(fail.status, 1, fail.stderr);
   assert.equal(fail.stdout, `FAIL  S1: names no test\n${offlineNote}\nNOTE  ${note}\n4 issues, 1 failing, 0 to ask\n`);
+});
+
+test('distinguishes an unknown online blocker from a CLI failure', { skip: process.platform === 'win32' }, t => {
+  const directory = mkdtempSync(join(tmpdir(), 'plan-preflight-'));
+  t.after(() => rmSync(directory, { force: true, recursive: true }));
+  const file = join(directory, 'plan.json');
+  const plan = goodPlan();
+  withOutside(plan);
+  plan.workspace = 'fixture workspace';
+  writeFileSync(file, JSON.stringify(plan));
+  writeFileSync(join(directory, 'collab'), `#!/usr/bin/env node
+const assert = require('node:assert/strict');
+assert.deepEqual(process.argv.slice(2), ['issues', 'get', 'X-9', '--workspace', 'fixture workspace']);
+console.error(process.env.PREFLIGHT_FIXTURE_ERROR);
+process.exitCode = 5;
+`, { mode: 0o755 });
+
+  function run(error) {
+    return spawnSync(process.execPath, [script, file], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: directory + delimiter + process.env.PATH, PREFLIGHT_FIXTURE_ERROR: error },
+    });
+  }
+
+  const missing = run(JSON.stringify({ error: 'not_found', status: 404 }));
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stderr, '');
+  assert.match(missing.stdout, /^FAIL  X-9: a blocker that Collab does not know$/m);
+
+  const failed = run(JSON.stringify({ error: 'auth_required', message: 'Not signed in.' }));
+  assert.equal(failed.status, 1);
+  assert.equal(failed.stdout, '');
+  assert.match(failed.stderr, /^collab issues get X-9 failed: Not signed in\.$/m);
 });
 
 test('prints usage and exits non-zero without a plan argument', () => {
