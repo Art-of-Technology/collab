@@ -19,7 +19,7 @@ test('each templated type has a standard template, and Subtask has none', () => 
   assert.deepEqual(required(STANDARD_TEMPLATES.EPIC), ['Goal', 'Background', 'Scope', 'Non-goals', 'Success measures', 'Deliverables']);
   assert.deepEqual(required(STANDARD_TEMPLATES.MILESTONE), ['Goal', 'Deliverables', 'Exit criteria', 'Target date']);
   assert.deepEqual(required(STANDARD_TEMPLATES.TASK), ['What', 'Why', 'Done when']);
-  assert.deepEqual(Array.from(TEMPLATED_TYPES, type => [...STANDARD_TEMPLATES[type].requiredFields]), [['priority'], [], [], ['dueDate'], []]);
+  assert.deepEqual(Array.from(TEMPLATED_TYPES, type => [...STANDARD_TEMPLATES[type].requiredFields]), [['priority'], ['storyPoints'], [], ['dueDate'], ['storyPoints']]);
   for (const type of TEMPLATED_TYPES) assert.deepEqual([STANDARD_TEMPLATES[type].version, STANDARD_TEMPLATES[type].standard], [1, true]);
   assert.equal(templateFor(STANDARD_TEMPLATES, 'bug'), BUG);
   assert.equal(templateFor(STANDARD_TEMPLATES, 'SUBTASK'), null);
@@ -77,7 +77,7 @@ test('a required field is missing when it is absent, empty or an empty list', ()
   assert.deepEqual([...missingFields(BUG, { priority: 'high' })], []);
   assert.deepEqual([...missingFields(STANDARD_TEMPLATES.MILESTONE, { dueDate: '2026-12-01T00:00:00.000Z' })], []);
   assert.deepEqual([...missingFields({ ...BUG, requiredFields: ['labels', 'storyPoints'] }, { labels: [], storyPoints: 3 })], ['labels']);
-  assert.deepEqual([...missingFields(STANDARD_TEMPLATES.TASK, {})], []);
+  assert.deepEqual([...missingFields(STANDARD_TEMPLATES.TASK, {})], ['storyPoints']);
 });
 
 test('the Markdown body gives every section as a heading with its guidance in a comment, and counts as unfilled', () => {

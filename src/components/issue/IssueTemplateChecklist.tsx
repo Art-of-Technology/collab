@@ -46,7 +46,10 @@ export function IssueTemplateChecklist({ template, missingSections, missingField
           !section.required ? "optional" : missingSections.includes(section.title) ? "missing" : "done", section.guidance,
         ))}
         {template.requiredFields.map(field => item(
-          field, FIELD_LABELS[field], missingFields.includes(field) ? "missing" : "done", "Set it with the selectors.",
+          field, FIELD_LABELS[field], missingFields.includes(field) ? "missing" : "done",
+          field === "storyPoints"
+            ? "This field is unavailable in this form. You can create the issue without it."
+            : "Set it with the selectors.",
         ))}
       </ul>
     </section>

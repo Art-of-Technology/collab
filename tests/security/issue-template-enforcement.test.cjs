@@ -16,7 +16,7 @@ const shape = (type, description, fields = {}) => ({ type, description, fields }
 
 test('an issue with every required section and field is not refused', () => {
   assert.equal(createRefusal(STANDARD_TEMPLATES, shape('BUG', complete('BUG'), { priority: 'high' })), null);
-  assert.equal(createRefusal(STANDARD_TEMPLATES, shape('task', complete('TASK'))), null);
+  assert.equal(createRefusal(STANDARD_TEMPLATES, shape('task', complete('TASK'), { storyPoints: 3 })), null);
 });
 
 test('a refusal names what is missing, says how to get the template, and carries it', () => {
@@ -44,7 +44,7 @@ test('labels written as bold text are not sections, and the refusal says to writ
 test('the description stays on one line whatever a section title contains', () => {
   const title = 'First\nsection\u0085here';
   const templates = { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, sections: [{ title, required: true, guidance: '' }] } };
-  const refusal = createRefusal(templates, shape('TASK', null));
+  const refusal = createRefusal(templates, shape('TASK', null, { storyPoints: 3 }));
   assert.equal(refusal.error_description, 'Missing required sections: First section here. Write each section as a heading. Get the template with "collab templates get TASK".');
   assert.deepEqual(plain(refusal.missing_sections), [title]);
 });
@@ -54,13 +54,13 @@ test('subtasks and types without a template are never refused', () => {
 });
 
 test('an edit is refused only when it takes a complete issue to an incomplete one', () => {
-  const task = shape('TASK', complete('TASK'));
+  const task = shape('TASK', complete('TASK'), { storyPoints: 3 });
   const sections = (before, after) => plain(updateRefusal(STANDARD_TEMPLATES, before, after)?.missing_sections ?? null);
   // An older issue that never had the sections can still be worked on.
   assert.equal(sections(shape('TASK', 'Old free text'), shape('TASK', 'Old free text, edited')), null);
   assert.equal(sections(shape('BUG', null), shape('BUG', null, { priority: 'urgent' })), null);
-  assert.equal(sections(task, shape('TASK', `${complete('TASK')}\n\n## Notes\n\nMore.`)), null);
-  assert.deepEqual(sections(task, shape('TASK', complete('TASK', 'Why'))), ['Why']);
+  assert.equal(sections(task, { ...task, description: `${complete('TASK')}\n\n## Notes\n\nMore.` }), null);
+  assert.deepEqual(sections(task, { ...task, description: complete('TASK', 'Why') }), ['Why']);
   // A subtask is exempt, so making it a Task is a change that must end complete; the other way is free.
   assert.deepEqual(sections(shape('SUBTASK', 'Free text'), shape('TASK', 'Free text')), ['What', 'Why', 'Done when']);
   assert.equal(sections(shape('SUBTASK', 'Free text'), task), null);
@@ -85,13 +85,18 @@ const issueRow = (type, description, fields = {}) => ({
 // One workspace with one stored issue, the real routes, and counters for what they write.
 function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLATES, realUpdate = false } = {}) {
   const state = { issue, created: [], updated: [], beforeTransaction: null, transactionOptions: null, afterRead: null };
+  function readIssue({ select }) {
+    if (!state.issue) return null;
+    if (!select) return { ...state.issue };
+    return Object.fromEntries(Object.entries(state.issue).filter(([field]) => select[field]));
+  }
   const db = {
     workspace: { findFirst: async () => ({ id: 'workspace', slug: 'workspace' }) },
     project: { findFirst: async () => ({ id: PROJECT, workspaceId: 'workspace' }) },
     projectStatus: { findFirst: async () => null },
     issue: {
-      findFirst: async () => state.issue && { ...state.issue },
-      findUniqueOrThrow: async () => ({ ...state.issue }),
+      findFirst: readIssue,
+      findUniqueOrThrow: readIssue,
       create: async ({ data }) => { state.created.push(data); return { id: 'created', issueKey: 'P-2', ...data }; },
       update: async ({ data }) => { state.updated.push(data); return { ...state.issue, ...data }; },
     },
@@ -122,8 +127,8 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'person', name: 'Person' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/permissions': { Permission: { CREATE_TASK: 'CREATE_TASK' }, checkUserPermission: async () => ({ hasPermission: true }) },
-    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async () => {
-      const row = state.issue && { ...state.issue };
+    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async (_id, options) => {
+      const row = readIssue(options);
       if (state.afterRead) state.afterRead();
       return row;
     } },
@@ -185,6 +190,20 @@ test('a complete agent issue is created, and a required field must be stated, no
   assert.deepEqual(on.state.created.map(data => data.type), ['BUG', 'MILESTONE', 'SUBTASK']);
 });
 
+test('standard Story and Task templates require points on agent creation when enforcement is on', async () => {
+  const on = workspace();
+  const off = workspace({ enforced: false });
+  for (const type of ['STORY', 'TASK']) {
+    const issue = { type, description: complete(type) };
+    const refused = await on.create(issue);
+    assert.equal(refused.status, 422);
+    assert.deepEqual((await refused.json()).missing_fields, ['storyPoints']);
+    assert.equal((await on.create({ ...issue, storyPoints: 3 })).status, 201);
+    assert.equal((await off.create(issue)).status, 201);
+  }
+  assert.deepEqual(on.state.created.map(issue => issue.storyPoints), [3, 3]);
+});
+
 test('an agent can still work on an older issue that never had the sections', async () => {
   const on = workspace({ issue: issueRow('TASK', 'Old free text') });
   for (const change of [{ status: 'done' }, { description: 'Old free text, edited' }, { type: 'BUG' }]) {
@@ -194,7 +213,7 @@ test('an agent can still work on an older issue that never had the sections', as
 });
 
 test('an agent edit that would leave a complete issue incomplete is refused and nothing is written', async () => {
-  const task = workspace({ issue: issueRow('TASK', complete('TASK')) });
+  const task = workspace({ issue: issueRow('TASK', complete('TASK'), { storyPoints: 3 }) });
   const response = await task.patch({ description: complete('TASK', 'Why') });
   assert.equal(response.status, 422);
   assert.deepEqual((await response.json()).missing_sections, ['Why']);
@@ -204,9 +223,17 @@ test('an agent edit that would leave a complete issue incomplete is refused and 
   assert.equal((await task.patch({ description: `${complete('TASK')}\n\nMore.`, status: 'done' })).status, 200);
   assert.equal((await task.patch({ type: 'SUBTASK', description: null })).status, 200);
 
-  const subtask = workspace({ issue: issueRow('SUBTASK', 'Free text') });
-  assert.equal((await subtask.patch({ type: 'TASK' })).status, 422);
-  assert.equal((await subtask.patch({ type: 'TASK', description: complete('TASK') })).status, 200);
+  for (const type of ['STORY', 'TASK']) {
+    const subtask = workspace({ issue: issueRow('SUBTASK', 'Free text') });
+    const conversion = { type, description: complete(type) };
+    const refused = await subtask.patch(conversion);
+    assert.equal(refused.status, 422);
+    assert.deepEqual((await refused.json()).missing_fields, ['storyPoints']);
+    assert.deepEqual(subtask.state.updated, []);
+    const pointed = { ...conversion, storyPoints: 3 };
+    assert.equal((await subtask.patch(pointed)).status, 200);
+    assert.deepEqual(plain(subtask.state.updated), [pointed]);
+  }
 
   const milestone = workspace({ issue: issueRow('MILESTONE', complete('MILESTONE'), { dueDate: new Date('2026-12-01') }) });
   const cleared = await milestone.patch({ dueDate: null });
@@ -215,9 +242,64 @@ test('an agent edit that would leave a complete issue incomplete is refused and 
   assert.equal((await milestone.patch({ dueDate: '2027-01-15T00:00:00.000Z' })).status, 200);
 });
 
+test('agents may edit unestimated standard issues but must preserve complete sections', async () => {
+  for (const type of ['STORY', 'TASK']) {
+    const on = workspace({ issue: issueRow(type, complete(type)) });
+    assert.equal((await on.patch({ title: 'Renamed' })).status, 200);
+    const removed = STANDARD_TEMPLATES[type].sections[0].title;
+    const response = await on.patch({ description: complete(type, removed) });
+    assert.equal(response.status, 422);
+    assert.deepEqual((await response.json()).missing_sections, [removed]);
+    assert.equal((await on.patch({ storyPoints: 3 })).status, 200);
+    assert.deepEqual(on.state.updated.map(change => change.storyPoints), [undefined, 3]);
+  }
+});
+
+for (const [source, target] of [['TASK', 'STORY'], ['STORY', 'TASK']]) {
+  test(`converting a section-complete unestimated ${source} to ${target} requires points`, async () => {
+    for (const update of [
+      (api, change) => api.patch(change),
+      (api, change) => api.assistant('update_issue', { issueId: 'issue', ...change }),
+    ]) {
+      const api = workspace({ issue: issueRow(source, complete(source)) });
+      const conversion = { type: target, description: complete(target) };
+      const refused = await update(api, conversion);
+      assert.equal(refused.status, 422);
+      const body = await refused.json();
+      assert.deepEqual([body.issue_type, body.missing_sections, body.missing_fields], [target, [], ['storyPoints']]);
+      assert.deepEqual(api.state.updated, []);
+
+      const estimated = { ...conversion, storyPoints: 3 };
+      assert.equal((await update(api, estimated)).status, 200);
+      assert.deepEqual(plain(api.state.updated), [estimated]);
+    }
+  });
+}
+
+test('an unestimated seat request keeps its required Task sections on agent edits', async () => {
+  const on = workspace({ issue: issueRow('TASK', complete('TASK'), { agentRequestRole: 'release' }) });
+  const description = complete('TASK', 'Done when');
+  for (const response of [
+    await on.patch({ description }),
+    await on.assistant('update_issue', { issueId: 'issue', description }),
+  ]) {
+    assert.equal(response.status, 422);
+    const body = await response.json();
+    assert.deepEqual([body.missing_sections, body.missing_fields], [['Done when'], []]);
+  }
+  assert.deepEqual(on.state.updated, []);
+
+  const custom = workspace({
+    issue: issueRow('TASK', complete('TASK'), { agentRequestRole: 'release' }),
+    templates: { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, standard: false } },
+  });
+  // A workspace's own required fields retain the existing rule for incomplete issues.
+  assert.equal((await custom.patch({ description })).status, 200);
+});
+
 test('unassigning cannot take away an assignee that the template requires', async () => {
   const templates = { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, requiredFields: ['assigneeId'] } };
-  const assigned = issueRow('TASK', complete('TASK'), { assigneeId: 'someone' });
+  const assigned = issueRow('TASK', complete('TASK'), { assigneeId: 'someone', storyPoints: 3 });
   const on = workspace({ templates, issue: assigned });
   const response = await on.unassign();
   assert.equal(response.status, 422);
@@ -255,12 +337,12 @@ test('assistant creation accepts and stores required template fields', async () 
 });
 
 test('with enforcement off, an agent edit is never refused', async () => {
-  const off = workspace({ enforced: false, issue: issueRow('TASK', complete('TASK')) });
+  const off = workspace({ enforced: false, issue: issueRow('TASK', complete('TASK'), { storyPoints: 3 }) });
   assert.equal((await off.patch({ description: null })).status, 200);
 });
 
 test('the in-app assistant route follows the same create and update rules', async () => {
-  const on = workspace({ issue: issueRow('TASK', complete('TASK')) });
+  const on = workspace({ issue: issueRow('TASK', complete('TASK'), { storyPoints: 3 }) });
   const refused = await on.assistant('create_issue', { title: 'New', type: 'BUG' });
   assert.equal(refused.status, 422);
   assert.deepEqual((await refused.json()).missing_fields, ['priority']);
@@ -276,12 +358,44 @@ test('the in-app assistant route follows the same create and update rules', asyn
   assert.equal((await off.assistant('create_issue', { title: 'New', type: 'BUG' })).status, 200);
 });
 
+test('the assistant can supply required points when converting a subtask', async () => {
+  for (const type of ['STORY', 'TASK']) {
+    const on = workspace({ issue: issueRow('SUBTASK', 'Free text') });
+    const params = { issueId: 'issue', type, description: complete(type) };
+    const refused = await on.assistant('update_issue', params);
+    assert.equal(refused.status, 422);
+    assert.deepEqual((await refused.json()).missing_fields, ['storyPoints']);
+    assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 0 })).status, 400);
+    assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 3 })).status, 200);
+    assert.deepEqual(plain(on.state.updated), [{ type, description: params.description, storyPoints: 3 }]);
+  }
+});
+
+test('agent updates can clear only optional estimates on complete issues', async () => {
+  for (const clearEstimate of [
+    api => api.patch({ storyPoints: null }),
+    api => api.assistant('update_issue', { issueId: 'issue', storyPoints: null }),
+  ]) {
+    const bug = workspace({ issue: issueRow('BUG', complete('BUG'), { storyPoints: 3 }) });
+    assert.equal((await clearEstimate(bug)).status, 200);
+    assert.deepEqual(plain(bug.state.updated), [{ storyPoints: null }]);
+
+    for (const type of ['STORY', 'TASK']) {
+      const required = workspace({ issue: issueRow(type, complete(type), { storyPoints: 3 }) });
+      const response = await clearEstimate(required);
+      assert.equal(response.status, 422);
+      assert.deepEqual((await response.json()).missing_fields, ['storyPoints']);
+      assert.deepEqual(required.state.updated, []);
+    }
+  }
+});
+
 test('the assistant update is not written when the issue changed after its template check', async () => {
   const on = workspace({ realUpdate: true, issue: issueRow('TASK', 'Old free text', { updatedAt: new Date('2026-11-12T10:00:00Z') }) });
   // The check finds an incomplete issue, which may be edited freely; then someone completes it before the write.
   on.state.afterRead = () => {
     on.state.afterRead = null;
-    Object.assign(on.state.issue, { description: complete('TASK'), updatedAt: new Date('2026-11-12T10:00:01Z') });
+    Object.assign(on.state.issue, { description: complete('TASK'), storyPoints: 3, updatedAt: new Date('2026-11-12T10:00:01Z') });
   };
   const response = await on.assistant('update_issue', { issueId: 'issue', description: 'Free text' });
   assert.equal(response.status, 409);
@@ -290,7 +404,7 @@ test('the assistant update is not written when the issue changed after its templ
 
 test('assistant creation refuses a label that is not in the workspace', async () => {
   const on = workspace();
-  const response = await on.assistant('create_issue', { title: 'New', description: complete('TASK'), labels: ['label', 'missing'] });
+  const response = await on.assistant('create_issue', { title: 'New', description: complete('TASK'), storyPoints: 3, labels: ['label', 'missing'] });
   assert.equal(response.status, 400);
   assert.deepEqual(on.state.created, []);
 });

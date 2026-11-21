@@ -74,5 +74,12 @@ export function createRefusal(templates: Record<TemplatedIssueType, IssueTemplat
  * still work on older issues; one that was complete, or exempt, must end complete or exempt.
  */
 export function updateRefusal(templates: Record<TemplatedIssueType, IssueTemplate>, before: IssueShape, after: IssueShape): TemplateRefusal | null {
+  const previous = templateFor(templates, before.type);
+  // An unestimated standard Story or Task keeps its pre-estimation edit rules until it has points.
+  if (previous?.standard && (previous.type === 'STORY' || previous.type === 'TASK') && before.fields.storyPoints == null) {
+    templates = { ...templates, [previous.type]: {
+      ...previous, requiredFields: previous.requiredFields.filter(field => field !== 'storyPoints'),
+    } };
+  }
   return createRefusal(templates, before) ? null : createRefusal(templates, after);
 }

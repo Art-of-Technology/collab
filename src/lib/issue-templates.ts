@@ -50,7 +50,7 @@ export const STANDARD_TEMPLATES: Record<TemplatedIssueType, IssueTemplate> = {
     may('Alternate flows', 'Variations and failures, by step.'),
     must('Acceptance criteria', 'Statements that can be checked, for example Given / When / Then.'),
     may('Out of scope', 'What this story deliberately leaves out.'),
-  ]),
+  ], ['storyPoints']),
   EPIC: standard('EPIC', [
     must('Goal', 'The outcome, not the work.'),
     must('Background', 'The problem and who has it.'),
@@ -72,7 +72,7 @@ export const STANDARD_TEMPLATES: Record<TemplatedIssueType, IssueTemplate> = {
     must('Why', 'The reason, or the issue it serves.'),
     must('Done when', 'How to tell it is finished.'),
     may('Notes', 'Anything else worth knowing.'),
-  ]),
+  ], ['storyPoints']),
 };
 
 /** The template for an issue type, or null for Subtask and for types that have none. */

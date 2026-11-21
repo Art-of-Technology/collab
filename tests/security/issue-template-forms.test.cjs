@@ -81,7 +81,7 @@ const modal = (run, templates, open = true) => mounted('src/components/issue/New
 test('the new issue form starts with the headings of the chosen type and lists what is missing', async () => {
   await modal(async page => {
     assert.equal(page.description(), headings('TASK'));
-    assert.deepEqual(page.missing(), ['What', 'Why', 'Done when']);
+    assert.deepEqual(page.missing(), ['What', 'Why', 'Done when', 'Story points']);
     assert.ok(page.button('Create anyway'));
 
     await page.click('Type BUG');
@@ -115,6 +115,8 @@ test('what a person has typed survives a change of type, and untouched headings 
 
 test('a quick issue with untouched headings is stored without a description', async () => {
   await modal(async page => {
+    const points = [...page.checklist().querySelectorAll('li')].find(item => item.textContent.startsWith('Story points'));
+    assert.match(points.textContent, /unavailable in this form.*create the issue without it/i);
     await page.type('Title', 'Quick one');
     await page.click('Create anyway');
     assert.equal(page.created.length, 1);
@@ -124,7 +126,9 @@ test('a quick issue with untouched headings is stored without a description', as
 
 test('a complete issue is created under the usual button, with its description', async () => {
   await modal(async page => {
-    const complete = headings('TASK').replaceAll('</h2>', '</h2><p>Something real.</p>');
+    await page.click('Type BUG');
+    await page.click('Priority HIGH');
+    const complete = headings('BUG').replaceAll('</h2>', '</h2><p>Something real.</p>');
     await page.type('Title', 'Thorough one');
     await page.type('Description', complete);
     assert.deepEqual(page.missing(), []);
@@ -157,7 +161,7 @@ test('a form that is not open does not read the templates', async () => {
 test('the inline creator pre-fills, guides and stores the same way', async () => {
   await mounted('src/components/issue/InlineIssueCreator.tsx', 'InlineIssueCreator', { workspaceId: 'workspace', projectId: 'project', autoFocus: true }, async page => {
     assert.equal(page.description(), headings('TASK'));
-    assert.deepEqual(page.missing(), ['What', 'Why', 'Done when']);
+    assert.deepEqual(page.missing(), ['What', 'Why', 'Done when', 'Story points']);
     await page.click('Type BUG');
     assert.equal(page.missing().at(-1), 'Priority');
     await page.type('Issue title', 'Sub-issue');
