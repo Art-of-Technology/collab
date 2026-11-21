@@ -26,7 +26,7 @@ after(() => db?.stop());
 
 test('runs: checkout, the lease, lost runs and who may clear them', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [owner, person, viewer].map(id => ({ id, name: id })) });
+    await prisma.user.createMany({ data: [owner, person, viewer].map(id => ({ id, name: id, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.createMany({ data: [{ workspaceId: 'w', userId: person }, { workspaceId: 'w', userId: viewer, role: 'VIEWER' }] });
     // A has three statuses in the "in progress" group: one switched off, and "doing" stored before "in_progress" but ordered after it.
@@ -408,5 +408,138 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     await refused(act(devA.token, run.id, 'renew'), 404, 'not_found');
     await refused(read(personToken, run.id), 404, 'not_found');
     assert.equal((await act(otherA.token, run.id, 'close'))[0], 200);
+  });
+  const browserOrigin = 'https://collab.test';
+  const secret = 'test-only-session-signing-secret';
+  const { NextRequest } = require('next/server');
+  const jwt = require('next-auth/jwt');
+  const cookie = async (userId, maxAge = 3600) => `__Secure-next-auth.session-token=${await jwt.encode({ token: { sub: userId }, secret, maxAge })}`;
+  const answerRoute = (mode = 'nextauth') => {
+    const routeGlobals = { ...globals, process: { env: { NEXTAUTH_URL: browserOrigin, NEXTAUTH_SECRET: secret, COLLAB_AUTH_MODE: mode } } };
+    return load('src/app/api/issues/[issueId]/runs/[runId]/answer/route.ts', {
+      ...deps, '@/lib/gateway-identity': load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, routeGlobals),
+      'next-auth/jwt': { getToken: options => jwt.getToken({ ...options, secureCookie: true, secret }) },
+    }, routeGlobals);
+  };
+  const answer = async (target, runId, questionId, headers, body = { questionId, decision: 'approved' }, mode) => {
+    const route = answerRoute(mode);
+    assert.equal(route.GET, undefined);
+    const reply = await route.POST(new NextRequest(`${browserOrigin}/api/issues/${target.issueKey}/runs/${runId}/answer`, {
+      method: 'POST', headers: { Origin: browserOrigin, 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body),
+    }), { params: Promise.resolve({ issueId: target.issueKey, runId }) });
+    return [reply.status, await reply.json()];
+  };
+  const ask = (token, id, ask, generation = 'g1') => call(one.PATCH, token, { id, body: { event: 'ask', generation, ask } });
+
+  await t.test('only the run holder adds immutable questions, one at a time, and the owner is notified once', async () => {
+    const target = await issue(release);
+    const { run } = (await checkout(release.token, target))[1];
+    await refused(ask(devA.token, run.id, 'another seat'), 404, 'not_found');
+    await refused(ask(release.token, run.id, 'wrong generation', 'stale'), 409, 'run_fenced');
+    await refused(ask(release.token, run.id, '   '), 400, 'invalid_request');
+    await refused(call(one.PATCH, release.token, { id: run.id, body: { event: 'answer', generation: 'g1', decision: 'approved' } }), 400, 'invalid_request');
+    const question = '  Merge <script> https://example.test\r\n\t**now**?\n';
+    const submissions = await Promise.all([ask(release.token, run.id, question), ask(release.token, run.id, question)]);
+    assert.deepEqual(submissions.map(([status]) => status).sort(), [200, 409]);
+    assert.equal(submissions.find(([status]) => status === 409)[1].error, 'question_open');
+    const accepted = submissions.find(([status]) => status === 200)[1];
+    assert.equal(accepted.run.state, 'waiting');
+    assert.equal(accepted.run.issueKey, target.issueKey);
+    assert.deepEqual(accepted.run.ask, [{ id: accepted.run.ask[0].id, text: question, answer: null }]);
+    await refused(ask(release.token, run.id, 'replacement'), 409, 'question_open');
+    const [notification] = await raw.notification.findMany({ where: { senderId: release.userId, type: 'ISSUE_RUN_QUESTION' } });
+    assert.equal(await raw.notification.count({ where: { senderId: release.userId, type: 'ISSUE_RUN_QUESTION' } }), 1);
+    assert.equal(notification.userId, person);
+    assert.ok(notification.content.includes(target.issueKey));
+    assert.doesNotMatch(notification.content, /<script>|https?:/);
+
+    const renewed = (await act(release.token, run.id, 'renew'))[1];
+    const readBack = (await read(release.token, run.id))[1];
+    for (const reply of [renewed, readBack]) {
+      assert.equal(reply.run.issueKey, target.issueKey);
+      assert.equal(reply.run.state, 'waiting');
+      assert.deepEqual(reply.run.ask, accepted.run.ask);
+      assert.ok(Math.abs(Date.now() - Date.parse(reply.now)) < 5000);
+    }
+
+    const issueRuns = load('src/app/api/issues/[issueId]/runs/route.ts', {
+      ...deps, '@/lib/gateway-identity': load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, { process }),
+    }, globals);
+    const pageRun = async viewer => {
+      session = viewer;
+      const reply = await issueRuns.GET(new Request(browserOrigin), { params: Promise.resolve({ issueId: target.id }) });
+      return (await reply.json()).run;
+    };
+    assert.deepEqual((await pageRun(person)).question, { id: accepted.run.ask[0].id, text: question });
+    assert.equal((await pageRun(owner)).question, undefined);
+    session = person;
+
+    const ownerCookie = await cookie(person);
+    const id = accepted.run.ask[0].id;
+    const answers = await Promise.all([
+      answer(target, run.id, id, { Cookie: ownerCookie }, { questionId: id, decision: 'approved', text: 'Go ahead' }),
+      answer(target, run.id, id, { Cookie: ownerCookie }, { questionId: id, decision: 'approved', text: 'Go ahead' }),
+    ]);
+    assert.deepEqual(answers.map(([status]) => status).sort(), [200, 409]);
+    const answered = (await read(release.token, run.id))[1];
+    assert.equal(answered.run.state, 'running');
+    const receipt = answered.run.ask[0].answer;
+    assert.deepEqual(receipt, { decision: 'approved', text: 'Go ahead', userId: person, at: receipt.at });
+    const entries = await activities(target, 'AGENT_RUN_ANSWERED');
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].userId, person);
+    assert.equal(entries[0].createdAt.toISOString(), receipt.at);
+    assert.equal(JSON.parse(entries[0].details).questionId, id);
+
+    const next = (await ask(release.token, run.id, 'Another question'))[1].run;
+    assert.deepEqual(next.ask[0], answered.run.ask[0]);
+    const secondId = next.ask[1].id;
+    assert.notEqual(secondId, id);
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie }), 409, 'question_not_open');
+    assert.equal((await answer(target, run.id, secondId, { Cookie: ownerCookie }, { questionId: secondId, decision: 'refused' }))[0], 200);
+    assert.equal((await read(release.token, run.id))[1].run.ask[1].answer.decision, 'refused');
+    const pending = (await ask(release.token, run.id, 'Leave this unanswered'))[1].run;
+    const finished = await call(one.PATCH, release.token, { id: run.id, body: {
+      event: 'finish', generation: 'g1', outcome: 'done', note: '## Done\nDone\n## Decisions\nNone\n## Evidence\nTest\n## Next\nNone',
+    } });
+    assert.equal(finished[0], 200);
+    assert.equal((await read(release.token, run.id))[1].run.ask, null);
+    await refused(answer(target, run.id, pending.ask[2].id, { Cookie: ownerCookie }), 409, 'question_not_open');
+  });
+
+  await t.test("the owner's CLI login cannot answer a question", async () => {
+    const own = await issue(person);
+    assert.equal((await checkout(personToken, own))[0], 200, 'the CLI login is valid');
+    const target = await issue(release);
+    const { run } = (await checkout(release.token, target))[1];
+    const waiting = await ask(release.token, run.id, 'Approve this?');
+    assert.equal(waiting[0], 200);
+    await refused(answer(target, run.id, waiting[1].run.ask[0].id, { Authorization: `Bearer ${personToken}` }), 401, 'browser_session_required');
+    assert.equal((await stored(run.id)).state, 'waiting');
+    await lapse(run.id);
+  });
+
+  await t.test('the answer needs a current owner cookie and same-origin POST, and a lost run cannot be answered', async () => {
+    const target = await issue(release);
+    const { run } = (await checkout(release.token, target))[1];
+    const waiting = await ask(release.token, run.id, 'Owner only');
+    assert.equal(waiting[0], 200);
+    const id = waiting[1].run.ask[0].id;
+    const ownerCookie = await cookie(person);
+    await refused(answer(target, run.id, id, {}), 401, 'browser_session_required');
+    await refused(answer(target, run.id, id, { Cookie: await cookie(owner) }), 403, 'seat_owner_required');
+    await refused(answer(target, run.id, id, { Cookie: await cookie(person, -60) }), 401, 'browser_session_required');
+    await refused(answer(target, run.id, id, { Authorization: `Bearer ${release.token}` }), 401, 'browser_session_required');
+    await refused(answer(target, run.id, id, { Authorization: `Bearer ${ownerCookie.split('=')[1]}` }), 401, 'browser_session_required');
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie, Origin: 'https://another.test' }), 403, 'same_origin');
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie, Origin: 'https://another.test', Host: 'another.test' }), 403, 'same_origin');
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie, Origin: 'null' }), 403, 'same_origin');
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie, 'Content-Type': 'text/plain' }), 403, 'same_origin');
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie, 'x-collab-email-verified': 'true' }, undefined, 'gateway'), 401, 'browser_session_required');
+    assert.equal((await stored(run.id)).state, 'waiting');
+    await lapse(run.id);
+    await refused(answer(target, run.id, id, { Cookie: ownerCookie }), 409, 'question_not_open');
+    assert.equal((await stored(run.id)).state, 'lost');
+    assert.equal((await activities(target, 'AGENT_RUN_ANSWERED')).length, 0);
   });
 });

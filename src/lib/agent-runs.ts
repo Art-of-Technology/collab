@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -6,7 +7,7 @@ import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
-import { findIssueByIdOrKey } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
 export { NOT_DONE };
@@ -240,7 +241,21 @@ const finishSchema = z.object({
     inputTokens: tally, outputTokens: tally, cacheReadTokens: tally, cacheWriteTokens: tally }).strict().optional(),
   alsoFinish: z.array(text(128)).min(1).max(20).optional(),
 }).strict();
-export const runActionSchema = z.discriminatedUnion('event', [z.object({ event: z.enum(['renew', 'close']), generation: text(128) }).strict(), finishSchema]);
+// Keep the exact question while rejecting strings PostgreSQL cannot store without changing them.
+const plainText = (max: number) => z.string().max(max).refine(value => !!value.trim() && !/[\u0000\uD800-\uDFFF]/u.test(value), 'Expected nonempty plain text');
+export const runActionSchema = z.discriminatedUnion('event', [
+  z.object({ event: z.enum(['renew', 'close']), generation: text(128) }).strict(),
+  z.object({ event: z.literal('ask'), generation: text(128), ask: plainText(16_000) }).strict(),
+  finishSchema,
+]);
+export const runAnswerSchema = z.object({
+  questionId: text(128), decision: z.enum(['approved', 'refused']), text: plainText(4000).transform(value => value.trim()).optional(),
+}).strict();
+
+type Question = { id: string; text: string; answer: { decision: 'approved' | 'refused'; text: string | null; userId: string; at: string } | null };
+// The existing JSON column was nullable and had no writer before questions.
+const questionsOf = (ask: Prisma.JsonValue) => Array.isArray(ask) ? ask as Question[] : [];
+const questionNotOpen = () => new HandoffError('question_not_open', 'This question is no longer open on the run', 409);
 
 const RUN = { id: true, issueId: true, generation: true, state: true, outcome: true, note: true, ask: true, usage: true,
   leaseUntil: true, startedAt: true, endedAt: true } as const;
@@ -333,13 +348,16 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
   }
 }
 
+const RUN_WITH_KEY = { ...RUN, issue: { select: { issueKey: true } } } as const;
+const withKeyAndTime = ({ issue, ...run }: Prisma.AgentRunGetPayload<{ select: typeof RUN_WITH_KEY }>) =>
+  ({ run: { ...run, ask: run.endedAt ? null : run.ask, issueKey: issue.issueKey }, now: new Date() });
+
 /** A run, read by the account that holds it. */
 export async function getRun(context: Caller, runId: string) {
   await markLost(context.workspace.id);
-  const run = await prisma.agentRun.findFirst({ where: { id: runId, workspaceId: context.workspace.id, userId: context.user.id }, select: { ...RUN, issue: { select: { issueKey: true } } } });
+  const run = await prisma.agentRun.findFirst({ where: { id: runId, workspaceId: context.workspace.id, userId: context.user.id }, select: RUN_WITH_KEY });
   if (!run) throw new HandoffError('not_found', 'Run not found', 404);
-  const { issue, ...rest } = run;
-  return { run: { ...rest, issueKey: issue.issueKey }, now: new Date() };
+  return withKeyAndTime(run);
 }
 
 /**
@@ -355,9 +373,10 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
   const run = await prisma.agentRun.findFirst({ where: own, select: { issueId: true, seatId: true, runner: true, leaseUntil: true, seat: { select: { role: true } } } });
   if (!run) throw new HandoffError('not_found', 'Run not found', 404);
   const live = { ...own, generation: input.generation, endedAt: null };
+  if (input.event === 'ask') return askOnRun(context, { ...live, issueId: run.issueId, seatId: run.seatId }, input.ask);
   if (input.event === 'finish') {
     const statusUnmapped = await finish(context, { ...run, id: runId }, input);
-    return { run: await prisma.agentRun.findFirstOrThrow({ where: own, select: RUN }), statusUnmapped };
+    return { run: { ...await prisma.agentRun.findFirstOrThrow({ where: own, select: RUN }), ask: null }, statusUnmapped };
   }
   if (input.event === 'renew') {
     // By the state, not the clock: the sweep above judged the lease, and a run marked lost by anyone since stays lost.
@@ -372,10 +391,81 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
     if (!closed.count) throw fenced();
   }
   if (input.event === 'renew') {
-    const { issue, ...renewed } = await prisma.agentRun.findFirstOrThrow({ where: own, select: { ...RUN, issue: { select: { issueKey: true } } } });
-    return { run: { ...renewed, issueKey: issue.issueKey }, now: new Date() };
+    return withKeyAndTime(await prisma.agentRun.findFirstOrThrow({ where: own, select: RUN_WITH_KEY }));
   }
-  return { run: await prisma.agentRun.findFirstOrThrow({ where: own, select: RUN }) };
+  return { run: { ...await prisma.agentRun.findFirstOrThrow({ where: own, select: RUN }), ask: null } };
+}
+
+async function askOnRun(context: Caller, run: {
+  id: string; issueId: string; seatId: string | null; generation: string; endedAt: null; userId: string; workspaceId: string;
+}, text: string) {
+  const { issueId, seatId, ...live } = run;
+  const { userId, workspaceId } = live;
+  if (!seatId) throw new HandoffError('seat_required', 'Only a seat run can ask its owner', 403);
+  await forgeGuard(issueId);
+  return prisma.$transaction(async tx => {
+    // Serialize both question writes with finish and assignment. Lock in the same order as checkout.
+    await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${seatId} FOR SHARE`;
+    await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${issueId} FOR UPDATE`;
+    const current = await tx.agentRun.findFirst({ where: { ...live, state: { in: LIVE }, issue: { assigneeId: userId } },
+      select: { ask: true, state: true, issue: { select: { issueKey: true, projectId: true } },
+        seat: { select: { owner: { select: { id: true, email: true, agentSeat: { select: { id: true } } } } } } } });
+    if (!current) throw fenced();
+    await seatWriteGuard(tx, context, current.issue.projectId);
+    if (current.state === 'waiting') throw new HandoffError('question_open', 'This run already has an open question', 409);
+    const owner = current.seat?.owner;
+    if (!owner?.email || owner.agentSeat || !await tx.issue.count({ where: { id: issueId, ...issueReadAccessWhere(owner.id) } })) {
+      throw new HandoffError('owner_required', 'The seat needs an owner who can read this issue', 409);
+    }
+
+    const question = { id: randomUUID(), text, answer: null };
+    const changed = await tx.agentRun.updateMany({ where: { ...live, state: 'running', leaseUntil: { gte: new Date() } },
+      data: { state: 'waiting', ask: [...questionsOf(current.ask), question] } });
+    if (!changed.count) throw fenced();
+    await tx.notification.create({ data: { type: 'ISSUE_RUN_QUESTION', senderId: userId, userId: owner.id,
+      content: `asked a question on ${current.issue.issueKey ?? issueId}. Open the issue in Collab to answer.` } });
+    return withKeyAndTime(await tx.agentRun.findFirstOrThrow({ where: live, select: RUN_WITH_KEY }));
+  });
+}
+
+/** The browser route has already verified the Collab cookie and origin. Here we bind the answer to the current owner and question. */
+export async function answerRunQuestion(userId: string, issueIdOrKey: string, runId: string, input: z.infer<typeof runAnswerSchema>) {
+  const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
+  const run = issue && await prisma.agentRun.findFirst({ where: { id: runId, issueId: issue.id, workspaceId: issue.workspaceId }, select: { seatId: true } });
+  if (!issue || !run) throw new HandoffError('not_found', 'Run not found', 404);
+  const { id: issueId, workspaceId } = issue;
+  const { seatId } = run;
+  if (!seatId) throw questionNotOpen();
+  await forgeGuard(issueId);
+  await markLost(workspaceId);
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${seatId} FOR SHARE`;
+    await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${issueId} FOR UPDATE`;
+    const current = await tx.agentRun.findFirst({ where: { id: runId, issueId, workspaceId, seatId, issue: issueReadAccessWhere(userId) },
+      select: { state: true, endedAt: true, ask: true, userId: true,
+        issue: { select: { projectId: true, assigneeId: true } },
+        seat: { select: { retiredAt: true, projectId: true, owner: { select: { id: true, email: true, agentSeat: { select: { id: true } } } } } } } });
+    if (!current) throw new HandoffError('not_found', 'Run not found', 404);
+    const owner = current.seat?.owner;
+    if (userId !== owner?.id || !owner.email || owner.agentSeat) {
+      throw new HandoffError('seat_owner_required', "Only the seat's owner can answer", 403);
+    }
+    const history = questionsOf(current.ask);
+    const question = history.at(-1);
+    if (current.state !== 'waiting' || current.endedAt || current.userId !== current.issue.assigneeId
+      || current.seat?.retiredAt || current.seat?.projectId !== current.issue.projectId
+      || question?.id !== input.questionId || question.answer !== null) throw questionNotOpen();
+
+    const now = new Date();
+    const answer = { decision: input.decision, text: input.text ?? null, userId, at: now.toISOString() };
+    const changed = await tx.agentRun.updateMany({ where: { id: runId, state: 'waiting', endedAt: null, leaseUntil: { gte: now } },
+      data: { state: 'running', ask: [...history.slice(0, -1), { ...question, answer }] } });
+    if (!changed.count) throw questionNotOpen();
+    await tx.issueActivity.create({ data: { action: 'AGENT_RUN_ANSWERED', itemType: 'ISSUE', itemId: issueId, userId,
+      workspaceId, projectId: current.issue.projectId, createdAt: now,
+      details: JSON.stringify({ runId, questionId: question.id, decision: answer.decision, answerText: answer.text }) } });
+    return { questionId: question.id, answer };
+  });
 }
 
 type Finish = z.infer<typeof finishSchema>;
@@ -679,16 +769,20 @@ export async function securityReviews(issue: { id: string; workspaceId: string }
  * For an issue's page: the run that is open on it (who holds it, since when, and whether this person may clear it
  * now) and its security reviews.
  */
-export async function openRun(userId: string, issueIdOrKey: string) {
+export async function openRun(userId: string, issueIdOrKey: string, browserSession: boolean) {
   const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   await markLost(issue.workspaceId);
   const security = await securityReviews(issue);
-  const run = await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { id: true, state: true, startedAt: true, leaseUntil: true, user: { select: { name: true } } } });
+  const run = await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { id: true, state: true, startedAt: true, leaseUntil: true, ask: true, userId: true, user: { select: { name: true } },
+    seat: { select: { ownerId: true } }, issue: { select: { assigneeId: true } } } });
   if (!run) return { run: null, security };
   // What `clearRun` accepts: a lost run, or a run without a lease, from a person who may assign issues.
   const clearable = (run.state === 'lost' || !run.leaseUntil) && (await checkUserPermission(userId, issue.workspaceId, Permission.ASSIGN_TASK)).hasPermission;
-  return { run: { id: run.id, state: run.state, startedAt: run.startedAt, by: run.user.name, clearable }, security };
+  const question = browserSession && run.state === 'waiting' && run.seat?.ownerId === userId && run.issue.assigneeId === run.userId
+    ? questionsOf(run.ask).at(-1) : undefined;
+  return { run: { id: run.id, state: run.state, startedAt: run.startedAt, by: run.user.name, clearable,
+    ...(question?.answer === null && { question: { id: question.id, text: question.text } }) }, security };
 }
 
 /**
@@ -710,6 +804,6 @@ export async function clearRun(userId: string, issueIdOrKey: string, runId: stri
     if (!cleared.count) throw new HandoffError('not_lost', 'A run under a lease is cleared once it is lost; until then its runner holds it', 409);
     await tx.issueActivity.create({ data: { action: 'AGENT_RUN_CLEARED', itemType: 'ISSUE', itemId: issue.id, userId, workspaceId: issue.workspaceId,
       projectId: issue.projectId, details: JSON.stringify({ runId }) } });
-    return { run: await tx.agentRun.findFirstOrThrow({ where: { id: runId }, select: RUN }) };
+    return { run: { ...await tx.agentRun.findFirstOrThrow({ where: { id: runId }, select: RUN }), ask: null } };
   });
 }

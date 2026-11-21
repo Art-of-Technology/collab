@@ -153,3 +153,29 @@ test('above the timeline: who is working the issue and since when, and a clear b
   global.fetch = async () => { throw new Error('offline'); };
   assert.equal(await open(), '');
 });
+
+test('the owner sees numbered plain-text lines and submits an answer bound to the displayed question', async () => {
+  const question = { id: 'q1', text: '  **Deploy** <b>now</b>\nhttps://example.test/' };
+  let run = { id: 'r1', state: 'waiting', startedAt: '2026-11-15T10:00:00.000Z', by: 'release-a', clearable: false, question };
+  const calls = [];
+  global.fetch = async (url, options) => {
+    if (options?.method === 'POST') {
+      calls.push([url, JSON.parse(options.body)]);
+      const { question: _, ...rest } = run;
+      run = { ...rest, state: 'running' };
+    }
+    return { ok: true, json: async () => ({ run }) };
+  };
+  await shown(React.createElement(OpenRun, { issueId: 'i1' }), async () => {
+    const lines = [...document.querySelectorAll('ol li')];
+    assert.deepEqual(lines.map(line => line.textContent), question.text.split('\n'));
+    assert.equal(document.querySelector('ol a, ol b, ol strong'), null);
+    const buttons = [...document.querySelectorAll('button')];
+    assert.deepEqual(buttons.map(button => button.textContent), ['Approve', 'Refuse']);
+    await React.act(async () => buttons[1].click());
+    assert.equal(document.querySelector('ol'), null);
+  });
+  assert.deepEqual(calls, [['/api/issues/i1/runs/r1/answer', { questionId: 'q1', decision: 'refused' }]]);
+  const answer = await entry('AGENT_RUN_ANSWERED', { runId: 'r1', questionId: 'q1', decision: 'refused', answerText: '**Declined**' });
+  assert.match(answer, /dev-a refused.*5 minutes ago.*\*\*Declined\*\*/);
+});
