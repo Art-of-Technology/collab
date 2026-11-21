@@ -52,7 +52,7 @@ On a phone it is one column in this order: Needs you, Agents now, Shipped today,
 | 8 | The sentence under the title is assembled from the panels' counts. No model is called. |
 | 9 | Times are relative ("3 h ago", "due tomorrow") with the exact UTC time in `title` and `dateTime`. |
 | 10 | The page reloads its data when the tab becomes visible again and when Refresh is pressed. No timer. |
-| 11 | Merging stays on the Git provider: a review row links to the pull request. |
+| 11 | Merging stays on the Git provider. “Open pull request” uses the provider URL supplied by the Needs you loader. |
 | 12 | "Shipped today" uses saved merge and publication times, and says how many connected repositories have no confirmed refresh in the last 24 hours, including those with no known success. Fixing the refresh is other work. |
 | 13 | The single-project view (`?project=<id>`) is not changed. |
 | 14 | `SimplifiedDashboard` and the `/api/ai/dashboard` route are deleted: no screen uses them. |
@@ -60,6 +60,8 @@ On a phone it is one column in this order: Needs you, Agents now, Shipped today,
 ## Panels
 
 The server starts the panel reads in parallel with the current session. Each panel shows its own `denied` or `unavailable` state. No loader waits for another: where one panel needs another's result, the shell passes it on as a prop after both have resolved. A loader never returns a row the viewer could not open.
+
+Home's filters, project search and pagination preserve the current `scope`, `kind`, search (`q`), `dormant` and `page` values except for the setting the person changes. Changing scope, submitting or clearing a search, or switching between active and dormant projects also drops `page` to start on page one.
 
 ### Needs you
 
@@ -70,10 +72,11 @@ For both questions and reviews, the unfinished issue must still be assigned to t
 | Kind | Is in the list when | Leaves the list when | Button |
 | --- | --- | --- | --- |
 | `question` | The seat's current question is unanswered and its run gave no pull request | It is answered, the assignment changes, a newer run starts or the issue is done | Answer |
-| `review` | The same current, unanswered question, with a pull request from that run | The same | Open pull request |
+| `review` | The same current, unanswered question, with a pull request from that run | The same | Open pull request when `pullRequestUrl` is present |
 | `failed` | As in `readSeats`, the run is open (`endedAt` is null) and either its state is `lost` or its non-null `leaseUntil` is earlier than now | The run ends or no longer meets that test | Session has stopped: clear run |
 | `due` | The issue is assigned to the viewer, not done, due before now plus 7 days, and in an active project (see Projects) | It is done or its date moves | Open issue |
 
+- For a review, the Needs you loader resolves the run's `OWNER/REPO#NUMBER` against repositories the viewer can access in the issue's project, using the matched repository's host and provider. If it cannot identify one authorized destination, the review stays in the list with no link.
 - **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. `due` rows are the viewer's own in both.
 - `waitingSeats` is the one value that ignores the scope: it covers every question and review the viewer may read, also in My work. A seat that waits for somebody else is still waiting, and must not be shown as idle.
 - Only `due` rows are held to the active-project rule. A seat that asks, or a run that is lost, is itself the sign that the project is being worked on.
@@ -114,7 +117,7 @@ Unfinished issues of active projects due from now through 7 days ahead, earliest
 - A card shows: name and colour, how many "Needs you" rows the project has, open issues, overdue issues, seats working, the latest issue change, and a 14-day line of issues finished per day. The "Needs you" number and the seats number are shown only when they are known: while their panel is not built or did not load, the card leaves them out instead of showing zero.
 - "Finished per day" counts an issue once when it moves from a status that is not final to one that is, by UTC day, for issues the viewer may read. Use the transition rule that `loadProjectHome` in `src/lib/project-overview.ts` already applies, with its handling of older activity rows that carry status names instead of status ids. A move from one final status to another is not counted. In "My work", for issues assigned to the viewer.
 - The table shows the same fields as columns.
-- The dormant line gives the number of dormant projects and their overdue issues. "Show" is a link (`?dormant=1`) that lists them, paged, with open, overdue and latest change. Dormant projects never count in Due, on a card or in the "Needs you" due rows.
+- The dormant line gives the number of dormant projects and their overdue issues. "Show" sets `dormant=1` in the current query and lists those projects with open, overdue and latest change. Returning to active projects removes `dormant`. Both links reset the project page. Dormant projects never count in Due, on a card or in the "Needs you" due rows.
 
 ### The sentence
 
@@ -150,7 +153,7 @@ type NeedsYouItem = {
   seat: { id: string; name: string } | null;   // the assigned seat for questions and reviews, the run's seat for failed, null for due
   since: string;              // ISO: run end for questions and reviews, leaseUntil (or startedAt) for failed, the due date for due
   text: string | null;        // the run's next step, for `question` and `review`
-  pullRequest: string | null; // OWNER/REPO#NUMBER, for `review`
+  pullRequestUrl: string | null;
   runId: string | null;       // for `failed`
   canAct: boolean;            // may comment (question, review) or may clear the run (failed)
 };
