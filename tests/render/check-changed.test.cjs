@@ -37,7 +37,7 @@ require('node:test').test('fixture test', () => require('node:assert/strict').eq
   write('docs-check.cjs', "const entry = ['docs:check'];\n" + record);
   write('node_modules/typescript/bin/tsc', "const entry = ['tsc', process.execArgv, process.argv.slice(2)];\n" + record);
   write('node_modules/eslint/bin/eslint.js', "const entry = ['eslint', ...process.argv.slice(2)];\n" + record);
-  for (const name of ['branch', 'staged', 'unstaged', 'removed', 'unchanged']) {
+  for (const name of ['branch [draft]', 'staged', 'unstaged', 'removed', 'unchanged']) {
     writeTest(`tests/${name}.test.cjs`);
   }
   git('init', '--initial-branch=main');
@@ -72,33 +72,34 @@ test('runs only the changed test files', t => {
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   git('checkout', '-b', 'seat/fixture', 'HEAD^');
 
-  writeTest('tests/branch.test.cjs', true);
+  const branchTest = 'tests/branch [draft].test.cjs';
+  writeTest(branchTest, true);
   git('commit', '-am', 'Branch change');
   // Change the committed file too, to exercise deduplication across Git states.
-  writeTest('tests/branch.test.cjs');
+  writeTest(branchTest);
   git('rm', 'tests/removed.test.cjs');
   const one = run();
   assert.equal(one.status, 0, one.output);
-  assert.deepEqual(testFiles(one), ['tests/branch.test.cjs']);
+  assert.deepEqual(testFiles(one), [branchTest]);
   assert.deepEqual(one.calls.find(([command]) => command === 'tsc'),
     ['tsc', ['--max-old-space-size=3072'], ['--noEmit', '-p', '.']]);
   const lintArgs = one.calls.find(([command]) => command === 'eslint').slice(1);
-  assert.ok(lintArgs.includes('tests/branch.test.cjs'));
+  assert.ok(lintArgs.includes(branchTest));
   assert.equal(lintArgs.filter(arg => arg.endsWith('.cjs')).length, 1);
 
   for (const name of ['staged', 'unstaged']) {
     write(`tests/${name}.test.cjs`, `const entry = ['test', 'tests/${name}.test.cjs'];\n` + record);
     if (name === 'staged') git('add', 'tests/staged.test.cjs');
   }
-  writeTest('tests/untracked [draft].test.cjs');
-  const many = run('./tests/branch.test.cjs', 'tests/unchanged.test.cjs');
+  writeTest('tests/untracked {draft,final}.test.cjs');
+  const many = run(`./${branchTest}`, 'tests/unchanged.test.cjs');
   assert.equal(many.status, 0, many.output);
   assert.deepEqual(testFiles(many), [
-    'tests/branch.test.cjs',
+    branchTest,
     'tests/staged.test.cjs',
     'tests/unchanged.test.cjs',
     'tests/unstaged.test.cjs',
-    'tests/untracked [draft].test.cjs',
+    'tests/untracked {draft,final}.test.cjs',
   ]);
 });
 
@@ -122,7 +123,7 @@ test('adds the docs check when a docs page or a command list changed', t => {
 
 test('exits non-zero and names the step when a step fails', t => {
   const { run, write, writeTest } = fixture(t);
-  writeTest('tests/failure.test.cjs', true);
+  writeTest('tests/failure {draft,final}.test.cjs', true);
   write('content/docs/page.md');
   const result = run();
   assert.equal(result.status, 1, result.output);

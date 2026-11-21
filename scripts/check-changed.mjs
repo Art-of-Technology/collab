@@ -37,7 +37,20 @@ try {
 const testFiles = files.filter(file => /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file));
 const extraTests = process.argv.slice(2).map(file => relative(process.cwd(), resolve(file)).split(sep).join('/'));
 const tests = [...new Set([...testFiles, ...extraTests])];
-if (tests.length) {
+if (tests.some(file => /[{}\\]/.test(file))) {
+  // Node's CLI expands braces and treats backslashes as separators even inside glob patterns.
+  runStep('node --test', process.execPath, ['-', ...tests], {
+    stdio: ['pipe', 'inherit', 'inherit'],
+    input: `
+    import { run } from 'node:test';
+    import { tap } from 'node:test/reporters';
+    run({ files: process.argv.slice(2), concurrency: true })
+      .on('test:fail', () => { process.exitCode = 1; })
+      .compose(tap)
+      .pipe(process.stdout);
+    `,
+  });
+} else if (tests.length) {
   // Node treats test arguments as glob patterns, even for existing files.
   const patterns = tests.map(file => file.replace(/[[\]*?()]/g, char => `[${char}]`));
   runStep('node --test', process.execPath, ['--test', '--', ...patterns]);
