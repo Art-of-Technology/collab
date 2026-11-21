@@ -115,6 +115,8 @@ test('what a person has typed survives a change of type, and untouched headings 
 
 test('a quick issue with untouched headings is stored without a description', async () => {
   await modal(async page => {
+    const points = [...page.checklist().querySelectorAll('li')].find(item => item.textContent.startsWith('Story points'));
+    assert.match(points.textContent, /unavailable in this form.*create the issue without it/i);
     await page.type('Title', 'Quick one');
     await page.click('Create anyway');
     assert.equal(page.created.length, 1);
