@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "check:changed": "node scripts/check-changed.mjs",
     "test": "node scripts/check-tests.mjs",
     "test:browser": "node --test tests/browser/*.test.cjs",
     "docs:check": "node scripts/check-docs.mjs && node scripts/build-docs-reference.mjs --check",
