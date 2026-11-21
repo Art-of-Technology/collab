@@ -155,7 +155,7 @@ type NeedsYouItem = {
   text: string | null;        // the run's next step, for `question` and `review`
   pullRequestUrl: string | null;
   runId: string | null;       // for `failed`
-  canAct: boolean;            // may comment (question, review) or may clear the run (failed)
+  canAct: boolean;            // may answer (question) or may clear the run (failed); false for review and due
 };
 type NeedsYouOverview = Panel<{
   generatedAt: string;
@@ -181,7 +181,7 @@ type ShippedOverview = Panel<{
 }>;
 ```
 
-`WorkspaceIssueOverview` (ready) keeps returning `attention` and `recent` through waves 1 and 2, because the shell shows them while "Needs you" is not built; the last issue removes them. Its `summary` counts active projects only. Added are `dueSoon: DashboardIssue[]`, `dueSoonTotal: number`, `dormant: { projects: number; overdueIssues: number }`, `showingDormant: boolean`, and on each project `finishedPerDay: number[]` (14 numbers, oldest first).
+`WorkspaceIssueOverview` (ready) keeps returning `attention` and `recent` through waves 1 and 2, because the shell shows them while "Needs you" is not built; the last issue removes them. Its `summary` counts active projects only. Added are `dueSoon: DashboardIssue[]` (the Due panel's exact count is the existing `summary.dueSoonIssues`), `dormant: { projects: number; overdueIssues: number }`, `showingDormant: boolean`, and on each project `finishedPerDay: number[]` (14 numbers, oldest first).
 
 | Hand-over | What crosses | Pinned by |
 | --- | --- | --- |
