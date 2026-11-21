@@ -32,6 +32,7 @@ export async function GET(
         description: true,
         color: true,
         workspaceId: true,
+        issuePrefix: true,
         createdAt: true,
         updatedAt: true,
       }
@@ -505,7 +506,7 @@ export async function GET(
       comments: note.comments,
     }));
 
-    const { overview, burn } = await loadProjectHome(projectId, project.workspaceId, actor.id, project.createdAt, now);
+    const { overview, burn } = await loadProjectHome(projectId, project.workspaceId, actor.id, project.createdAt, now, project.issuePrefix);
 
     return NextResponse.json({
       overview,

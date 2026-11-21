@@ -14,7 +14,7 @@ export const burnAccountSelect = {
 export type BurnTransition = { at: Date; closed: boolean; actor?: BurnAccount };
 type Work = {
   createdAt: Date; updatedAt: Date; finishedAt: Date | null; done: boolean; closer?: BurnAccount;
-  history?: BurnTransition[];
+  history?: BurnTransition[]; agentRequestRole?: string | null;
 };
 type Merge = { mergedAt: Date | null; mergedBy: BurnAccount | null };
 type Run = { startedAt: Date; endedAt: Date | null; user: BurnAccount };
@@ -31,7 +31,7 @@ export function calculateProjectBurn({
   createdAt: Date;
   now: Date;
   work: Work[];
-  milestones: { label: string; dueDate: Date }[];
+  milestones: { label: string; dueDate: Date; done?: boolean }[];
   accounts: BurnAccount[];
   merges: Merge[];
   runs: Run[];
@@ -41,7 +41,7 @@ export function calculateProjectBurn({
   const today = burnDay(now);
   const projectStart = Math.min(today, burnDay(createdAt));
   const contributors = new Map<string, {
-    id: string; name: string; agent: boolean; issuesClosed: number; prsMerged: number;
+    id: string; name: string; agent: boolean; issuesClosed: number; requestsHandled: number; prsMerged: number;
     runs: number; runHours: number; hoursLogged: number; spendUsd?: number | null;
   }>();
   function contributor(account: BurnAccount) {
@@ -50,7 +50,7 @@ export function calculateProjectBurn({
       const seat = account.agentSeat?.workspaceId === workspaceId ? account.agentSeat : null;
       row = {
         id: account.id, name: seat?.name ?? account.name ?? 'Unnamed account',
-        agent: !!account.agentSeat, issuesClosed: 0, prsMerged: 0, runs: 0, runHours: 0, hoursLogged: 0,
+        agent: !!account.agentSeat, issuesClosed: 0, requestsHandled: 0, prsMerged: 0, runs: 0, runHours: 0, hoursLogged: 0,
       };
       contributors.set(account.id, row);
     }
@@ -91,6 +91,10 @@ export function calculateProjectBurn({
   }
 
   for (const issue of work) {
+    if (issue.agentRequestRole != null) {
+      if (issue.done && issue.closer) contributor(issue.closer).requestsHandled++;
+      continue;
+    }
     add(scopeDays, burnDay(issue.createdAt));
     // A closure that was later reopened still happened in its week. The reopen
     // takes the issue out of the done line again.
@@ -211,7 +215,9 @@ export function calculateProjectBurn({
   return {
     today, historyStart, historyLimited: historyStart > projectStart, recentStart,
     points, forecast, remaining,
-    milestones: milestones.map(({ label, dueDate }) => ({ label, day: burnDay(dueDate) })),
+    wholeProjectEnd: milestones.reduce((end, { dueDate }) => Math.max(end, burnDay(dueDate)), today + 8 * WEEK),
+    milestones: milestones.filter(milestone => !milestone.done && burnDay(milestone.dueDate) >= today)
+      .map(({ label, dueDate }) => ({ label, day: burnDay(dueDate) })),
     weeklyStart, weeklyLimited: issuesStart > projectStart, prStart,
     weeks: [...weeks.values()].filter(entry => entry.day <= thisWeek).sort((a, b) => a.day - b.day),
     prCounts, undatedPrs, closures,

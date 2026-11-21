@@ -223,7 +223,7 @@ export function calculateProjectOverview(
   };
 }
 
-export async function loadProjectHome(projectId: string, workspaceId: string, userId: string, createdAt: Date, now: Date) {
+export async function loadProjectHome(projectId: string, workspaceId: string, userId: string, createdAt: Date, now: Date, issuePrefix: string) {
   const issueWhere = { projectId, workspaceId, deletedAt: null, AND: [issueReadAccessWhere(userId)] };
   const projectWhere = { id: projectId, workspaceId, workspace: postWorkspaceAccessWhere(userId) };
   const seatRunWhere = { workspaceId, issue: issueWhere, state: 'finished', seatId: { not: null }, seat: { workspaceId } };
@@ -238,6 +238,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     ...overviewIssueSelect,
     projectStatus: { select: { ...overviewIssueSelect.projectStatus.select, id: true, name: true, projectId: true } },
     updatedAt: true,
+    agentRequestRole: true,
     assignee: { select: burnAccountSelect },
     targetRelations: {
       where: {
@@ -378,8 +379,15 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     select: { id: true, startedAt: true, endedAt: true, user: { select: burnAccountSelect }, usage: billing },
     orderBy: pageOrder, take: PAGE_SIZE,
   }));
+  const workspaceAccountWhere = {
+    OR: [
+      { agentSeat: { workspaceId } },
+      { ownedWorkspaces: { some: { id: workspaceId } } },
+      { workspaceMemberships: { some: { workspaceId } } },
+    ],
+  } satisfies Prisma.UserWhereInput;
   const billingAtStart = !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
-  const [baseline, seats, merges, initialRuns, logs] = await Promise.all([
+  const [baseline, seats, storedMerges, initialRuns, logs] = await Promise.all([
     prisma.projectBaseline.findFirst({
       where: { project: projectWhere },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -391,7 +399,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     })),
     collect(after => prisma.pullRequest.findMany({
       where: { state: 'MERGED', repository: { project: projectWhere }, id: after ? { gt: after } : undefined },
-      select: { id: true, mergedAt: true, mergedBy: { select: {
+      select: { id: true, issueId: true, headBranchName: true, title: true, mergedAt: true, mergedBy: { select: {
         ...burnAccountSelect,
         ownedWorkspaces: { where: { id: workspaceId }, select: { id: true } },
         workspaceMemberships: { where: { workspaceId }, select: { id: true } },
@@ -405,6 +413,60 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     })),
     readIssues(),
   ]);
+  const issuesById = new Map(issues.map(issue => [issue.id, issue]));
+  const issueIdsByKey = new Map(issues.flatMap(issue => issue.issueKey ? [[issue.issueKey.toUpperCase(), issue.id]] : []));
+  const escapedPrefix = issuePrefix?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const issueKeyPattern = escapedPrefix ? new RegExp(`\\b${escapedPrefix}-\\d+\\b`, 'i') : null;
+  const resolveKey = (text: string | null) => {
+    const key = text && issueKeyPattern?.exec(text)?.[0];
+    return key ? issueIdsByKey.get(key.toUpperCase()) : undefined;
+  };
+  // Some PRs first arrive as a merge or via sync, with a branch and title but no stored issue ID.
+  const merges = storedMerges.map(merge => ({
+    ...merge, issueId: merge.issueId ?? resolveKey(merge.headBranchName) ?? resolveKey(merge.title),
+  }));
+  const firstMergeByIssue = new Map<string, Date>();
+  for (const { issueId, mergedAt } of merges) {
+    if (!issueId || !mergedAt || !issuesById.has(issueId)) continue;
+    const first = firstMergeByIssue.get(issueId);
+    if (!first || mergedAt < first) firstMergeByIssue.set(issueId, mergedAt);
+  }
+  const changesByIssue = new Map<string, { createdAt: Date; oldValue: string | null }[]>();
+  const linkedIssues = [...firstMergeByIssue];
+  for (let start = 0; start < linkedIssues.length; start += PAGE_SIZE) {
+    for await (const changes of pages(after => prisma.issueActivity.findMany({
+      where: {
+        workspaceId, itemType: 'ISSUE', id: after ? { gt: after } : undefined,
+        fieldName: { in: ['assignee', 'assigneeId'] },
+        OR: linkedIssues.slice(start, start + PAGE_SIZE).map(([itemId, mergedAt]) => ({
+          itemId, createdAt: { gt: mergedAt },
+        })),
+      },
+      select: { id: true, itemId: true, createdAt: true, oldValue: true },
+      orderBy: pageOrder, take: PAGE_SIZE,
+    }))) {
+      for (const change of changes) {
+        const history = changesByIssue.get(change.itemId) ?? [];
+        history.push(change);
+        changesByIssue.set(change.itemId, history);
+      }
+    }
+  }
+  for (const history of changesByIssue.values()) history.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // The first assignment change after the merge records who held it at merge time.
+  const mergeAssignments = merges.map(({ issueId, mergedAt }) => {
+    if (!issueId || !mergedAt) return undefined;
+    return changesByIssue.get(issueId)?.find(change => change.createdAt > mergedAt);
+  });
+  const historicalIds = [...new Set(mergeAssignments.flatMap(change => change?.oldValue ? [change.oldValue] : []))];
+  const historicalAssignees = new Map<string, BurnAccount>();
+  for (let start = 0; start < historicalIds.length; start += PAGE_SIZE) {
+    const accounts = await prisma.user.findMany({
+      where: { ...workspaceAccountWhere, id: { in: historicalIds.slice(start, start + PAGE_SIZE) } },
+      select: burnAccountSelect,
+    });
+    for (const account of accounts) historicalAssignees.set(account.id, account);
+  }
   const baselineSetter = baseline && await prisma.user.findFirst({
     where: {
       id: baseline.setById,
@@ -445,13 +507,21 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     work: work.map(issue => ({
       ...issue, done: isDone(issue), closer: closingActors.get(issue.id), history: closureHistory.get(issue.id),
     })),
-    milestones: issues.flatMap(issue => issue.type === 'MILESTONE' && !isDone(issue) && issue.dueDate && day(issue.dueDate) >= day(now)
-      ? [{ label: issue.issueKey ?? issue.title, dueDate: issue.dueDate }] : []),
+    milestones: issues.flatMap(issue => issue.type === 'MILESTONE' && issue.dueDate
+      ? [{ label: issue.issueKey ?? issue.title, dueDate: issue.dueDate, done: isDone(issue) }] : []),
     accounts: [...seats.map(seat => seat.user), ...work.flatMap(issue => issue.assignee ?? [])],
-    merges: merges.map(({ mergedAt, mergedBy }) => ({
-      mergedAt, mergedBy: mergedBy && (mergedBy.agentSeat?.workspaceId === workspaceId ||
-        mergedBy.ownedWorkspaces.length > 0 || mergedBy.workspaceMemberships.length > 0) ? mergedBy : null,
-    })),
+    merges: merges.map(({ issueId, mergedAt, mergedBy }, index) => {
+      if (issueId) {
+        const change = mergeAssignments[index];
+        const assignee = change
+          ? historicalAssignees.get(change.oldValue ?? '')
+          : mergedAt && issuesById.get(issueId)?.assignee;
+        return { mergedAt, mergedBy: assignee ?? null };
+      }
+      const inWorkspace = mergedBy && (mergedBy.agentSeat?.workspaceId === workspaceId ||
+        mergedBy.ownedWorkspaces.length > 0 || mergedBy.workspaceMemberships.length > 0);
+      return { mergedAt, mergedBy: inWorkspace ? mergedBy : null };
+    }),
     runs, logs, spend,
   });
   const externalProjectIds = new Set<string>();
@@ -500,13 +570,15 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     return [{ ...issueRef(issue), blockedDays: Math.max(0, elapsed) }];
   });
   // The Overview tile keeps its original workspace-specific attribution.
-  const closedByAgents = work.filter(issue => closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
+  const closedByAgents = work.filter(issue => issue.agentRequestRole == null &&
+    closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
+  const { agents, people, unmatched } = burn.closures;
   return {
     burn,
     overview: {
       ...overview, work: workItems, baselineSetBy: baselineSetter?.name ?? null,
       blocked,
-      closedByAgents, closedByAgentsPercent: percent(closedByAgents, overview.stats.done),
+      closedByAgents, closedByAgentsPercent: percent(closedByAgents, agents + people + unmatched),
       runCount: burn.runCount,
       ...(billingAllowed ? { agentSpendUsd: burn.spendUsd ?? null } : {}),
     },
