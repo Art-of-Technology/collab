@@ -71,7 +71,7 @@ function planMilestones(
       const start = issue.startDate ? day(issue.startDate) : due === null ? null : previousDue ?? due;
       previousDue = due ?? previousDue;
       const decision = due !== null && !issue.startDate && !linked.length;
-      const state = decision ? 'decision' : isDone(issue) ? 'done'
+      const state: 'decision' | 'done' | 'running' | 'planned' = decision ? 'decision' : isDone(issue) ? 'done'
         : issue.firstStartedAt || issue.projectStatus?.category === 'in_progress' ? 'running' : 'planned';
       const forecast = start !== null && state !== 'done' && !decision
         ? forecastFinish(today, start, linked.length - completed, recentClosures) : null;
@@ -202,7 +202,7 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
           AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
         },
       },
-      select: { createdAt: true, setById: true },
+      select: { createdAt: true },
       orderBy: { createdAt: 'asc' },
       take: 1,
     },
@@ -278,7 +278,7 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
     prisma.projectBaseline.findFirst({
       where: { project: projectWhere },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { createdAt: true },
+      select: { createdAt: true, setById: true },
     }),
     prisma.agentRun.count({ where: seatRunWhere }),
     agentSpend(),
