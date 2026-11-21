@@ -57,7 +57,9 @@ function IssueGroup({ milestone, issues, openIssue }: {
                 className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 px-2.5 py-[7px] text-left text-[13px] hover:bg-collab-700 sm:flex">
                 <span className="whitespace-nowrap tabular-nums text-collab-400">{issue.issueKey}</span>
                 <span className="min-w-0 flex-1 truncate">{issue.title}</span>
-                <span className={cn(chip, issue.done ? 'border-emerald-400/40 text-emerald-400' : issue.blocked && 'border-red-400/40 text-red-400')}>{issue.status}</span>
+                <span className={cn(chip, 'max-w-[45vw] truncate', issue.done ? 'border-emerald-400/40 text-emerald-400' : issue.blocked && 'border-red-400/40 text-red-400')} title={issue.status}>
+                  {issue.status}
+                </span>
                 <Assignee issue={issue} className="sm:max-w-[30%]" />
               </button>
             </li>
@@ -95,7 +97,7 @@ function WorkBoard({ issues, statuses, milestones, openIssue }: {
               return (
                 <li key={issue.id}>
                   <button type="button" onClick={() => openIssue(issue.id)}
-                    className="grid w-full min-w-0 gap-1 rounded-lg border border-white/[.09] bg-collab-800 p-2 text-left text-xs hover:border-blue-500">
+                    className="grid w-full min-w-0 grid-cols-1 gap-1 rounded-lg border border-white/[.09] bg-collab-800 p-2 text-left text-xs hover:border-blue-500">
                     <span className="tabular-nums text-collab-400">{issue.issueKey}</span>
                     <span className="break-words">{issue.title}</span>
                     <span className="flex min-w-0 flex-wrap items-center gap-1">
