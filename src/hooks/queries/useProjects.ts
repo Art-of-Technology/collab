@@ -372,7 +372,8 @@ export const useProjectSummary = (projectId: string | undefined, workspaceId: st
   useEffect(() => {
     if (!workspaceId || !projectId) return;
     return subscribeWorkspaceEvents(workspaceId, event => {
-      if (event.projectId === projectId && (event.type === 'issue.updated' || event.type === 'issue.created')) {
+      if ((event.type === 'issue.updated' && (event.projectId === projectId || event.previousProjectId === projectId)) ||
+        (event.type === 'issue.created' && event.projectId === projectId)) {
         void queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
       }
     });

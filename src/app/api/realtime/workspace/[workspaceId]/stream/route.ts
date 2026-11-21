@@ -155,6 +155,12 @@ export async function GET(
                   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
                     typeof parsed.type !== 'string' || !parsed.type) return;
                   if (parsed.workspaceId !== undefined && parsed.workspaceId !== workspaceId) return;
+                  if (parsed.previousProjectId !== undefined && (
+                    parsed.type !== 'issue.updated' || typeof parsed.previousProjectId !== 'string' ||
+                    !await prisma.project.findFirst({
+                      where: { id: parsed.previousProjectId, workspaceId, ...issueAccessWhere(user.id) }, select: { id: true },
+                    })
+                  )) return;
                   if (parsed.type.startsWith('view.') || parsed.viewId !== undefined) {
                     if (typeof parsed.viewId !== 'string' || !parsed.viewId || !await prisma.view.findFirst({
                       where: { id: parsed.viewId, workspaceId, ...viewReadAccessWhere(user.id) }, select: { id: true },

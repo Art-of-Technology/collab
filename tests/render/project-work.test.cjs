@@ -4,6 +4,13 @@ const React = require('react');
 
 const folder = 'src/app/(main)/[workspaceId]/projects/[projectSlug]';
 const jsx = { 'react/jsx-runtime': require('react/jsx-runtime') };
+const loadWork = () => load(folder + '/ProjectWork.tsx', {
+  ...jsx, react: React,
+  'next/link': { default: ({ scroll, prefetch, ...props }) => React.createElement('a', props) },
+  '@/components/issue/IssueDetailModal': { IssueDetailModal: 'aside' },
+  '@/hooks/useIssueModalUrlState': { useIssueModalUrlState: () => ({ setSelectedIssueId() {} }) },
+  '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+}).ProjectWork;
 
 test('old board URLs open the correct Work sub-view, using only the matching project binding', async () => {
   const params = Promise.resolve({ workspaceId: 'example-space', projectSlug: 'studio' });
@@ -75,13 +82,7 @@ test('Work regroups refreshed issues in place and carries the filter between the
   global.document = dom.window.document;
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const { createRoot } = require('react-dom/client');
-  const { ProjectWork } = load(folder + '/ProjectWork.tsx', {
-    ...jsx, react: React,
-    'next/link': { default: ({ scroll, prefetch, ...props }) => React.createElement('a', props) },
-    '@/components/issue/IssueDetailModal': { IssueDetailModal: 'aside' },
-    '@/hooks/useIssueModalUrlState': { useIssueModalUrlState: () => ({ setSelectedIssueId() {} }) },
-    '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
-  });
+  const ProjectWork = loadWork();
   const milestone = (id, issueKey, title) => ({ id, issueKey, title, dueDate: '2026-11-21', forecastDate: '2026-11-24', driftDays: 3, completed: 0 });
   const milestones = [milestone('one', 'M9', 'Launch'), milestone('two', 'M10', 'Polish')];
   const moving = { id: 'move', issueKey: 'DEMO-1', title: 'Move me', milestoneId: 'one', status: 'Backlog', statusId: 'todo' };
@@ -121,6 +122,89 @@ test('Work regroups refreshed issues in place and carries the filter between the
     assert.equal(document.querySelector('a').getAttribute('href'), '/example/projects/studio?tab=work');
   } finally {
     await React.act(async () => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('a project move refreshes both open Work views through the mutation response or the workspace event', async () => {
+  const dom = new JSDOM('<main></main>', { url: 'https://example.test' });
+  global.window = dom.window;
+  global.document = dom.window.document;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const { createRoot } = require('react-dom/client');
+  const query = require('@tanstack/react-query');
+  const client = new query.QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { gcTime: Infinity } },
+  });
+  const root = createRoot(document.querySelector('main'));
+  const events = [];
+  const listeners = new Set();
+  let issue = { id: 'move', issueKey: 'DEMO-1', projectId: 'studio', workspaceId: 'space',
+    title: 'Move me', milestoneId: null, status: 'Backlog', statusId: 'todo' };
+  const { PUT } = load('src/app/api/issues/[issueId]/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/session': { getCurrentUser: async () => ({ id: 'editor' }) },
+    '@/lib/prisma': { prisma: { issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] } } },
+    '@/lib/permissions': {}, '@/lib/issue-finder': {}, '@/lib/notification-service': {}, '@/utils/mentions': {},
+    '@/lib/board-item-activity-service': { compareObjects: () => [] },
+    '@/lib/event-bus': { emitIssueUpdated: async () => {} },
+    '@/lib/redis': { publishEvent: async (channel, event) => { assert.equal(channel, 'workspace:space:events'); events.push(event); } },
+    '@/lib/issue-mutation': { updateIssue: async (_user, id, { projectId }) => {
+      assert.equal(id, issue.id);
+      const oldIssue = issue;
+      issue = { ...issue, projectId };
+      return { issue, oldIssue, assigneeChanged: false, updateData: {} };
+    } },
+  }, { URL, console });
+  const fetch = (url, options) => PUT(new Request(url, options), { params: Promise.resolve({ issueId: 'move' }) });
+  const { useUpdateIssue } = load('src/hooks/queries/useIssues.ts', { '@tanstack/react-query': query }, { URL, window, fetch });
+  const { useProjectSummary } = load('src/hooks/queries/useProjects.ts', {
+    react: React, '@tanstack/react-query': query,
+    '@/lib/workspace-event-source': { subscribeWorkspaceEvents: (id, listener) => {
+      assert.equal(id, 'space');
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    } },
+    axios: { default: { get: async url => ({ data: {
+      overview: { work: url === `/api/projects/${issue.projectId}/summary` ? [issue] : [], milestones: [] },
+      statusDistribution: [],
+    } }) } },
+  });
+  const ProjectWork = loadWork();
+  let move;
+  function WorkView({ id }) {
+    const { data } = useProjectSummary(id, 'space');
+    const { mutateAsync } = useUpdateIssue();
+    if (id === 'studio') move = projectId => mutateAsync({ id: 'move', workspaceId: 'space', projectId });
+    return React.createElement('div', { id }, data && React.createElement(ProjectWork, {
+      base: `/example/projects/${id}`, milestoneId: null, noMilestone: false, hasForge: false, summary: data,
+    }));
+  }
+  const hasIssue = id => document.getElementById(id)?.textContent.includes('Move me');
+  async function visibleIn(source, destination) {
+    for (let i = 0; i < 50 && (!document.querySelector(`#${source} button`) || hasIssue(source) || !hasIssue(destination)); i++) {
+      await React.act(() => new Promise(resolve => setTimeout(resolve, 10)));
+    }
+    assert.equal(hasIssue(source), false, `issue should leave ${source}`);
+    assert.equal(hasIssue(destination), true, `issue should appear in ${destination}`);
+  }
+  try {
+    await React.act(async () => root.render(React.createElement(query.QueryClientProvider, { client },
+      React.createElement(WorkView, { id: 'studio' }), React.createElement(WorkView, { id: 'lab' }))));
+    await visibleIn('lab', 'studio');
+
+    await React.act(async () => move('lab'));
+    // The originating client updates even before its workspace event arrives.
+    await visibleIn('studio', 'lab');
+
+    const res = await fetch('https://example.test/api/issues/move', { method: 'PUT', body: JSON.stringify({ projectId: 'studio' }) });
+    assert.equal(res.status, 200);
+    assert.equal(events.length, 2);
+    await React.act(async () => { listeners.forEach(listener => listener(events[1])); });
+    await visibleIn('lab', 'studio');
+  } finally {
+    await React.act(async () => root.unmount());
+    client.clear();
     dom.window.close();
   }
 });

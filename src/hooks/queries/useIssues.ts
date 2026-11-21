@@ -30,6 +30,7 @@ export interface UpdateIssueData {
   milestoneId?: string | null;
   reporterId?: string;
   labels?: string[];
+  projectId?: string;
   startDate?: Date | null;
   dueDate?: Date | null;
   position?: number;
@@ -233,9 +234,10 @@ export function useUpdateIssue() {
               query.queryKey[2] === updatedIssue.workspaceId
           });
         }
-        if (updatedIssue.projectId) {
-          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(updatedIssue.projectId) });
-          queryClient.invalidateQueries({ queryKey: ['projectSummary', updatedIssue.projectId] });
+        for (const projectId of [updatedIssue.projectId, data.previousProjectId]) {
+          if (!projectId) continue;
+          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(projectId) });
+          queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
         }
       }
     }
