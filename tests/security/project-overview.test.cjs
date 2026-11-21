@@ -193,6 +193,7 @@ test('Plan charts undated completed milestones using actual dates before chainin
     closed('milestone-only', { type: 'MILESTONE', finishedAt: date(17) }),
     closed('with-work', { type: 'MILESTONE', firstStartedAt: date(8), finishedAt: date(11) }),
     closed('linked', { milestoneId: 'with-work', firstStartedAt: date(6), finishedAt: date(12) }),
+    milestone('reversed', { startDate: date(26), dueDate: date(19) }),
     milestone('open', { projectStatus: { isFinal: false, category: 'in_progress' }, firstStartedAt: date(15) }),
     closed('unknown-finish', { type: 'MILESTONE', finishedAt: null }),
   ], null, now);
@@ -203,7 +204,23 @@ test('Plan charts undated completed milestones using actual dates before chainin
     { id: 'milestone-only', state: 'done', start: asDay(date(17)), end: asDay(date(17)) },
     { id: 'scheduled', state: 'planned', start: asDay(date(17)), end: asDay(date(25)) },
   ]);
-  assert.deepEqual(result.plan.milestones.filter(row => row.start === null).map(row => row.id), ['open', 'unknown-finish']);
+  assert.deepEqual(result.plan.milestones.filter(row => row.start === null).map(row => row.id), ['reversed', 'open', 'unknown-finish']);
   assert.equal(charted[1].startDate, null);
   assert.equal(charted[1].dueDate, null);
+});
+
+test('Plan preserves reversed dates for repair without charting them or chaining a start from them', () => {
+  const result = calculateProjectOverview([
+    milestone('valid', { dueDate: date(22), baselineDueDate: date(22) }),
+    milestone('reversed', { startDate: date(28), dueDate: date(24), baselineStartDate: date(28), baselineDueDate: date(24) }),
+    milestone('next', { dueDate: date(27), baselineDueDate: date(27) }),
+    issue('linked', { milestoneId: 'next' }),
+  ], date(21), now);
+  const [valid, reversed, next] = result.plan.milestones;
+  assert.equal(reversed.invalidDates, true);
+  assert.deepEqual([reversed.start, reversed.end, reversed.forecast, reversed.driftDays], [null, null, null, null]);
+  assert.equal(reversed.startDate, date(28).toISOString());
+  assert.equal(reversed.dueDate, date(24).toISOString());
+  assert.equal(next.start, valid.end);
+  assert.equal(next.baselineStart, valid.baselineDue);
 });

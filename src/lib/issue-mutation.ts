@@ -1,4 +1,4 @@
-import { assertMilestoneHasNoIssues, InvalidMilestone, validateMilestone } from '@/lib/issue-milestones';
+import { assertMilestoneHasNoIssues, InvalidMilestone, milestoneDateError, validateMilestone } from '@/lib/issue-milestones';
 import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { z } from 'zod';
 import { enqueueLabelHandoff } from '@/lib/agent-label-triggers';
@@ -79,14 +79,8 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       return { error: 'No permission to edit these issue fields', status: 403 };
     }
 
-    if ((body.type ?? existingIssue.type) === 'MILESTONE' &&
-        (body.startDate !== undefined || body.dueDate !== undefined)) {
-      const start = body.startDate === undefined ? existingIssue.startDate : body.startDate;
-      const due = body.dueDate === undefined ? existingIssue.dueDate : body.dueDate;
-      if (start && due && new Date(due).toISOString().slice(0, 10) < new Date(start).toISOString().slice(0, 10)) {
-        return { error: 'The due date is before the start.', status: 400 };
-      }
-    }
+    const dateError = milestoneDateError(existingIssue, body);
+    if (dateError) return { error: dateError, status: 400 };
 
     await assertLegacyProjectWriteAllowed(existingIssue.projectId, body.projectId ?? existingIssue.projectId);
 
