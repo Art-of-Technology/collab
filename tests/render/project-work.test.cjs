@@ -128,6 +128,22 @@ test('Work regroups refreshed issues in place and carries the filter between the
     await render({ ...moving, milestoneId: 'two' });
     assert.deepEqual(groups().map(group => group.getAttribute('aria-label')), ['Backlog', 'No status']);
     assert.match(groups()[1].textContent, /No status · 2.*Empty.*Unknown/);
+
+    milestones[0].completed = 2;
+    await render(moving, { waitingIssueIds: ['stay', 'loose'] });
+    assert.match(document.body.textContent, /2 of 5 issues shown/);
+    assert.match(document.body.textContent, /Stay here/);
+    assert.match(document.body.textContent, /Unplanned/);
+    assert.doesNotMatch(document.body.textContent, /Move me|Empty|Unknown/);
+    assert.equal(document.querySelector('a').textContent, 'Show all issues');
+    await click([...document.querySelectorAll('button')].find(button => button.textContent === 'By milestone'));
+    assert.equal(groups().length, 2);
+    assert.match(groups()[0].textContent, /0 of 1/);
+    assert.doesNotMatch(document.body.textContent, /Move me|Empty|Unknown/);
+
+    await render(moving, { waitingIssueIds: [] });
+    assert.match(document.body.textContent, /0 of 5 issues shown/);
+    assert.match(document.body.textContent, /No issues are waiting on this issue/);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();

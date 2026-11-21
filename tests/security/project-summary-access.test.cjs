@@ -50,12 +50,36 @@ function fixture(options={}){
  if (options.role) target.workspace.members.find(m => m.userId === actor.id).role = options.role;
  const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,category:null,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
- const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],createdAt:date(-60),...overrides});
+ const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],sourceRelations:[],createdAt:date(-60),...overrides});
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
- const visibleParent=issue('visible-parent');
- const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
+ const visibleParent=issue('visible-parent',{projectId:sibling.id,project:sibling});
+ const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus}),visibleParent];
  const activity = [];
  const blocks = (sourceIssue, days) => ({ relationType: 'BLOCKS', sourceIssue, createdAt: date(-days) });
+ if (options.waitingChains) {
+  issues[0].targetRelations = [];
+  for (const [count, id, updatedDays] of [[9, 'idle-root', -14], [7, 'recent-root', -13]]) {
+   let prerequisite = issue(id, { updatedAt: date(updatedDays) });
+   issues.push(prerequisite);
+   for (let index = 0; index < count; index++) {
+    const waiting = issue(`${id}-${index}`);
+    if (index % 2) waiting.sourceRelations = [{ relationType: 'BLOCKED_BY', targetIssue: prerequisite }];
+    else waiting.targetRelations = [blocks(prerequisite, 35)];
+    issues.push(waiting);
+    prerequisite = waiting;
+   }
+  }
+ }
+ if (options.waitingEnds) {
+  const finished = issues.find(row => row.id === 'completed');
+  const bridge = issue('waiting-bridge', { targetRelations: [blocks(finished, 20)] });
+  const assigned = issue('assigned-root', { assigneeId: actor.id, updatedAt: date(-20) });
+  const a = issue('cycle-a'), b = issue('cycle-b', { targetRelations: [blocks(a, 20)] });
+  a.targetRelations = [blocks(b, 20)];
+  issues.push(bridge, assigned, a, b,
+   issue('behind-closed', { targetRelations: [blocks(bridge, 20)] }),
+   issue('behind-assigned', { targetRelations: [blocks(assigned, 20)] }));
+ }
  if (options.legacyStatuses) {
   target.createdAt = date(-90);
   statuses[0].displayName = 'To Do';
@@ -92,6 +116,13 @@ function fixture(options={}){
   issues.find(row => row.id === 'undated').targetRelations = [blocks(siblingIssue('linked-open', 'done', {
    statusId: 'sibling-open', projectStatus: statuses.at(-1),
   }), 2)];
+  const ancestor = siblingIssue('sibling-root', 'complete', {
+   sourceRelations: [{ relationType: 'BLOCKED_BY', targetIssue: hidden }],
+  });
+  const intermediate = issues[0].targetRelations.at(-1).sourceIssue;
+  intermediate.targetRelations = [blocks(ancestor, 12)];
+  issues.push(intermediate, ancestor, shipped.sourceIssue, done.sourceIssue,
+   issues.find(row => row.id === 'undated').targetRelations[0].sourceIssue);
  }
  if (options.paged) {
   for (let i=0;i<520;i++) issues.push(issue(`paged-${i}`, { dueDate:null }));
@@ -101,7 +132,8 @@ function fixture(options={}){
   statuses.push(blockedStatus);
   const completed = issues.find(row => row.id === 'completed');
   completed.finishedAt = date(-4);
-  issues.push(issue('blocked', { statusId: 'blocked', projectStatus: blockedStatus }));
+  issues.push(issue('blocked', { statusId: 'blocked', projectStatus: blockedStatus,
+   targetRelations: [blocks(visibleParent, 35)] }));
   const transition = (itemId, newStatus, createdAt, user) => ({
    id: itemId + '-change', itemId, itemType: 'ISSUE', workspaceId: target.workspaceId, projectId: target.id,
    action: 'STATUS_CHANGED', oldStatusId: 'todo', oldStatus: statuses[0], newStatus, createdAt,
@@ -306,6 +338,31 @@ test('Overview attributes recorded closures to seats and reports the age of a bl
  assert.equal(result.body.overview.closedByAgents, 1);
  assert.equal(result.body.overview.closedByAgentsPercent, 100);
  assert.equal(result.body.overview.blocked.find(issue => issue.id === 'blocked').blockedDays, 6);
+ assert.deepEqual(plain(result.body.overview.blocked.map(issue => issue.id)), ['blocked']);
+ assert.ok(result.body.overview.waiting.every(group => !group.issueIds.includes('blocked')));
+});
+
+test('Overview groups sixteen issues through both dependency directions into two lines', async () => {
+ const result = await fixture({ waitingChains: true }).call();
+ assert.equal(result.status, 200);
+ const { blocked, waiting } = result.body.overview;
+ assert.deepEqual(plain(blocked), []);
+ assert.deepEqual(plain(waiting), [
+  { blocker: { id: 'idle-root', issueKey: 'idle-root', title: 'idle-root' }, state: 'unassigned',
+   issueIds: Array.from({ length: 9 }, (_, index) => `idle-root-${index}`) },
+  { blocker: { id: 'recent-root', issueKey: 'recent-root', title: 'recent-root' }, state: null,
+   issueIds: Array.from({ length: 7 }, (_, index) => `recent-root-${index}`) },
+ ]);
+});
+
+test('Overview marks a closed chain endpoint, keeps assigned work active and handles dependency cycles', async () => {
+ const result = await fixture({ waitingEnds: true }).call();
+ assert.equal(result.status, 200);
+ assert.deepEqual(plain(result.body.overview.waiting.filter(row => row.blocker.id !== 'visible-parent')
+  .map(row => [row.blocker.id, row.state, row.issueIds])), [
+  ['assigned-root', null, ['behind-assigned']],
+  ['completed', 'closed', ['behind-closed']],
+ ]);
 });
 
 test('pagination preserves Overview issue counts and the authorized spend total', async () => {
@@ -328,7 +385,8 @@ test('Project Home counts legacy finishes in Overview, Burn and Plan and maps Wo
  assert.equal(overview.stats.open, 8);
  assert.equal(overview.stats.donePercent, 27);
  assert.equal(overview.unplanned.length, 7);
- assert.deepEqual(plain(overview.blocked.map(({ id, blockedDays }) => [id, blockedDays])), [['overdue', 3]]);
+ assert.deepEqual(plain(overview.blocked), []);
+ assert.deepEqual(plain(overview.waiting.map(row => [row.blocker.id, row.issueIds])), [['visible-parent', ['overdue']]]);
  assert.equal(overview.pacePerWeek, 1 / 3);
  assert.equal(overview.milestones[0].completed, 1);
  const plan = overview.plan.milestones[0];
@@ -354,11 +412,12 @@ test('Project Home counts legacy finishes in Overview, Burn and Plan and maps Wo
  }
 });
 
-test('Overview resolves legacy blockers against the source project and uses the oldest readable open blocker', async () => {
+test('Overview follows readable cross-project dependencies and resolves their legacy statuses in the source project', async () => {
  const result = await fixture({ crossProjectBlockers: true }).call();
  assert.equal(result.status, 200);
- assert.deepEqual(plain(result.body.overview.blocked.map(({ id, blockedDays }) => [id, blockedDays])), [
-  ['overdue', 4], ['undated', 2],
+ assert.deepEqual(plain(result.body.overview.blocked), []);
+ assert.deepEqual(plain(result.body.overview.waiting.map(row => [row.blocker.id, row.issueIds])), [
+  ['linked-open', ['undated']], ['sibling-root', ['overdue']],
  ]);
 });
 
