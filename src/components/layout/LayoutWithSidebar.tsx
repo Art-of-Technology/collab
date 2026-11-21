@@ -53,7 +53,7 @@ export default function LayoutWithSidebar({
         </div>
 
         {/* Main content area */}
-        <main className="main-content">
+        <main className="main-content" inert={isMobileOpen}>
           <div className="h-full w-full overflow-auto pb-14">
             {children}
           </div>
@@ -103,11 +103,10 @@ export default function LayoutWithSidebar({
         </Button>
       </div>
 
-      {/* Mobile Navigation */}
-      <MobileBottomNav />
-
-      {/* Persistent AI Chat Bar (unified search + AI) */}
-      <ChatBar />
+      <div className="app-toolbar" inert={isMobileOpen}>
+        <MobileBottomNav />
+        <ChatBar />
+      </div>
     </AIProvider>
   );
 }

@@ -90,6 +90,12 @@
   .app-sidebar[data-open="true"] {
     transform: translateX(0);
   }
+
+  /* Keep page and toolbar layers below the mobile drawer and its backdrop. */
+  .main-content[inert],
+  .app-toolbar[inert] {
+    isolation: isolate;
+  }
 }
 
 /* Optional: a slight fade/slide for internal items only */

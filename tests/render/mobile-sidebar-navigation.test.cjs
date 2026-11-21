@@ -1,4 +1,5 @@
 const { assert, test, load } = require('../security/helpers.cjs');
+const { JSDOM } = require('jsdom');
 const React = require('react');
 const jsx = require('react/jsx-runtime');
 const { renderToStaticMarkup } = require('react-dom/server');
@@ -66,7 +67,7 @@ test('desktop links have no dismissal callback; mobile expand/create actions sta
   assert.equal(closed, 0);
 });
 
-test('layout wires dismissal only to the mobile drawer', () => {
+function renderLayout({ isMobileOpen, isMdUp = false }) {
   const sidebars = [];
   const closeMobile = () => {};
   const Container = ({children}) => React.createElement('div', null, children);
@@ -75,17 +76,43 @@ test('layout wires dismissal only to the mobile drawer', () => {
     react: React, 'react/jsx-runtime': jsx,
     'next/navigation': { usePathname: () => '/weezboo/dashboard' },
     '@/components/layout/SimplifiedSidebar': { default: props => { sidebars.push(props); return null; } },
-    '@/components/providers/SidebarProvider': { useSidebar: () => ({ isMobileOpen: true, isMdUp: false, isCollapsedDesktop: false, closeMobile }) },
+    '@/components/providers/SidebarProvider': { useSidebar: () => ({ isMobileOpen, isMdUp, isCollapsedDesktop: false, closeMobile }) },
     '@/context/AIContext': { AIProvider: Container },
     '@heroicons/react/24/outline': { ChevronLeftIcon: Empty, ChevronRightIcon: Empty },
     '@/components/ui/button': { Button: Empty },
-    '@/components/layout/MobileBottomNav': { MobileBottomNav: Empty },
-    '@/components/ai/ChatBar': { ChatBar: Empty },
+    '@/components/layout/MobileBottomNav': { MobileBottomNav: () => React.createElement('button', { id: 'bottom-menu' }, 'Menu') },
+    '@/components/ai/ChatBar': { ChatBar: () => React.createElement('textarea', { id: 'search-or-ask' }) },
   });
-  renderToStaticMarkup(React.createElement(Layout, {pathname: '/weezboo/dashboard'}));
+  const html = renderToStaticMarkup(React.createElement(Layout, {pathname: '/weezboo/dashboard'},
+    React.createElement('button', { id: 'page-action' }, 'Page action')));
+  return { html, sidebars, closeMobile };
+}
+
+test('layout wires dismissal only to the mobile drawer', () => {
+  const { sidebars, closeMobile } = renderLayout({ isMobileOpen: true });
   assert.equal(sidebars.length, 2);
   assert.equal(sidebars[0].onNavigate, undefined);
   assert.equal(sidebars[1].onNavigate, closeMobile);
+});
+
+test('the open mobile drawer disables interaction with the page and bottom controls', () => {
+  for (const state of [
+    { isMobileOpen: true },
+    { isMobileOpen: false },
+    { isMobileOpen: false, isMdUp: true },
+  ]) {
+    const { html } = renderLayout(state);
+    const { window } = new JSDOM(html);
+    try {
+      const { document } = window;
+      for (const id of ['page-action', 'bottom-menu', 'search-or-ask']) {
+        assert.equal(Boolean(document.getElementById(id).closest('[inert]')), state.isMobileOpen, id);
+      }
+      assert.equal(document.querySelector('[role="dialog"]').closest('[inert]'), null);
+    } finally {
+      window.close();
+    }
+  }
 });
 
 test('issue title overrides the real shared Button nowrap style and permits flex shrinking', () => {
