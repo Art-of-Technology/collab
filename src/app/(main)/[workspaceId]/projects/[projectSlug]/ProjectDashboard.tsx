@@ -10,6 +10,7 @@ import NewIssueModal from '@/components/issue/NewIssueModal';
 import { useProjectSummary, type ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
 import { BurnOverviewCard, ProjectBurn } from './ProjectBurn';
+import { BaselineControl, ProjectPlan, ProjectPlanPreview } from './ProjectPlan';
 
 interface ProjectDashboardProps {
   projectId: string;
@@ -58,8 +59,6 @@ function ProjectOverview({
 }) {
   const { overview } = summary;
   const { stats, milestones, unplanned, blocked } = overview;
-  const [savingBaseline, setSavingBaseline] = useState(false);
-  const [baselineError, setBaselineError] = useState(false);
   const next = milestones.find(milestone => milestone.id === overview.nextMilestoneId);
   const byId = new Map(milestones.map(milestone => [milestone.id, milestone]));
   const late = overview.lateMilestoneIds.flatMap(id => {
@@ -85,20 +84,6 @@ function ProjectOverview({
       label: unplanned.length === 1 ? '1 open issue has no milestone' : `${unplanned.length} open issues have no milestone`,
     }] : []),
   ];
-
-  async function setBaseline() {
-    setSavingBaseline(true);
-    setBaselineError(false);
-    try {
-      const response = await fetch(`/api/projects/${summary.project.id}/baseline`, { method: 'POST' });
-      if (!response.ok) throw new Error('Could not set baseline');
-      await refetch();
-    } catch {
-      setBaselineError(true);
-    } finally {
-      setSavingBaseline(false);
-    }
-  }
 
   return (
     <div className="grid gap-3">
@@ -132,11 +117,8 @@ function ProjectOverview({
                   : 'Add milestone due dates so the workspace owner can set a baseline.'}</p>
               )}
               {!overview.hasBaseline && !overview.baselineAt && 'agentSpendUsd' in overview && (
-                <Button variant="outline" className={cn(controlStyle, 'mt-2')} disabled={savingBaseline || !milestones.some(milestone => milestone.dueDate)} onClick={setBaseline}>
-                  {savingBaseline ? 'Setting baseline…' : 'Set baseline'}
-                </Button>
+                <div className="mt-2"><BaselineControl overview={overview} projectId={summary.project.id} refetch={refetch} showHistory={false} /></div>
               )}
-              {baselineError && <p role="alert" className="mt-2 text-red-400">Could not set the baseline. Try again.</p>}
             </div>
           </div>
           {next && (
@@ -170,16 +152,7 @@ function ProjectOverview({
       </div>
 
       <div className="grid gap-3 min-[861px]:grid-cols-2">
-        {milestones.length > 0 && (
-          <Card className={cn(cardStyle, 'p-3')}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-[13px] font-semibold">Plan · next 8 weeks</h2>
-              <Button variant="outline" asChild className={cn(controlStyle, 'bg-transparent')}>
-                <Link href={`${base}?tab=plan`}>Open Plan →</Link>
-              </Button>
-            </div>
-          </Card>
-        )}
+        {milestones.length > 0 && <ProjectPlanPreview overview={overview} base={base} />}
         <BurnOverviewCard burn={summary.burn} base={base} />
       </div>
 
@@ -275,8 +248,11 @@ export function ProjectDashboard({
   const base = `/${workspaceSlug}/projects/${projectSlug}`;
   const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Burn', 'Work'] as const);
   const selected = available.find(tab => tab.toLowerCase() === search.get('tab')) ?? 'Overview';
-  const milestone = selected === 'Plan' ? summary?.overview.milestones.find(item => item.id === search.get('milestone')) : undefined;
+  const milestoneId = search.get('milestone');
+  const workMilestone = selected === 'Work' ? summary?.overview.plan.milestones.find(item => item.id === milestoneId) : undefined;
   const unplanned = selected === 'Work' && search.get('group') === 'no-milestone' ? summary?.overview.unplanned : undefined;
+  const workIssues = workMilestone?.issues ?? unplanned;
+  const refreshSummary = () => refetch({ throwOnError: true });
 
   return (
     <div className="h-full w-full overflow-y-auto bg-collab-900 text-collab-50">
@@ -322,23 +298,24 @@ export function ProjectDashboard({
         )}
         {summary && !isError && (selected === 'Overview' ? (
           <ProjectOverview summary={summary} base={base} workspaceSlug={workspaceSlug} projectName={projectName}
-            openMilestoneForm={() => setCreatingMilestone(true)} refetch={refetch} />
+            openMilestoneForm={() => setCreatingMilestone(true)} refetch={refreshSummary} />
+        ) : selected === 'Plan' ? (
+          <ProjectPlan key={milestoneId} summary={summary} workspaceId={workspaceId} workspaceSlug={workspaceSlug}
+            base={base} milestoneId={milestoneId} refetch={refreshSummary} />
         ) : selected === 'Burn' ? (
           <ProjectBurn burn={summary.burn} />
         ) : (
           <Card className={cn(cardStyle, 'space-y-2 p-3')}>
-            <h2 className="text-base font-semibold">{selected}{unplanned && ' · No milestone'}</h2>
-            <p className="text-collab-400">{selected} is coming.</p>
-            {milestone && (
-              <p><Link className="text-blue-400 hover:underline" href={`/${workspaceSlug}/issues/${milestone.id}`}>{titleOf(milestone)} →</Link></p>
-            )}
-            {unplanned && (
+            <h2 className="text-base font-semibold">{selected}{workMilestone ? ` · ${titleOf(workMilestone)}` : unplanned && ' · No milestone'}</h2>
+            {!workMilestone && <p className="text-collab-400">{selected} is coming.</p>}
+            {workIssues && (
               <ul className="space-y-1">
-                {unplanned.map(issue => (
+                {workIssues.map(issue => (
                   <li key={issue.id}><Link className="text-blue-400 hover:underline" href={`/${workspaceSlug}/issues/${issue.id}`}>{titleOf(issue)}</Link></li>
                 ))}
               </ul>
             )}
+            {workMilestone && !workIssues?.length && <p className="text-collab-400">This milestone has no issues.</p>}
           </Card>
         ))}
         {creatingMilestone && (

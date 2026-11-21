@@ -135,3 +135,53 @@ test('Burn keeps a reopened closure in its week, the pace and the done line unti
   assert.equal(missingReopen.historyStart, burnDay(date(13)));
   assert.equal(missingReopen.points.at(-1).closed, 0);
 });
+
+test('Plan moves the scheduled bar and its drift while keeping the saved outline fixed until re-baseline', () => {
+  const earlier = milestone('M1', { startDate: date(20), dueDate: date(22), baselineStartDate: date(20), baselineDueDate: date(22) });
+  const changed = milestone('M2', { dueDate: date(25), baselineDueDate: date(25) });
+  const linked = Array.from({ length: 6 }, (_, i) => issue(`open-${i}`, { milestoneId: changed.id }));
+  const closures = Array.from({ length: 21 }, (_, i) => closed(`done-${i}`));
+  const plan = (previous, current) => calculateProjectOverview(
+    [previous, current, ...linked, ...closures], date(20), now,
+  ).plan.milestones.find(row => row.id === changed.id);
+  const before = plan(earlier, changed);
+  const moved = plan({ ...earlier, dueDate: date(23) }, { ...changed, dueDate: date(27) });
+  const rebaselined = plan(
+    { ...earlier, dueDate: date(23), baselineDueDate: date(23) },
+    { ...changed, dueDate: date(27), baselineDueDate: date(27) },
+  );
+  assert.equal(before.start, before.baselineStart);
+  assert.equal(before.end, before.baselineDue);
+  assert.equal(before.driftDays, 3);
+  assert.equal(moved.start, before.start + 1);
+  assert.equal(moved.end, before.end + 2);
+  assert.equal(moved.baselineStart, before.baselineStart);
+  assert.equal(moved.baselineDue, before.baselineDue);
+  assert.equal(moved.driftDays, 4);
+  assert.equal(rebaselined.baselineStart, moved.start);
+  assert.equal(rebaselined.baselineDue, moved.end);
+  assert.equal(rebaselined.driftDays, rebaselined.forecast - rebaselined.end);
+  assert.equal(rebaselined.driftDays, 2);
+});
+
+test('Plan orders due-only milestones, chains their starts, and includes decision points and undated work', () => {
+  const result = calculateProjectOverview([
+    milestone('M4', { dueDate: date(29) }), milestone('M1', { dueDate: date(21) }),
+    milestone('M2', { dueDate: date(24) }), milestone('M3', { dueDate: date(27) }),
+    milestone('M5'), milestone('M6', { startDate: date(30), baselineDueDate: date(29) }),
+    issue('first', { milestoneId: 'M1' }), issue('second', { milestoneId: 'M2' }),
+    issue('fourth', { milestoneId: 'M4' }), issue('undated', { milestoneId: 'M5' }),
+  ], null, now);
+  const [first, second, decision, fourth, startOnly, undated] = result.plan.milestones;
+  assert.deepEqual([first.id, second.id, decision.id, fourth.id, startOnly.id, undated.id], ['M1', 'M2', 'M3', 'M4', 'M6', 'M5']);
+  assert.equal(first.start, first.end);
+  assert.equal(second.start, first.end);
+  assert.equal(decision.state, 'decision');
+  assert.equal(decision.start, decision.end);
+  assert.equal(fourth.start, decision.end);
+  assert.equal(startOnly.start, startOnly.end);
+  assert.equal(startOnly.forecast, null);
+  assert.equal(startOnly.driftDays, null);
+  assert.equal(undated.start, null);
+  assert.equal(undated.end, null);
+});

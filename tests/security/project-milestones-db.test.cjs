@@ -89,6 +89,11 @@ test('milestones, repeated baselines and finish dates use the project issue writ
   const listed = await milestones.GET(request('GET'), projectParams);
   assert.deepEqual((await listed.json()).milestones.map(row => row.id), [launch.id]);
 
+  const invalidDates = await webPut(launch.id, { dueDate: oldCreated.toISOString() });
+  assert.equal(invalidDates.status, 400);
+  assert.equal((await invalidDates.json()).error, 'The due date is before the start.');
+  assert.deepEqual((await fresh(launch.id)).dueDate, later);
+
   for (const put of [webPut, appPatch]) {
     assert.equal((await put(target.id, { milestoneId: launch.id })).status, 200);
     assert.equal((await fresh(target.id)).milestoneId, launch.id);
