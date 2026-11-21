@@ -88,11 +88,15 @@ test('Work regroups refreshed issues in place and carries the filter between the
   const moving = { id: 'move', issueKey: 'DEMO-1', title: 'Move me', milestoneId: 'one', status: 'Backlog', statusId: 'todo' };
   const keep = { ...moving, id: 'stay', title: 'Stay here', issueKey: 'DEMO-2' };
   const loose = { ...moving, id: 'loose', milestoneId: null, title: 'Unplanned', issueKey: 'DEMO-3' };
+  const withoutStatus = [
+    { ...loose, id: 'empty', title: 'Empty', statusId: null, status: 'No status' },
+    { ...loose, id: 'unknown', title: 'Unknown', statusId: null, status: 'Old workflow' },
+  ];
   const statuses = [{ id: 'todo', displayName: 'Backlog' }];
   const root = createRoot(document.querySelector('main'));
   const render = (issue, filter = {}) => React.act(async () => root.render(React.createElement(ProjectWork, {
     base: '/example/projects/studio', milestoneId: null, noMilestone: false, hasForge: false, ...filter,
-    summary: { overview: { work: [issue, keep, loose], milestones }, statusDistribution: statuses },
+    summary: { overview: { work: [issue, keep, loose, ...withoutStatus], milestones }, statusDistribution: statuses },
   })));
   const groups = () => [...document.querySelectorAll('section')];
   const click = button => React.act(async () => button.click());
@@ -113,13 +117,17 @@ test('Work regroups refreshed issues in place and carries the filter between the
 
     await render({ ...moving, milestoneId: 'two' }, { milestoneId: 'two' });
     assert.equal(groups().length, 1);
-    assert.match(document.body.textContent, /1 of 3 issues shown/);
+    assert.match(document.body.textContent, /1 of 5 issues shown/);
     await click([...document.querySelectorAll('button')].find(button => button.textContent === 'Board'));
     assert.equal(groups().length, 1);
     assert.equal(groups()[0].getAttribute('aria-label'), 'Backlog');
     assert.match(groups()[0].textContent, /Move meM10/);
     assert.doesNotMatch(groups()[0].textContent, /Stay here|Unplanned/);
     assert.equal(document.querySelector('a').getAttribute('href'), '/example/projects/studio?tab=work');
+
+    await render({ ...moving, milestoneId: 'two' });
+    assert.deepEqual(groups().map(group => group.getAttribute('aria-label')), ['Backlog', 'No status']);
+    assert.match(groups()[1].textContent, /No status · 2.*Empty.*Unknown/);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();

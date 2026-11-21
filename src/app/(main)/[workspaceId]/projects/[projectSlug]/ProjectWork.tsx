@@ -76,13 +76,13 @@ function WorkBoard({ issues, statuses, milestones, openIssue }: {
   milestones: Map<string, Milestone>;
   openIssue: (id: string) => void;
 }) {
-  const columns = new Map(statuses.map(status => [`status:${status.id}`, {
+  const columns = new Map<string | null, { label: string; issues: WorkIssue[] }>(statuses.map(status => [status.id, {
     label: status.displayName ?? status.name,
-    issues: [] as WorkIssue[],
+    issues: [],
   }]));
   for (const issue of issues) {
-    const key = issue.statusId ? `status:${issue.statusId}` : `legacy:${issue.status}`;
-    const column = columns.get(key) ?? { label: issue.status, issues: [] };
+    const key = issue.statusId;
+    const column = columns.get(key) ?? { label: key === null ? 'No status' : issue.status, issues: [] };
     column.issues.push(issue);
     columns.set(key, column);
   }

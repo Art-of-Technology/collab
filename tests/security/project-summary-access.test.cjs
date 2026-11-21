@@ -55,6 +55,44 @@ function fixture(options={}){
  const visibleParent=issue('visible-parent');
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
  const activity = [];
+ const blocks = (sourceIssue, days) => ({ relationType: 'BLOCKS', sourceIssue, createdAt: date(-days) });
+ if (options.legacyStatuses) {
+  target.createdAt = date(-90);
+  statuses[0].displayName = 'To Do';
+  statuses.push({ ...statuses[0], id: 'retired', name: 'deprecated', displayName: 'Deprecated' });
+  const legacy = (id, status, fields) => issue(id, { statusId: null, projectStatus: null, status, ...fields });
+  issues.push(
+   issue('milestone', { type: 'MILESTONE', dueDate: date(14) }),
+   legacy('legacy-done', 'done', { milestoneId: 'milestone', finishedAt: date(-5) }),
+   legacy('legacy-completed', 'complete', { updatedAt: date(-40) }),
+   legacy('legacy-to-do', 'to_do', { milestoneId: 'milestone' }),
+   legacy('legacy-status-value', 'done', { statusValue: ' To Do ' }),
+   legacy('legacy-deprecated', 'deprecated'),
+   legacy('legacy-empty', null),
+   legacy('legacy-unknown', 'previous workflow'),
+  );
+  issues[0].status = 'done';
+  issues.find(row => row.id === 'completed').updatedAt = date(-40);
+  const completedBlocker = blocks(issues.find(row => row.id === 'legacy-done'), 10);
+  issues[0].targetRelations = [completedBlocker, blocks(visibleParent, 3)];
+  issues[1].targetRelations = [completedBlocker];
+ }
+ if (options.crossProjectBlockers) {
+  statuses.push(
+   { ...statuses[1], id: 'sibling-finished', name: 'shipped', displayName: 'Shipped', projectId: sibling.id, project: sibling },
+   { ...statuses[0], id: 'sibling-open', name: 'complete', displayName: 'Completing', projectId: sibling.id, project: sibling },
+  );
+  const siblingIssue = (id, status, fields = {}) => issue(id, {
+   projectId: sibling.id, project: sibling, statusId: null, projectStatus: null, status, ...fields,
+  });
+  const shipped = blocks(siblingIssue('shipped', ' SHIPPED '), 12);
+  const done = blocks(siblingIssue('legacy-done', 'done'), 10);
+  issues[0].targetRelations = [blocks(hidden, 20), shipped, done, blocks(siblingIssue('completing', 'complete'), 4)];
+  issues[1].targetRelations = [shipped, done];
+  issues.find(row => row.id === 'undated').targetRelations = [blocks(siblingIssue('linked-open', 'done', {
+   statusId: 'sibling-open', projectStatus: statuses.at(-1),
+  }), 2)];
+ }
  if (options.paged) {
   for (let i=0;i<520;i++) issues.push(issue(`paged-${i}`, { dueDate:null }));
  }
@@ -246,6 +284,48 @@ test('pagination preserves Overview issue counts and the authorized spend total'
  assert.ok(result.body.overview.work.every(issue => issue.milestoneId === null));
  assert.equal(result.body.overview.runCount, 521);
  assert.equal(result.body.overview.agentSpendUsd, 537.25);
+});
+
+test('Project Home counts legacy finishes in Overview, Burn and Plan and maps Work to configured statuses', async () => {
+ const result = await fixture({ legacyStatuses: true }).call();
+ assert.equal(result.status, 200);
+ const { overview, burn } = result.body;
+ assert.equal(overview.stats.done, 3);
+ assert.equal(overview.stats.open, 8);
+ assert.equal(overview.stats.donePercent, 27);
+ assert.equal(overview.unplanned.length, 7);
+ assert.deepEqual(plain(overview.blocked.map(({ id, blockedDays }) => [id, blockedDays])), [['overdue', 3]]);
+ assert.equal(overview.pacePerWeek, 1 / 3);
+ assert.equal(overview.milestones[0].completed, 1);
+ const plan = overview.plan.milestones[0];
+ assert.equal(plan.completed, 1);
+ assert.equal(plan.forecast, plan.start + 21);
+ assert.equal(burn.remaining, 8);
+ assert.equal(burn.forecast.remaining, 8);
+ assert.equal(burn.points.at(-1).closed, 3);
+
+ const work = new Map(overview.work.map(row => [row.id, row]));
+ for (const [id, statusId, status, done] of [
+  ['legacy-done', 'done', 'Done', true],
+  ['legacy-completed', 'done', 'Done', true],
+  ['legacy-to-do', 'todo', 'To Do', false],
+  ['legacy-status-value', 'todo', 'To Do', false],
+  ['legacy-deprecated', 'retired', 'Deprecated', false],
+  ['legacy-empty', null, 'No status', false],
+  ['legacy-unknown', null, 'previous workflow', false],
+  ['overdue', 'todo', 'To Do', false],
+ ]) {
+  const row = work.get(id);
+  assert.deepEqual([row.statusId, row.status, row.done], [statusId, status, done], id);
+ }
+});
+
+test('Overview resolves legacy blockers against the source project and uses the oldest readable open blocker', async () => {
+ const result = await fixture({ crossProjectBlockers: true }).call();
+ assert.equal(result.status, 200);
+ assert.deepEqual(plain(result.body.overview.blocked.map(({ id, blockedDays }) => [id, blockedDays])), [
+  ['overdue', 4], ['undated', 2],
+ ]);
 });
 
 test('Burn attributes the finish transition and recorded merge actor independently of assignment', async () => {

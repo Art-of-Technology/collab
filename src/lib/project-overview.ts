@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { prisma } from '@/lib/prisma';
@@ -26,21 +27,42 @@ const percent = (done: number, total: number) => total ? Math.round(100 * done /
 
 const overviewIssueSelect = {
   id: true, issueKey: true, title: true, type: true, milestoneId: true,
-  reporterId: true, status: true,
+  reporterId: true, statusId: true, status: true, statusValue: true,
   createdAt: true, firstStartedAt: true, finishedAt: true, dueDate: true, startDate: true,
   baselineStartDate: true, baselineDueDate: true,
   projectStatus: { select: { isFinal: true, category: true, displayName: true } },
 } satisfies Prisma.IssueSelect;
 
 const statusFields = { isFinal: true, category: true } satisfies Prisma.ProjectStatusSelect;
+const projectHomeStatusSelect = {
+  ...statusFields, id: true, name: true, displayName: true, isActive: true, projectId: true,
+} satisfies Prisma.ProjectStatusSelect;
 
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
-const isDone = (issue: OverviewIssue) => issue.projectStatus?.isFinal === true;
+type ProjectHomeStatus = Prisma.ProjectStatusGetPayload<{ select: typeof projectHomeStatusSelect }>;
+const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
+  issue.statusValue?.trim() || issue.status?.trim() || '';
+const isLegacyFinal = (label: string) => LEGACY_FINAL_STATUSES.has(label.toLowerCase());
+const isDone = (issue: OverviewIssue) =>
+  issue.projectStatus?.isFinal ?? (!issue.statusId && isLegacyFinal(legacyStatusLabel(issue)));
+const normalizeStatus = (label: string) => label.toLowerCase().replace(/[\s_-]+/g, '');
 const issueRef = ({ id, issueKey, title }: OverviewIssue) => ({ id, issueKey, title });
 const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
   a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
 const dateOrder = (a: Date | null, b: Date | null) =>
   (a?.getTime() ?? Infinity) - (b?.getTime() ?? Infinity);
+
+function resolveLegacyStatus(label: string, activeStatuses: ProjectHomeStatus[]) {
+  if (!label) return null;
+  const exact = activeStatuses.filter(status => status.name === label || status.displayName === label);
+  if (exact.length === 1) return exact[0];
+  const key = normalizeStatus(label);
+  const matches = activeStatuses.filter(status => [status.name, status.displayName].some(name => normalizeStatus(name) === key));
+  if (matches.length === 1) return matches[0];
+  if (!isLegacyFinal(label)) return null;
+  const finalStatuses = activeStatuses.filter(status => status.isFinal);
+  return finalStatuses.find(status => status.name === 'done') ?? (finalStatuses.length === 1 ? finalStatuses[0] : null);
+}
 
 function forecastFinish(today: number, start: number | null, remaining: number, recentClosures: number) {
   const forecastStart = Math.max(today, start ?? today);
@@ -111,7 +133,7 @@ function planMilestones(
         forecast,
         driftDays: comparison === null || baselineDue === null ? null : Math.max(0, comparison - baselineDue),
         isReporter: viewerId !== undefined && issue.reporterId === viewerId,
-        issues: linked.map(item => ({ ...issueRef(item), status: item.projectStatus?.displayName ?? item.status })),
+        issues: linked.map(item => ({ ...issueRef(item), status: item.projectStatus?.displayName ?? (legacyStatusLabel(item) || null) })),
       };
     });
 }
@@ -225,9 +247,8 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
           AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
         },
       },
-      select: { createdAt: true },
+      select: { createdAt: true, sourceIssue: { select: { projectId: true, statusId: true, status: true, statusValue: true } } },
       orderBy: { createdAt: 'asc' },
-      take: 1,
     },
   } satisfies Prisma.IssueSelect;
   const issues: Prisma.IssueGetPayload<{ select: typeof issueSelect }>[] = [];
@@ -236,21 +257,27 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const closureHistory = new Map<string, BurnTransition[]>();
   const projectStatuses = await prisma.projectStatus.findMany({
     where: { projectId, project: projectWhere },
-    select: { name: true, displayName: true, isFinal: true },
+    select: projectHomeStatusSelect,
   });
-  function legacyStatus(label: string | null) {
+  const activeStatuses = projectStatuses.filter(status => status.isActive);
+
+  function legacyActivityStatus(label: string | null) {
     if (!label) return undefined;
     const matches = projectStatuses.filter(status => status.name === label || status.displayName === label);
     return matches.length === 1 ? matches[0].isFinal : undefined;
   }
 
   async function readIssues() {
-    for await (const batch of pages(after => prisma.issue.findMany({
+    for await (const stored of pages(after => prisma.issue.findMany({
       where: { ...issueWhere, id: after ? { gt: after } : undefined },
       select: issueSelect,
       take: PAGE_SIZE,
       orderBy: pageOrder,
     }))) {
+      // Resolve old labels for Project Home only. A linked status takes precedence.
+      const batch = stored.map(issue => issue.statusId === null
+        ? { ...issue, projectStatus: resolveLegacyStatus(legacyStatusLabel(issue), activeStatuses) }
+        : issue);
       issues.push(...batch);
       const datedIssues = new Map(batch.flatMap(issue => issue.type !== 'MILESTONE' && isDone(issue) && issue.finishedAt
         ? [[issue.id, issue.finishedAt]] as const : []));
@@ -295,8 +322,8 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
             const previous = blockedSince.get(change.itemId);
             if (!previous || change.createdAt > previous) blockedSince.set(change.itemId, change.createdAt);
           }
-          const wasFinal = legacy ? legacyStatus(change.oldValue) : change.oldStatusId ? oldStatus?.isFinal : false;
-          const isFinal = legacy ? legacyStatus(change.newValue) : newStatus?.isFinal;
+          const wasFinal = legacy ? legacyActivityStatus(change.oldValue) : change.oldStatusId ? oldStatus?.isFinal : false;
+          const isFinal = legacy ? legacyActivityStatus(change.newValue) : newStatus?.isFinal;
           const closing = wasFinal === false && isFinal === true;
           if (!closing && !(wasFinal === true && isFinal === false)) continue;
           const finishedAt = datedIssues.get(change.itemId);
@@ -406,7 +433,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       ...issueRef(issue),
       milestoneId: issue.milestoneId && milestoneIds.has(issue.milestoneId) ? issue.milestoneId : null,
       statusId: status?.id ?? null,
-      status: status?.displayName ?? status?.name ?? issue.status ?? 'No status',
+      status: status?.displayName ?? status?.name ?? (legacyStatusLabel(issue) || 'No status'),
       done: isDone(issue),
       blocked: status?.category === 'blocked',
       assignee: issue.assignee?.name ?? null,
@@ -427,20 +454,58 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     })),
     runs, logs, spend,
   });
-  const blocked = issues.filter(issue => !isDone(issue) &&
-    (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
+  const externalProjectIds = new Set<string>();
+  for (const issue of issues) {
+    if (isDone(issue)) continue;
+    for (const { sourceIssue } of issue.targetRelations) {
+      if (sourceIssue.projectId !== projectId && sourceIssue.statusId === null && legacyStatusLabel(sourceIssue)) {
+        externalProjectIds.add(sourceIssue.projectId);
+      }
+    }
+  }
+  const activeStatusesByProject = new Map([[projectId, activeStatuses]]);
+  const externalProjects = [...externalProjectIds];
+  for (let start = 0; start < externalProjects.length; start += PAGE_SIZE) {
+    for await (const statuses of pages(after => prisma.projectStatus.findMany({
+      where: {
+        projectId: { in: externalProjects.slice(start, start + PAGE_SIZE) },
+        project: { workspace: postWorkspaceAccessWhere(userId) },
+        isActive: true,
+        id: after ? { gt: after } : undefined,
+      },
+      select: projectHomeStatusSelect,
+      orderBy: pageOrder,
+      take: PAGE_SIZE,
+    }))) {
+      for (const status of statuses) {
+        const active = activeStatusesByProject.get(status.projectId) ?? [];
+        active.push(status);
+        activeStatusesByProject.set(status.projectId, active);
+      }
+    }
+  }
+  const blocked = issues.flatMap(issue => {
+    if (isDone(issue)) return [];
+    const relation = issue.targetRelations.find(({ sourceIssue }) => {
+      // The relation query already excludes linked final statuses.
+      if (sourceIssue.statusId !== null) return true;
+      const label = legacyStatusLabel(sourceIssue);
+      const resolved = resolveLegacyStatus(label, activeStatusesByProject.get(sourceIssue.projectId) ?? []);
+      return !(resolved?.isFinal ?? isLegacyFinal(label));
+    });
+    if (!relation && issue.projectStatus?.category !== 'blocked') return [];
+    const sinceStatus = blockedSince.get(issue.id) ?? now;
+    const sinceRelation = relation?.createdAt ?? now;
+    const elapsed = day(now) - Math.min(day(sinceStatus), day(sinceRelation));
+    return [{ ...issueRef(issue), blockedDays: Math.max(0, elapsed) }];
+  });
   // The Overview tile keeps its original workspace-specific attribution.
   const closedByAgents = work.filter(issue => closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
   return {
     burn,
     overview: {
       ...overview, work: workItems, baselineSetBy: baselineSetter?.name ?? null,
-      blocked: blocked.map(issue => {
-        const sinceStatus = blockedSince.get(issue.id) ?? now;
-        const sinceRelation = issue.targetRelations[0]?.createdAt ?? now;
-        const elapsed = day(now) - Math.min(day(sinceStatus), day(sinceRelation));
-        return { ...issueRef(issue), blockedDays: Math.max(0, elapsed) };
-      }),
+      blocked,
       closedByAgents, closedByAgentsPercent: percent(closedByAgents, overview.stats.done),
       runCount: burn.runCount,
       ...(billingAllowed ? { agentSpendUsd: burn.spendUsd ?? null } : {}),
