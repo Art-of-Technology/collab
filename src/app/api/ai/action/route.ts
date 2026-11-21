@@ -13,6 +13,8 @@ import { ISSUE_SHAPE_SELECT, createRefusal, issueShape, updateRefusal } from '@/
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 
+const storyPoints = z.number().int().positive();
+
 export async function POST(req: Request) {
   try {
     const currentUser = await getCurrentUser();
@@ -150,7 +152,7 @@ export async function POST(req: Request) {
           assigneeId: z.string().min(1).optional(),
           dueDate: z.string().datetime().optional(),
           startDate: z.string().datetime().optional(),
-          storyPoints: z.number().int().positive().optional(),
+          storyPoints: storyPoints.optional(),
           labels: z.array(z.string()).optional(),
         }).strict().safeParse(action.params);
         if (!parsedParams.success) {
@@ -257,6 +259,9 @@ export async function POST(req: Request) {
           'title', 'description', 'status', 'priority', 'type', 'assigneeId', 'dueDate', 'storyPoints',
         ].includes(field))) {
           return NextResponse.json({ error: 'Unsupported issue update field' }, { status: 400 });
+        }
+        if (!storyPoints.nullish().safeParse(fields.storyPoints).success) {
+          return NextResponse.json({ error: 'Story points must be a positive integer or null' }, { status: 400 });
         }
         const { enforced, templates } = await getWorkspaceTemplates(workspace.id);
         let checkedAt: Date | undefined;

@@ -8,6 +8,7 @@ import {
 /** What the checks look at: an issue as it is, or as it would be after a change. */
 export interface IssueShape {
   type: string;
+  isSeatRequest?: boolean;
   description: string | null;
   fields: Partial<Record<TemplateField, unknown>>;
 }
@@ -30,14 +31,15 @@ export class TemplateRefused extends Error {
 
 /** The columns `issueShape` needs when it reads a stored issue. */
 export const ISSUE_SHAPE_SELECT = {
-  type: true, description: true, priority: true, dueDate: true, startDate: true,
+  type: true, agentRequestRole: true, description: true, priority: true, dueDate: true, startDate: true,
   assigneeId: true, storyPoints: true, labels: { select: { id: true } },
 } as const;
 
 /** An issue row, or a row with a request's changes laid over it, as the checks read it. */
-export function issueShape(row: { type?: unknown; description?: unknown } & Partial<Record<TemplateField, unknown>>): IssueShape {
+export function issueShape(row: { type?: unknown; agentRequestRole?: unknown; description?: unknown } & Partial<Record<TemplateField, unknown>>): IssueShape {
   return {
     type: String(row.type),
+    isSeatRequest: Boolean(row.agentRequestRole),
     description: typeof row.description === 'string' ? row.description : null,
     fields: Object.fromEntries(TEMPLATE_FIELDS.map(field => [field, row[field]])),
   };
@@ -48,8 +50,12 @@ const oneLine = (text: string) => text.replace(/[\s\p{Cc}]+/gu, ' ').trim();
 
 /** Why a new issue is refused, or null when it has all its template requires or its type has no template. */
 export function createRefusal(templates: Record<TemplatedIssueType, IssueTemplate>, issue: IssueShape): TemplateRefusal | null {
-  const template = templateFor(templates, issue.type);
-  if (!template) return null;
+  const configured = templateFor(templates, issue.type);
+  if (!configured) return null;
+  // The server files seat requests without an estimate. Their required sections still apply.
+  const template = issue.isSeatRequest && configured.standard && configured.type === 'TASK'
+    ? { ...configured, requiredFields: configured.requiredFields.filter(field => field !== 'storyPoints') }
+    : configured;
   const sections = missingSections(template, issue.description);
   const fields = missingFields(template, issue.fields);
   if (!sections.length && !fields.length) return null;

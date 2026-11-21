@@ -71,7 +71,7 @@ test('an edit is refused only when it takes a complete issue to an incomplete on
 
 test('an issue row is read as its type, its description and the six template fields', () => {
   const row = { id: 'issue', title: 'Ignored', type: 'BUG', description: 'Text', priority: 'high', dueDate: null, labels: [{ id: 'label' }] };
-  assert.deepEqual(plain(issueShape(row)), { type: 'BUG', description: 'Text', fields: { priority: 'high', dueDate: null, labels: [{ id: 'label' }] } });
+  assert.deepEqual(plain(issueShape(row)), { type: 'BUG', isSeatRequest: false, description: 'Text', fields: { priority: 'high', dueDate: null, labels: [{ id: 'label' }] } });
   assert.equal(issueShape({ type: 'TASK', description: 42 }).description, null);
 });
 
@@ -237,6 +237,27 @@ test('an agent edit that would leave a complete issue incomplete is refused and 
   assert.equal((await milestone.patch({ dueDate: '2027-01-15T00:00:00.000Z' })).status, 200);
 });
 
+test('an unestimated seat request keeps its required Task sections on agent edits', async () => {
+  const on = workspace({ issue: issueRow('TASK', complete('TASK'), { agentRequestRole: 'release' }) });
+  const description = complete('TASK', 'Done when');
+  for (const response of [
+    await on.patch({ description }),
+    await on.assistant('update_issue', { issueId: 'issue', description }),
+  ]) {
+    assert.equal(response.status, 422);
+    const body = await response.json();
+    assert.deepEqual([body.missing_sections, body.missing_fields], [['Done when'], []]);
+  }
+  assert.deepEqual(on.state.updated, []);
+
+  const custom = workspace({
+    issue: issueRow('TASK', complete('TASK'), { agentRequestRole: 'release' }),
+    templates: { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, standard: false } },
+  });
+  // A workspace's own required fields retain the existing rule for incomplete issues.
+  assert.equal((await custom.patch({ description })).status, 200);
+});
+
 test('unassigning cannot take away an assignee that the template requires', async () => {
   const templates = { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, requiredFields: ['assigneeId'] } };
   const assigned = issueRow('TASK', complete('TASK'), { assigneeId: 'someone', storyPoints: 3 });
@@ -305,6 +326,7 @@ test('the assistant can supply required points when converting a subtask', async
     const refused = await on.assistant('update_issue', params);
     assert.equal(refused.status, 422);
     assert.deepEqual((await refused.json()).missing_fields, ['storyPoints']);
+    assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 0 })).status, 400);
     assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 3 })).status, 200);
     assert.deepEqual(plain(on.state.updated), [{ type, description: params.description, storyPoints: 3 }]);
   }
