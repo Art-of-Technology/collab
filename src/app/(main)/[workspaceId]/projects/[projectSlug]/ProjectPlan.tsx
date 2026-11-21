@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -244,11 +244,17 @@ function MilestoneDetail({ milestone, workspaceId, workspaceSlug, base, canEdit,
   const update = useUpdateIssue();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const { startDate, dueDate, baselineDue, driftDays, completed, total, state } = milestone;
+  const [draft, setDraft] = useState<Partial<Record<'startDate' | 'dueDate', string>>>({});
+  const { baselineDue, driftDays, completed, total, state } = milestone;
+  const storedStart = milestone.startDate?.slice(0, 10) ?? '';
+  const storedDue = milestone.dueDate?.slice(0, 10) ?? '';
+  const start = draft.startDate ?? storedStart;
+  const due = draft.dueDate ?? storedDue;
+  const dirty = start !== storedStart || due !== storedDue;
 
-  async function saveDate(field: 'startDate' | 'dueDate', value: string) {
-    const start = field === 'startDate' ? value : startDate?.slice(0, 10);
-    const due = field === 'dueDate' ? value : dueDate?.slice(0, 10);
+  async function saveDates(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit || saving || !dirty) return;
     if (start && due && due < start) {
       setError('The due date is before the start.');
       return;
@@ -256,8 +262,13 @@ function MilestoneDetail({ milestone, workspaceId, workspaceSlug, base, canEdit,
     setSaving(true);
     setError('');
     try {
-      await update.mutateAsync({ id: milestone.id, workspaceId, [field]: value ? new Date(value) : null });
+      await update.mutateAsync({
+        id: milestone.id, workspaceId,
+        ...(start !== storedStart && { startDate: start ? new Date(start) : null }),
+        ...(due !== storedDue && { dueDate: due ? new Date(due) : null }),
+      });
       await refetch();
+      setDraft({});
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not save the milestone date.');
     } finally {
@@ -271,24 +282,35 @@ function MilestoneDetail({ milestone, workspaceId, workspaceSlug, base, canEdit,
         <h3 className="text-base font-semibold">{titleOf(milestone)}</h3>
         <span className={cn(chipStyle, stateStyle[state].chip)}>{stateStyle[state].label}</span>
       </div>
-      <div className="mb-2.5 mt-2.5 grid grid-cols-[repeat(auto-fit,minmax(min(130px,100%),1fr))] gap-2.5">
-        {(['startDate', 'dueDate'] as const).map((field, index) => (
-          <label key={field} className={fieldStyle}>
-            {index === 0 ? 'Start' : 'Due'}
-            <input type="date" value={milestone[field]?.slice(0, 10) ?? ''} readOnly={!canEdit} disabled={saving}
-              className="w-full min-w-0 rounded-lg border border-white/[.09] bg-collab-950 px-2.5 py-1.5 text-sm text-collab-50 [color-scheme:dark]"
-              onChange={event => saveDate(field, event.target.value)} />
-          </label>
-        ))}
-        <div className={fieldStyle}>Baseline due<strong className="text-sm text-collab-50">
-          {baselineDue === null ? '—' : dateLabel.format(baselineDue * DAY)}
-        </strong></div>
-        <div className={fieldStyle}>Drift<strong className={cn('text-sm', driftDays ? 'text-amber-400' : 'text-emerald-400')}>
-          {driftDays ? `+${driftDays} ${driftDays === 1 ? 'day' : 'days'}` : driftDays === null ? '—' : 'none'}
-        </strong></div>
-        <div className={fieldStyle}>Issues<strong className="text-sm text-collab-50">{total ? `${completed} of ${total} done` : 'none'}</strong></div>
-      </div>
-      {error && <p role="alert" className="text-[13px] text-red-400">{error}</p>}
+      <form className="my-2.5 space-y-2" onSubmit={saveDates}>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(130px,100%),1fr))] gap-2.5">
+          {(['startDate', 'dueDate'] as const).map((field, index) => (
+            <label key={field} className={fieldStyle}>
+              {index === 0 ? 'Start' : 'Due'}
+              <input type="date" value={index === 0 ? start : due} readOnly={!canEdit} disabled={saving}
+                className="w-full min-w-0 rounded-lg border border-white/[.09] bg-collab-950 px-2.5 py-1.5 text-sm text-collab-50 [color-scheme:dark]"
+                onChange={event => {
+                  const value = event.target.value;
+                  setDraft(previous => ({ ...previous, [field]: value }));
+                  setError('');
+                }} />
+            </label>
+          ))}
+          <div className={fieldStyle}>Baseline due<strong className="text-sm text-collab-50">
+            {baselineDue === null ? '—' : dateLabel.format(baselineDue * DAY)}
+          </strong></div>
+          <div className={fieldStyle}>Drift<strong className={cn('text-sm', driftDays ? 'text-amber-400' : 'text-emerald-400')}>
+            {driftDays ? `+${driftDays} ${driftDays === 1 ? 'day' : 'days'}` : driftDays === null ? '—' : 'none'}
+          </strong></div>
+          <div className={fieldStyle}>Issues<strong className="text-sm text-collab-50">{total ? `${completed} of ${total} done` : 'none'}</strong></div>
+        </div>
+        {error && <p role="alert" className="text-[13px] text-red-400">{error}</p>}
+        {canEdit && (dirty || saving) && (
+          <Button type="submit" variant="outline" className={controlStyle} disabled={saving}>
+            {saving ? 'Saving dates…' : 'Save dates'}
+          </Button>
+        )}
+      </form>
       <p className="text-[13px] text-collab-400">Agents can change these dates through the CLI and MCP. The baseline moves only when you freeze it.</p>
       <ul className="divide-y divide-white/[.09] border-b-white/[.09] [&:not(:empty)]:border-b">
         {milestone.issues.map(issue => (
