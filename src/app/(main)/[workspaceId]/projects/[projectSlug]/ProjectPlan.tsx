@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useUpdateIssue } from '@/hooks/queries/useIssues';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useChartWidth } from '@/hooks/use-chart-width';
 import { Permission } from '@/lib/permission-types';
 import type { ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
@@ -104,6 +105,7 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
   open?: (id: string) => void;
   href?: (id: string) => string;
 }) {
+  const [width, chartRef] = useChartWidth(compact ? 520 : 1000);
   const dated = milestones.flatMap(milestone => milestone.start === null || milestone.end === null
     ? [] : [{ ...milestone, start: milestone.start, end: milestone.end }]);
   const until = today + NEXT_WEEKS;
@@ -112,7 +114,6 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
     return <p className="py-2 text-[13px] text-collab-400">{nextWeeks ? 'No milestones in the next 8 weeks.' : 'No milestones with chartable dates.'}</p>;
   }
 
-  const width = compact ? 520 : 1000;
   const labels = compact ? 128 : 236;
   const rowHeight = compact ? 26 : 30;
   const top = 24;
@@ -144,7 +145,7 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div ref={chartRef} className="overflow-x-auto">
       <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label="Milestones on a time axis"
         className={cn('block h-auto w-full', compact ? 'min-w-[340px]' : 'min-w-[825px]')}>
         <g aria-hidden="true">{ticks}</g>
