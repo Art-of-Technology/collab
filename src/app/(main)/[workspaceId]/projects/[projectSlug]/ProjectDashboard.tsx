@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import NewIssueModal from '@/components/issue/NewIssueModal';
 import { useProjectSummary, type ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
+import { BurnOverviewCard, ProjectBurn } from './ProjectBurn';
 import { BaselineControl, ProjectPlan, ProjectPlanPreview } from './ProjectPlan';
 
 interface ProjectDashboardProps {
@@ -150,25 +151,10 @@ function ProjectOverview({
           detail={overview.agentSpendUsd != null ? `${dollars.format(overview.agentSpendUsd)} agent spend` : `${overview.runCount} ${overview.runCount === 1 ? 'run' : 'runs'}`} />
       </div>
 
-      {milestones.length > 0 && (
-        <div className="grid gap-3 min-[861px]:grid-cols-2">
-          {([
-            ['Plan · next 8 weeks', 'Plan'],
-            ['Burn-up · last 30 days', 'Burn'],
-          ] as const).map(([heading, tab]) => tab === 'Plan' ? (
-            <ProjectPlanPreview key={tab} overview={overview} base={base} />
-          ) : (
-            <Card key={tab} className={cn(cardStyle, 'p-3')}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-[13px] font-semibold">{heading}</h2>
-                <Button variant="outline" asChild className={cn(controlStyle, 'bg-transparent')}>
-                  <Link href={`${base}?tab=${tab.toLowerCase()}`}>Open {tab} →</Link>
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div className="grid gap-3 min-[861px]:grid-cols-2">
+        {milestones.length > 0 && <ProjectPlanPreview overview={overview} base={base} />}
+        <BurnOverviewCard burn={summary.burn} base={base} />
+      </div>
 
       <Card className={cn(cardStyle, 'p-3')}>
         <h2 className="mb-2 text-[13px] font-semibold text-collab-400">Needs attention · {attention.length}</h2>
@@ -260,7 +246,7 @@ export function ProjectDashboard({
   const [creatingMilestone, setCreatingMilestone] = useState(false);
   const { data: summary, isLoading, isError, refetch } = useProjectSummary(projectId);
   const base = `/${workspaceSlug}/projects/${projectSlug}`;
-  const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Work'] as const);
+  const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Burn', 'Work'] as const);
   const selected = available.find(tab => tab.toLowerCase() === search.get('tab')) ?? 'Overview';
   const milestoneId = search.get('milestone');
   const workMilestone = selected === 'Work' ? summary?.overview.plan.milestones.find(item => item.id === milestoneId) : undefined;
@@ -316,6 +302,8 @@ export function ProjectDashboard({
         ) : selected === 'Plan' ? (
           <ProjectPlan key={milestoneId} summary={summary} workspaceId={workspaceId} workspaceSlug={workspaceSlug}
             base={base} milestoneId={milestoneId} refetch={refreshSummary} />
+        ) : selected === 'Burn' ? (
+          <ProjectBurn burn={summary.burn} />
         ) : (
           <Card className={cn(cardStyle, 'space-y-2 p-3')}>
             <h2 className="text-base font-semibold">{selected}{workMilestone ? ` · ${titleOf(workMilestone)}` : unplanned && ' · No milestone'}</h2>
