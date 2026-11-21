@@ -450,8 +450,7 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     const [notification] = await raw.notification.findMany({ where: { senderId: release.userId, type: 'ISSUE_RUN_QUESTION' } });
     assert.equal(await raw.notification.count({ where: { senderId: release.userId, type: 'ISSUE_RUN_QUESTION' } }), 1);
     assert.equal(notification.userId, person);
-    assert.ok(notification.content.includes(target.issueKey));
-    assert.doesNotMatch(notification.content, /<script>|https?:/);
+    assert.equal(notification.content, `asked a question on ${target.issueKey}. Open the issue in Collab and select Activity to answer.`);
 
     const renewed = (await act(release.token, run.id, 'renew'))[1];
     const readBack = (await read(release.token, run.id))[1];
