@@ -218,9 +218,17 @@ test('an agent edit that would leave a complete issue incomplete is refused and 
   assert.equal((await task.patch({ description: `${complete('TASK')}\n\nMore.`, status: 'done' })).status, 200);
   assert.equal((await task.patch({ type: 'SUBTASK', description: null })).status, 200);
 
-  const subtask = workspace({ issue: issueRow('SUBTASK', 'Free text') });
-  assert.equal((await subtask.patch({ type: 'TASK' })).status, 422);
-  assert.equal((await subtask.patch({ type: 'TASK', description: complete('TASK'), storyPoints: 3 })).status, 200);
+  for (const type of ['STORY', 'TASK']) {
+    const subtask = workspace({ issue: issueRow('SUBTASK', 'Free text') });
+    const conversion = { type, description: complete(type) };
+    const refused = await subtask.patch(conversion);
+    assert.equal(refused.status, 422);
+    assert.deepEqual((await refused.json()).missing_fields, ['storyPoints']);
+    assert.deepEqual(subtask.state.updated, []);
+    const pointed = { ...conversion, storyPoints: 3 };
+    assert.equal((await subtask.patch(pointed)).status, 200);
+    assert.deepEqual(plain(subtask.state.updated), [pointed]);
+  }
 
   const milestone = workspace({ issue: issueRow('MILESTONE', complete('MILESTONE'), { dueDate: new Date('2026-12-01') }) });
   const cleared = await milestone.patch({ dueDate: null });
