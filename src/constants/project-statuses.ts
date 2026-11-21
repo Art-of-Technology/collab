@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+export const LEGACY_FINAL_STATUSES = new Set(['done', 'complete', 'completed', 'closed', 'resolved', 'cancelled', 'canceled']);
+
 export interface DefaultProjectStatus {
   name: string;          // Internal name (database)
   displayName: string;   // User-facing name (UI)

@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { prisma } from '@/lib/prisma';
@@ -26,7 +27,7 @@ const percent = (done: number, total: number) => total ? Math.round(100 * done /
 
 const overviewIssueSelect = {
   id: true, issueKey: true, title: true, type: true, milestoneId: true,
-  reporterId: true, status: true,
+  reporterId: true, statusId: true, status: true, statusValue: true,
   createdAt: true, firstStartedAt: true, finishedAt: true, dueDate: true, startDate: true,
   baselineStartDate: true, baselineDueDate: true,
   projectStatus: { select: { isFinal: true, category: true, displayName: true } },
@@ -35,7 +36,11 @@ const overviewIssueSelect = {
 const statusFields = { isFinal: true, category: true } satisfies Prisma.ProjectStatusSelect;
 
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
-const isDone = (issue: OverviewIssue) => issue.projectStatus?.isFinal === true;
+const legacyStatusLabel = (issue: OverviewIssue) => issue.statusValue?.trim() || issue.status?.trim() || '';
+const isLegacyFinal = (label: string) => LEGACY_FINAL_STATUSES.has(label.toLowerCase());
+const isDone = (issue: OverviewIssue) =>
+  issue.projectStatus?.isFinal ?? (!issue.statusId && isLegacyFinal(legacyStatusLabel(issue)));
+const normalizeStatus = (label: string) => label.toLowerCase().replace(/[\s_-]+/g, '');
 const issueRef = ({ id, issueKey, title }: OverviewIssue) => ({ id, issueKey, title });
 const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
   a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
@@ -111,7 +116,7 @@ function planMilestones(
         forecast,
         driftDays: comparison === null || baselineDue === null ? null : Math.max(0, comparison - baselineDue),
         isReporter: viewerId !== undefined && issue.reporterId === viewerId,
-        issues: linked.map(item => ({ ...issueRef(item), status: item.projectStatus?.displayName ?? item.status })),
+        issues: linked.map(item => ({ ...issueRef(item), status: item.projectStatus?.displayName ?? (legacyStatusLabel(item) || null) })),
       };
     });
 }
@@ -236,21 +241,40 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const closureHistory = new Map<string, BurnTransition[]>();
   const projectStatuses = await prisma.projectStatus.findMany({
     where: { projectId, project: projectWhere },
-    select: { name: true, displayName: true, isFinal: true },
+    select: { id: true, name: true, displayName: true, isFinal: true, isActive: true, category: true, projectId: true },
   });
-  function legacyStatus(label: string | null) {
+  const activeStatuses = projectStatuses.filter(status => status.isActive);
+  const finalStatuses = activeStatuses.filter(status => status.isFinal);
+  const defaultFinal = finalStatuses.find(status => status.name === 'done') ??
+    (finalStatuses.length === 1 ? finalStatuses[0] : null);
+
+  function resolveLegacyStatus(label: string) {
+    if (!label) return null;
+    const exact = activeStatuses.filter(status => status.name === label || status.displayName === label);
+    if (exact.length === 1) return exact[0];
+    const key = normalizeStatus(label);
+    const matches = activeStatuses.filter(status => [status.name, status.displayName].some(name => normalizeStatus(name) === key));
+    if (matches.length === 1) return matches[0];
+    return isLegacyFinal(label) ? defaultFinal : null;
+  }
+
+  function legacyActivityStatus(label: string | null) {
     if (!label) return undefined;
     const matches = projectStatuses.filter(status => status.name === label || status.displayName === label);
     return matches.length === 1 ? matches[0].isFinal : undefined;
   }
 
   async function readIssues() {
-    for await (const batch of pages(after => prisma.issue.findMany({
+    for await (const stored of pages(after => prisma.issue.findMany({
       where: { ...issueWhere, id: after ? { gt: after } : undefined },
       select: issueSelect,
       take: PAGE_SIZE,
       orderBy: pageOrder,
     }))) {
+      // Resolve old labels for Project Home only. A linked status takes precedence.
+      const batch = stored.map(issue => issue.statusId === null
+        ? { ...issue, projectStatus: resolveLegacyStatus(legacyStatusLabel(issue)) }
+        : issue);
       issues.push(...batch);
       const datedIssues = new Map(batch.flatMap(issue => issue.type !== 'MILESTONE' && isDone(issue) && issue.finishedAt
         ? [[issue.id, issue.finishedAt]] as const : []));
@@ -295,8 +319,8 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
             const previous = blockedSince.get(change.itemId);
             if (!previous || change.createdAt > previous) blockedSince.set(change.itemId, change.createdAt);
           }
-          const wasFinal = legacy ? legacyStatus(change.oldValue) : change.oldStatusId ? oldStatus?.isFinal : false;
-          const isFinal = legacy ? legacyStatus(change.newValue) : newStatus?.isFinal;
+          const wasFinal = legacy ? legacyActivityStatus(change.oldValue) : change.oldStatusId ? oldStatus?.isFinal : false;
+          const isFinal = legacy ? legacyActivityStatus(change.newValue) : newStatus?.isFinal;
           const closing = wasFinal === false && isFinal === true;
           if (!closing && !(wasFinal === true && isFinal === false)) continue;
           const finishedAt = datedIssues.get(change.itemId);
@@ -406,7 +430,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       ...issueRef(issue),
       milestoneId: issue.milestoneId && milestoneIds.has(issue.milestoneId) ? issue.milestoneId : null,
       statusId: status?.id ?? null,
-      status: status?.displayName ?? status?.name ?? issue.status ?? 'No status',
+      status: status?.displayName ?? status?.name ?? (legacyStatusLabel(issue) || 'No status'),
       done: isDone(issue),
       blocked: status?.category === 'blocked',
       assignee: issue.assignee?.name ?? null,

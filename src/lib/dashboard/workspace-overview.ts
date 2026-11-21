@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
+import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
 import { prisma } from '@/lib/prisma';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
@@ -13,7 +14,6 @@ const issueSelect = {
   projectStatus: { select: { displayName: true } },
 } as const satisfies Prisma.IssueSelect;
 const statusFields = ['projectId', 'statusId', 'status', 'statusValue'] as const;
-const legacyFinalStatuses = new Set(['done', 'complete', 'completed', 'closed', 'resolved', 'cancelled', 'canceled']);
 
 type StatusGroup = {
   projectId: string;
@@ -72,7 +72,7 @@ export async function loadWorkspaceIssueOverview({
     // A linked project status is authoritative; legacy strings apply only without a statusId.
     const isOpen = (group: StatusGroup) => group.statusId !== null
       ? !finalIds.has(group.statusId)
-      : !legacyFinalStatuses.has((group.statusValue?.trim() || group.status?.trim() || '').toLowerCase());
+      : !LEGACY_FINAL_STATUSES.has((group.statusValue?.trim() || group.status?.trim() || '').toLowerCase());
 
     const [allGroups, overdueGroups, soonGroups, recentIssues] = projectIds.length ? await Promise.all([
       prisma.issue.groupBy({ by: [...statusFields], where: scopedIssues, _count: { id: true }, _max: { updatedAt: true } }),
