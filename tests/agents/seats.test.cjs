@@ -627,8 +627,19 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
 
     const listed = await tokens.listAgentTokens('w');
     const seatOf = name => listed.find(row => row.name === name).seat;
-    assert.equal(seatOf('dev-owned').owner, 'Dana');
+    assert.equal(seatOf('dev-owned').owner, 'Dana (dana@example.test)');
     assert.equal(seatOf('dev-unowned').owner, null);
+
+    // Two accounts can share a name: the name set in this workspace's account settings wins, and the email tells them apart.
+    await prisma.user.create({ data: { id: 'cdana000002', name: 'Dana', email: 'dana@other.test' } });
+    await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: 'cdana000002', displayName: 'Dana Two' } });
+    await prisma.user.create({ data: { id: 'cgone000001', name: 'Gone', email: 'gone@example.test' } });
+    await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: 'cgone000001', status: false } });
+    const choices = await tokens.listSeatOwnerChoices('w');
+    const names = choices.people.map(row => row.name);
+    assert.deepEqual(names.filter(name => name.startsWith('Dana')), ['Dana (dana@example.test)', 'Dana Two (dana@other.test)']);
+    assert.ok(!names.some(name => name.startsWith('Gone')), 'a member switched off cannot own a seat');
+    assert.equal(choices.seats.find(row => row.name === 'dev-owned').owner, 'Dana (dana@example.test)');
     // A token that is not a seat has no owner to show.
     assert.equal(seatOf('crm'), null);
   });

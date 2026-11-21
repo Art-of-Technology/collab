@@ -25,6 +25,36 @@ async function serviceAccounts(db: Pick<typeof prisma, 'appToken' | 'user' | 'ag
   return ids.length ? db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
 }
 
+const personSelect = (workspaceId: string) => ({
+  id: true, name: true, email: true,
+  workspaceMemberships: { where: { workspaceId }, select: { displayName: true } },
+}) satisfies Prisma.UserSelect;
+
+/** A person as an owner is picked or shown: the name they set for this workspace, then their email, since two accounts can share a name. */
+function personLabel(user: { id: string; name: string | null; email: string | null; workspaceMemberships: { displayName: string | null }[] }) {
+  const name = user.workspaceMemberships[0]?.displayName || user.name;
+  return name && user.email ? `${name} (${user.email})` : name || user.email || user.id;
+}
+
+/** The people who can own a seat in a workspace (its owner and active members with a sign-in), and its live seats. */
+export async function listSeatOwnerChoices(workspaceId: string) {
+  const [people, seats] = await Promise.all([
+    prisma.user.findMany({
+      where: { email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspaceId } } }, { workspaceMemberships: { some: { workspaceId, status: true } } }] },
+      select: personSelect(workspaceId),
+    }),
+    prisma.agentSeat.findMany({
+      where: { workspaceId, retiredAt: null },
+      select: { id: true, name: true, role: true, isDefault: true, project: { select: { name: true } }, owner: { select: personSelect(workspaceId) } },
+    }),
+  ]);
+  return {
+    people: people.map(user => ({ id: user.id, name: personLabel(user) })).sort((a, b) => a.name.localeCompare(b.name)),
+    seats: seats.map(seat => ({ id: seat.id, name: seat.name, role: seat.role, project: seat.project.name, isDefault: seat.isDefault,
+      owner: seat.owner && personLabel(seat.owner) })),
+  };
+}
+
 /** Unrevoked agent tokens of a workspace, or null while the agent app is not provisioned and published. */
 export async function listAgentTokens(workspaceId: string) {
   const app = await agentApp();
@@ -44,13 +74,13 @@ export async function listAgentTokens(workspaceId: string) {
   const seats = names.size ? await prisma.agentSeat.findMany({
     where: { userId: { in: [...names.keys()] } },
     select: { id: true, userId: true, role: true, isDefault: true, retiredAt: true, project: { select: { name: true } },
-      owner: { select: { id: true, name: true, email: true } } },
+      owner: { select: personSelect(workspaceId) } },
   }) : [];
   const seatOf = (userId: string | null) => {
     const seat = seats.find(row => row.userId === userId);
     // The owner is the person whose sign-in runs the seat; without one, no person's subscription pays for it.
     return seat ? { id: seat.id, role: seat.role, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt,
-      owner: seat.owner ? seat.owner.name || seat.owner.email || seat.owner.id : null } : null;
+      owner: seat.owner && personLabel(seat.owner) } : null;
   };
   return tokens.map(token => ({
     id: token.id,
