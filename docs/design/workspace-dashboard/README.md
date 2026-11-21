@@ -10,7 +10,7 @@ The page counts issues and due dates. In a workspace where most work is done by 
 
 - A seat's question, or a run that was lost, never reaches the page. The person looks in the Seats page, the Floor and the issue.
 - "Needs attention" is ordered by due date, so issues of projects nobody has touched for a year fill it.
-- The repository list dates each item and labels its last refresh or refresh attempt. It does not count repositories without a confirmed refresh in the last 24 hours.
+- The repository list dates each item and labels its last refresh or refresh attempt. It does not say how many repositories have no confirmed refresh in the last 24 hours.
 
 ## The page
 
@@ -47,7 +47,7 @@ On a phone it is one column in this order: Needs you, Agents now, Shipped today,
 | 3 | Agents appear as one summary panel that links to the Floor. It is not a second Floor. |
 | 4 | A project with no issue change for 30 days is dormant. Dormant projects are not counted and collapse into one line. |
 | 5 | One fixed layout. No widgets, no per-person arrangement. |
-| 6 | A seat is answered in the row: a suggested answer or typed text, sent as a comment on the issue. |
+| 6 | A seat is answered in the row: typed text, sent as a comment on the issue. |
 | 7 | Projects show as cards with a trend line. A Cards / Table switch sits above them; the choice is kept in the browser (`localStorage`), cards first. |
 | 8 | The sentence under the title is assembled from the panels' counts. No model is called. |
 | 9 | Times are relative ("3 h ago", "due tomorrow") with the exact UTC time in `title` and `dateTime`. |
@@ -59,43 +59,48 @@ On a phone it is one column in this order: Needs you, Agents now, Shipped today,
 
 ## Panels
 
-The server starts the panel reads in parallel with the current session. Each panel shows its own `denied` or `unavailable` state. Agents now also needs the waiting-seat IDs from Needs you to classify seats. A loader never returns a row the viewer could not open.
+The server starts the panel reads in parallel with the current session. Each panel shows its own `denied` or `unavailable` state. No loader waits for another: where one panel needs another's result, the shell passes it on as a prop after both have resolved. A loader never returns a row the viewer could not open.
 
 ### Needs you
 
-A row is one issue that cannot go on until a person acts. In both scopes, start with readable issues in active projects (see Projects below). Use the matching rows for the kind counts, project totals and sentence before taking the first 20 for display. Sort by kind in the order below, then by `since`, oldest first.
+A row is one issue that cannot go on until a person acts. Count every matching row for the kind counts, the project totals and the sentence, then send at most 20. Sort by kind in the order below, then by `since`, oldest first.
 
-For both questions and reviews, the unfinished issue must still be assigned to the user of the seat that ran it, in that seat's project. Its latest run must have finished `in_review` or `blocked` and named a person (`askedUser`). Match the finish facts to that run ID. As in `inboxOf`, the run must have ended on or after the current assignment time (the assignee's helper record's `approvedAt`, then `assignedAt`, then issue creation as fallback). A later comment by anyone other than the seat's user answers the question.
+For both questions and reviews, the unfinished issue must still be assigned to the user of the seat that ran it, in that seat's project. Its latest run must be a seat's run, must have finished `in_review` or `blocked`, and must have named a person (`askedUser`). Match the finish facts to that run's id. As in `inboxOf`, the run must have ended on or after the current assignment time (the assignee's helper record's `approvedAt`, then `assignedAt`, then the issue's creation). A later comment by anyone other than the seat's user answers the question.
 
 | Kind | Is in the list when | Leaves the list when | Button |
 | --- | --- | --- | --- |
 | `question` | The seat's current question is unanswered and its run gave no pull request | It is answered, the assignment changes, a newer run starts or the issue is done | Answer |
 | `review` | The same current, unanswered question, with a pull request from that run | The same | Open pull request |
-| `failed` | As in `readSeats`, the run is open (`endedAt` is null) and either its state is `lost` or its non-null `leaseUntil` is earlier than now | The run ends or no longer meets the lost predicate | Session has stopped: clear run |
-| `due` | The issue is assigned to the viewer, not done, and due before now plus 7 days | It is done or its date moves | Open issue |
+| `failed` | As in `readSeats`, the run is open (`endedAt` is null) and either its state is `lost` or its non-null `leaseUntil` is earlier than now | The run ends or no longer meets that test | Session has stopped: clear run |
+| `due` | The issue is assigned to the viewer, not done, due before now plus 7 days, and in an active project (see Projects) | It is done or its date moves | Open issue |
 
-- **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. Both scopes apply the current-assignment check before matching a question or review. `due` rows are the viewer's own in both.
-- A `question` row opens in place with the seat's next step and a text field. Sending posts a comment through the existing issue comment route with its own checks. Empty text is refused in the row. After a successful send, refresh the rows and counts. Name the seat that can pick up the reply only if it still holds that assignment.
-- Only viewers with permission to assign issues see “Session has stopped: clear run”. Pressing it confirms that the person has checked the old session stopped and calls `POST /api/issues/:issueId/runs/:runId/clear`. A missed lease alone cannot establish that the process stopped. The route checks permission and run state again before releasing the checkout. On success, refresh the row and counts. The action test checks that the request requires confirmation and that clearing releases the checkout.
-- Filter chips (All, Questions, Reviews, Failed runs, Due) filter the sent rows in the browser and show each kind's exact count.
-- The mockup shows two suggested answers per question. Seats do not record suggestions today, so the first version has the text field only. Suggested answers are not part of this work.
+- **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. `due` rows are the viewer's own in both.
+- Only `due` rows are held to the active-project rule. A seat that asks, or a run that is lost, is itself the sign that the project is being worked on.
+- The chips (All, Questions, Reviews, Failed runs, Due) are links: `?kind=question`, `review`, `failed` or `due`, kept together with `scope`. Each shows its exact count. The server applies the chosen kind before it takes the 20 rows, so a count never points at rows that cannot be reached. Under the rows: "Showing 20 of N" when there are more.
+- A `question` row opens in place with the seat's next step and a text field. Sending posts a comment through the existing issue comment route, with that route's own checks. Empty text is refused in the row. After a successful send the page reloads its rows and counts, and the panel names the seat that will pick the reply up, if it still holds the issue.
+- Only viewers with the permission to assign issues see "Session has stopped: clear run", the label the issue page already uses. A missed lease alone does not prove that the old process stopped, and clearing lets another session take the issue. So pressing the button first asks, in the row, for the person's confirmation that they checked the session is gone; only then is `POST /api/issues/:issueId/runs/:runId/clear` called. The route checks the permission and the run's state again. On success the page reloads its rows and counts.
+- The mockup shows two suggested answers per question and a one-press "Retry run". Seats do not record suggestions, and a lost run needs the confirmation above, so neither is built.
 
 ### Agents now
 
-From `readSeats` in `src/lib/agents-page.ts`, read only, with its rules unchanged (a seat's room stays hidden from people who may not see it).
+From `readSeats` in `src/lib/agents-page.ts`, read only, with its rules unchanged (a seat's room stays hidden from people who may not see it). `readSeats` does not return a seat's project id, so the loader reads the project id of the seats it got back in one further query by seat id.
 
-- One chip per seat with a state: `working` (an open run with `working[].lost` false), `failed` (an open run with that flag true, the same lost predicate used by Needs you), `waiting_on_person` (no open run and the seat is in the complete waiting-seat set), `idle` (the rest). The counts line sums the chips. If the waiting-seat set is missing, show Agents now as unavailable.
-- Pressing a chip shows the seat's line: name, state, issue key.
+- One chip per seat with one state. `failed`: the seat has an open run that `readSeats` marks lost. `working`: it has an open run and none is lost. `waiting_on_person`: no open run, and the seat is in the waiting set from Needs you. `idle`: the rest. A seat with a lost run and a working run is `failed`, because that is the one a person must act on, and its issue key is the lost run's.
+- The loader returns `failed`, `working` or `idle`. The panel turns `idle` into `waiting_on_person` for the seats in its `waitingSeats` prop, and takes that seat's issue key from the same prop.
+- While the waiting set is unknown (Needs you is not built yet, or did not load), a seat with no open run is labelled "not running", and the counts line has no "waiting on you" part.
+- The counts line sums the chips. Pressing a chip shows the seat's line: name, state, issue key.
 - "Open Floor" links to `/[workspace]/agent-inbox/floor`.
-- The runner line shows each runner's name and reported state as `readSeats` returns them. No new read of runners.
+- There is no runner line. `readSeats` gives a runner's name but not its state, and showing another person's runner state would need its own access decision.
 
 ### Shipped today
 
-Replaces "Recent repository activity". Keep the project, repository and release access checks and the canonical identities used by `src/lib/dashboard/repository-overview.ts`.
+Replaces "Recent repository activity". It is a new loader, `src/lib/dashboard/shipped.ts`, that keeps the project, repository and release access checks and the canonical identities of `src/lib/dashboard/repository-overview.ts` by importing them. The old loader stays until the last issue removes it.
 
-- Use `PullRequest.mergedAt` for a merged pull request and `Release.publishedAt` for a published, non-draft release. A provider update (`GitConnectionActivity.date` or `PullRequest.githubUpdatedAt`) cannot date a merge. Exclude records without the event time or outside the last 24 hours before deduplicating. Count the distinct events, then send the newest five. Use the same event time for the row's age.
-- For each distinct connected repository in a project, use the latest successful `GitConnection.syncedAt` across its authorized connections. Legacy `Repository.syncedAt` records an attempt. Count the repository once if its last success is older than 24 hours or unknown, even if a recent attempt is recorded. When the count is positive, show “N connected repositories have no confirmed refresh in the last 24 hours”.
+- Use `PullRequest.mergedAt` for a merged pull request and `Release.publishedAt` for a published, non-draft release. A provider update time (`GitConnectionActivity.date` or `PullRequest.githubUpdatedAt`) cannot date a merge. Leave out records without the event time or outside the last 24 hours before deduplicating. Count the distinct events, then send the newest five. The row's age is the same event time.
+- For each distinct connected repository in a project, use the latest successful `GitConnection.syncedAt` across its authorized connections. The older `Repository.syncedAt` records an attempt, not a success. Count the repository once if its last success is older than 24 hours or unknown. When the count is above zero, show "N connected repositories have no confirmed refresh in the last 24 hours".
+- `connectionCount` stays in the contract for one reason: with zero connected repositories the panel says so, instead of "nothing shipped".
 - A row is labelled "Merged" or "Released". A release is still not a deployment and the panel does not say "deployed".
+- A release or merge counts whatever the state of its project's issues: the 30-day rule is about issues, and something that shipped today did ship.
 
 ### Due in the next 7 days
 
@@ -103,30 +108,30 @@ Unfinished issues of active projects due from now through 7 days ahead, earliest
 
 ### Projects
 
-- **Active** means the project's latest visible issue change is 30 days old or less. Determine this before narrowing issues to My work, searching projects or paging. Needs you, Due, cards, the table and the dormant line all use this classification. The page size stays 10.
-- A card shows: name and colour, how many "Needs you" rows the project has, open issues, overdue issues, seats working, the latest issue change, and a 14-day line of issues finished per day.
-- "Finished per day" counts issue status changes into a final status (`IssueActivity` with a `newStatus` whose `isFinal` is true), by UTC day, for issues the viewer may read. In "My work", for issues assigned to the viewer.
+- **Active** means: the project has at least one issue the viewer may read that changed in the last 30 days. It is decided before issues are narrowed to My work, before the search and before paging. Due rows, cards, the table and the dormant line all use it. The page size stays 10.
+- A card shows: name and colour, how many "Needs you" rows the project has, open issues, overdue issues, seats working, the latest issue change, and a 14-day line of issues finished per day. The "Needs you" number and the seats number are shown only when they are known: while their panel is not built or did not load, the card leaves them out instead of showing zero.
+- "Finished per day" counts an issue once when it moves from a status that is not final to one that is, by UTC day, for issues the viewer may read. Use the transition rule that `loadProjectHome` in `src/lib/project-overview.ts` already applies, with its handling of older activity rows that carry status names instead of status ids. A move from one final status to another is not counted. In "My work", for issues assigned to the viewer.
 - The table shows the same fields as columns.
-- The dormant line gives the number of dormant projects and their overdue issues. "Show" is a link (`?dormant=1`) that lists them, paged, with open, overdue and latest change. Dormant projects never count in the sentence or on a card.
+- The dormant line gives the number of dormant projects and their overdue issues. "Show" is a link (`?dormant=1`) that lists them, paged, with open, overdue and latest change. Dormant projects never count in Due, on a card or in the "Needs you" due rows.
 
 ### The sentence
 
-Build the sentence from ready panels: `N things need you. Oldest question: <seat>, <age> ago. N failed runs. N changes shipped today.` Use the exact Needs you counts for the current scope and the deduplicated Shipped today total. Omit zero or unknown clauses. When no clause remains, show “Nothing needs you” only if Needs you is ready with zero matches. Otherwise omit the sentence.
+Build the sentence from the panels that are ready: `N things need you. Oldest question: <seat>, <age> ago. N failed runs. N changes shipped today.` Use the exact Needs you counts for the current scope and the Shipped today total. Leave out a clause whose number is zero or unknown. When no clause remains, show "Nothing needs you." only if Needs you is ready with zero rows; otherwise show no sentence.
 
 ## Contexts
 
-A finer cut of the dashboard paths, for this work. Each feature issue holds one context. The final cleanup removes the fallback from the shell and its loader together.
+A finer cut of the dashboard paths, for this work. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
 
 | Context | Paths | Tests |
 | --- | --- | --- |
 | `dashboard-shell` | `src/app/(main)/[workspaceId]/dashboard/page.tsx`, `.../dashboard/components/WorkspaceOverview.tsx`, `.../dashboard/components/DashboardRefresh.tsx`, `.../dashboard/components/RelativeTime.tsx`, `src/types/workspace-dashboard.ts`, `docs/workspace-dashboard.md` | `tests/render/workspace-dashboard.test.cjs` |
 | `dashboard-needs-you` | `src/lib/dashboard/needs-you.ts`, `.../dashboard/components/NeedsYouPanel.tsx` | `tests/security/dashboard-needs-you.test.cjs`, `tests/render/dashboard-needs-you.test.cjs` |
 | `dashboard-agents` | `src/lib/dashboard/agents-now.ts`, `.../dashboard/components/AgentsNowPanel.tsx` | `tests/security/dashboard-agents-now.test.cjs`, `tests/render/dashboard-agents-now.test.cjs` |
-| `dashboard-shipped` | `src/lib/dashboard/repository-overview.ts`, `.../dashboard/components/ShippedPanel.tsx` | `tests/security/workspace-repository-overview.test.cjs`, `tests/render/dashboard-shipped.test.cjs` |
+| `dashboard-shipped` | `src/lib/dashboard/shipped.ts`, `src/lib/dashboard/repository-overview.ts` (only to export what the new loader imports), `.../dashboard/components/ShippedPanel.tsx` | `tests/security/dashboard-shipped.test.cjs`, `tests/render/dashboard-shipped.test.cjs` |
 | `dashboard-projects` | `src/lib/dashboard/workspace-overview.ts`, `.../dashboard/components/ProjectsPanel.tsx`, `.../dashboard/components/DueSoonPanel.tsx` | `tests/security/workspace-dashboard-data.test.cjs`, `tests/render/dashboard-projects.test.cjs` |
-| `dashboard-legacy` | `src/components/dashboard/**`, `src/app/api/ai/dashboard/**` | `tests/security/ai-dashboard-access.test.cjs`, dashboard route load and case in `tests/security/profile-notifications.test.cjs` |
+| `dashboard-legacy` | `src/components/dashboard/**`, `src/app/api/ai/dashboard/**` | `tests/security/ai-dashboard-access.test.cjs`, and the load of that route with its one case in `tests/security/profile-notifications.test.cjs` |
 
-Not in any of them, and not changed: `.../dashboard/components/DashboardClient.tsx` (the single-project view), `src/lib/agents-page.ts`, `src/lib/agent-runs.ts`, the comment and run routes.
+Not in any of them, and not changed: `.../dashboard/components/DashboardClient.tsx` (the single-project view), `src/lib/agents-page.ts`, `src/lib/agent-runs.ts`, `src/lib/project-overview.ts`, the comment and run routes.
 
 ## Contracts
 
@@ -140,71 +145,73 @@ type NeedsYouItem = {
   id: string;                 // `${kind}:${issueId}`
   kind: NeedsYouKind;
   issue: { id: string; issueKey: string | null; title: string; project: DashboardProject };
-  seat: { id: string; name: string } | null;   // current assigned seat for questions/reviews, run seat if any for failed, null for due
-  since: string;              // ISO: run end for questions/reviews, leaseUntil (or startedAt if absent) for failed, due date for due
+  seat: { id: string; name: string } | null;   // the assigned seat for questions and reviews, the run's seat for failed, null for due
+  since: string;              // ISO: run end for questions and reviews, leaseUntil (or startedAt) for failed, the due date for due
   text: string | null;        // the run's next step, for `question` and `review`
   pullRequest: string | null; // OWNER/REPO#NUMBER, for `review`
   runId: string | null;       // for `failed`
   canAct: boolean;            // may comment (question, review) or may clear the run (failed)
 };
 type NeedsYouOverview = Panel<{
-  generatedAt: string; items: NeedsYouItem[];
-  counts: Record<NeedsYouKind, number>;        // scoped active-project rows, before the preview
-  byProject: Record<string, number>;           // same rows grouped by project ID
-  waitingSeatIds: string[];                    // distinct seats of all matching questions/reviews, before the preview
+  generatedAt: string;
+  kind: NeedsYouKind | null;                   // the chip that is chosen; null is All
+  items: NeedsYouItem[];                       // at most 20, of the chosen kind
+  counts: Record<NeedsYouKind, number>;        // every matching row of the scope, whatever chip is chosen
+  byProject: Record<string, number>;           // the same rows by project id
+  waitingSeats: Array<{ seatId: string; issueKey: string | null }>; // every seat with a question or review, one issue each
 }>;
 
 type SeatState = 'working' | 'waiting_on_person' | 'failed' | 'idle';
 type AgentsNowOverview = Panel<{
-  seats: Array<{ id: string; name: string; project: DashboardProject; state: SeatState; issueKey: string | null }>;
-  counts: Record<SeatState, number>;
-  runners: Array<{ name: string; state: string | null }>;
+  // `id` is the seat's id, the same value as `NeedsYouItem.seat.id`. The loader never returns `waiting_on_person`.
+  seats: Array<{ id: string; name: string; projectId: string; state: Exclude<SeatState, 'waiting_on_person'>; issueKey: string | null }>;
 }>;
 
 type ShippedOverview = Panel<{
   items: Array<{ id: string; kind: 'merged' | 'released'; title: string; project: DashboardProject;
-    repository: string; url: string | null; at: string }>; // ISO merge or publication time
-  total: number;                // distinct events in the window, before the five-row preview
-  connectionCount: number;      // distinct connected repositories within their projects
-  staleRepositories: number;    // no recorded successful refresh in the window
+    repository: string; url: string | null; at: string }>; // `at` is the merge or publication time
+  total: number;                // distinct events in the window, before the five-row cut
+  connectionCount: number;      // distinct connected repositories; zero changes the empty text
+  staleRepositories: number;    // no confirmed refresh in the window
 }>;
 ```
 
-`WorkspaceIssueOverview` (ready) keeps returning the populated `attention` and `recent` arrays for the existing shell fallbacks through waves 1 and 2. Its `summary` counts active projects only. Add `dueSoon: DashboardIssue[]`, `dueSoonTotal: number`, `dormant: { projects: number; overdueIssues: number }`, `showingDormant: boolean`, and on each project `seatsWorking: number` and `finishedPerDay: number[]` (14 numbers, oldest first).
+`WorkspaceIssueOverview` (ready) keeps returning `attention` and `recent` through waves 1 and 2, because the shell shows them while "Needs you" is not built; the last issue removes them. Its `summary` counts active projects only. Added are `dueSoon: DashboardIssue[]`, `dueSoonTotal: number`, `dormant: { projects: number; overdueIssues: number }`, `showingDormant: boolean`, and on each project `finishedPerDay: number[]` (14 numbers, oldest first).
 
 | Hand-over | What crosses | Pinned by |
 | --- | --- | --- |
-| loader to shell | A loader returns `null` while it is not built. The shell keeps the existing content for that slot. Ready panel data includes exact totals independently of its preview. | `tests/render/workspace-dashboard.test.cjs` › "a panel whose loader returns null is skipped" |
-| needs-you to projects | `NeedsYouOverview.byProject`, passed by the shell to the projects panel as `needsByProject` | `tests/render/dashboard-projects.test.cjs` › "a card shows how many rows need a person" |
-| needs-you to agents | Start the seat read alongside Needs you. After both resolve, the shell passes the authorized seat data and `NeedsYouOverview.waitingSeatIds` to the seat classifier. Preserve a denied or unavailable seat read. With ready seats but no ready Needs you result, return `unavailable` for Agents now. | `tests/security/dashboard-agents-now.test.cjs` › "a seat with a question outside the preview waits on a person" |
-| needs-you to comment route | `POST /api/issues/:issueId/comments`, unchanged | `tests/render/dashboard-needs-you.test.cjs` › "sending an answer posts one comment and removes the row" |
+| loader to shell | Each loader exports one function that returns its `Panel` type, or `null` while it is not built. For a `null` panel the shell shows what the page showed before in that slot (the old attention list, the old repository list) or nothing (agents, due). The panels' props are fixed by the shell task and do not change afterwards. | `tests/render/workspace-dashboard.test.cjs` › "a panel whose loader returns null is skipped" |
+| needs-you to projects | `NeedsYouOverview.byProject`, passed by the shell to the projects panel as `needsByProject`; `null` while Needs you is not ready | `tests/render/dashboard-projects.test.cjs` › "a card shows how many rows need a person, and nothing while that is unknown" |
+| needs-you to agents | `NeedsYouOverview.waitingSeats`, passed by the shell to the agents panel as `waitingSeats`; `null` while Needs you is not ready | `tests/render/dashboard-agents-now.test.cjs` › "an idle seat with a question waits on a person" |
+| agents to projects | Seats in state `working` counted by `projectId`, passed by the shell to the projects panel as `seatsWorkingByProject`; `null` while Agents now is not ready | `tests/render/dashboard-projects.test.cjs` › "a card shows how many seats are working, and nothing while that is unknown" |
+| needs-you to comment route | `POST /api/issues/:issueId/comments`, unchanged | `tests/render/dashboard-needs-you.test.cjs` › "sending an answer posts one comment and reloads the rows" |
 
 ## Order of work
 
 | Wave | Issue | Context | Needs |
 | --- | --- | --- | --- |
 | 0 | Shell: layout, panel slots, types, relative times, refresh on return | `dashboard-shell` | nothing |
-| 0 | Delete the unused dashboard code and route-specific test. Remove only the retired route load and case from the shared profile, timeline and notification suite. | `dashboard-legacy` | nothing |
+| 0 | Delete the unused dashboard code and its route's test file; in the shared profile, timeline and notification suite remove only that route's load and case | `dashboard-legacy` | nothing |
 | 1 | Needs you: the list | `dashboard-needs-you` | the shell |
 | 1 | Projects: active and dormant, and what is due | `dashboard-projects` | the shell |
 | 1 | Agents now | `dashboard-agents` | the shell |
 | 1 | Shipped today | `dashboard-shipped` | the shell |
-| 2 | Needs you: answer a seat and clear a lost run after the person confirms the session stopped | `dashboard-needs-you` | the list |
+| 2 | Needs you: answer a seat, and clear a lost run after the person confirms its session stopped | `dashboard-needs-you` | the list |
 | 2 | Projects: cards, the table switch and the trend line | `dashboard-projects` | active and dormant |
-| 3 | Finish: remove the fallback consumers together with the `attention` and `recent` fields and reads, and rewrite `docs/workspace-dashboard.md` | `dashboard-shell` with `dashboard-projects` for the loader | everything above |
+| 3 | Finish: remove the fallbacks with the `attention` and `recent` fields and the old repository loader, and rewrite `docs/workspace-dashboard.md` | `dashboard-shell`, and the two old loaders | everything above |
 
 In wave 1, the list and the projects issue are handed out first. Each issue is released when it merges, the way this project already releases.
 
 ## Not in this work
 
-- Suggested answers for a seat's question.
+- Suggested answers for a seat's question, and a one-press retry of a lost run.
 - A merge button, or anything else that writes to a Git provider.
-- Refreshing repository data, and deployment events.
+- Refreshing repository data, deployment events, and the state of runners.
 - Charts beyond the one line per project.
 - The single-project view, widgets, a live socket, keyboard shortcuts.
 
 ## Risks
 
-- **Load on the database.** Bound the row previews (20 Needs you, five shipped or due, ten projects) while computing exact counts and distinct waiting-seat IDs over all matches. Use existing indexes and one grouped query for the 14 days of status changes for the ten projects on the page.
-- **"Shipped today" can undercount.** Merges without a saved merge time are omitted. The stale line counts repositories whose last successful refresh is old or unknown.
+- **Load on the database.** Bound the rows that are sent (20 Needs you, five shipped or due, ten projects) while the counts and the waiting seats cover all matches. Use existing indexes, and one grouped read for the 14 days of status changes of the ten projects on the page, never one per project.
+- **"Shipped today" can undercount.** A merge without a saved merge time is left out. The stale line counts repositories whose last successful refresh is old or unknown.
 - **A `question` row can outlive its answer** when the answer is given outside the issue (in chat, in a pull request). It leaves when the next run starts.
