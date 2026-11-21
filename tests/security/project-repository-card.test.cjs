@@ -5,7 +5,7 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
   const jsx = (type, props) => ({ type, props });
   const components = 'src/app/(main)/[workspaceId]/projects/[projectSlug]';
   const deps = {
-    react: { useState: initial => [initial === null ? expanded : initial, () => {}] },
+    react: { useId: () => 'fixture-id', useState: initial => [initial === null ? expanded : initial, () => {}] },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/navigation': { useSearchParams: () => new URLSearchParams(tab) }, 'next/link': { default: 'a' }, 'lucide-react': { ChevronRight: 'svg' },
     '@/components/ui/button': { Button: ({ asChild, children, ...props }) => asChild ? children : jsx('button', { ...props, children }) },
