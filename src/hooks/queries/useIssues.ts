@@ -30,6 +30,7 @@ export interface UpdateIssueData {
   milestoneId?: string | null;
   reporterId?: string;
   labels?: string[];
+  projectId?: string;
   startDate?: Date | null;
   dueDate?: Date | null;
   position?: number;
@@ -141,6 +142,7 @@ export function useCreateIssue() {
           query.queryKey[2] === variables.workspaceId
       });
       queryClient.invalidateQueries({ queryKey: issueKeys.byProject(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: ['projectSummary', variables.projectId] });
       queryClient.invalidateQueries({ queryKey: issueKeys.lists() });
       
       // Optionally add the new issue to the cache immediately
@@ -232,8 +234,10 @@ export function useUpdateIssue() {
               query.queryKey[2] === updatedIssue.workspaceId
           });
         }
-        if (updatedIssue.projectId) {
-          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(updatedIssue.projectId) });
+        for (const projectId of [updatedIssue.projectId, data.previousProjectId]) {
+          if (!projectId) continue;
+          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(projectId) });
+          queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
         }
       }
     }

@@ -214,6 +214,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   };
   const issueSelect = {
     ...overviewIssueSelect,
+    projectStatus: { select: { ...overviewIssueSelect.projectStatus.select, id: true, name: true, projectId: true } },
     updatedAt: true,
     assignee: { select: burnAccountSelect },
     targetRelations: {
@@ -398,6 +399,20 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   }) : undefined;
   const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now, userId);
   const work = issues.filter(issue => issue.type !== 'MILESTONE');
+  const milestoneIds = new Set(overview.milestones.map(milestone => milestone.id));
+  const workItems = work.map(issue => {
+    const status = issue.projectStatus?.projectId === projectId ? issue.projectStatus : null;
+    return {
+      ...issueRef(issue),
+      milestoneId: issue.milestoneId && milestoneIds.has(issue.milestoneId) ? issue.milestoneId : null,
+      statusId: status?.id ?? null,
+      status: status?.displayName ?? status?.name ?? issue.status ?? 'No status',
+      done: isDone(issue),
+      blocked: status?.category === 'blocked',
+      assignee: issue.assignee?.name ?? null,
+      agent: issue.assignee?.agentSeat?.workspaceId === workspaceId,
+    };
+  });
   const burn = calculateProjectBurn({
     workspaceId, createdAt, now,
     work: work.map(issue => ({
@@ -419,7 +434,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   return {
     burn,
     overview: {
-      ...overview, baselineSetBy: baselineSetter?.name ?? null,
+      ...overview, work: workItems, baselineSetBy: baselineSetter?.name ?? null,
       blocked: blocked.map(issue => {
         const sinceStatus = blockedSince.get(issue.id) ?? now;
         const sinceRelation = issue.targetRelations[0]?.createdAt ?? now;

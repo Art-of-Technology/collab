@@ -241,6 +241,9 @@ test('pagination preserves Overview issue counts and the authorized spend total'
  assert.equal(result.status, 200);
  assert.equal(result.body.overview.stats.open, 523);
  assert.equal(result.body.overview.unplanned.length, 523);
+ assert.equal(result.body.overview.work.length, 524);
+ assert.equal(result.body.overview.work.find(issue => issue.id === 'completed').done, true);
+ assert.ok(result.body.overview.work.every(issue => issue.milestoneId === null));
  assert.equal(result.body.overview.runCount, 521);
  assert.equal(result.body.overview.agentSpendUsd, 537.25);
 });

@@ -11,6 +11,7 @@ import { useProjectSummary, type ProjectSummary } from '@/hooks/queries/useProje
 import { cn } from '@/lib/utils';
 import { BurnOverviewCard, ProjectBurn } from './ProjectBurn';
 import { BaselineControl, ProjectPlan, ProjectPlanPreview } from './ProjectPlan';
+import { ProjectWork } from './ProjectWork';
 
 interface ProjectDashboardProps {
   projectId: string;
@@ -20,6 +21,8 @@ interface ProjectDashboardProps {
   projectColor: string | null;
   workspaceId: string;
   workspaceSlug: string;
+  hasForge: boolean;
+  forgeBoard?: ReactNode;
 }
 
 type Milestone = ProjectSummary['overview']['milestones'][number];
@@ -252,23 +255,22 @@ function ProjectDetails({ base, summary, workspaceSlug }: { base: string; summar
 }
 
 export function ProjectDashboard({
-  projectId, projectName, projectSlug, projectDescription, projectColor, workspaceId, workspaceSlug,
+  projectId, projectName, projectSlug, projectDescription, projectColor, workspaceId, workspaceSlug, hasForge, forgeBoard,
 }: ProjectDashboardProps) {
   const search = useSearchParams();
   const [creatingMilestone, setCreatingMilestone] = useState(false);
-  const { data: summary, isLoading, isError, refetch } = useProjectSummary(projectId);
+  const { data: summary, isLoading, isError, refetch } = useProjectSummary(projectId, workspaceId);
   const base = `/${workspaceSlug}/projects/${projectSlug}`;
   const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Burn', 'Work'] as const);
   const selected = available.find(tab => tab.toLowerCase() === search.get('tab')) ?? 'Overview';
   const milestoneId = search.get('milestone');
-  const workMilestone = selected === 'Work' ? summary?.overview.plan.milestones.find(item => item.id === milestoneId) : undefined;
-  const unplanned = selected === 'Work' && search.get('group') === 'no-milestone' ? summary?.overview.unplanned : undefined;
-  const workIssues = workMilestone?.issues ?? unplanned;
+  const noMilestone = search.get('group') === 'no-milestone';
+  const showingForge = selected === 'Work' && Boolean(forgeBoard);
   const refreshSummary = () => refetch({ throwOnError: true });
 
   return (
     <div className="h-full w-full overflow-y-auto bg-collab-900 text-collab-50">
-      <div className="mx-auto max-w-[1180px] p-4 pb-12 text-sm">
+      <div className={cn('mx-auto max-w-[1180px] p-4 text-sm', selected === 'Work' ? 'pb-32' : 'pb-12')}>
         <header className="mb-2.5 flex flex-wrap items-center gap-2.5">
           <div className="flex min-w-0 flex-1 items-stretch gap-2.5">
             <span aria-hidden="true" className="w-1 shrink-0 rounded-sm" style={{ backgroundColor: projectColor || '#2563eb' }} />
@@ -288,7 +290,7 @@ export function ProjectDashboard({
           </div>
         </header>
 
-        {summary && (
+        {(summary || showingForge) && (
           <nav aria-label="Project tabs" className="mb-3.5 flex gap-0.5 border-b border-white/[.09]">
             {available.map(tab => (
               <Link key={tab} href={tab === 'Overview' ? base : `${base}?tab=${tab.toLowerCase()}`}
@@ -300,35 +302,26 @@ export function ProjectDashboard({
           </nav>
         )}
 
-        {isLoading && <p role="status" className="text-collab-400">Loading project overview…</p>}
-        {(isError || (!summary && !isLoading)) && (
+        {!showingForge && isLoading && <p role="status" className="text-collab-400">Loading project overview…</p>}
+        {!showingForge && (isError || (!summary && !isLoading)) && (
           <Card className={cn(cardStyle, 'space-y-2 p-3')} role="alert">
             <p>Could not load project overview.</p>
             <p className="text-collab-400">Connection status unavailable</p>
             <Button variant="outline" className={controlStyle} onClick={() => refetch()}>Retry</Button>
           </Card>
         )}
-        {summary && !isError && (selected === 'Overview' ? (
+        {selected === 'Work' && (showingForge || (summary && !isError)) && (
+          <ProjectWork key={noMilestone ? 'no-milestone' : milestoneId} base={base} summary={summary}
+            hasForge={hasForge} forgeBoard={forgeBoard} milestoneId={milestoneId} noMilestone={noMilestone} />
+        )}
+        {selected !== 'Work' && summary && !isError && (selected === 'Overview' ? (
           <ProjectOverview summary={summary} base={base} workspaceSlug={workspaceSlug} projectName={projectName}
             openMilestoneForm={() => setCreatingMilestone(true)} refetch={refreshSummary} />
         ) : selected === 'Plan' ? (
           <ProjectPlan key={milestoneId} summary={summary} workspaceId={workspaceId} workspaceSlug={workspaceSlug}
             base={base} milestoneId={milestoneId} refetch={refreshSummary} />
-        ) : selected === 'Burn' ? (
-          <ProjectBurn burn={summary.burn} />
         ) : (
-          <Card className={cn(cardStyle, 'space-y-2 p-3')}>
-            <h2 className="text-base font-semibold">{selected}{workMilestone ? ` · ${titleOf(workMilestone)}` : unplanned && ' · No milestone'}</h2>
-            {!workMilestone && <p className="text-collab-400">{selected} is coming.</p>}
-            {workIssues && (
-              <ul className="space-y-1">
-                {workIssues.map(issue => (
-                  <li key={issue.id}><Link className="text-blue-400 hover:underline" href={`/${workspaceSlug}/issues/${issue.id}`}>{titleOf(issue)}</Link></li>
-                ))}
-              </ul>
-            )}
-            {workMilestone && !workIssues?.length && <p className="text-collab-400">This milestone has no issues.</p>}
-          </Card>
+          <ProjectBurn burn={summary.burn} />
         ))}
         {creatingMilestone && (
           <NewIssueModal open onOpenChange={setCreatingMilestone} workspaceId={workspaceId} projectId={projectId}

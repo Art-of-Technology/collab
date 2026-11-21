@@ -58,6 +58,7 @@ export async function GET(
     // Get all statuses to identify final (done) statuses
     const projectStatuses = await prisma.projectStatus.findMany({
       where: { projectId, project: projectWhere, isActive: true },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
       select: { id: true, isFinal: true, name: true, displayName: true, color: true }
     });
 

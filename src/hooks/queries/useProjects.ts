@@ -1,6 +1,8 @@
 import type { ProjectBurn } from '@/lib/project-burn';
 import type { ProjectOverview } from '@/lib/project-overview';
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { subscribeWorkspaceEvents } from '@/lib/workspace-event-source';
 import axios from 'axios';
 
 export interface Repository {
@@ -365,7 +367,18 @@ export interface ProjectSummary {
   notes: NoteSummary[];
 }
 
-export const useProjectSummary = (projectId: string | undefined) => {
+export const useProjectSummary = (projectId: string | undefined, workspaceId: string | undefined) => {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!workspaceId || !projectId) return;
+    return subscribeWorkspaceEvents(workspaceId, event => {
+      if ((event.type === 'issue.updated' && (event.projectId === projectId || event.previousProjectId === projectId)) ||
+        (event.type === 'issue.created' && event.projectId === projectId)) {
+        void queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
+      }
+    });
+  }, [projectId, queryClient, workspaceId]);
+
   return useQuery({
     queryKey: ["projectSummary", projectId],
     queryFn: async () => {

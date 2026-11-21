@@ -17,6 +17,7 @@ test('closing a retained dialog discards create title and description without su
   // Model the exit-animation interval: closing changes open state but retains the shell and children.
   const Dialog = ({ open, onOpenChange, children }) => h('div', { 'data-dialog': true, 'data-state': open ? 'open' : 'closed', onKeyDown: e => { if (open && e.key === 'Escape') onOpenChange(false); } }, children);
   const deps = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'next/link': { default: native('a') },
+    'next/navigation': { useRouter: () => ({}) },
     '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') },
     '@/components/ui/textarea': { Textarea: native('textarea') }, '@/components/ui/badge': { Badge: native('span') },
     '@/components/ui/dialog': { Dialog, DialogContent: native('section'), DialogHeader: native('header'), DialogTitle: native('h2'), DialogDescription: native('p') },
