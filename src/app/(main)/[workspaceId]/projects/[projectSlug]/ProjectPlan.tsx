@@ -73,7 +73,7 @@ export function BaselineControl({ overview, projectId, refetch, showHistory = tr
         </>
       ) : (
         <Button type="button" variant="outline" className={controlStyle}
-          disabled={saving || !overview.plan.milestones.some(milestone => milestone.start !== null)}
+          disabled={saving || !overview.plan.milestones.some(milestone => milestone.startDate || milestone.dueDate)}
           onClick={() => { setError(''); setConfirming(true); }}>
           {baselineAt ? 'Re-baseline' : 'Set baseline'}
         </Button>

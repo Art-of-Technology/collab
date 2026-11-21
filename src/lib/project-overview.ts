@@ -44,6 +44,17 @@ function forecastFinish(today: number, start: number | null, remaining: number, 
   return recentClosures ? forecastStart + Math.ceil(remaining * PACE_DAYS / recentClosures) : null;
 }
 
+function milestoneWorkDates(issue: OverviewIssue, linked: OverviewIssue[]) {
+  const workDates = linked.map(item => day(item.firstStartedAt ?? item.createdAt));
+  const finishDates = linked.flatMap(item => item.finishedAt ? [day(item.finishedAt)] : []);
+  return {
+    start: workDates.reduce<number | null>((earliest, date) => earliest === null ? date : Math.min(earliest, date),
+      issue.firstStartedAt ? day(issue.firstStartedAt) : null),
+    end: finishDates.reduce<number | null>((latest, date) => latest === null ? date : Math.max(latest, date),
+      issue.finishedAt ? day(issue.finishedAt) : null),
+  };
+}
+
 function planMilestones(
   milestones: OverviewIssue[], byMilestone: Map<string, OverviewIssue[]>,
   today: number, recentClosures: number, viewerId: string | undefined,
@@ -61,22 +72,29 @@ function planMilestones(
     previousBaselineDue = due ?? previousBaselineDue;
   }
 
-  let previousDue: number | null = null;
-  return [...milestones]
-    .sort((a, b) => dateOrder(a.dueDate ?? a.startDate, b.dueDate ?? b.startDate) || milestoneTie(a, b))
+  let previousEnd: number | null = null;
+  return milestones
     .map(issue => {
       const linked = byMilestone.get(issue.id) ?? [];
+      const actual = isDone(issue) && !issue.startDate && !issue.dueDate ? milestoneWorkDates(issue, linked) : null;
+      const sortTime = issue.dueDate?.getTime() ?? issue.startDate?.getTime() ?? (actual?.end ?? Infinity) * DAY;
+      return { issue, linked, actual, sortTime };
+    })
+    .sort((a, b) => a.sortTime - b.sortTime || milestoneTie(a.issue, b.issue))
+    .map(({ issue, linked, actual }) => {
       const completed = linked.filter(isDone).length;
       const due = issue.dueDate ? day(issue.dueDate) : null;
-      const start = issue.startDate ? day(issue.startDate) : due === null ? null : previousDue ?? due;
-      previousDue = due ?? previousDue;
+      const actualEnd = actual?.end ?? null;
+      const start = actualEnd !== null ? Math.min(actual?.start ?? actualEnd, actualEnd)
+        : issue.startDate ? day(issue.startDate) : due === null ? null : previousEnd ?? due;
+      previousEnd = due ?? actualEnd ?? previousEnd;
       const decision = due !== null && !issue.startDate && !linked.length;
       const state: 'decision' | 'done' | 'running' | 'planned' = decision ? 'decision' : isDone(issue) ? 'done'
         : issue.firstStartedAt || issue.projectStatus?.category === 'in_progress' ? 'running' : 'planned';
       const forecast = due !== null && state !== 'done' && !decision
         ? forecastFinish(today, start, linked.length - completed, recentClosures) : null;
       const baselineDue = issue.baselineDueDate ? day(issue.baselineDueDate) : null;
-      const end = due ?? start;
+      const end = due ?? actualEnd ?? start;
       const comparison = due === null ? null : Math.max(due, forecast ?? due);
       return {
         ...issueRef(issue), state, completed, total: linked.length,
@@ -127,12 +145,7 @@ export function calculateProjectOverview(
     let end = due;
 
     if (finished) {
-      const workDates = linked.map(item => day(item.firstStartedAt ?? item.createdAt));
-      const finishDates = linked.flatMap(item => item.finishedAt ? [day(item.finishedAt)] : []);
-      start = workDates.reduce<number | null>((earliest, date) => earliest === null ? date : Math.min(earliest, date),
-        issue.firstStartedAt ? day(issue.firstStartedAt) : null);
-      end = finishDates.reduce<number | null>((latest, date) => latest === null ? date : Math.max(latest, date),
-        issue.finishedAt ? day(issue.finishedAt) : null);
+      ({ start, end } = milestoneWorkDates(issue, linked));
     }
     previousEnd = end ?? previousEnd;
 
