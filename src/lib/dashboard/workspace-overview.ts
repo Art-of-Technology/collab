@@ -52,23 +52,27 @@ export async function loadWorkspaceIssueOverview({
     } satisfies Prisma.ProjectWhereInput;
     const projects = await prisma.project.findMany({ where: activeProjects, select: projectSelect });
     const projectIds = projects.map(project => project.id);
+    const statuses = projectIds.length ? await prisma.projectStatus.findMany({
+      where: { projectId: { in: projectIds }, project: activeProjects },
+      select: { id: true, projectId: true, isFinal: true },
+    }) : [];
+    const statusIdsByProject = new Map<string, string[]>();
+    for (const status of statuses) statusIdsByProject.set(status.projectId, [...statusIdsByProject.get(status.projectId) ?? [], status.id]);
     const scopedIssues = {
       workspaceId,
       projectId: { in: projectIds },
       project: activeProjects,
       ...(scope === 'mine' ? { assigneeId: actorId } : {}),
+      // A linked status must belong to the issue's own project. Plain columns, not a relation filter per
+      // project: each relation filter is one more join, and 75 of them took PostgreSQL seconds to plan.
       AND: [issueReadAccessWhere(actorId), {
-        OR: projects.map(project => ({
-          projectId: project.id,
-          OR: [{ statusId: null }, { projectStatus: { projectId: project.id } }],
-        })),
+        OR: [{ statusId: null }, ...projects.flatMap(project => {
+          const statusIds = statusIdsByProject.get(project.id);
+          return statusIds ? [{ projectId: project.id, statusId: { in: statusIds } }] : [];
+        })],
       }],
     } satisfies Prisma.IssueWhereInput;
     const soon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const statuses = projectIds.length ? await prisma.projectStatus.findMany({
-      where: { projectId: { in: projectIds }, project: activeProjects },
-      select: { id: true, projectId: true, isFinal: true },
-    }) : [];
     const finalIds = new Set(statuses.filter(status => status.isFinal).map(status => status.id));
     // A linked project status is authoritative; legacy strings apply only without a statusId.
     const isOpen = (group: StatusGroup) => group.statusId !== null

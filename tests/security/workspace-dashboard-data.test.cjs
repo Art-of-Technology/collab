@@ -206,3 +206,17 @@ test('workspace and permission lookup errors are unavailable, never disguised as
     assert.equal(f.calls.length, 0, 'failed access checks must not read project or issue payloads');
   }
 });
+
+// Each relation filter is one more join for PostgreSQL to plan; one per project made a 75-project Home take seconds of processor.
+test('issue reads filter through the same number of relations however many projects the workspace has', async () => {
+  const relationFilters = where => !where || typeof where !== 'object' ? 0 : Object.entries(where).reduce((sum, [key, value]) =>
+    sum + (['project', 'projectStatus', 'workspace'].includes(key) ? 1 : 0) + (Array.isArray(value) ? value.reduce((n, part) => n + relationFilters(part), 0) : relationFilters(value)), 0);
+  const filters = async extraProjects => {
+    const f = fixture();
+    for (let i = 0; i < extraProjects; i++) f.projects.push({ ...f.projects[2], id: `extra-${i}`, slug: `extra-${i}`, name: `Extra ${i}` });
+    const result = await f.invoke();
+    assert.equal(result.summary.visibleProjects, 12 + extraProjects);
+    return f.calls.filter(call => call.model === 'Issue').map(call => `${call.operation}: ${relationFilters(call.query.where)}`);
+  };
+  assert.deepEqual(await filters(63), await filters(0));
+});
