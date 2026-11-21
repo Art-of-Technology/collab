@@ -44,7 +44,7 @@ The sections the issue template requires follow the card unchanged. An issue fil
 1. The plan names the contexts it touches and adds any that are missing to `CONTEXT-MAP.md`.
 2. Every hand-over between two contexts is written down: what crosses, where it is written, the test that pins it.
 3. The work is cut into issues of one context each, in waves. What unblocks the rest goes first.
-4. The pre-flight checks the cut before anything is filed: every issue has a card and names a test, no two issues of a wave share a context or a file, every need has a block and every block a need, and "Starts now" is the set of issues that need nothing unfinished.
+4. Run `node scripts/plan-preflight.mjs PLAN.json` before filing anything. The pre-flight checks that every issue has a card and names a test, no two issues of a wave share a context or a file, every need has a block and every block a need, and "Starts now" is the set of issues that need nothing unfinished.
 5. The owner sees the waves on one page and answers `file ok`.
 6. The epic is filed with its children and assigned to the lead seat last.
 
