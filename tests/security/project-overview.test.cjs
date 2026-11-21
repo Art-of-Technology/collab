@@ -112,3 +112,19 @@ test('Plan orders due-only milestones, chains their starts, and includes decisio
   assert.equal(undated.start, null);
   assert.equal(undated.end, null);
 });
+
+test('Plan preserves reversed dates for repair without charting them or chaining a start from them', () => {
+  const result = calculateProjectOverview([
+    milestone('valid', { dueDate: date(22), baselineDueDate: date(22) }),
+    milestone('reversed', { startDate: date(28), dueDate: date(24), baselineStartDate: date(28), baselineDueDate: date(24) }),
+    milestone('next', { dueDate: date(27), baselineDueDate: date(27) }),
+    issue('linked', { milestoneId: 'next' }),
+  ], date(21), now);
+  const [valid, reversed, next] = result.plan.milestones;
+  assert.equal(reversed.invalidDates, true);
+  assert.deepEqual([reversed.start, reversed.end, reversed.forecast, reversed.driftDays], [null, null, null, null]);
+  assert.equal(reversed.startDate, date(28).toISOString());
+  assert.equal(reversed.dueDate, date(24).toISOString());
+  assert.equal(next.start, valid.end);
+  assert.equal(next.baselineStart, valid.baselineDue);
+});

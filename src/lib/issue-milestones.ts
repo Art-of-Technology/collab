@@ -6,6 +6,19 @@ export class InvalidMilestone extends Error {
   }
 }
 
+type MilestoneDates = { type: string; startDate: string | Date | null; dueDate: string | Date | null };
+
+export function milestoneDateError(current: MilestoneDates, patch: Partial<MilestoneDates>) {
+  if ((patch.type ?? current.type) !== 'MILESTONE' ||
+      (current.type === 'MILESTONE' && patch.startDate === undefined && patch.dueDate === undefined)) return;
+
+  const start = patch.startDate === undefined ? current.startDate : patch.startDate;
+  const due = patch.dueDate === undefined ? current.dueDate : patch.dueDate;
+  if (start && due && new Date(due).toISOString().slice(0, 10) < new Date(start).toISOString().slice(0, 10)) {
+    return 'The due date is before the start.';
+  }
+}
+
 export async function validateMilestone(
   tx: Prisma.TransactionClient,
   scope: { projectId: string; workspaceId: string },

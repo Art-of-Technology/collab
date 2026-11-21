@@ -1,4 +1,4 @@
-import { assertMilestoneHasNoIssues, InvalidMilestone, validateMilestone } from '@/lib/issue-milestones';
+import { assertMilestoneHasNoIssues, InvalidMilestone, milestoneDateError, validateMilestone } from '@/lib/issue-milestones';
 import { changeIssueTrash, IssueTrashError } from '@/lib/issue-trash';
 import { issueTrashErrorResponse } from '@/lib/issue-trash-response';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
@@ -357,11 +357,13 @@ export const PATCH = withAppAuth(
       // Update issue
       let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
-        if (updateData.milestoneId || (updateData.type && updateData.type !== 'MILESTONE')) {
+        if (updateData.milestoneId || updateData.type || updateData.startDate !== undefined || updateData.dueDate !== undefined) {
           const current = await tx.issue.findUniqueOrThrow({
-            where: { id: existingIssue.id }, select: { projectId: true, workspaceId: true, type: true },
+            where: { id: existingIssue.id }, select: { projectId: true, workspaceId: true, type: true, startDate: true, dueDate: true },
           });
           if (current.projectId !== existingIssue.projectId) throw new InvalidMilestone('Issue changed; reload and retry');
+          const dateError = milestoneDateError(current, updateData);
+          if (dateError) throw new InvalidMilestone(dateError);
           await validateMilestone(tx, current, updateData.milestoneId, existingIssue.id);
           if (current.type === 'MILESTONE' && updateData.type && updateData.type !== 'MILESTONE') {
             await assertMilestoneHasNoIssues(tx, existingIssue.id);

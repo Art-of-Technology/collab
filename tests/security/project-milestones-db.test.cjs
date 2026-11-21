@@ -94,6 +94,31 @@ test('milestones, repeated baselines and finish dates use the project issue writ
   assert.equal((await invalidDates.json()).error, 'The due date is before the start.');
   assert.deepEqual((await fresh(launch.id)).dueDate, later);
 
+  for (const dates of [
+    { startDate: '2025-01-04T00:00:00.000Z' },
+    { dueDate: oldCreated.toISOString() },
+    { startDate: later.toISOString(), dueDate: entry.toISOString() },
+  ]) {
+    const refused = await appPatch(launch.id, { ...dates, title: 'Must not save' });
+    assert.equal(refused.status, 400);
+    assert.equal((await refused.json()).error_description, 'The due date is before the start.');
+    const { title, startDate, dueDate } = await fresh(launch.id);
+    assert.deepEqual([title, startDate, dueDate], [launch.title, entry, later]);
+  }
+  assert.equal((await appPatch(launch.id, { dueDate: entry.toISOString() })).status, 200);
+  assert.equal((await appPatch(launch.id, { startDate: '2025-01-02T19:00:00.000Z' })).status, 200);
+  assert.equal((await appPatch(launch.id, { dueDate: null })).status, 200);
+  assert.equal((await fresh(launch.id)).dueDate, null);
+  await raw.issue.update({ where: { id: launch.id }, data: { startDate: later, dueDate: entry } });
+  assert.equal((await appPatch(launch.id, { title: launch.title })).status, 200);
+  assert.equal((await appPatch(launch.id, { startDate: entry.toISOString(), dueDate: later.toISOString() })).status, 200);
+
+  assert.equal((await appPatch(notMilestone.id, {
+    startDate: later.toISOString(), dueDate: entry.toISOString(),
+  })).status, 200);
+  assert.equal((await appPatch(notMilestone.id, { type: 'MILESTONE' })).status, 400);
+  assert.equal((await fresh(notMilestone.id)).type, notMilestone.type);
+
   for (const put of [webPut, appPatch]) {
     assert.equal((await put(target.id, { milestoneId: launch.id })).status, 200);
     assert.equal((await fresh(target.id)).milestoneId, launch.id);

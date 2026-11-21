@@ -57,6 +57,7 @@ function planMilestones(
   for (const issue of baselineOrder) {
     const due = issue.baselineDueDate ? day(issue.baselineDueDate) : null;
     const start = issue.baselineStartDate ? day(issue.baselineStartDate) : previousBaselineDue ?? due;
+    if (start !== null && due !== null && due < start) continue;
     if (start !== null) baselineStarts.set(issue.id, start);
     previousBaselineDue = due ?? previousBaselineDue;
   }
@@ -69,20 +70,22 @@ function planMilestones(
       const completed = linked.filter(isDone).length;
       const due = issue.dueDate ? day(issue.dueDate) : null;
       const start = issue.startDate ? day(issue.startDate) : due === null ? null : previousDue ?? due;
-      previousDue = due ?? previousDue;
+      const invalidDates = start !== null && due !== null && due < start;
+      if (!invalidDates) previousDue = due ?? previousDue;
       const decision = due !== null && !issue.startDate && !linked.length;
       const state: 'decision' | 'done' | 'running' | 'planned' = decision ? 'decision' : isDone(issue) ? 'done'
         : issue.firstStartedAt || issue.projectStatus?.category === 'in_progress' ? 'running' : 'planned';
-      const forecast = due !== null && state !== 'done' && !decision
+      const forecast = due !== null && !invalidDates && state !== 'done' && !decision
         ? forecastFinish(today, start, linked.length - completed, recentClosures) : null;
-      const baselineDue = issue.baselineDueDate ? day(issue.baselineDueDate) : null;
+      const baselineStart = baselineStarts.get(issue.id) ?? null;
+      const baselineDue = baselineStart !== null && issue.baselineDueDate ? day(issue.baselineDueDate) : null;
       const end = due ?? start;
-      const comparison = due === null ? null : Math.max(due, forecast ?? due);
+      const comparison = due === null || invalidDates ? null : Math.max(due, forecast ?? due);
       return {
         ...issueRef(issue), state, completed, total: linked.length,
         startDate: issue.startDate?.toISOString() ?? null, dueDate: dateOf(due),
-        start: decision ? due : start, end,
-        baselineStart: baselineStarts.get(issue.id) ?? null, baselineDue,
+        start: invalidDates ? null : decision ? due : start, end: invalidDates ? null : end, invalidDates,
+        baselineStart, baselineDue,
         forecast,
         driftDays: comparison === null || baselineDue === null ? null : Math.max(0, comparison - baselineDue),
         isReporter: viewerId !== undefined && issue.reporterId === viewerId,
