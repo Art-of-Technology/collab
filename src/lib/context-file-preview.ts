@@ -1,10 +1,8 @@
 /**
  * What a preview of a Context file is.
  *
- * A preview is there so a file can be checked without downloading it, and it never runs anything the
- * file carries. Four kinds are shown: an image as an image, a PDF in the browser's viewer, a text file
- * as text and a CSV as a table. Anything else is named, not shown: its name, type and size, and a
- * download.
+ * Previews show images, PDFs, plain text and CSV tables. Other files show their name, type, size
+ * and a download link.
  *
  * The kind follows the type the server worked out from the bytes (`context-file-type.ts`), never what
  * the browser called the upload. A name only ever decides between two readings of the same text — a
@@ -18,13 +16,12 @@
  *    and every fetch even when the address is opened on its own. Only types a browser draws and never
  *    runs are in that list: an SVG is a document when it is opened on its own, so it is named here,
  *    not drawn.
- *  - A PDF is drawn by the browser's own viewer. What keeps the file away from Collab's site is that
- *    its type comes from the bytes (only bytes that start `%PDF` are `application/pdf`), that it leaves
- *    `nosniff` so no browser reads it as a page, and that the viewer runs apart from the page: Chrome
- *    hands the bytes to its viewer and never into the frame's document. Collab's frame carries no
- *    sandbox mark, because Chrome will not start its viewer in a sandboxed frame (CLB-854); Chrome
- *    also ignores the header's `sandbox` for a PDF. The header keeps `sandbox allow-scripts` for the
- *    browsers that honour it there.
+ *  - Only the stored type `application/pdf` gets a frame. Uploads get that type from a `%PDF`
+ *    prefix. The response sends the stored type with `nosniff`, so Chrome hands even a malformed
+ *    PDF to its viewer, which runs separately from the Collab page. The iframe omits `sandbox`
+ *    because the attribute blocks Chrome's viewer
+ *    (CLB-854). Chrome ignores the response's CSP sandbox for PDFs. The header still allows viewer
+ *    scripts under `sandbox allow-scripts` in browsers that enforce it.
  *
  * Only the start of a text file is read, and only a stated number of rows of a CSV: a preview of a
  * file of a few megabytes stays small, and says when there is more.
@@ -156,11 +153,9 @@ export function contextDownloadUrl(id: string): string {
 }
 
 /**
- * Bytes that are drawn in the page: their own type, shown rather than downloaded, and sealed. The
- * PDF viewer is the browser's own program and needs its scripts, so a PDF's sandbox allows them; it is
- * kept for the browsers that honour it on a PDF (Chrome does not, see the header of this file).
+ * Headers for inline previews. See the module comment for the PDF sandbox rationale.
  *
- * The seal says who may frame these bytes as well: `frame-ancestors` is not covered by `default-src`,
+ * `frame-ancestors` is not covered by `default-src`,
  * and an API reply inherits no policy from Collab's pages, so it has to be said here. It is `'self'`
  * rather than `'none'` because Collab's own preview frames the PDF.
  */

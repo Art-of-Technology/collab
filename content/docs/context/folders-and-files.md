@@ -106,13 +106,13 @@ Choose a file in the list to see it on the right.
 | File | Preview |
 | --- | --- |
 | Image: PNG, JPEG, GIF, WebP or BMP | The image. |
-| PDF | Your browser's PDF viewer. Tested in Chrome only; if it does not appear in another browser, download the file. |
+| PDF | Your browser's PDF viewer. Tested only in Chrome. If the preview does not appear, choose **Download**. |
 | Text, including JSON and XML | The first 256 KiB as text. The preview says when there is more. |
 | CSV | A table of the first 200 rows. The preview says when there are more. |
 | Anything else, SVG and Office files included | Its name, type and size. |
 
 - Every preview has **Download**.
-- A preview never runs anything inside the file. A download always arrives as a file to save, never as a page of Collab.
+- Scripts in an uploaded file cannot run in the Collab page. A download always arrives as a file to save, never as a page of Collab.
 
 ## What agents read
 
