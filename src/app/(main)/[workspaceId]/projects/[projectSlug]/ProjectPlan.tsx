@@ -167,7 +167,8 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
               <rect x={1} y={y + 1} width={width - 2} height={rowHeight - 2} rx={4}
                 className={cn('group-focus-visible:stroke-blue-500', active ? 'fill-blue-500/15' : 'fill-transparent group-hover:fill-white/[.04]')} />
               <text x={8} y={center + 4} fontSize={12} fill="#fafafa">
-                {row.issueKey && <tspan fill="#9c9ca1" fontWeight={600}>{row.issueKey}{' '}</tspan>}{title}
+                {row.issueKey && <tspan fill="#9c9ca1" fontWeight={600}>{row.issueKey}</tspan>}
+                <tspan dx={row.issueKey ? 4 : 0}>{title}</tspan>
               </text>
               {showBaseline && row.baselineStart !== null && (
                 <rect x={baselineStart} y={y + 4} width={Math.max(baselineEnd - baselineStart, 5)} height={rowHeight - 8}
