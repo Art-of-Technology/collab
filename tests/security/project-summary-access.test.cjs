@@ -74,16 +74,18 @@ function fixture(options={}){
   activity.push(transition('completed', statuses[1], date(-4), closer), transition('blocked', blockedStatus, date(-6), actor));
   if (options.burn) {
    const finished = new Date(now.getTime() - 3_600_000);
+   const nearFinish = seconds => new Date(finished.getTime() + seconds * 1_000);
    completed.finishedAt = finished;
    activity[0].createdAt = finished;
    issues.push(issue('human-completed', {statusId:'done',projectStatus:statuses[1],finishedAt:finished,assignee:agent}));
    activity.push(
-    { ...transition('human-completed', statuses[1], date(-12), agent), id: 'old-close' },
-    { ...transition('human-completed', statuses[1], new Date(finished.getTime() + 1_000), actor),
+    { ...transition('human-completed', statuses[1], options.rapidReopen ? nearFinish(-30) : date(-12), agent), id: 'old-close' },
+    { ...transition('human-completed', statuses[1], nearFinish(options.rapidReopen ? 35 : 1), actor),
       action: 'UPDATED', fieldName: 'status', projectId: null, newStatusId: null, oldValue: 'Todo', newValue: 'Done' },
     { ...transition('human-completed', statuses[1], new Date(finished.getTime() + 2_000), agent),
       id: 'final-to-final', oldStatusId: 'done', oldStatus: statuses[1] },
-    { ...transition('human-completed', statuses[0], date(-10), actor), id: 'old-reopen', oldStatusId: 'done', oldStatus: statuses[1] },
+    { ...transition('human-completed', statuses[0], options.rapidReopen ? nearFinish(-15) : date(-10), actor),
+      id: 'old-reopen', oldStatusId: 'done', oldStatus: statuses[1] },
    );
    if (options.reopen) {
     target.createdAt = date(-60);
@@ -286,4 +288,18 @@ test('Burn keeps the week and pace of a closure that was later reopened', async 
  assert.equal(burn.points.at(-1).closed, 2);
  assert.equal(burn.historyLimited, false);
  assert.ok(burn.forecast.remaining >= 1);
+});
+
+test('Burn counts both rapid closures and attributes the current finish to the actor after the reopen', async () => {
+ const result = await fixture({ overviewHistory: true, burn: true, reopen: true, rapidReopen: true }).call();
+ assert.equal(result.status, 200);
+ const { burn, overview } = result.body;
+ const seatClosures = burn.weeks.reduce((sum, week) => sum + week.issues.agents, 0);
+ assert.equal(seatClosures, 3);
+ assert.deepEqual(plain(burn.recentClosures), { agents: 3, people: 1, unmatched: 0 });
+ assert.deepEqual(plain(burn.closures), { agents: 1, people: 1, unmatched: 0 });
+ assert.equal(overview.closedByAgents, 1);
+ assert.equal(burn.historyLimited, false);
+ assert.equal(burn.points.at(-1).closed, 2);
+ assert.equal(burn.forecast.day, burn.today + Math.ceil(7 * burn.forecast.remaining / (4 / 3)));
 });

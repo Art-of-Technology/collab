@@ -7,6 +7,7 @@ import { burnAccountSelect, calculateProjectBurn, type BurnAccount, type BurnTra
 const DAY = 86_400_000;
 const PACE_DAYS = 21;
 const PAGE_SIZE = 500;
+const FINISH_ACTIVITY_SKEW_MS = 60_000;
 const pageOrder = { id: 'asc' } as const;
 
 async function* pages<Row extends { id: string }>(read: (after: string | undefined) => Promise<Row[]>) {
@@ -214,7 +215,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   } satisfies Prisma.IssueSelect;
   const issues: Prisma.IssueGetPayload<{ select: typeof issueSelect }>[] = [];
   const blockedSince = new Map<string, Date>();
-  const closingEvents = new Map<string, { distance: number; actor: BurnAccount | undefined }>();
+  const closingActors = new Map<string, BurnAccount | undefined>();
   const closureHistory = new Map<string, BurnTransition[]>();
   const projectStatuses = await prisma.projectStatus.findMany({
     where: { projectId, project: projectWhere },
@@ -282,22 +283,42 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
           const closing = wasFinal === false && isFinal === true;
           if (!closing && !(wasFinal === true && isFinal === false)) continue;
           const finishedAt = datedIssues.get(change.itemId);
-          // The trigger and activity writers have different clocks. An event close
-          // to the current finish is that finish. Earlier transitions are history.
-          const distance = finishedAt ? Math.abs(change.createdAt.getTime() - finishedAt.getTime()) : Infinity;
-          if (!finishedAt || (closing ? change.createdAt.getTime() < finishedAt.getTime() - 60_000
-            : change.createdAt.getTime() <= finishedAt.getTime() + 60_000)) {
-            const transition = { at: change.createdAt, closed: closing, actor: change.user };
-            closureHistory.set(change.itemId, [...closureHistory.get(change.itemId) ?? [], transition]);
-            continue;
+          if (finishedAt && change.createdAt.getTime() > finishedAt.getTime() + FINISH_ACTIVITY_SKEW_MS) continue;
+          let transitions = closureHistory.get(change.itemId);
+          if (!transitions) {
+            transitions = [];
+            closureHistory.set(change.itemId, transitions);
           }
-          if (!closing || distance > 60_000) continue;
-          const previous = closingEvents.get(change.itemId);
-          if (!previous || distance < previous.distance) closingEvents.set(change.itemId, { distance, actor: change.user });
-          else if (distance === previous.distance && previous.actor?.id !== change.user.id) {
-            closingEvents.set(change.itemId, { distance, actor: undefined });
+          transitions.push({ at: change.createdAt, closed: closing, actor: change.user });
+        }
+      }
+      for (const [issueId, finishedAt] of datedIssues) {
+        const transitions = closureHistory.get(issueId);
+        if (!transitions) continue;
+        const finish = finishedAt.getTime();
+        let lastReopen = -Infinity;
+        for (const transition of transitions) {
+          if (!transition.closed) lastReopen = Math.max(lastReopen, transition.at.getTime());
+        }
+        // The trigger and activity writers have different clocks. Match the
+        // current finish within that skew, keeping closures before the reopen.
+        let closest = Infinity;
+        let actor: BurnAccount | undefined;
+        const previousTransitions: BurnTransition[] = [];
+        for (const transition of transitions) {
+          const at = transition.at.getTime();
+          const distance = Math.abs(at - finish);
+          if (!transition.closed || at < lastReopen || distance > FINISH_ACTIVITY_SKEW_MS) {
+            previousTransitions.push(transition);
+          } else if (distance < closest) {
+            closest = distance;
+            actor = transition.actor;
+          } else if (distance === closest && actor?.id !== transition.actor?.id) {
+            actor = undefined;
           }
         }
+        closingActors.set(issueId, actor);
+        closureHistory.set(issueId, previousTransitions);
       }
     }
   }
@@ -364,7 +385,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const burn = calculateProjectBurn({
     workspaceId, createdAt, now,
     work: work.map(issue => ({
-      ...issue, done: isDone(issue), closer: closingEvents.get(issue.id)?.actor, history: closureHistory.get(issue.id),
+      ...issue, done: isDone(issue), closer: closingActors.get(issue.id), history: closureHistory.get(issue.id),
     })),
     milestones: issues.flatMap(issue => issue.type === 'MILESTONE' && !isDone(issue) && issue.dueDate && day(issue.dueDate) >= day(now)
       ? [{ label: issue.issueKey ?? issue.title, dueDate: issue.dueDate }] : []),
@@ -378,7 +399,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const blocked = issues.filter(issue => !isDone(issue) &&
     (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
   // The Overview tile keeps its original workspace-specific attribution.
-  const closedByAgents = work.filter(issue => closingEvents.get(issue.id)?.actor?.agentSeat?.workspaceId === workspaceId).length;
+  const closedByAgents = work.filter(issue => closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
   return {
     burn,
     overview: {
