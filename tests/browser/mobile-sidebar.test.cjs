@@ -1,61 +1,7 @@
 const assert = require('node:assert/strict');
-const { readFile } = require('node:fs/promises');
-const { join } = require('node:path');
 const { test } = require('node:test');
-const { build } = require('esbuild');
 const { chromium } = require('playwright');
-const postcss = require('postcss');
-const tailwindcss = require('tailwindcss');
-
-const root = join(__dirname, '../..');
-const stubs = join(__dirname, 'mobile-sidebar-stubs.jsx');
-const dependencies = {
-  'next/link': 'Link',
-  'next/dynamic': 'dynamic',
-  'next/image': 'default',
-  'next/navigation': '*',
-  '@tanstack/react-query': '*',
-  '@/context/AIContext': '*',
-  '@/context/WorkspaceContext': '*',
-  '@/hooks/useAI': '*',
-  '@/hooks/use-toast': '*',
-  '@/hooks/queries/useUser': '*',
-  '@/hooks/queries/useProjects': '*',
-  '@/hooks/queries/useViews': '*',
-  '@/hooks/queries/useInstalledApps': '*',
-  '@/hooks/queries/useSeatsWaiting': '*',
-  '@/hooks/queries/useCommandSearch': '*',
-  '@/lib/sign-out': '*',
-  '@/components/workspace/WorkspaceSelector': 'default',
-  '@/components/layout/sidebar/NotificationPopover': 'default',
-  '@/components/modals/CreateViewModal': 'default',
-  '@/components/modals/CreateProjectModal': 'default',
-  '@/components/issue/NewIssueModal': 'default',
-  './ChatPanel': 'default',
-};
-
-async function bundleApp() {
-  const { outputFiles } = await build({
-    absWorkingDir: root,
-    entryPoints: [join(__dirname, 'mobile-sidebar-app.jsx')],
-    bundle: true,
-    write: false,
-    jsx: 'automatic',
-    plugins: [{
-      name: 'sidebar-fixture',
-      setup(plugin) {
-        plugin.onResolve({ filter: /.*/ }, ({ path }) =>
-          Object.hasOwn(dependencies, path) ? { path, namespace: 'fixture' } : undefined);
-        plugin.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => {
-          const symbol = dependencies[path];
-          const exports = symbol === '*' ? '*' : `{ ${symbol} as default }`;
-          return { contents: `export ${exports} from ${JSON.stringify(stubs)};`, resolveDir: root };
-        });
-      },
-    }],
-  });
-  return outputFiles[0].text;
-}
+const { buildFixture, loadFixture } = require('./mobile-sidebar-fixture.cjs');
 
 async function paintOrder(page, elements) {
   await Promise.all(Object.entries(elements).map(([name, element]) =>
@@ -79,13 +25,7 @@ async function paintOrder(page, elements) {
 }
 
 test('the phone drawer and backdrop cover the page and toolbar, and account taps open the menu', { timeout: 60_000 }, async () => {
-  const stylesheet = join(root, 'src/app/globals.css');
-  const [script, { css }] = await Promise.all([
-    bundleApp(),
-    readFile(stylesheet, 'utf8').then(source =>
-      postcss([tailwindcss(join(root, 'tailwind.config.js'))]).process(source, { from: stylesheet })),
-  ]);
-
+  const fixture = await buildFixture();
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({
@@ -96,13 +36,7 @@ test('the phone drawer and backdrop cover the page and toolbar, and account taps
     page.setDefaultTimeout(5_000);
     const errors = [];
     page.on('pageerror', error => errors.push(error));
-    await page.route('http://fixture.test/', route => route.fulfill({
-      contentType: 'text/html',
-      body: '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="app"></div>',
-    }));
-    await page.goto('http://fixture.test/');
-    await page.addStyleTag({ content: css });
-    await page.addScriptTag({ content: script });
+    await loadFixture(page, fixture);
 
     const search = page.getByPlaceholder(/Search or ask/);
     await search.waitFor();
@@ -114,7 +48,7 @@ test('the phone drawer and backdrop cover the page and toolbar, and account taps
     };
     assert.equal(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y).tagName, outside), 'TEXTAREA');
 
-    const menu = page.getByRole('button', { name: 'Menu', exact: true });
+    const menu = page.getByRole('button', { name: 'Open menu', exact: true });
     await menu.tap();
     const drawer = page.locator('[role="dialog"][data-open="true"]');
     const account = drawer.getByRole('button', { name: 'Fixture User' });
@@ -134,7 +68,7 @@ test('the phone drawer and backdrop cover the page and toolbar, and account taps
       drawer,
       backdrop: page.locator('.fixed.inset-0'),
       search,
-      menu: page.getByRole('button', { name: 'Menu', exact: true, includeHidden: true }),
+      menu: page.getByRole('button', { name: 'Open menu', exact: true, includeHidden: true }),
       page: page.getByRole('button', { name: 'Page action', includeHidden: true }),
     });
     assert.ok(layers.drawer > layers.backdrop, 'the drawer paints above the backdrop');

@@ -8,7 +8,7 @@ import React, {
   useImperativeHandle,
   useState,
 } from "react";
-import { ArrowUp, ChevronDown, Loader2, Paperclip, X, Globe, Mic, StopCircle } from "lucide-react";
+import { ArrowUp, ChevronDown, Loader2, PanelLeft, Paperclip, X, Globe, Mic, StopCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,7 @@ interface ChatInputProps {
   placeholder?: string;
   onFocus?: () => void;
   onBlur?: () => void;
+  onOpenMenu?: () => void;
   onArrowKey?: (direction: 'up' | 'down') => void;
   onEscape?: () => void;
   hasSelectedResult?: boolean;
@@ -88,6 +89,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     placeholder = "Search or ask Cleo anything...",
     onFocus,
     onBlur,
+    onOpenMenu,
     onArrowKey,
     onEscape,
     hasSelectedResult,
@@ -138,8 +140,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+      textarea.style.height = "";
+      if (value) textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
     }
   }, [value]);
 
@@ -279,6 +281,26 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   const hasContent = value.trim().length > 0 || files.length > 0;
   const isActive = isLoading || isStreaming;
+  const showOptions = isFocused || hasContent;
+
+  const attachButton = (className: string) => (
+    <button
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => uploadInputRef.current?.click()}
+      disabled={isRecording || isActive}
+      className={cn(
+        "flex-shrink-0 w-8 h-8 rounded-full items-center justify-center",
+        "text-white/40 hover:text-white/70 hover:bg-white/[0.06]",
+        "transition-all duration-200",
+        (isRecording || isActive) && "opacity-50 cursor-not-allowed",
+        className
+      )}
+      title="Attach image"
+      type="button"
+    >
+      <Paperclip className="h-4 w-4" />
+    </button>
+  );
 
   const dynamicPlaceholder = webSearchEnabled
     ? "Search the web..."
@@ -290,6 +312,18 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      <input
+        ref={uploadInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            processFile(e.target.files[0]);
+          }
+          if (e.target) e.target.value = "";
+        }}
+        accept="image/*"
+      />
       {/* Image previews */}
       <AnimatePresence>
         {files.length > 0 && !isRecording && (
@@ -371,38 +405,21 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           isRecording ? "h-0 overflow-hidden opacity-0" : "opacity-100"
         )}
       >
-        <div className="flex items-end gap-2 px-3 pt-3 pb-1.5">
-          {/* Attach button */}
-          <button
-            onClick={() => uploadInputRef.current?.click()}
-            disabled={isRecording || isActive}
-            className={cn(
-              "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-              "text-white/40 hover:text-white/70 hover:bg-white/[0.06]",
-              "transition-all duration-200",
-              "mb-[1px]",
-              (isRecording || isActive) && "opacity-50 cursor-not-allowed"
-            )}
-            title="Attach image"
-            type="button"
-          >
-            <Paperclip className="h-4 w-4" />
-            <input
-              ref={uploadInputRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  processFile(e.target.files[0]);
-                }
-                if (e.target) e.target.value = "";
-              }}
-              accept="image/*"
-            />
-          </button>
+        <div className="flex items-center gap-1 px-1.5 pt-3 pb-1.5 md:items-end md:gap-2 md:px-3">
+          {onOpenMenu && (
+            <button
+              type="button"
+              onClick={onOpenMenu}
+              aria-label="Open menu"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/40 hover:text-white/70 hover:bg-white/[0.06] transition-all duration-200 md:hidden"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
+          )}
+          {attachButton("hidden mb-[1px] md:flex")}
 
           {/* Input area */}
-          <div className="flex-1 relative min-w-0">
+          <div className="flex-1 relative min-w-0 md:pb-2">
             <textarea
               ref={textareaRef}
               value={value}
@@ -413,8 +430,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               placeholder={dynamicPlaceholder}
               rows={1}
               className={cn(
-                "w-full resize-none bg-transparent text-sm text-white/90",
-                "placeholder:text-white/25",
+                "block w-full resize-none bg-transparent text-sm text-white/90",
+                "placeholder:text-white/25 placeholder-shown:truncate",
                 "outline-none py-1.5 max-h-[120px]",
                 "scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
               )}
@@ -434,10 +451,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               }
             }}
             disabled={isActive && !isRecording}
+            aria-label={isActive ? "Sending" : isRecording ? "Stop recording" : hasContent ? "Send message" : "Start recording"}
             type="button"
             className={cn(
-              "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-              "transition-all duration-200 mb-[1px]",
+              "flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center md:w-8 md:h-8",
+              "transition-all duration-200 md:mb-[1px]",
               isRecording
                 ? "bg-transparent text-red-500 hover:bg-red-500/10"
                 : hasContent && !isActive
@@ -462,13 +480,14 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       <div
         className={cn(
           "flex items-center gap-1 px-3 pb-2.5 pt-0.5 transition-opacity duration-200",
-          isFocused || hasContent
-            ? (isRecording ? "opacity-0 pointer-events-none" : "opacity-100")
-            : "opacity-0 pointer-events-none h-0 overflow-hidden p-0"
+          showOptions
+            ? (isRecording ? "invisible opacity-0" : "opacity-100")
+            : "invisible opacity-0 h-0 overflow-hidden p-0"
         )}
       >
         {/* Left side: Web Search toggle */}
         <div className="flex items-center gap-0.5">
+          {attachButton("flex md:hidden")}
           <button
             type="button"
             onClick={onWebSearchToggle}

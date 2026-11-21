@@ -7,7 +7,6 @@ import { useSidebar } from "@/components/providers/SidebarProvider";
 import { AIProvider } from "@/context/AIContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
-import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { ChatBar } from "@/components/ai/ChatBar";
 
 interface LayoutWithSidebarProps {
@@ -54,7 +53,7 @@ export default function LayoutWithSidebar({
 
         {/* Main content area */}
         <main className="main-content" inert={isMobileOpen}>
-          <div className="h-full w-full overflow-auto pb-14">
+          <div className="app-page-scroll h-full w-full overflow-auto">
             {children}
           </div>
         </main>
@@ -84,7 +83,7 @@ export default function LayoutWithSidebar({
           />
         )}
 
-        {/* Desktop sidebar toggle - hidden on mobile since we have bottom nav */}
+        {/* Desktop sidebar toggle */}
         <Button
           variant="ghost"
           size="icon"
@@ -104,8 +103,7 @@ export default function LayoutWithSidebar({
       </div>
 
       <div className="app-toolbar" inert={isMobileOpen}>
-        <MobileBottomNav />
-        <ChatBar />
+        <ChatBar onOpenMenu={toggleMobile} />
       </div>
     </AIProvider>
   );
