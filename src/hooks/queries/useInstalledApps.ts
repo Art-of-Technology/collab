@@ -13,6 +13,7 @@ interface InstalledApp {
     iconUrl?: string | null;
     publisherId: string;
     permissions?: JsonValue | null;
+    hasPage: boolean;
   };
 }
 

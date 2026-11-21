@@ -51,11 +51,13 @@ import NotificationPopover from "@/components/layout/sidebar/NotificationPopover
 interface SimplifiedSidebarProps {
   pathname?: string;
   isCollapsed?: boolean;
+  onNavigate?: () => void;
 }
 
 export default function SimplifiedSidebar({
   pathname = "",
   isCollapsed = false,
+  onNavigate,
 }: SimplifiedSidebarProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -75,7 +77,9 @@ export default function SimplifiedSidebar({
     includeStats: true,
   });
 
-  const { data: installedApps = [] } = useInstalledApps(currentWorkspace?.id);
+  const { data: allInstalledApps = [] } = useInstalledApps(currentWorkspace?.id);
+  // Sign-in and token registrations are installed too, but have no page to open.
+  const installedApps = allInstalledApps.filter(installation => installation.app.hasPage);
 
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
@@ -100,6 +104,7 @@ export default function SimplifiedSidebar({
   const handleSignOut = async () => {
     try {
       if (!await signOutCurrentSession()) return;
+      onNavigate?.();
       toast({ title: "Signed out", description: "You have been signed out" });
       router.push("/");
     } catch {
@@ -126,8 +131,8 @@ export default function SimplifiedSidebar({
   const mainNav = [
     { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: section === "dashboard", badge: 0 },
     { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: section === "timeline", badge: 0 },
-    // Context is the folder tree, the Notes and the files; a Note's own page lives under /notes.
-    { name: "Context", href: `${workspaceBase}/context`, icon: FileText, current: section === "context" || section === "notes", badge: 0 },
+    // Context is the folder tree, the Notes and the files; a Note opens inside it.
+    { name: "Context", href: `${workspaceBase}/context`, icon: FileText, current: section === "context", badge: 0 },
     { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: section === "features", badge: 0 },
     // The public documentation. It has its own layout, so it is never the current page of this menu.
     { name: "Docs", href: "/docs", icon: BookOpen, current: false, badge: 0 },
@@ -139,7 +144,7 @@ export default function SimplifiedSidebar({
       <div className="flex flex-col h-full py-3">
         {/* Logo */}
         <div className="px-2 mb-4 flex justify-center">
-          <Link href={`${workspaceBase}/dashboard`}>
+          <Link onClick={onNavigate} href={`${workspaceBase}/dashboard`}>
             <div className="p-2 rounded-lg hover:bg-collab-800 transition-colors">
               <Image unoptimized src="/logo-icon.svg" width={24} height={24} alt="Collab" />
             </div>
@@ -149,7 +154,7 @@ export default function SimplifiedSidebar({
         {/* Main Nav Icons */}
         <div className="px-2 space-y-1">
           {[agents, ...mainNav].map((item) => (
-            <Link
+            <Link onClick={onNavigate}
               key={item.name}
               href={item.href}
               className={cn(
@@ -202,7 +207,12 @@ export default function SimplifiedSidebar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
               <DropdownMenuItem
-                onClick={() => currentWorkspace && router.push(`${workspaceBase}/profile`)}
+                onClick={() => {
+                  if (currentWorkspace) {
+                    onNavigate?.();
+                    router.push(`${workspaceBase}/profile`);
+                  }
+                }}
                 disabled={!currentWorkspace}
                 className="text-collab-400 hover:text-white focus:bg-collab-800"
               >
@@ -227,7 +237,7 @@ export default function SimplifiedSidebar({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between pt-3.5 px-2">
-        <Link href={`${workspaceBase}/dashboard`} className="flex items-center">
+        <Link onClick={onNavigate} href={`${workspaceBase}/dashboard`} className="flex items-center">
           <Image unoptimized src="/logo-text.svg" width={100} height={28} alt="Collab" />
         </Link>
         <div className="flex items-center gap-1">
@@ -246,7 +256,7 @@ export default function SimplifiedSidebar({
           {/* Agents: opens and closes the way Projects does */}
           <div>
             <div className="flex items-center rounded-lg text-collab-400 hover:bg-collab-800">
-              <Link
+              <Link onClick={onNavigate}
                 href={agents.href}
                 className={cn("flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium hover:text-white",
                   agents.current && "bg-collab-800 text-white")}
@@ -264,7 +274,7 @@ export default function SimplifiedSidebar({
             {agentsExpanded && (
               <div id="sidebar-agents" className="mt-1 ml-6 space-y-1 border-l border-collab-700 pl-3">
                 {agentsNav.map(item => (
-                  <Link key={item.name} href={item.href} aria-current={item.current ? "page" : undefined}
+                  <Link onClick={onNavigate} key={item.name} href={item.href} aria-current={item.current ? "page" : undefined}
                     className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
                       item.current ? "text-white bg-collab-800" : "text-collab-400 hover:text-white hover:bg-collab-900")}>
                     <span className="flex-1 truncate">{item.name}</span>
@@ -275,7 +285,7 @@ export default function SimplifiedSidebar({
             )}
           </div>
           {mainNav.map((item) => (
-            <Link
+            <Link onClick={onNavigate}
               key={item.name}
               href={item.href}
               className={cn(
@@ -295,7 +305,7 @@ export default function SimplifiedSidebar({
         {/* Projects Section */}
         <div>
           <div className="flex items-center rounded-lg text-collab-400 hover:bg-collab-800">
-            <Link
+            <Link onClick={onNavigate}
               href={`${workspaceBase}/projects`}
               className={cn("flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium hover:text-white",
                 section === "projects" && "bg-collab-800 text-white")}
@@ -320,7 +330,7 @@ export default function SimplifiedSidebar({
                 className="h-8 text-xs" />
               <p className="px-2 py-1 text-[10px] text-collab-500">Recently updated</p>
               {recentProjects.map(project => (
-                <Link key={project.id} href={`${workspaceBase}/projects/${project.slug}`}
+                <Link onClick={onNavigate} key={project.id} href={`${workspaceBase}/projects/${project.slug}`}
                   className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
                     pathname === `${workspaceBase}/projects/${project.slug}`
                       ? "text-white bg-collab-800" : "text-collab-400 hover:text-white hover:bg-collab-900")}>
@@ -337,7 +347,7 @@ export default function SimplifiedSidebar({
 
         {/* Views Section */}
         <div>
-          <Link
+          <Link onClick={onNavigate}
             href={`${workspaceBase}/views`}
             className={cn(
               "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150 group",
@@ -360,7 +370,7 @@ export default function SimplifiedSidebar({
           {starredViews.length > 0 && (
             <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-collab-700">
               {starredViews.map((view: any) => (
-                <Link
+                <Link onClick={onNavigate}
                   key={view.id}
                   href={`${workspaceBase}/views/${view.slug || view.id}`}
                   className={cn(
@@ -386,9 +396,9 @@ export default function SimplifiedSidebar({
             </div>
             <div className="space-y-0.5">
               {installedApps.map((installation: any) => (
-                <Link
+                <Link onClick={onNavigate}
                   key={installation.id}
-                  href={installation.app.slug === 'collab-cli' ? '/docs/cli' : `${workspaceBase}/apps/${installation.app.slug}`}
+                  href={`${workspaceBase}/apps/${installation.app.slug}`}
                   className={cn(
                     "flex items-center gap-4 rounded-lg px-2 py-2 text-sm transition-all duration-150",
                     section === "apps" && subsection === installation.app.slug
@@ -430,7 +440,12 @@ export default function SimplifiedSidebar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-collab-900 border-collab-700">
             <DropdownMenuItem
-              onClick={() => currentWorkspace && router.push(`${workspaceBase}/profile`)}
+              onClick={() => {
+                  if (currentWorkspace) {
+                    onNavigate?.();
+                    router.push(`${workspaceBase}/profile`);
+                  }
+                }}
               disabled={!currentWorkspace}
               className="text-collab-400 hover:text-white focus:bg-collab-800"
             >

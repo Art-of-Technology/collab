@@ -6,6 +6,8 @@
   --sidebar-open: 14rem;
   --sidebar-closed: 3rem;
   --sidebar-width: var(--sidebar-open);
+  /* Resting AI bar: 44px controls, 18px row padding, 2px border, 16px bottom gap. */
+  --ai-bar-clearance: calc(4.875rem + 2px + env(safe-area-inset-bottom, 0px));
 
   /* Collab Design System Colors */
   --collab-950: #070708;  /* Sidebar background - darkest */
@@ -58,6 +60,22 @@
   transition: left 200ms ease, transform 200ms ease, background 150ms ease;
 }
 
+.app-page-scroll {
+  padding-bottom: var(--ai-bar-clearance);
+}
+
+@media (min-width: 768px) {
+  :root {
+    /* Desktop: 40px input including its bottom spacing, with a 24px bottom gap. */
+    --ai-bar-clearance: calc(5.125rem + 2px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-page-scroll {
+    /* The desktop shell already provides 8px of padding and a 1px border. */
+    padding-bottom: calc(var(--ai-bar-clearance) - 9px);
+  }
+}
+
 /* Mobile: overlay drawer */
 @media (max-width: 767.98px) {
   .app-layout {
@@ -89,6 +107,12 @@
 
   .app-sidebar[data-open="true"] {
     transform: translateX(0);
+  }
+
+  /* Keep page and toolbar layers below the mobile drawer and its backdrop. */
+  .main-content[inert],
+  .app-toolbar[inert] {
+    isolation: isolate;
   }
 }
 
@@ -752,4 +776,19 @@ textarea::selection {
 
 .mermaid-preview:not([data-state="error"]) + pre.mermaid-source-collapsed {
   display: none;
+}
+
+/* One soft arrival cue; no repeating flashes. */
+@keyframes comment-arrival {
+  0%, 15% { background-color: rgb(34 197 94 / 0.14); }
+  100% { background-color: transparent; }
+}
+.comment-arrival-highlight {
+  animation: comment-arrival 650ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .comment-arrival-highlight {
+    animation: none;
+    background-color: rgb(34 197 94 / 0.10);
+  }
 }

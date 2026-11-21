@@ -4,7 +4,7 @@ const zlib = require('node:zlib');
 // What an agent's token may read of Context: the folders of its workspace and of one project, what
 // is in one folder, and the text of a file. A token reads what its own account reads and nothing
 // else, Notes keep the rules they have everywhere, and only text, CSV and PDF files give up text.
-const CLOUD = { NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'demo', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' };
+const STORE = { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'collab', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' };
 const SCOPES = ['context:read', 'issues:read', 'prompts:read'];
 
 /** A PDF of one page, written here so the reader is exercised on a file and not on a fixture of itself. */
@@ -56,10 +56,10 @@ function fixture({ userId = 'alice', scopes = SCOPES } = {}) {
   const files = [];
   const stored = new Map();
   function addFile(id, { bytes = Buffer.from(''), mimeType = 'text/plain', size, ...fields } = {}) {
-    const publicId = `collab/context/${id}`;
-    stored.set(publicId, Buffer.from(bytes));
+    const key = `context/00000000-0000-4000-8000-${String(stored.size + 1).padStart(12, '0')}`;
+    stored.set(key, Buffer.from(bytes));
     const row = { id, name: id, mimeType, size: size ?? bytes.length, folderId: 'ideation', uploadedById: 'alice',
-      storageUrl: `https://res.cloudinary.test/demo/raw/authenticated/v1/${publicId}`,
+      storageUrl: `storage:${key}`,
       createdAt: now, updatedAt: now, deletedAt: null, deletedById: null, ...fields };
     Object.defineProperty(row, 'folder', { get: () => folders.find(item => item.id === row.folderId) ?? null, enumerable: true });
     files.push(row);
@@ -113,17 +113,13 @@ function fixture({ userId = 'alice', scopes = SCOPES } = {}) {
     },
   };
 
-  const cloudinary = {
-    url: publicId => `https://res.cloudinary.test/demo/raw/authenticated/s--sign--/${publicId}`,
-    uploader: { destroy: async () => ({ result: 'ok' }) },
-  };
   async function fakeFetch(url) {
     state.fetched.push(url);
-    const bytes = stored.get(/\/s--sign--\/(.+)$/.exec(url)?.[1]);
+    const bytes = stored.get(/^https:\/\/s3\.test\/collab\/(.+)$/.exec(String(url))?.[1]);
     return bytes ? new Response(bytes, { status: 200 }) : new Response(null, { status: 404 });
   }
 
-  const globals = { URL, console, TextDecoder, Buffer, Response, Request, fetch: fakeFetch, process: { env: { ...CLOUD } } };
+  const globals = { URL, console, TextDecoder, Buffer, Response, Request, fetch: fakeFetch, process: { env: { ...STORE } } };
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: db },
     '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts') });
   const scopesModule = load('src/lib/oauth-scopes.ts');
@@ -134,7 +130,7 @@ function fixture({ userId = 'alice', scopes = SCOPES } = {}) {
   const dependencies = {
     'next/server': { NextResponse: Response }, '@prisma/client': client, '@/lib/prisma': { prisma: db },
     '@/lib/issue-finder': finder, '@/lib/secrets/access': access, '@/lib/apps/auth-middleware': auth,
-    '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'), '@/utils/cloudinary-server': { cloudinary },
+    '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'),
     '@/lib/pdf-text': load('src/lib/pdf-text.ts', { unpdf: require('unpdf') }, { Buffer, Error, Uint8Array, TextDecoder, console }),
   };
   dependencies['@/lib/agent-context-folders'] = load('src/lib/agent-context-folders.ts', dependencies, globals);

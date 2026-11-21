@@ -869,6 +869,7 @@ collab issues list
 | `--limit` | integer |  |
 | `--project-id` | string |  |
 | `--assignee-id` | string |  |
+| `--milestone-id` | string |  |
 | `--status` | string |  |
 | `--type` | string |  |
 | `--priority` | string |  |
@@ -905,6 +906,7 @@ collab issues create
 | `--status` | string |  |
 | `--assignee-id` | string |  |
 | `--parent-id` | string |  |
+| `--milestone-id` | string |  |
 | `--due-date` | string |  |
 | `--start-date` | string |  |
 | `--story-points` | integer |  |
@@ -920,6 +922,8 @@ Writes.
 collab issues update ID
 ```
 
+Set --milestone-id to a Milestone issue ID in the same project. To clear it, use --input with a JSON body containing "milestoneId": null.
+
 ID is the issue ID or key (such as APP-123).
 
 | Flag | Type | Details |
@@ -931,6 +935,7 @@ ID is the issue ID or key (such as APP-123).
 | `--status` | string |  |
 | `--assignee-id` | string |  |
 | `--parent-id` | string |  |
+| `--milestone-id` | string |  |
 | `--due-date` | string |  |
 | `--start-date` | string |  |
 | `--story-points` | integer |  |
@@ -1011,6 +1016,24 @@ ID is the issue ID or key (such as APP-123).
 | --- | --- | --- |
 | `--limit` | integer |  |
 | `--action` | string |  |
+
+### `collab issues attach`
+
+Writes.
+
+```sh
+collab issues attach ID
+```
+
+Attach a file to an issue: --file PATH reads it (at most 5 MiB; --name when it is read from stdin with --file -). The file is kept in the Issue attachments folder of the issue's project. With --comment TEXT the command also adds a comment to the issue with that text and the file under it, so an image shows on the issue in one step. Without it, the reply has "markdown": put that line in a comment or in the description yourself.
+
+ID is the issue ID or key (such as APP-123).
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--name` | string |  |
+| `--file` | string | required |
+| `--comment` | string |  |
 
 ## comments
 

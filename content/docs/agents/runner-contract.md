@@ -32,7 +32,7 @@ curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/app
 ## The loop
 
 1. Read the inbox. If it is empty, wait and read again. Nothing is pushed to a runner.
-2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read. The exception is `repository_required`, which an administrator's choice alone clears: keep that issue and try it again at the next read of the inbox.
+2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read. The exception is `repository_required`: keep that issue and try it again at the next read of the inbox after a seat pick or project default resolves.
 3. Start a fresh session for the issue. Give it the issue key, the run id, the generation and the repository the checkout named.
 4. Renew the lease while the session lives. A lease lasts 60 seconds from each renewal; renew well inside that.
 5. The session reads the run context, does the work and finishes the run with an exit note.
@@ -68,7 +68,7 @@ Takes nothing. Needs `issues:read`. The call does not wait: it answers at once, 
 ```
 
 - At most 50 items, already in the order to work them. An empty inbox is `{ "items": [] }`.
-- `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`, and for a lead seat also `child_done`, `child_blocked` or `child_idle`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
+- `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`, and for a lead seat also `child_done`, `child_blocked`, `child_idle` or `child_no_room`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
 - `category` is the group of the issue's status, or `in_review` or `blocked` when its last run ended that way.
 - `lastRunAt` is when the last run on the issue ended, or `null`.
 - An issue with an open run and an issue in a done status are not listed.
@@ -110,7 +110,7 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `wrong_project` | The issue is in another project than the seat's. |
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
-| 409 | `repository_required` | Several repositories are connected and no valid default is selected. Ask an administrator to choose the default in Project settings. Nothing else has to happen: the checkout can be repeated once one is chosen, and `collab seat run` 0.14.2 and later waits for the issue rather than leaving it alone. |
+| 409 | `repository_required` | Several repositories are connected and neither the seat's pick nor the project default resolves. Ask an administrator to choose a default in Project settings. The checkout can be repeated once a pick or default resolves, and `collab seat run` 0.14.3 and later waits for the issue rather than leaving it alone. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
 
@@ -122,17 +122,19 @@ Collab sends the repository with each checked-out issue, so no address is typed 
 
 | Key | Value |
 | --- | --- |
-| `id` | The repository's id in Collab. |
-| `provider` | `github` for a repository connected by the GitHub sign-in, otherwise the connection's own provider, in lower case. |
+| `id` | The repository's id in Collab. For an address typed on the project, the project's id. |
+| `provider` | `github` for a repository connected by the GitHub sign-in, `address` for an address typed on the project, otherwise the connection's own provider, in lower case. |
 | `name` | The path at the provider, `owner/name`. |
 | `url` | What the runner clones. |
 | `defaultBranch` | The default branch where Collab knows it, else `null`. |
 
 - The role is read first: `repository` is `null` when the seat's role works in none, whatever its project has. A lead seat hands work out and gets `null`; so does a person's own run. The checkout and the run context answer the same for an issue.
-- For a role that works in one, Collab works out one repository: the seat's own pick, else the project's default for agents, else the project's only repository. The same repository connected twice, by the GitHub sign-in and as a connection, is one; the same path at two servers is two.
+- For a role that works in one, Collab works out one repository: the project's only connected repository; with several, the seat's own pick, else the project's default for agents; with none connected, the address typed on the project. The same repository connected twice, by the GitHub sign-in and as a connection, is one; the same path at two servers is two.
+- The seat's pick is made when the seat is created, among the active repositories connected to the seat's project: see [Which repository](/docs/agents/create-a-seat#which-repository). A pick whose repository is connected no more is passed over, and the seat follows the project again.
+- A typed address is an `https` address with no user name, password, query or fragment, saved by someone who manages the workspace's permissions on a project that has no connected repository. Collab knows no provider and no branch for it: `provider` is `address`, `name` is the address's path without `.git`, and `defaultBranch` is `null`. A repository connected later comes before it.
 - In Project settings, under repository connections, an administrator with permission to manage seats can select the default repository for agents. One connected repository is automatically the default. Only active connections in the issue's project can resolve as its default. What was chosen is the repository and not the row it was connected by: connecting the same repository a second time, or switching off the row the choice was saved as while another of the same repository stays, keeps the default.
-- With several repositories and no valid default, checkout for a role that works in a repository returns `409 repository_required` before creating a run. Ask an administrator to choose a default in Project settings.
-- With no connected repository, checkout still returns `repository: null` and starts the run, preserving compatibility with runners that have a configured copy.
+- With several repositories, if neither the seat's pick nor the project default resolves, checkout for a role that works in a repository returns `409 repository_required` before creating a run. Ask an administrator to choose a default in Project settings.
+- With no connected repository and no typed address, checkout still returns `repository: null` and starts the run, preserving compatibility with runners that have a configured copy.
 - No token, secret or credential is ever in the reply. The runner clones with its owner's own sign-in.
 
 ## The run object
@@ -257,12 +259,13 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out returns `null` in the context (an ambiguous checkout is refused). |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
+| `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. See [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you). |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
-| `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. |
-| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. |
+| `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. When the lead seat itself reads, each also has `movedOff`, the user IDs of seats the child was moved off. |
+| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
 An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
@@ -286,7 +289,13 @@ The reply names the new issue:
 { "issue": { "id": "cm3issue000042", "issueKey": "BB-7" } }
 ```
 
-A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person.
+A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person. The same warning is added when placement chooses among multiple seats and all are known to have no room.
+
+When a review, security or release request has more than one seat that could take it, Collab [places it by room](/docs/agents/seats#where-a-request-goes) and the reply says where it went:
+
+```json
+{ "issue": { "id": "cm3issue000042", "issueKey": "BB-7" }, "placed": { "seat": "Reviewer (Bob)", "why": "most room" } }
+```
 
 A `security` request adds `"blocks": true`: it blocks the source issue whatever `blocks` said.
 
@@ -327,6 +336,10 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 | Pairing code | Works once, for 15 minutes |
 | Token fetched by a runner | 30 days |
 | Renewed from | 7 days before it runs out |
+| Room figure counts as unknown | 15 minutes after it arrived |
+| Runner counts as offline | 10 minutes without a `seats` call |
+| Eligible work no run has started on can move | 10 minutes without room |
+| Started work can move, between runs, when its last run pushed | 30 minutes without room |
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
@@ -345,7 +358,7 @@ A runner can get its seats' tokens from Collab instead of having them entered by
 | Call | Carries | Does |
 | --- | --- | --- |
 | `POST /api/runner/pair` | Nothing | Starts a pairing: answers with the runner's credential and a code to show. |
-| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold or whose token is in its last week. |
+| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold or whose token is in its last week. Can also [report room](#report-room). |
 | `POST /api/runner/goodbye` | The runner credential | Says the runner is going: its tokens are revoked at once and its credential stops working. |
 
 1. Call `pair` once. Keep the credential in a file only the runner's user can read. Show the code to the person.
@@ -353,7 +366,8 @@ A runner can get its seats' tokens from Collab instead of having them entered by
 3. Keep each token you are given. Send the ids of the tokens you hold as `have` on every call: `{"have":[]}` only while you hold none, because every new token costs the server work.
 4. When an answer carries a token for a seat you already have one for, that is a renewal: start using the new one. The token it replaces ends on your first request with the new one.
 5. When a seat is no longer in the answer, stop running it and delete its token.
-6. Before the machine is deleted on purpose, call `goodbye` as the last act.
+6. To report room, add `state` and `rooms` to the same call: see [Report room](#report-room).
+7. Before the machine is deleted on purpose, call `goodbye` as the last act.
 
 ```sh
 curl -X POST -H "Content-Type: application/json" -d '{"name":"seat-runner on build-1"}' https://collab.example.com/api/runner/pair
@@ -382,8 +396,79 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 | `tokenId`, `expiresAt` | The token to use for the seat: the newest one you said you hold, or the new one. |
 | `token` | Present only when the token is new. It is sent once and never again. |
 | `problem` | Present when no token could be made this time, beside whatever token you already hold. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
+| `refused` | Beside `runner` and `seats`, when any reported figures were not stored: the ids of those seats. See [Report room](#report-room). |
+| `refusedRuns` | Beside `runner` and `seats`, when any runs under `ended` were not eligible: the ids of those runs. See [Report the program a run used](#report-the-program-a-run-used). |
 
 A seat for which you hold no usable token gets a new one. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
+
+### Report room
+
+Room is the percent of allowance a seat has left on the program it would run next. A runner can send it with the `seats` call it already makes, so no extra call is needed.
+
+```json
+{
+  "have": ["cmw..."],
+  "state": "working",
+  "rooms": [
+    { "seat": "cmw...", "room": 60, "program": "Claude Code" }
+  ]
+}
+```
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `state` | `working`, `paused` or `disk_full` | How the runner itself is. Collab keeps it until you send another, so send it with every call. |
+| `rooms` | list, up to 1000 entries | One entry per seat you report for. A seat appears at most once. The body as a whole stays within 64 KiB, which long names reach before 1000 entries. |
+| `seat` | text, 1 to 128 characters | The seat's `id`, as the answer of this call lists it. |
+| `room` | whole number, 0 to 100 | Percent of allowance left, after your own hold-back. `0` means no room: the allowance is used up, or the seat cannot run now for a reason of your own (switched off, paused, or no program signed in). Collab reads it as "its runner reports no room". |
+| `program` | text, 1 to 64 printable ASCII characters after trimming | The name of the program the seat would run next, such as `Claude Code`. Collab stores the trimmed name. |
+
+Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields are required.
+
+- **Only percentages and program names are sent.** No login, account, plan or billing detail is ever sent: a runner has no field to put one in, and any other key is refused.
+- Collab stores a figure with the time it arrived, by its own clock. Send the figures with every call: a figure at least 15 minutes old counts as unknown.
+- A seat that is retired and made again, or given another project, role or owner, starts with no figure. A figure stays when its person's runner is replaced, because it is the same person's allowance: send the figures with your first call after pairing.
+- A call without `state` and `rooms` stores no state and no figure, and is answered exactly as before.
+- A value outside the table is `400 invalid_request`, and a body over 64 KiB is `413 body_too_large`. Nothing of that call is stored and no seats are answered.
+- A figure for a seat that this call's answer does not list is not stored. The call is still answered, and the answer names those seats' ids under `refused`. That happens when a seat was retired since your last call: stop running it, as in step 5.
+
+What Collab makes of it:
+
+| A seat reads as | When |
+| --- | --- |
+| A number | Its figure is newer than 15 minutes and above 0, and its runner called within the last 10 minutes and did not say `paused` or `disk_full`. |
+| No room | No runner is connected for the seat's person, or the runner has not called for 10 minutes (offline), or it said `paused` or `disk_full`, or the seat's fresh figure is `0`. |
+| Unknown | The seat is run by hand, or its runner is connected, online and working but no figure was sent or the figure is at least 15 minutes old. |
+
+A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
+
+Eligible work can move after a seat has had no room: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
+
+Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It shows the figure under **Agents**, **Seats**, to the seat's owner and to whoever may manage workspace permissions: see [Room on the Seats tab](/docs/agents/overview#room-on-the-seats-tab).
+
+### Report the program a run used
+
+The issue can show whose allowance a finished or lost run used and its program: see [Give a seat work](/docs/agents/give-a-seat-work). Send the program with the same `seats` call, once a run has ended:
+
+```json
+{
+  "have": ["cmw..."],
+  "ended": [
+    { "run": "cmw...", "program": "Codex" }
+  ]
+}
+```
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `ended` | list, up to 100 entries | One entry per run that ended since your last call that was answered with `200`. A run appears at most once. Optional. |
+| `run` | text, 1 to 128 characters | The run's `id`, as `checkout` answered it. |
+| `program` | text, 1 to 64 printable ASCII characters after trimming | The program the run used, the same names as in `rooms`. |
+
+- In an entry, both fields are required and no other fields are allowed. A value outside the table is `400 invalid_request`, and nothing of that call is stored.
+- A run is stored only when it is a run of a seat this call's answer lists. The first program stored for a run stays: a later entry for the same run is ignored, not an error.
+- A run that is not of your seats, or does not exist, is not stored. The call is still answered `200`, and the answer names those runs' ids under `refusedRuns`. Every such run reads the same.
+- A call without `ended` is answered exactly as before.
 
 ### Renewal
 
@@ -401,6 +486,8 @@ Nothing is renewed for a seat run by hand. Those tokens keep the expiry they wer
 | `403 runner_pending` | No person has connected the runner yet. Ask again. |
 | `401 runner_refused` | The credential is unknown, the runner was removed, replaced or said goodbye, its person left the workspace, or the pairing ran out after 15 minutes. Stop every seat and pair again. |
 | `429 pairing_busy` | 50 pairings are waiting on this server. Try `pair` again in a few minutes. |
+| `400 invalid_request` | A field is missing or wrong, or the body has a key the call does not know. |
+| `413 body_too_large` | The body is over 64 KiB. |
 
 ## Say goodbye: POST /api/runner/goodbye
 
@@ -419,7 +506,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" https://collab.exampl
 - A machine that is lost says nothing. Expiry is the backstop for that: its tokens stop within 30 days.
 - A runner that comes back pairs again and is connected again.
 
-A runner credential does nothing else. It reads no issue and writes nothing, and every other call refuses it.
+A runner credential reads no issue, and every other call refuses it. The runner can also report its own state and its seats' room.
 
 ## A person's own sessions
 

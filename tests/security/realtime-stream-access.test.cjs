@@ -8,15 +8,17 @@ function fixture() {
   const state = { subject: 'actor', userReads: 0, callback: null, subscribed: 0, unsubscribe: 0, quit: 0, issueReads: 0, viewReads: 0 };
   const workspace = { id: 'space', ownerId: 'other', members: [{ userId: 'actor', status: true }] };
   const foreign = { id: 'foreign', ownerId: 'other', members: [] };
-  const project = { id: 'project', workspace };
-  const hiddenProject = { id: 'hidden-project', workspace: foreign };
+  const project = { id: 'project', workspaceId: workspace.id, workspace };
+  const previous = { ...project, id: 'previous' };
+  const hiddenProject = { id: 'hidden-project', workspaceId: foreign.id, workspace: foreign };
+  const outside = { id: 'outside', workspaceId: 'outside', workspace: { id: 'outside', ownerId: 'actor' } };
   const status = { id: 'status', project };
   const rows = [{ id: 'one', workspaceId: workspace.id, workspace, project, statusId: null }, { id: 'two', workspaceId: workspace.id, workspace, project, statusId: null }];
   const view = { id: 'view', workspaceId: workspace.id, workspace, ownerId: 'other', visibility: 'WORKSPACE', sharedWith: [] };
   const db = {
     workspace: { findFirst: async ({ where }) => matches(workspace, where) ? workspace : null },
     issue: { count: async ({ where }) => { state.issueReads++; return rows.filter(row => matches(row, where)).length; } },
-    project: { findFirst: async ({ where }) => [project, hiddenProject].find(row => matches(row, where)) ?? null },
+    project: { findFirst: async ({ where }) => [project, previous, hiddenProject, outside].find(row => matches(row, where)) ?? null },
     projectStatus: { findFirst: async ({ where }) => matches(status, where) ? status : null },
     view: { findFirst: async ({ where }) => {
       state.viewReads++;
@@ -39,10 +41,10 @@ function fixture() {
 }
 async function stream(f) { const response = await f.open(); assert.equal(response.status, 200); const reader = response.body.getReader(); assert.match(new TextDecoder().decode((await reader.read()).value), /connected/); if (!f.state.getWait && !f.state.subscribeWait) assert.match(new TextDecoder().decode((await reader.read()).value), /realtime.ready/); return reader; }
 const sentinel = { type: 'workspace.updated', marker: 'allowed sentinel' };
-async function delivered(f, reader, event, allowed) {
+async function delivered(f, reader, event, allowed, forwarded = event) {
   await f.state.callback(JSON.stringify(event)); await f.state.callback(JSON.stringify(sentinel));
   const first = new TextDecoder().decode((await reader.read()).value);
-  assert.equal(first, `data: ${JSON.stringify(allowed ? event : sentinel)}\n\n`);
+  assert.equal(first, `data: ${JSON.stringify(allowed ? forwarded : sentinel)}\n\n`);
   if (allowed) assert.equal(new TextDecoder().decode((await reader.read()).value), `data: ${JSON.stringify(sentinel)}\n\n`);
 }
 test('inactive membership and absent subject deny before subscribing; owner remains allowed', async () => {
@@ -77,6 +79,16 @@ test('hidden issue project or linked status and retained inaccessible references
   f.rows[0].statusId = 'status'; f.status.project = f.hiddenProject; f.rows[0].projectStatus = f.status; await delivered(f, reader, event, false);
   f.rows[0].statusId = null; await delivered(f, reader, { ...event, statusId: 'status' }, false); await delivered(f, reader, { ...event, projectId: 'hidden-project' }, false);
   f.status.project = f.project; await delivered(f, reader, event, true); await reader.cancel();
+});
+test('issue moves still reach the destination when the source project cannot be sent', async () => {
+  const f = fixture(), reader = await stream(f);
+  const event = { type: 'issue.updated', workspaceId: 'space', issueId: 'one', projectId: 'project' };
+  await delivered(f, reader, { ...event, previousProjectId: 'previous' }, true);
+  for (const previousProjectId of ['hidden-project', 'outside', 'missing', null]) {
+    await delivered(f, reader, { ...event, previousProjectId }, true, event);
+  }
+  await delivered(f, reader, { type: 'workspace.updated', previousProjectId: 'previous' }, true, { type: 'workspace.updated' });
+  await reader.cancel();
 });
 test('private, unshared, foreign-workspace and missing views cannot disclose view-bearing events', async () => {
   const f = fixture(), reader = await stream(f), event = { type: 'view.issue-position.updated', workspaceId: 'space', viewId: 'view', issueId: 'one', columnId: 'private-column', position: 0 };
@@ -138,4 +150,13 @@ test('cancellation suppresses pending delivery and skips queued authorization', 
   } finally {
     f.state.firstViewWait.resolve();
   }
+});
+
+test('comment change events require current issue access', async () => {
+  const f = fixture(), reader = await stream(f);
+  const event = { type: 'issue.comments.changed', workspaceId: 'space', issueId: 'one' };
+  await delivered(f, reader, event, true);
+  f.rows[0].project = f.hiddenProject;
+  await delivered(f, reader, event, false);
+  await reader.cancel();
 });

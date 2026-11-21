@@ -123,7 +123,7 @@ class UrlResolver {
   }
 
   workspaceNotes(workspaceSlug: string): string {
-    return this.workspace({ workspaceSlug, path: '/notes' });
+    return this.workspace({ workspaceSlug, path: '/context' });
   }
 
   workspaceSearch(workspaceSlug: string, query?: string): string {

@@ -1,3 +1,4 @@
+import { assertMilestoneHasNoIssues, InvalidMilestone, milestoneDateError, validateMilestone } from '@/lib/issue-milestones';
 import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { z } from 'zod';
 import { enqueueLabelHandoff } from '@/lib/agent-label-triggers';
@@ -20,6 +21,7 @@ const UpdateIssueSchema = z.object({
   reporterId: z.string().min(1).nullable().optional(),
   projectId: z.string().min(1).optional(),
   parentId: z.string().min(1).nullable().optional(),
+  milestoneId: z.string().min(1).nullable().optional(),
   dueDate: z.string().datetime({ offset: true }).nullable().optional(),
   startDate: z.string().datetime({ offset: true }).nullable().optional(),
   storyPoints: z.number().int().nonnegative().nullable().optional(),
@@ -77,6 +79,9 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       return { error: 'No permission to edit these issue fields', status: 403 };
     }
 
+    const dateError = milestoneDateError(existingIssue, body);
+    if (dateError) return { error: dateError, status: 400 };
+
     await assertLegacyProjectWriteAllowed(existingIssue.projectId, body.projectId ?? existingIssue.projectId);
 
     const oldIssue = existingIssue;
@@ -127,6 +132,11 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
             select: { id: true }
           }))) {
         return { error: 'Invalid parent issue', status: 400 };
+      }
+      if (moving && body.milestoneId === undefined && existingIssue.milestoneId) updateData.milestoneId = null;
+      await validateMilestone(tx, { projectId, workspaceId: existingIssue.workspaceId }, body.milestoneId, existingIssue.id);
+      if (existingIssue.type === 'MILESTONE' && (moving || (body.type && body.type !== 'MILESTONE'))) {
+        await assertMilestoneHasNoIssues(tx, existingIssue.id);
       }
       if (labelIds?.length && await tx.taskLabel.count({
         where: { id: { in: [...new Set(labelIds)] }, workspaceId: existingIssue.workspaceId }
@@ -224,6 +234,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
     return { issue: result.issue, oldIssue, assigneeChanged, updateData };
 
   } catch (error) {
+    if (error instanceof InvalidMilestone) return { error: error.message, status: 400 };
     if (error instanceof ForgeProjectWriteError) return { error: error.message, status: 409 };
     if (error instanceof HandoffError) return { error: error.message, status: error.status };
     if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2002'].includes(error.code)) {

@@ -7,7 +7,7 @@ const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify'
 const helpers = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 const { ActivityItem } = load('src/components/issue/sections/activity/components/ActivityItem.tsx', {
   'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': require('date-fns'), 'next/navigation': { useParams: () => ({}) },
-  '@/lib/comment-html': { commentHtml }, '@/components/ui/custom-avatar': { CustomAvatar: () => null },
+  '@/lib/comment-html': { commentHtml }, '@/components/ui/custom-avatar': { CustomAvatar: () => null }, '@/components/ui/badge': { Badge: ({ children }) => React.createElement('span', null, children) },
   './ActivityIcon': { ActivityIcon: () => null }, './ActivityChangeDetails': { ActivityChangeDetails: () => null },
   '../utils/activityHelpers': helpers,
 });
@@ -29,6 +29,11 @@ test('agent timeline identifies each agent and the work transition', () => {
     assert.doesNotMatch(html, /<script\b/i);
   }
   assert.equal(helpers.getActionText({ action: 'CREATED', user: { name: 'Cem' } }), 'Cem created this issue');
+});
+
+test('a request placed by room says on its timeline which seat got it and why', () => {
+  const activity = { action: 'REQUEST_PLACED', details: { toSeatId: 'seat-b', to: 'Reviewer (Bob)', why: 'most room' }, user: { name: 'Developer' }, createdAt: new Date() };
+  assert.match(renderToStaticMarkup(React.createElement(ActivityItem, { activity })), /Collab sent this request to Reviewer \(Bob\): most room/);
 });
 
 

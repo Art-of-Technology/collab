@@ -20,7 +20,13 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.14.2 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.14.2) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.15.2 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.15.2) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.15.2 reports “The due date is before the start.” when the server refuses a milestone date update. This message needs the matching server.
+
+Version 0.15.1 adds `--comment TEXT` to `issues attach`: the command attaches the file and then adds a comment with that text and the file under it, so an image shows on the issue in one step. If the comment cannot be added, the error says the file is attached and gives the line to add with `comments add`, so nothing is uploaded twice. `--dry-run` sends nothing and shows the size of the file, not its content.
+
+Version 0.15.0 adds `issues attach ISSUE --file PATH`, which attaches a screenshot or another file to an issue. It needs `issues:write` and `context:write` and the matching server. The file is read as it is (at most 5 MiB; `--name` sets another name, and is required with `--file -`), kept in the `Issue attachments` folder of the issue's project, and readable by the members of the workspace. The reply's `markdown` is one line to put in a comment or in the description: an image shows there, and any other file is offered as a download. A seat attaches to issues of its own project, and to a request it filed.
 
 Version 0.14.2 waits instead of giving up when a project has several repositories and no default for agents. The server refuses that checkout with `repository_required`; `collab seat run` now says so once (`waiting`) and tries the issue again at every read of the inbox, so an administrator choosing the default in Project settings is enough for the runner to take it, with no restart. Other refusals are unchanged: the issue is left alone while the inbox keeps listing it.
 
@@ -264,7 +270,7 @@ The apply operation creates `collab-agent` (agent tokens, no OAuth client), `col
 
 Before enabling CLI 0.7.0 workers, follow the [server migration and compatibility requirements](../../docs/agent-handoffs.md#validation-and-rollout). The final tag must contain both the CLI changes and updated agent guide.
 
-Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
+Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. A complete release has 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars): 10 after the first step, 18 after the second. The app may be deployed once the first step is published. Until the second step is published, `install.ps1` points at Windows downloads that are not there yet, so the release owner verifies all 18 afterwards and reruns a failed Windows job at once.
 
 ```sh
 npm test --prefix packages/cli
@@ -281,7 +287,7 @@ For Windows x86, use a Windows build host with Bun, Node.js and npm configured a
 
 The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64/ARM64 runner. Windows x86 runs under WoW64 with 32-bit PowerShell in CI, not on a physical 32-bit Windows OS. It includes the README and license notices, packages Unix `.tar.gz` archives and Windows `.zip` archives, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the seven archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
-Windows source-Node CLI/auth/ACL coverage runs once on x64. For each Windows architecture (x64, x86 and ARM64), three parallel jobs install the built archive and run shards of the CLI/auth/ACL suite, alongside installer selection, PATH persistence, repeat installation, checksum refusal and PE architecture checks. A gate compares the installed shards with the source suite to require every test and nested subtest exactly once and the expected skips. All Windows jobs and coverage gates must pass before publication.
+Windows source-Node CLI/auth/ACL coverage runs once on x64. For each Windows architecture (x64, x86 and ARM64), three parallel jobs install the built archive and run shards of the CLI/auth/ACL suite, alongside installer selection, PATH persistence, repeat installation, checksum refusal and PE architecture checks. A gate compares the installed shards with the source suite to require every test and nested subtest exactly once and the expected skips. All Windows jobs and coverage gates must pass before the Windows downloads are published. A release is published in two steps: the macOS and Linux downloads and `install.sh` as soon as their builds and tests pass, then the Windows downloads and `install.ps1`, added to the same release when the Windows gates pass.
 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
 

@@ -22,11 +22,12 @@ The owner is fixed when the seat is created: creating a token again under the sa
 1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need permission to manage workspace permissions.
 2. Type a name. Everything the seat does is shown under this name.
 3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner.
-4. Choose **Create seat** and copy the token. It is shown once.
+4. The **Repository** line says what the seat will work in. Pick one only when the project has several; see [Which repository](/docs/agents/create-a-seat#which-repository).
+5. Choose **Create seat** and copy the token. It is shown once.
 
 The first seat of a role in a project is the default for that role.
 
-A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with its owner, or **No owner (API key)**, and the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**.
+A person finds the seats under **Agents** in the app's left menu: **Seats** groups the seats of the projects that person can read by their owner, or **No owner (API key)**, with the owner's runner and [room](/docs/agents/overview#room-on-the-seats-tab), and shows the issue each seat works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 
@@ -60,7 +61,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
 4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
 
-A lead seat's blocked issue is also offered with `child_done`, `child_blocked` or `child_idle`: see [Lead seat](#lead-seat).
+A lead seat's blocked issue is also offered with `child_done`, `child_blocked`, `child_idle` or `child_no_room`: see [Lead seat](#lead-seat).
 
 From the CLI: `collab seat inbox`. With `--wait-seconds 30` (1 to 60) it waits until there is work, so a plain script can wait without a model. `collab seat show` names the seat behind the token.
 
@@ -127,12 +128,13 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
+- `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
 - `children`: when the issue has child issues, up to 100 of them, oldest first, each with its status, `assigneeId`, `assignee` and `lastRun` (`null`, `running`, `stopped` or the outcome of its last run).
-- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats, each with `userId`, `name`, `role` and `openFromLead`.
+- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. When the lead seat itself reads, each seat also has `owner`, `room` and `openRuns`, and the seats of a role are in the order to prefer: see [Placed by room](#placed-by-room).
 - `commands`: `collab` commands that fetch the rest (the project's context, the earlier comments and the timeline) and the two that end the session's work: a request and the finish.
 
 A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.
@@ -141,7 +143,7 @@ Any token that can read the workspace's issues can read an issue's run context. 
 
 ## Ask another seat: a request
 
-A seat asks for a review, a release, a security review or work in another project by filing a request. A request is a new issue in the target project, assigned to that project's default seat for the role and linked to the issue it came from.
+A seat asks for a review, a release, a security review or work in another project by filing a request. A request is a new issue in the target project, assigned to a seat of the role there and linked to the issue it came from. Which seat it is: see [Placed by room](#placed-by-room).
 
 `POST /api/apps/auth/seats/me/requests`:
 
@@ -162,11 +164,11 @@ A seat asks for a review, a release, a security review or work in another projec
 
 From the CLI: `collab seat request --from-issue AA-12 --role review --title "Review the change for AA-12" --body-file request.md`, with `--project <id or prefix>` for another project and `--blocks true`.
 
-The reply contains `issue` with the request's `id` and `issueKey`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
+The reply contains `issue` with the request's `id` and `issueKey`. When Collab chose between seats, it also has `placed`: the `seat` that got the request and `why`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
 
 - The request takes the priority of its source issue. A review or release request gets the `Review request` or `Release request` label when the workspace has one. The label is for people; it hands the request to no one.
 - Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
-- A project with no default seat for the role refuses it with `409 no_default_seat`. A request that would go to the seat that files it is refused.
+- A project with no default seat for the role refuses it with `409 no_default_seat`. A request whose default seat is the seat that files it is refused.
 - A request whose body lacks a section the Task template requires is refused with `422 template_required`, which lists the missing sections. The template's required fields do not apply to a request: it gets its priority from its source issue, its assignee and, when available, the role label from the server, and the caller cannot set any other field.
 - Filing is refused with `429 request_cap` when the filing project already has 5 open requests in the target project. Open excludes done issues and issues in Trash. The count is made when a request is filed: reopening or restoring a request later is not refused. Requests inside a project are not limited.
 - The seat that filed a request can comment on it, also in another project. It can change nothing else there.
@@ -180,7 +182,7 @@ A security seat gives a change an independent read before it goes on. Any seat a
 | Step | Who | What happens |
 | --- | --- | --- |
 | 1 | The asking seat | Files the request with `"role": "security"`, then finishes its run `blocked` with `blockedBy` naming the request. |
-| 2 | Collab | Assigns the request to the project's default security seat and links it as blocking the source issue, also when the caller sent `"blocks": false`. The reply says `"blocks": true`. |
+| 2 | Collab | Assigns the request to a security seat of the project, [by room](#placed-by-room), and links it as blocking the source issue, also when the caller sent `"blocks": false`. The reply says `"blocks": true`. |
 | 3 | The security seat | Works the request and finishes it `done` with `"verdict"`: `"passed"` or `"failed"`, and `"reviewed"`: the commit or pull request it read. The findings go in the exit note. |
 | 4 | Collab | Writes the verdict to the timeline of the request and of the source issue. The source issue returns to its seat's inbox with reason `blocker_resolved`, whatever the verdict. |
 
@@ -207,6 +209,137 @@ The rules:
 - Like any blocking issue, a security request brings its source back once it is in a done status. In a project with no status in the done group, the finish replies `"statusUnmapped": true`, the verdict is still recorded, and the source issue keeps waiting: give the project a done status.
 - A project with no security seat refuses the request with `409 no_default_seat`. No label files a security request.
 
+## Placed by room
+
+Room is the percent of allowance a seat's runner has left: see [Report room](/docs/agents/runner-contract#report-room). Collab puts the seats of one role in one order. The lead reads that order, and Collab places review, security and release requests by it.
+
+| Order | Seats |
+| --- | --- |
+| 1 | Seats with a number, most room first. |
+| 2 | Seats whose room is unknown. One exception, a stopgap until every runner reports a figure: an unknown seat whose runner is seen and has reported the state `working` stands level with the most room in row 1. A runner that has never reported a state does not count. |
+| 3 | Seats with no room. |
+
+Equal standing: the seat whose owner has the fewest open runs comes first, then the role's default seat, then the older seat. When every seat is unknown, the original order stands. An owner's open runs are counted over all of that person's seats in the workspace; a seat without an owner counts its own runs.
+
+### Where a request goes
+
+| The seats of the role | The request goes to | `why` in the reply |
+| --- | --- | --- |
+| One has the most room | That seat. | `most room` |
+| Several share the most room | Of those, the seat whose owner has the fewest open runs, then the default seat, then the older seat. | `equal room, fewer open runs`, `equal room and open runs: the default seat first`, or `equal room and open runs: the older seat first` |
+| At least one seat has a number, and another seat's runner works but has no fresh figure | The highest-numbered seats and the working runner's unknown seat count as having the most room: the owner with the fewest open runs, then the default seat, then the older seat. | `a working runner with no figure counts as the most room, fewer open runs`, `a working runner with no figure counts as the most room; equal open runs: the default seat first`, or `a working runner with no figure counts as the most room; equal open runs: the older seat first` |
+| None has a number, and the default seat is unknown | The default seat, as before. | `no fresh figure: the default seat` |
+| None has a number, the default seat has no room, and another seat is unknown | The first seat whose room is unknown. | `no fresh figure and the default seat cannot start: the next seat whose figure is unknown` |
+| All have no room | The default seat, with `"warning": "seat_idle"`. It waits there. | `no seat can start now: it waits at the default seat` |
+
+- The reply has `placed` with the `seat`'s name and `why`. The request's **Activity** tab has the same line. Neither names a percentage.
+- A role with one seat leaves nothing to choose: the request goes to it, and the reply and the timeline are as before. The same holds when the only other seat of the role is the one asking: a seat is never sent its own request.
+- A `developer` request goes to the default developer seat, whatever its room. Developer work is the lead's to place.
+- A request asked for by label is placed the same way.
+- `no_default_seat` and `request_cap` are unchanged.
+
+### What the lead is given
+
+In the lead's [run context](#start-from-the-run-context), each seat in `lead.seats` also has:
+
+| Field | What it is |
+| --- | --- |
+| `owner` | The person whose runner works the seat, with `id` and `name`, or `null`. |
+| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` (which can be `null`) and the time `at`; the other two have a `reason`. An `unknown` seat also has `live: true` when its runner is seen and has itself reported the state `working`; that is the seat that stands level with the most room. |
+| `openRuns` | The runs the owner has open right now. |
+
+- The seats of one role are in the order above. Prefer the first seat that is under its limit of issues from the lead. A seat with no room gets nothing.
+- When every seat of a role is unknown, their order is the one from before room: oldest first.
+- Only the lead seat is given these fields and this order. Any other reader gets the list as it was.
+- Collab assigns developer work by itself in one case only: [when the lead's own seat has no room too](#when-the-leads-own-seat-has-no-room). Who may assign is otherwise unchanged.
+
+### When a seat has had no room for 10 minutes
+
+Eligible work that no run has started on can move to a seat that can start it, without waiting for an allowance to reset. Work a run has started on can move too, between runs and after 30 minutes: see [Started work](#started-work).
+
+| The work | Who moves it | How |
+| --- | --- | --- |
+| A review or security request | Collab | Places it again on the seat of the role with the most room. |
+| A developer issue the lead placed | The lead | Is woken with `child_no_room` and can assign it to another developer seat and write one comment. |
+| The same, while the lead's own seat has had no room for 10 minutes | Collab | May assign it to another developer seat and write one comment on it and one on the epic. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
+| Work a run has started on | As above | Only between runs, after 30 minutes, and only when its last run pushed. See [Started work](#started-work). |
+
+When unstarted work moves, all of these hold:
+
+1. No run has started on it. A run that was started and stopped, lost or finished counts as started, and [started work](#started-work) has its own rules.
+2. Its seat reads as **no room**, and has for 10 minutes. A seat whose room is unknown keeps its work. A seat run by hand is unknown; an old figure is unknown when the runner is connected, online and working.
+3. Another seat of the role has a number. A seat whose room is unknown or none takes nothing, also when its runner is working: standing level with the most room is for new work, a move needs a real figure.
+
+How the 10 minutes are counted:
+
+| Why the seat has no room | Counted from |
+| --- | --- |
+| Its runner reports no room (a figure of 0), or the runner said `paused` or `disk_full` | The start of the current no-room spell. A later call that gives the seat room ends it; a fresh zero after the previous figure became unknown also starts a new spell. |
+| The runner is offline | Its last call. Offline already means 10 minutes of silence, so nothing more is waited for. |
+| No runner is connected | When the last runner was removed, or when the seat was made, whichever is later. |
+
+An unstarted request Collab moved:
+
+- has a line on its **Activity** tab: `Collab moved this request from <seat> to <seat>: <seat> had no room for 10 minutes (<why>)`. It names no percentage.
+- arrives in the new seat's inbox as `assigned`.
+- stays where it went when the first seat has room again, and never returns to a seat it was moved off.
+- is not placed on a possible filer's seat found from its first placement, link creators or reporter. If no trace remains, Collab can still move it.
+
+Collab looks for requests when a seat of the role reads its inbox. There is no timer: while no reviewer or security seat of the project reads, Collab moves no requests of that role.
+
+Limits of this version:
+
+- Collab does not move requests or developer issues in a Forge-connected project; its issues are changed through the Forge board.
+- A release request never moves: a project has one release seat.
+- A `developer` request is not moved by Collab. Other developer work is moved by Collab only when the lead's own seat has no room: see below.
+- The lead is not woken for a developer issue a person assigned, or for one outside the epic it waits on: it may not move those.
+- The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours. So a started child that waits for a person or another issue when its 30 minutes come, and is ready for its next run only after the lead has looked, does not move in that spell.
+- If a seat is retired during a no-room spell and made again while its runner stays paused or full, its earlier spell can make work eligible to move up to 10 minutes early (30 for started work). See `markNoRoom` in `src/lib/agent-seats.ts`.
+
+### Started work
+
+Work a run has started on moves to another seat too, so a half-done issue does not wait days for one person's allowance. It moves the way unstarted work does, by the same people, with three limits:
+
+| Limit | What it means |
+| --- | --- |
+| **Between runs only** | No run is open on it, and its seat's inbox offers it for its next run: to resume, a review came back, a reply, a blocker is done. An issue that waits for a person or for another issue is not offered, so it does not move: there is nothing to run. |
+| **30 minutes** | Its seat has had no room for 30 minutes, counted as in the table above with 30 instead of 10. An offline runner counts from its last call. Unknown room never counts. |
+| **The last run pushed** | The last run on the issue finished with `--pull-request` and `--head-commit`. A pull request exists only for a pushed branch. A last run that stopped, was lost, or finished without them: Collab cannot tell, and the issue stays. |
+
+And, as for unstarted work, another seat of the role has a number, for developer work is under the lead's limit, and is not a seat the issue was moved off before.
+
+| What moves | Who moves it |
+| --- | --- |
+| A review or security request | Collab. |
+| A developer issue the lead placed | The lead, woken with `child_no_room`. The `noRoom` entry has the `pullRequest`. |
+| The same, while the lead's own seat has had no room for 10 minutes | Collab. See [When the lead's own seat has no room](#when-the-leads-own-seat-has-no-room). |
+
+- When Collab moves started work, the **Activity** tab says from which seat, to which seat, why, and that the work continues from the branch its last run pushed. No percentage. A comment says the same and that what the first seat did not push stays behind. If a request has no trace of its filer, the comment is under the new seat's name and does not wake it. For a lead-driven move, the lead writes the details in a comment.
+- The new seat's session follows `movedFrom` in [the run context](#start-from-the-run-context) before continuing from the last exit note.
+- **What is lost:** anything the first seat did not push. It stays in that seat's working copy and is not part of the work any more.
+- Once per no-room spell, and never moved back to a seat it left. A run that starts on the old seat while the move is made wins.
+
+### When the lead's own seat has no room
+
+This is the one case where Collab assigns developer work. A developer issue moves without the lead when all of these hold:
+
+1. The lead placed it, it is an unfinished child of an unfinished issue assigned to the lead, and either no run has ever started on it and its developer seat has had no room for 10 minutes, or it is [started work](#started-work) that may move and its seat has had no room for 30 minutes. The lead's latest run on the parent finished blocked after its assignment, and the child's no-room period became due after that run started.
+2. The lead's own seat has had no room for 10 minutes too, counted as for any seat. A lead seat run by hand, or one whose figure is unknown, is not full: Collab does not move the issue.
+3. No run of the lead's is open on that parent issue.
+4. Another developer seat has a number, holds fewer than 3 open issues from the lead, and is not a seat the issue was moved off before.
+
+| What Collab does | How |
+| --- | --- |
+| Picks the seat | The first eligible seat in the [placing order](#placed-by-room): most room, then fewest open runs. |
+| Assigns it | The lead's hand stays on the assignment: the issue counts toward the lead's limit, and the lead may move it again. |
+| Says so | One comment on the issue and one on its parent, under the lead seat's name: from which seat, to which seat, and that the lead's seat had no room. No percentage. The issue's **Activity** tab has `Collab moved this issue from <seat> to <seat>: <why>`. |
+
+- Collab looks when a developer seat of the project reads its inbox. There is no timer.
+- Moved work is not moved back when the first seat has room again.
+- An issue a person assigned stays, and so does started work outside the limits of [Started work](#started-work). A run that starts before the move wins; a later checkout on the old seat is refused.
+- Collab chooses by room alone. It does not know which issues change the same files, the order the epic gives, or lanes: the lead checks those when it runs again. See [When Collab moved a child](/docs/agents/protocol#when-collab-moved-a-child).
+- The comments are the lead's own, so they do not wake it. The epic comes back when a child is done, blocked or idle, as before.
+
 ## Lead seat
 
 A lead seat decides which seat works which issue. It is a seat like the others: an issue assigned to it comes to its inbox, one fresh session makes one decision, and the run ends. Nothing keeps a lead session alive between decisions.
@@ -214,7 +347,7 @@ A lead seat decides which seat works which issue. It is a seat like the others: 
 | Step | Who | What happens |
 | --- | --- | --- |
 | 1 | A person | Creates a seat with role `lead` and assigns it an epic whose child issues are unassigned. |
-| 2 | The lead | Reads the [run context](#start-from-the-run-context): the epic, its `children` and the project's seats under `lead`. |
+| 2 | The lead | Reads the [run context](#start-from-the-run-context): the epic, its `children` and the project's seats under `lead`, the seats of a role [with the most room first](#what-the-lead-is-given). |
 | 3 | The lead | Assigns child issues to seats: `PATCH /api/apps/auth/issues/<key>` with `{ "assigneeId": "<the seat's userId>" }`, or `collab issues update <key> --assignee-id <the seat's userId>`. |
 | 4 | The lead | Finishes its run `blocked` with nothing named: it waits for the children. |
 | 5 | Collab | Offers the epic to the lead again when something happens to a child. |
@@ -226,6 +359,7 @@ What the lead may assign:
 - Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, assigning to a person or to itself, and assigning an issue that is done or that the same call marks done are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
 - Only an issue with no assignee that no lead has placed before, or an issue whose current assignee the lead itself set. Anything else was decided by someone else and stands: `403 assign_by_person`. So an issue a person assigned is not moved, and an issue the lead placed that was then unassigned, by a person or because its seat was retired, waits for a person.
 - A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns, and a done issue cannot be assigned: reopening an issue that was done after the lead placed it, or restoring one from Trash, is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
+- Not an issue a run is open on: `409 already_running`. It keeps its seat until the run has ended. An issue a run has started on may be moved between runs: see [Started work](#started-work).
 - Every assignment is on the issue's **Activity** tab under the lead's name, with the seat it went to.
 
 What brings the epic back, each as the `reason` in the lead's inbox:
@@ -233,7 +367,10 @@ What brings the epic back, each as the `reason` in the lead's inbox:
 - `child_done`: a child issue reached a done status after the lead's last run started.
 - `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
 - `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
+- `child_no_room`: a child issue the lead placed sits on a developer seat without room, and another developer seat has a number and is under its limit. Either no run ever started on it and the seat has had [no room for 10 minutes](#when-a-seat-has-had-no-room-for-10-minutes), or it is [started work](#started-work) that may move after 30 minutes. The item has `noRoom`: a list of `{ issueKey, seat, reason }`, one per such child, and a started child's entry also has the `pullRequest` its last run pushed. Offered once per time the seat is without room: after the lead's next run it is not offered again until the seat has had room and lost it again.
 - `reply`, as for any blocked issue: someone else commented on the epic.
+
+When two of these hold, the first in this list is the reason given.
 
 Children are measured from the start of the lead's last run, not its end: a child that finishes while the lead's session is running may be unseen by it, so the epic comes back once more.
 
@@ -292,7 +429,7 @@ The reply contains the finished `run` and `statusUnmapped`.
 - A finish is accepted from the session that holds the run, while the run is running or waiting and the issue is still assigned to the caller. Otherwise it gets `409 run_fenced` and changes neither the run nor the issue. If the generation matches and the run had not finished, the note is kept on the timeline as a late exit note.
 - A release seat can finish the other release requests of one release with the same call: `"alsoFinish": ["<key>", ...]`, at most 20, with outcome `done`. Each must be assigned to the seat, in a to do status and without an open run. Each gets a finished run with the same note. If one cannot be finished, the whole finish is refused and nothing changes; `409 already_running` names an issue that has a run.
 
-The issue's **Activity** tab shows the open run above the timeline: who is working the issue and since when.
+The issue's **Activity** tab shows the open run above the timeline: who is working the issue and since when. See [Give a seat work](/docs/agents/give-a-seat-work) for how finished and lost runs appear on the timeline.
 
 ## Other agent tokens
 
@@ -310,6 +447,38 @@ An agent account without a seat, such as an integration, gives a seat work by cr
 
 A seat that is working an issue cannot be retired until that work has ended. A retired name can be made a seat again, also in another project.
 
+## Seats a member adds
+
+A project can let its members add seats of their own, so its work can go to another person's runner.
+
+| Step | Who | What |
+| --- | --- | --- |
+| 1 | Someone who may manage workspace permissions | Ticks **Members may add their own seats to this project** on **Agents**, **Seats**. Off for every project until then. |
+| 2 | A member who can read the project | Chooses **Add my seats to this project** there. |
+| 3 | The same member | Chooses **Remove my seats** to retire them. |
+
+- The projects listed are those that use seats and are not archived. A project that went back to handoffs or was archived stays listed for a person who still has such a seat there, to remove it.
+- Adding makes a developer, a reviewer and a security seat for the signed-in person: owned by that person, run by that person's runner, named as in the table below. No token is made; the runner fetches them.
+- Only the roles the person has no active seat of in the project are made. A seat becomes its role's default only when the role has no default yet.
+- No lead and no release seat is made this way, and the request names no owner: nobody adds a seat for someone else.
+- If the initial project check finds the switch off, the request returns `403 members_add_off`; if it finds the project archived, it returns `409 project_archived`. Switching off stops new seats only; the seats members already added stay.
+- Each seat is made on its own. The reply lists the seats made in `created` and the ones that were not in `refused`, each with a `code` and a reason; the seats that were made stay.
+- If the switch is turned off or the project archived while the seats are being made: with no seat made yet the request gets that same refusal, and once a seat is made the reply names the others in `refused`.
+- A name is taken when an agent of that name already exists and is not a seat this person owned, for example when two members share a first name. The seats of one request share one form of name: the first form in which no name of a seat being made is taken.
+- In the last form each seat is decided on its own: a seat whose name is taken is refused with `name_taken`, and someone who manages the workspace creates it under **Agent tokens**. A person whose name has no last name has only the first form.
+- Nobody's existing seat is renamed, and only the seats being made are looked at: a seat the person already has keeps the name it has.
+- Removing retires the person's own developer, reviewer and security seats of the project under the rules of [Retire a seat](#retire-a-seat), also while the switch is off. A seat with a run open stays, and the reply says so.
+
+The names, in the order they are tried:
+
+| Tried | Name | Example |
+| --- | --- | --- |
+| First | `<Project> <Role> (<first name>)` | `Collab Developer (Deniz)` |
+| Then | `<Project> <Role> (<first name> <last initial>.)` | `Collab Developer (Deniz K.)` |
+| Last | `<Project> <Role> (<full name>)` | `Collab Developer (Deniz Kaya)` |
+
+The last name is the last word of the person's name.
+
 ## Switch a project to seats
 
 A project gives agents work in one of two ways: by handoffs or by seats. Seats and runs work in both. The switch decides whether handoffs still do. Projects switch one at a time.
@@ -323,7 +492,7 @@ From then on, in that project:
 
 - Sending, claiming, offering and accepting a handoff are refused with `project_uses_seats`. Old handoffs stay readable, and a claim made before the switch can still be reported on, released or completed.
 - A label no longer hands an issue to the agents subscribed to it.
-- Adding the `Release request` or `Review request` label to an issue files a request for the default seat of that role, related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). `Review request` from an agent token that is not a seat is refused with `assign_by_person`; a person or a seat of the project adds it.
+- Adding the `Release request` or `Review request` label to an issue files a request for a seat of that role, placed [by room](#placed-by-room) and related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). `Review request` from an agent token that is not a seat is refused with `assign_by_person`; a person or a seat of the project adds it.
 - The Agents tab lists agent names that hold claims only in this project. Before retiring one, check its other work and subscriptions across the workspace. If it is no longer needed, use `collab agents retire --agent NAME`.
 
 **Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.

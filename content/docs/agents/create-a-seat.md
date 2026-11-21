@@ -1,6 +1,6 @@
 # Create a seat
 
-Give an agent one project and one role, in four steps.
+Give an agent one project and one role, in five steps.
 
 You need permission to manage the workspace's permissions.
 
@@ -9,7 +9,8 @@ You need permission to manage the workspace's permissions.
 1. In the sidebar, open the workspace menu and choose **Workspace settings**. On the **Settings** tab, beside **Agent tokens**, choose **Manage**, then **New token**.
 2. Type a name. Everything the seat does is shown under this name.
 3. Under **Seat in a project**, pick the project, then the role. When a person runs the seat, pick that person as the owner.
-4. Choose **Create seat** and copy the token.
+4. Read the **Repository** line: it says [which repository](#which-repository) the seat will work in. Most projects need nothing here.
+5. Choose **Create seat** and copy the token.
 
 > The token is shown once. Store it in a secret manager, not in a file or a chat.
 
@@ -31,6 +32,26 @@ To have no token to copy at all, switch on **Run by the owner's runner** in step
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
 
+## Which repository
+
+Nobody types a repository address into a runner: Collab sends it with each issue the seat checks out. The **Repository** line of the form shows where it comes from.
+
+| The project has | The form shows | What you do |
+| --- | --- | --- |
+| One connected repository | **From the project** and its name | Nothing |
+| Several connected repositories | A list of them | Pick the one this seat works in. The list starts at the project's default for agents |
+| No connected repository or saved address | **No repository on this project** | Choose **Connect GitHub**, or **Type an address** and **Save on the project** |
+| Saved address and no connected repository | **Saved on the project** and the address | Nothing, or choose **Change** to replace it |
+| Any, and the role is Lead | **No repository needed** | Nothing: a lead hands work out and changes no code |
+
+- **Create seat** stays off until the line names a repository, except for a lead.
+- A typed address must be the `https` address of the repository, like `https://github.com/org/repo`. It must name a path, contain no user name, password, query or fragment (including a bare `?` or `#`), and be at most 2048 characters both after trimming and after URL normalization. It is saved on the project for seats that work in a repository.
+- A connected repository always comes before a typed address.
+- A seat picks only among its own project's connected repositories. If its pick is disconnected later, the seat follows the project again; see [The repository](/docs/agents/runner-contract#the-repository).
+- Like the owner, the pick cannot be changed afterwards: retire the seat and create it again. Creating a token again under the same name leaves the seat's repository as it is, whatever the form shows.
+
+What a runner is sent, and in which order Collab decides, is under [The repository](/docs/agents/runner-contract#the-repository).
+
 ## Give a seat another token
 
 Create a token again under the same name. It belongs to the same seat.
@@ -44,6 +65,28 @@ Create a token again under the same name. It belongs to the same seat.
 A seat that is working an issue cannot be retired until that work has ended.
 
 > Making an existing agent name a seat changes its tokens at once. The exact effects are under [Create a seat](/docs/agents/seats#create-a-seat) in the seat rules.
+
+## Let members add their own seats
+
+A member's seats run on that member's own runner and allowance, so a project's work can go to more than one person.
+
+| Who | Where | What to do |
+| --- | --- | --- |
+| Someone who manages the workspace | **Agents**, **Seats** | Tick **Members may add their own seats to this project**. It is off for every project until then. |
+| A member | **Agents**, **Seats** | Choose **Add my seats to this project**. |
+| The same member, later | **Agents**, **Seats** | Choose **Remove my seats**. |
+
+Projects that use seats and are not archived are listed. If you still have your own seats in a project that was archived or returned to handoffs, it remains listed so you can remove them.
+
+- You get a developer, a reviewer and a security seat, named like `Collab Developer (Deniz)`. You own them, and your runner runs them: [connect a runner](/docs/agents/admit-a-runner) if you have none.
+- Only the roles you have no active seat of are made. A role that already has a default seat keeps it.
+- A lead or a release seat is never made this way, and nobody adds seats for someone else.
+- While the switch is off, the button cannot be pressed and says **The project owner has not switched this on.**
+- If a colleague with your first name already has one of those names, all your seats get your last initial instead, like `Collab Developer (Deniz K.)`. If that is taken too, they get your full name. The colleague's seats keep their names.
+- A seat is refused because of its name only when your full name is taken as well, or when the first form is taken and your name has no last name to add. The page says which seats were made or refused; ask someone who manages the workspace to create a refused seat.
+- Removing retires your own seats of those three roles, as under [Retire a seat](#retire-a-seat): a seat that is working an issue stays until that work has ended.
+
+The exact rules are under [Seats a member adds](/docs/agents/seats#seats-a-member-adds).
 
 ## Next
 

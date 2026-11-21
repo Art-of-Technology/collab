@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronRight, Folder, FolderOpen, Layers, Building2 } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, Layers, Building2, Lock, Pin, Share2 } from 'lucide-react';
 
 /**
  * The folder tree of Context.
  *
- * Its top rows are the levels a folder can belong to: the workspace, and every project in it. Under
- * the open level come its folders, each row a child of the row above it. One row at a time is in the
+ * Its top rows are the workspace's lists (pinned, personal and shared Notes, which hold no folders)
+ * and then the levels a folder can belong to: the workspace, and every project in it. Under the open
+ * level come its folders, each row a child of the row above it. One row at a time is in the
  * page's tab order and the arrow keys move between them, so the whole tree is reached without a
  * mouse: down and up walk the rows that are showing, right opens a row or steps into it, left closes
  * it or steps back out to the row it hangs from, and Enter opens what is focused.
@@ -17,16 +18,17 @@ import { ChevronRight, Folder, FolderOpen, Layers, Building2 } from 'lucide-reac
  */
 
 export type TreeFolder = { id: string; name: string; parentId: string | null };
-export type TreeRoot = { projectId: string | null; name: string };
+export type TreeView = 'pinned' | 'personal' | 'shared';
+export type TreeRoot = { projectId: string | null; name: string; view?: TreeView };
 
-export type TreeTarget = { projectId: string | null; folderId: string | null };
+export type TreeTarget = { projectId: string | null; folderId: string | null; view?: TreeView };
 
 /** `position` and `siblings` count the rows that share this row's parent, as a screen reader announces them. */
 export type TreeRow = TreeTarget & {
   key: string; name: string; depth: number; hasChildren: boolean; expanded: boolean; position: number; siblings: number;
 };
 
-export const rootKey = (projectId: string | null) => `root:${projectId ?? ''}`;
+export const rootKey = (projectId: string | null, view?: TreeView | null) => (view ? `view:${view}` : `root:${projectId ?? ''}`);
 export const folderKey = (id: string) => `folder:${id}`;
 
 /**
@@ -35,6 +37,7 @@ export const folderKey = (id: string) => `folder:${id}`;
  */
 export function treeRows(
   roots: TreeRoot[], folders: TreeFolder[], levelProjectId: string | null, expanded: Set<string>,
+  levelView: TreeView | null = null,
 ): TreeRow[] {
   const children = (parentId: string | null) => folders.filter(folder => folder.parentId === parentId);
   const rows: TreeRow[] = [];
@@ -51,7 +54,14 @@ export function treeRows(
     });
   };
   roots.forEach((root, index) => {
-    const isLevel = root.projectId === levelProjectId;
+    if (root.view) {
+      rows.push({
+        key: rootKey(null, root.view), name: root.name, depth: 0, projectId: null, folderId: null, view: root.view,
+        hasChildren: false, expanded: false, position: index + 1, siblings: roots.length,
+      });
+      return;
+    }
+    const isLevel = !levelView && root.projectId === levelProjectId;
     const hasChildren = isLevel ? children(null).length > 0 : true;
     const open = expanded.has(rootKey(root.projectId)) && isLevel;
     rows.push({
@@ -63,21 +73,24 @@ export function treeRows(
   return rows;
 }
 
-export function ContextTree({ roots, folders, levelProjectId, openFolderId, expanded, onExpand, onOpen, className = '' }: {
+const viewIcons = { pinned: Pin, personal: Lock, shared: Share2 };
+
+export function ContextTree({ roots, folders, levelProjectId, levelView = null, openFolderId, expanded, onExpand, onOpen, className = '' }: {
   roots: TreeRoot[];
   folders: TreeFolder[];
   levelProjectId: string | null;
+  levelView?: TreeView | null;
   openFolderId: string | null;
   expanded: Set<string>;
   onExpand: (row: TreeRow, open: boolean) => void;
   onOpen: (row: TreeRow) => void;
   className?: string;
 }) {
-  const rows = treeRows(roots, folders, levelProjectId, expanded);
+  const rows = treeRows(roots, folders, levelProjectId, expanded, levelView);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const items = useRef(new Map<string, HTMLButtonElement | null>());
   // The row that holds the tab stop: the one last focused while it is still showing, else the open one.
-  const openKey = openFolderId ? folderKey(openFolderId) : rootKey(levelProjectId);
+  const openKey = openFolderId ? folderKey(openFolderId) : rootKey(levelProjectId, levelView);
   const current = (focusKey && rows.some(row => row.key === focusKey) ? focusKey : null)
     ?? (rows.some(row => row.key === openKey) ? openKey : rows[0]?.key) ?? null;
 
@@ -120,7 +133,8 @@ export function ContextTree({ roots, folders, levelProjectId, openFolderId, expa
   return <div role="tree" aria-label="Context folders" className={`min-h-0 overflow-auto ${className}`}>
     {rows.map(row => {
       const selected = row.key === openKey;
-      const Icon = row.depth === 0 ? (row.projectId ? Layers : Building2) : selected ? FolderOpen : Folder;
+      const Icon = row.view ? viewIcons[row.view]
+        : row.depth === 0 ? (row.projectId ? Layers : Building2) : selected ? FolderOpen : Folder;
       return <button
         key={row.key}
         ref={element => { items.current.set(row.key, element); }}

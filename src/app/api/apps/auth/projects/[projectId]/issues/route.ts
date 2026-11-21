@@ -21,6 +21,7 @@ export const GET = withAppAuth(
       const type = searchParams.get('type');
       const status = searchParams.get('status');
       const priority = searchParams.get('priority');
+      const milestoneId = searchParams.get('milestoneId');
       const assigneeId = searchParams.get('assigneeId');
       const search = searchParams.get('search');
       const sortBy = searchParams.get('sortBy') || 'updatedAt';
@@ -48,6 +49,8 @@ export const GET = withAppAuth(
         projectId,
         workspaceId: context.workspace.id,
       };
+
+      if (milestoneId) where.milestoneId = milestoneId;
 
       if (type && ['EPIC', 'STORY', 'TASK', 'BUG', 'MILESTONE', 'SUBTASK'].includes(type)) {
         where.type = type;

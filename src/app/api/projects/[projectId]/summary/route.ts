@@ -6,6 +6,7 @@ import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
+import { loadProjectHome } from '@/lib/project-overview';
 
 export async function GET(
   request: NextRequest,
@@ -31,6 +32,7 @@ export async function GET(
         description: true,
         color: true,
         workspaceId: true,
+        issuePrefix: true,
         createdAt: true,
         updatedAt: true,
       }
@@ -43,6 +45,7 @@ export async function GET(
     const issueWhere = {
       projectId,
       workspaceId: project.workspaceId,
+      deletedAt: null,
       AND: [issueReadAccessWhere(actor.id)]
     };
 
@@ -56,6 +59,7 @@ export async function GET(
     // Get all statuses to identify final (done) statuses
     const projectStatuses = await prisma.projectStatus.findMany({
       where: { projectId, project: projectWhere, isActive: true },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
       select: { id: true, isFinal: true, name: true, displayName: true, color: true }
     });
 
@@ -80,16 +84,20 @@ export async function GET(
       count: issueCounts.find(c => c.statusId === status.id)?._count.id || 0
     }));
 
-    // Get overdue issues (dueDate < now AND not in final status)
+    const openWhere = {
+      ...issueWhere,
+      OR: [{ statusId: { notIn: finalStatusIds } }, { statusId: null }],
+    };
+    const overdueWhere = { ...openWhere, dueDate: { lt: now } };
+    const atRiskWhere = { ...openWhere, dueDate: { gte: now, lte: twoDaysFromNow } };
+    const [overdueCount, atRiskCount] = await Promise.all([
+      prisma.issue.count({ where: overdueWhere }),
+      prisma.issue.count({ where: atRiskWhere }),
+    ]);
+
+    // Keep the overview's preview lists bounded.
     const overdueIssues = await prisma.issue.findMany({
-      where: {
-        ...issueWhere,
-        dueDate: { lt: now },
-        OR: [
-          { statusId: { notIn: finalStatusIds } },
-          { statusId: null }
-        ]
-      },
+      where: overdueWhere,
       select: {
         id: true,
         title: true,
@@ -120,19 +128,8 @@ export async function GET(
       take: 10
     });
 
-    // Get at-risk issues (due within 2 days, not started or minimal progress, not in final status)
     const atRiskIssues = await prisma.issue.findMany({
-      where: {
-        ...issueWhere,
-        dueDate: {
-          gte: now,
-          lte: twoDaysFromNow
-        },
-        OR: [
-          { statusId: { notIn: finalStatusIds } },
-          { statusId: null }
-        ]
-      },
+      where: atRiskWhere,
       select: {
         id: true,
         title: true,
@@ -509,7 +506,11 @@ export async function GET(
       comments: note.comments,
     }));
 
+    const { overview, burn } = await loadProjectHome(projectId, project.workspaceId, actor.id, project.createdAt, now, project.issuePrefix);
+
     return NextResponse.json({
+      overview,
+      burn,
       project: {
         id: project.id,
         name: project.name,
@@ -521,8 +522,8 @@ export async function GET(
         totalIssues,
         openIssues,
         completedIssues,
-        overdueCount: overdueIssues.length,
-        atRiskCount: atRiskIssues.length,
+        overdueCount,
+        atRiskCount,
         issuesWithoutDates,
         unassignedIssues,
         completionRate: totalIssues > 0 ? Math.round((completedIssues / totalIssues) * 100) : 0

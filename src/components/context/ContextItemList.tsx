@@ -12,7 +12,7 @@ import { formatFileSize } from '@/lib/context-file-preview';
 
 export type ContextItem =
   | { kind: 'folder'; id: string; name: string }
-  | { kind: 'note'; id: string; name: string; noteType: string; updatedAt: string }
+  | { kind: 'note'; id: string; name: string; noteType: string; pinned?: boolean; updatedAt: string }
   | { kind: 'file'; id: string; name: string; mimeType: string; size: number; updatedAt: string };
 
 const icons = { folder: Folder, note: FileText, file: File };
@@ -20,7 +20,7 @@ const icons = { folder: Folder, note: FileText, file: File };
 /** What a row says about itself under its name. */
 function detail(item: ContextItem): string {
   if (item.kind === 'folder') return 'Folder';
-  if (item.kind === 'note') return `Note · ${item.noteType.replace(/_/g, ' ').toLowerCase()}`;
+  if (item.kind === 'note') return `Note · ${item.noteType.replace(/_/g, ' ').toLowerCase()}${item.pinned ? ' · pinned' : ''}`;
   return `${item.mimeType} · ${formatFileSize(item.size)}`;
 }
 

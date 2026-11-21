@@ -34,9 +34,12 @@ test('the board Project notes link renders its destination for a member', { time
     config.resolve.alias = {
       'next-auth$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/auth$': ${JSON.stringify(join(fixture, 'data.js'))},
+      '@/lib/session$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/prisma$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/slug-resolvers$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/forge/board$': ${JSON.stringify(join(fixture, 'data.js'))},
+      '@/lib/forge/reader$': ${JSON.stringify(join(fixture, 'data.js'))},
+      './ProjectDashboard$': ${JSON.stringify(join(fixture, 'dashboard.jsx'))},
       '@': ${JSON.stringify(source)},
       ...config.resolve.alias,
     };
@@ -45,15 +48,24 @@ test('the board Project notes link renders its destination for a member', { time
   write('data.js', `
     export const authConfig = {};
     export const getServerSession = async () => ({ user: { id: 'member', email: 'member@example.test' } });
+    export const getAuthSession = getServerSession;
+    export const getCurrentUser = async () => ({ id: 'member', email: 'member@example.test' });
     export const resolveWorkspaceSlug = async () => 'workspace';
     export const prisma = {
       workspace: { findFirst: async () => ({ id: 'workspace', slug: 'test' }) },
       project: { findFirst: async () => ({ id: 'project', name: 'Test project', slug: 'demo' }) },
       user: { findUnique: async () => ({ id: 'member' }) },
     };
-    export const loadForgeBoard = async () => ({ kind: 'not-connected', projectName: 'Test project' });
+    export const readForgeBindings = async () => [{ workspaceId: 'workspace', projectId: 'project' }];
+    export const loadForgeBoard = async () => ({
+      kind: 'ready', projectName: 'Test project', tasks: [], today: '2026-11-21',
+      fetchedAt: '2026-11-21T00:00:00Z', truncated: false,
+    });
   `);
+  write('dashboard.jsx', "'use client'; export function ProjectDashboard({forgeBoard}) { return forgeBoard; }");
   write('app/layout.jsx', 'export default function Layout({children}) { return <html><body>{children}</body></html>; }');
+  write('app/[workspaceId]/projects/[projectSlug]/page.jsx',
+    `export { default } from ${JSON.stringify(join(source, page, 'page.tsx'))};`);
   for (const route of ['board', 'notes']) {
     write(`app/[workspaceId]/projects/[projectSlug]/${route}/page.jsx`,
       `export { default } from ${JSON.stringify(join(source, page, route, 'page.tsx'))};`);
@@ -84,12 +96,8 @@ test('the board Project notes link renders its destination for a member', { time
   const board = await (await fetch(`${url}/test/projects/demo/board`).catch(error => { throw new Error(`${url}: ${error.cause}`, { cause: error }); })).text();
   const href = board.match(/href="([^"]+)"[^>]*>Project notes<\/a>/)?.[1];
   assert.equal(href, '/test/projects/demo/notes', logs);
-  const response = await fetch(new URL(href, url));
-  const html = await response.text();
-  assert.equal(response.status, 200, logs);
-  assert.doesNotMatch(html, /Functions cannot be passed directly to Client Components|"digest"\s*:/, logs);
-  assert.match(html, /<h1[^>]*>Project Context<\/h1>/);
-  assert.match(html, /Documentation and context for Test project/);
-  assert.match(html, /href="\/test\/notes\/new\?projectId=project"/);
-  assert.match(html, /lucide-file-text/);
+  // A project's Notes are its level in Context, so the link ends there.
+  const response = await fetch(new URL(href, url), { redirect: 'manual' });
+  assert.equal(response.status, 307, logs);
+  assert.equal(new URL(response.headers.get('location'), url).pathname + new URL(response.headers.get('location'), url).search, '/test/context?project=project', logs);
 });

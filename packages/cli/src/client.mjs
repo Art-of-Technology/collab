@@ -234,6 +234,11 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
         configureRejected = Object.hasOwn(rejections, remoteCode) && rejections[remoteCode] === response.status;
       }
       if (remoteCode === 'forge_connected_project') code = remoteCode;
+      if (method === 'PATCH' && response.status === 400 && remoteCode === 'invalid_milestone_dates' &&
+          /^\/api\/apps\/auth\/issues\/[^/?]+(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        code = remoteCode; retrievalMessage = 'The due date is before the start.';
+      }
       if (response.status === 409 && remoteCode === 'already_claimed' && /^\/api\/apps\/auth\/agents\/handoffs\//.test(endpoint)) code = remoteCode;
       const workerConflicts = { configure: ['worker_conversion_required', 'worker_active'], start: ['worker_binding_changed', 'worker_fenced'],
         renew: ['worker_binding_changed', 'worker_fenced'], close: ['worker_binding_changed', 'worker_fenced'] };

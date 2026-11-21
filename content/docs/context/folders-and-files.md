@@ -28,15 +28,36 @@ Open **Context** in the left menu.
 
 | Part of the page | Shows |
 | --- | --- |
-| **Left** | The tree. Open the workspace, a project or a folder. |
+| **Left** | The tree. Open a list, the workspace, a project or a folder. |
 | **Middle** | What the open folder holds: its folders, Notes and files. |
-| **Right** | The preview of the file you chose. |
+| **Right** | The Note you chose, in its editor, or the preview of the file you chose. |
 | **Top** | The path to the open folder. Each part of it leads back there. |
 
-- On a phone the three parts sit above each other, and the preview appears once you choose a file.
+- On a phone the three parts sit above each other, and the preview appears once you choose a file. An open Note takes the whole page; **Close** brings the list back.
 - The tree and the list work with the keyboard.
-- The page's address names the open level and folder, so you can send a link to a folder.
-- **All notes** opens the list of every Note you can read.
+- The page's address names the open level, folder and Note, so you can send a link to any of them.
+
+## Notes
+
+A Note opens beside the list, on the same page. There is no separate notes page.
+
+| To | Do this |
+| --- | --- |
+| **Read or edit a Note** | Choose it in the list. Changes save as you type. |
+| **Go back to the folder** | Choose **Close**. |
+| **Pin or unpin it** | Choose **Pin** or **Unpin** above the Note. Its author or a workspace administrator can. |
+| **Delete it** | Choose **Delete** above the Note and confirm. |
+| **See one kind of Note** | Pick the kind above the list. The picker shows when the list holds more than one kind. |
+
+Three lists sit at the top of the tree. They hold Notes, not folders.
+
+| List | Holds |
+| --- | --- |
+| **Pinned** | Every pinned Note you can read, wherever it is kept. |
+| **Personal** | Your own personal Notes. |
+| **Shared** | Notes shared with you by name, and the ones you shared that way. |
+
+A link to a Note made before this page existed still works: it opens the Note here, in its folder.
 
 ## Add a folder, a Note or a file
 
@@ -44,8 +65,11 @@ Open **Context** in the left menu.
 2. Choose **New**.
 3. Choose one:
    - **Folder**: type a name and choose **Create**. The new folder opens.
-   - **Note**: type a title and choose **Create**. The Note opens in its editor.
+   - **Note**: type a title and choose **Create**. The Note opens beside the list, in its editor.
+   - **Note from template**: pick a template, or **Start blank**. The Note is made from it and opens the same way.
    - **Upload file**: pick a file. It appears in the folder with its name, type and size. **Upload file** is offered only inside a folder.
+
+In **Personal**, **New** makes a personal Note. Nothing is made in **Pinned** or **Shared**: pin or share a Note from where it is.
 
 ## Folders
 
@@ -102,6 +126,8 @@ An agent reads what the account behind its token reads, in the token's workspace
 | One file: its name, type, size and text | `collab files get FILE_ID` | [`files_get`](/docs/reference/mcp-tools#files_get) |
 | One Note in full | `collab notes get NOTE_ID` | `notes_get` |
 
+An agent can also add a file. `collab issues attach ISSUE --file PATH` (CLI 0.15.0, at most 5 MiB) puts a screenshot or another file in the `Issue attachments` folder of the issue's project and answers with one line of Markdown. Add `--comment TEXT` (CLI 0.15.1) and the same command also posts a comment with that text and the file under it, so the image shows on the issue in one step. Put that line in a comment or in the description: an image shows there, and any other file is offered as a download. Whoever reads the workspace's Context reads the file.
+
 What an agent gets from a file:
 
 | File | The agent gets |
@@ -109,6 +135,8 @@ What an agent gets from a file:
 | Text or CSV | The first 256 KiB of text. |
 | PDF up to 8 MiB | The text written in it, from the first 100 pages, at most 256 KiB. A scan has no text: it is not read as an image. |
 | Anything else, or a larger PDF | Its name, type and size, and why there is no text. |
+
+The CLI and MCP do not provide image bytes, a download command or a short-lived download URL for Context files. MCP cannot upload files to Context; the CLI can upload them through issue attachments as described above. File responses include a download path, but it requires a signed-in web session; the agent token cannot use it. To give an agent a visual reference, keep the image in a repository it can access and link to its path in the issue; the agent also needs a tool that can view images.
 
 An agent never gets personal, shared-scope or encrypted Notes, or Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS`, in a folder or outside one. Paging and limits are in [Project context](/docs/reference/project-context#read-folders-and-files).
 

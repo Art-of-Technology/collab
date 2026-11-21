@@ -146,7 +146,8 @@ export async function getUserRepositories(
   accessToken: string,
   page = 1,
   perPage = 30,
-  sort: 'created' | 'updated' | 'pushed' | 'full_name' = 'updated'
+  sort: 'created' | 'updated' | 'pushed' | 'full_name' = 'updated',
+  signal?: AbortSignal
 ): Promise<{ repositories: GitHubRepository[]; hasMore: boolean }> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -156,9 +157,8 @@ export async function getUserRepositories(
     affiliation: 'owner,collaborator,organization_member',
   });
 
-  console.log('Fetching GitHub repositories with params:', params.toString());
-
   const response = await fetch(`${GITHUB_API_BASE}/user/repos?${params.toString()}`, {
+    signal,
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/vnd.github.v3+json',
@@ -166,21 +166,11 @@ export async function getUserRepositories(
   });
 
   if (!response.ok) {
-    console.error('GitHub API error:', response.status, response.statusText);
     if (response.status === 401) throw new Error('Bad credentials');
     throw new Error('Failed to fetch repositories');
   }
 
   const repositories = await response.json();
-  console.log(`Fetched ${repositories.length} repositories (page ${page}):`, 
-    repositories.map((repo: any) => ({ 
-      name: repo.full_name, 
-      owner: repo.owner.login, 
-      private: repo.private,
-      permissions: repo.permissions 
-    }))
-  );
-
   const linkHeader = response.headers.get('Link');
   const hasMore = linkHeader?.includes('rel="next"') || false;
 

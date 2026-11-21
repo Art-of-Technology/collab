@@ -72,7 +72,7 @@ test('project moves reject active and retained children, preserve ordinary updat
 
 test('stored projections disappear on Trash and return unchanged on Restore across version endpoints', async () => {
   const workspace = { id: 'workspace', ownerId: 'alice', members: [] };
-  const project = { id: 'project', workspaceId: workspace.id, workspace };
+  const project = { id: 'project', workspaceId: workspace.id, workspace, createdAt: new Date() };
   const repository = { id: 'repo', project, projectId: project.id, isActive: true };
   const issue = { id: 'issue', issueKey: 'KEEP-1', type: 'TASK', workspace, project, statusId: null, deletedAt: null };
   const version = { id: 'version', version: '1.0.0', repositoryId: repository.id, repository,
@@ -90,8 +90,11 @@ test('stored projections disappear on Trash and return unchanged on Restore acro
       findFirst: async ({ where }) => allows(version, where) ? version : null },
     versionFile: { findFirst: async ({ where }) => useFile && allows(file, where) ? file : null },
     release: { findMany: async ({ where }) => [release].filter(v => allows(v, where)) },
+    projectBaseline: { findFirst: async () => null },
+    agentRun: { count: async () => 0, findMany: async () => [] },
+    workspace: { findFirst: async ({ where }) => allows(workspace, where) ? { ...workspace, agentRuns: [] } : null },
   };
-  for (const name of ['issue', 'projectStatus', 'commit', 'pullRequest', 'gitConnection', 'featureRequest', 'note']) {
+  for (const name of ['issue', 'projectStatus', 'commit', 'pullRequest', 'gitConnection', 'featureRequest', 'note', 'agentSeat', 'workLog']) {
     raw[name] = { findMany: async () => [], groupBy: async () => [], count: async () => 0 };
   }
   const db = visible(raw);
@@ -106,6 +109,8 @@ test('stored projections disappear on Trash and return unchanged on Restore acro
     '@/lib/note-tag-access': { noteTagAccessWhere: () => ({}) },
     '@/lib/secrets/access': { noteAccessWhere: () => ({}) }, 'next/server': { NextResponse: Response },
   };
+  deps['@/lib/project-burn'] = load('src/lib/project-burn.ts');
+  deps['@/lib/project-overview'] = load('src/lib/project-overview.ts', deps);
   const routes = [
     'src/app/api/version.json/route.ts',
     'src/app/api/github/repositories/[repositoryId]/versions/route.ts',

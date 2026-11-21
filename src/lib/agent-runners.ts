@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { createAgentToken } from '@/lib/agent-tokens';
+import { markNoRoom, saysNoRoom } from '@/lib/agent-seats';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -15,6 +16,8 @@ const PAIRING_CAP = 50;
 export const RUNNER_TOKEN_DAYS = 30;
 /** With this many days or fewer left, a fetched token is renewed: the runner's next ask carries a new one as well. */
 export const RUNNER_RENEW_DAYS = 7;
+/** What a runner says about itself. Anything but `working` means its seats have no room. */
+export const RUNNER_STATES = ['working', 'paused', 'disk_full'] as const;
 // No 0, O, 1, I, L or U: the code is read off one screen and typed into another.
 const ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
 
@@ -220,9 +223,19 @@ export async function revokeProjectRunnerTokens(tx: Prisma.TransactionClient, wo
  * again. A token ends when the runner uses the one that replaces it (src/lib/apps/auth-middleware.ts), or when a
  * second newer one is made: answers can arrive late or out of order, and a renewal the runner never picks up must
  * leave the old token working to its own expiry, so a runner has at most two usable tokens for a seat. A stored token
- * is never decrypted to be sent again. The credential does nothing else.
+ * is never decrypted to be sent again.
+ *
+ * The ask may carry a `report` (CLB-774): the runner's own state, and per seat the room it has left and the program it
+ * would run next. A figure is stored, with the time it arrived, only for a seat this ask lists; any other seat's id is
+ * answered under `refused` and nothing is stored for it, so a seat retired since the runner's last ask does not cost
+ * the runner its answer. A report also opens or ends each seat's spell without room (`markNoRoom` in
+ * src/lib/agent-seats.ts), which is how Collab later knows for how long a seat has had none (CLB-780). A report may
+ * also name, under `ended`, the program each run of these seats used (CLB-779); the first program stored for a run
+ * stays, and a run that is not of a seat this ask lists, or does not exist, is answered under `refusedRuns`. An ask
+ * without a report makes no report writes and is answered as before. The credential does nothing else.
  */
-export async function fetchSeats(credential: string, have: string[]) {
+export async function fetchSeats(credential: string, have: string[],
+  report: { state?: typeof RUNNER_STATES[number]; rooms?: { seat: string; room: number; program: string }[]; ended?: { run: string; program: string }[] } = {}) {
   const refused = () => new HandoffError('runner_refused', 'This runner credential is not accepted', 401);
   const now = new Date();
   const runner = await prisma.agentRunner.findUnique({ where: { credentialHash: hash(credential) } });
@@ -236,8 +249,40 @@ export async function fetchSeats(credential: string, have: string[]) {
   if (!await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
   if (!runner.lastSeenAt || runner.lastSeenAt.getTime() < now.getTime() - 60_000) await prisma.agentRunner.updateMany({ where: { id: runner.id }, data: { lastSeenAt: now } });
 
-  const seats = await prisma.agentSeat.findMany({ where: { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } }, orderBy: { createdAt: 'asc' },
+  // The seats that are this runner's to run. A figure is stored under the same conditions, stated again on the seat's row.
+  const mine = { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } };
+  const seats = await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
+  const notStored: string[] = [], runsNotStored: string[] = [];
+  // The runner and its person are asked again on their rows, as for a token: a runner removed or replaced, or a
+  // person switched off, since this ask began stores nothing.
+  if (report.state || report.rooms?.length || report.ended?.length) await prisma.$transaction(async tx => {
+    // The state is read on the row this holds: reports of one runner come one at a time, so "until now" is what the one before left.
+    const [held] = await tx.$queryRaw<{ state: string | null }[]>`SELECT "state" FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR UPDATE`;
+    if (!held) throw refused();
+    await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${ownerId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
+    if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
+    // The report's time, taken behind that row: reports of one runner are timed in the order they are handled.
+    const at = new Date();
+    const until = await tx.agentSeat.findMany({ where: { id: { in: seats.map(seat => seat.id) }, ...mine }, select: { id: true, userId: true, room: true, roomAt: true } });
+    if (report.state) await tx.agentRunner.update({ where: { id: runner.id }, data: { state: report.state } });
+    for (const { seat: id, room, program } of report.rooms ?? []) {
+      if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
+        data: { room, roomProgram: program, roomAt: at } })).count) notStored.push(id);
+    }
+    // The program a run used (CLB-779), for a run of a seat this ask lists, under the same conditions. The first value stays.
+    const ours = { seatId: { in: seats.map(seat => seat.id) }, seat: mine };
+    for (const { run: id, program } of report.ended ?? []) {
+      if (!(await tx.agentRun.updateMany({ where: { id, ...ours, program: null }, data: { program } })).count
+        && !await tx.agentRun.count({ where: { id, ...ours } })) runsNotStored.push(id);
+    }
+    // Since when a seat has had no room is what moves its work (CLB-780): each seat's spell is kept in step with what was just said.
+    await markNoRoom(tx, workspaceId, until.map(seat => {
+      const told = notStored.includes(seat.id) ? undefined : report.rooms?.find(row => row.seat === seat.id);
+      return { id: seat.id, userId: seat.userId, before: saysNoRoom(seat, held.state, at),
+        after: saysNoRoom(told ? { room: told.room, roomAt: at } : seat, report.state ?? held.state, at) };
+    }), at);
+  });
   const held = seats.length ? await prisma.appToken.findMany({ where: { runnerId: runner.id, userId: { in: seats.map(seat => seat.userId) }, isRevoked: false, tokenExpiresAt: { gt: now } },
     orderBy: { createdAt: 'desc' }, select: { id: true, userId: true, tokenExpiresAt: true, createdAt: true } }) : [];
   const renewFrom = new Date(now.getTime() + RUNNER_RENEW_DAYS * 86_400_000);
@@ -282,5 +327,6 @@ export async function fetchSeats(credential: string, have: string[]) {
       answer.push({ ...holding, problem: error.code });
     }
   }
-  return { runner: { id: runner.id, name: runner.name, workspaceId, ownerId }, seats: answer };
+  return { runner: { id: runner.id, name: runner.name, workspaceId, ownerId }, seats: answer, ...(notStored.length > 0 && { refused: notStored }),
+    ...(runsNotStored.length > 0 && { refusedRuns: runsNotStored }) };
 }

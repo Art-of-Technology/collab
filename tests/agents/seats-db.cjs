@@ -25,19 +25,23 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     execFileSync(join(bindir, 'initdb'), ['-D', data, '-A', 'trust', '--no-locale', '-E', 'UTF8'], { stdio: 'pipe' });
     execFileSync(join(bindir, 'pg_ctl'), ['-D', data, '-l', join(directory, 'server.log'), '-o', `-k ${directory} -c listen_addresses='' -c fsync=off`, '-w', 'start'], { stdio: 'pipe' });
     const url = `postgresql://${encodeURIComponent(userInfo().username)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
-    execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate', '--schema', resolve('prisma/schema.prisma')],
-      { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
+    psql(execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-empty',
+      '--to-schema-datamodel', resolve('prisma/schema.prisma'), '--script'], { stdio: 'pipe' }));
     prisma = new PrismaClient({ datasources: { db: { url } } });
     await seed(prisma);
     // Back to the shape before the migration, with the seeded rows kept, then the migration as production gets it.
     psql(`DROP TABLE "AgentRun", "AgentSeat", "AgentRunner";
       ALTER TABLE "AppToken" DROP COLUMN "runnerId";
       ALTER TABLE "ProjectStatus" DROP COLUMN "category";
-      ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt";
+      ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt", DROP COLUMN "agentRepositoryUrl", DROP COLUMN "membersMayAddSeats";
       ALTER TABLE "Issue" DROP COLUMN "agentRequestRole";`);
     psql(readFileSync(resolve('prisma/migrations/20261116000100_agent_seats/migration.sql'), 'utf8'));
     // The seats table was made again by its own migration, so the migrations that changed it since follow.
     psql(readFileSync(resolve('prisma/migrations/20261116000400_agent_runners/migration.sql'), 'utf8'));
+    psql(readFileSync(resolve('prisma/migrations/20261119000100_seat_room_and_repository/migration.sql'), 'utf8'));
+    psql(`DROP TABLE "ProjectBaseline";
+      ALTER TABLE "Issue" DROP COLUMN "milestoneId", DROP COLUMN "baselineStartDate", DROP COLUMN "baselineDueDate", DROP COLUMN "finishedAt";`);
+    psql(readFileSync(resolve('prisma/migrations/20261120000100_project_milestones/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();

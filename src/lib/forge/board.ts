@@ -8,7 +8,8 @@ import type { ForgeTask } from './tasks';
 
 export type ForgeBoard =
   | { kind: 'denied' }
-  | { kind: 'not-connected' | 'unavailable'; projectName: string }
+  | { kind: 'not-connected'; projectName: string }
+  | { kind: 'unavailable'; projectName: string }
   | { kind: 'ready'; projectName: string; tasks: ForgeTask[]; truncated: boolean; fetchedAt: string; today: string };
 
 export async function loadForgeBoard(workspaceSlug: string, projectSlug: string, expected?: { workspaceId: string; projectId: string }): Promise<ForgeBoard> {

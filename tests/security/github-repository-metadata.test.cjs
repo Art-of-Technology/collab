@@ -3,6 +3,8 @@ const crypto = require('node:crypto');
 function select(row, shape) { if (!shape || !row) return row; return Object.fromEntries(Object.entries(shape).filter(([,v]) => v).map(([k,v]) => [k, v === true ? row[k] : select(row[k], v.select)])); }
 function fixture(options = {}) {
   const effects = [], logs = [];
+  const record = (...args) => logs.push(args);
+  const repositoryConsole = { debug: record, info: record, log: record, warn: record, error: record };
   const actor = { id: 'alice', email: 'alice@example.test', createdAt: new Date(), updatedAt: new Date() };
   const projects = workspaces.map((workspace, i) => ({ id: workspace.id, name: 'project-' + workspace.id, workspace, repository: options.attached ? { id: 'attached' } : null }));
   const connections = projects.map((project, i) => ({ id: 'connection-' + i, githubRepoId: String(i + 1), project, accessToken: 'encrypted-secret', webhookSecret: 'webhook-secret' }));
@@ -29,20 +31,25 @@ function fixture(options = {}) {
     '@/lib/encryption': { EncryptionService: { decrypt: token => { effects.push(['decrypt']); return 'token'; }, encrypt: token => { effects.push(['encrypt']); return 'sealed'; } } },
     crypto: { default: crypto }, '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/github/oauth-config': {
-      getUserRepositories: async (...args) => { effects.push(['list', ...args]); if (options.listError) throw new Error(options.listError); return { repositories: providerRows, hasMore: true }; },
+      getUserRepositories: async (...args) => { effects.push(['list', ...args.slice(0, 4)]); await options.onList?.(...args); if (options.listError) throw new Error(options.listError); if (options.pages) return { repositories: options.pages[args[1] - 1] || [], hasMore: args[1] < options.pages.length }; return { repositories: providerRows, hasMore: true }; },
       getRepositoryDetails: async () => { effects.push(['details']); return { id: 99, full_name: 'org/repo', default_branch: 'main', permissions: { admin: !options.noAdmin } }; },
       createRepositoryWebhook: async () => { effects.push(['webhook']); if (options.webhookError) throw new Error(options.webhookError); return { id: 12 }; },
     },
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status || 200, headers: new Headers(init.headers) }) } },
   };
-  if (options.providerStatus) deps['@/lib/github/oauth-config'].getUserRepositories = load('src/lib/github/oauth-config.ts', {}, { URLSearchParams, process: { env: {} }, Error, console: { log() {}, error() {} }, fetch: async () => ({ ok: false, status: options.providerStatus, statusText: 'Provider error' }) }).getUserRepositories;
+  if (options.providerFetch || options.providerStatus) {
+    deps['@/lib/github/oauth-config'].getUserRepositories = load('src/lib/github/oauth-config.ts', {}, {
+      URLSearchParams, process: { env: {} }, Error, console: repositoryConsole,
+      fetch: options.providerFetch ?? (async () => ({ ok: false, status: options.providerStatus, statusText: 'Provider error' })),
+    }).getUserRepositories;
+  }
   deps['@/lib/github/access'] = load('src/lib/github/access.ts', deps);
   const globals = { URL, Error, crypto, process: { env: { NEXTAUTH_URL: options.local ? 'http://localhost:3000' : 'https://collab.example' } }, console: { log() {}, warn() {}, error: (...args) => logs.push(args) }, fetch: async url => { effects.push(['fetch']); return { ok: true, json: async () => url.includes('/branches') ? [{ name: 'main', commit: { sha: 'sha' }, protected: true }] : url.includes('/commits') ? [{ sha: 'sha', commit: { message: 'initial', author: { name: 'A', email: 'a@example.test', date: '2026-01-01' } } }] : [] }; } };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
-  const list = load('src/app/api/github/oauth/repositories/route.ts', deps, globals).GET;
+  const list = load('src/app/api/github/oauth/repositories/route.ts', deps, { ...globals, console: repositoryConsole }).GET;
   const connect = load('src/app/api/github/oauth/connect/route.ts', deps, globals).POST;
   const manual = load('src/app/api/github/repositories/route.ts', deps, globals).POST;
-  return { effects, logs, list: query => list({ url: 'https://collab.example/api/github/oauth/repositories' + (query || '') }), connect: (projectId = 'own', manualMode = false) => (manualMode ? manual : connect)({ json: async () => ({ projectId, repositoryId: 99, githubRepoId: 99, owner: 'org', name: 'repo', accessToken: 'manual-token' }) }) };
+  return { effects, logs, list: (query, signal = new AbortController().signal) => list({ url: 'https://collab.example/api/github/oauth/repositories' + (query || ''), signal }), connect: (projectId = 'own', manualMode = false) => (manualMode ? manual : connect)({ json: async () => ({ projectId, repositoryId: 99, githubRepoId: 99, owner: 'org', name: 'repo', accessToken: 'manual-token' }) }) };
 }
 
 test('list reveals connection metadata only for owner and active member projects', async () => {
@@ -52,8 +59,51 @@ test('list reveals connection metadata only for owner and active member projects
   for (const row of r.body.repositories.slice(2)) assert.equal(row.connectedProject, undefined);
   assert.equal(JSON.stringify(r.body).includes('encrypted-secret'), false); assert.equal(r.headers.get('cache-control'), 'no-store');
 });
-test('list preserves provider pagination, search, sort and disconnected response', async () => {
-  const f = fixture(); const r = await f.list('?page=2&search=repo-own&sort=created'); assert.equal(r.body.repositories.length, 1); assert.equal(r.body.hasMore, false); assert.equal(r.body.currentPage, 2); assert.deepEqual(f.effects.find(e => e[0] === 'list'), ['list', 'token', 2, 30, 'created']); assert.equal((await fixture({ noToken: true }).list()).status, 400);
+test('list preserves provider pagination, sort and disconnected response', async () => {
+  const f = fixture(); const r = await f.list('?page=2&sort=created'); assert.equal(r.body.repositories.length, 4); assert.equal(r.body.hasMore, true); assert.equal(r.body.currentPage, 2); assert.deepEqual(f.effects.find(e => e[0] === 'list'), ['list', 'token', 2, 30, 'created']); assert.equal((await fixture({ noToken: true }).list()).status, 400);
+});
+test('search reads every provider page, so it finds a repository the picker has not loaded', async () => {
+  const row = (id, name) => ({ id, name, full_name: 'org/' + name, description: null, permissions: { admin: true } });
+  const f = fixture({ pages: [[row(1, 'alpha')], [row(2, 'beta')], [row(3, 'needle')]] });
+  const r = await f.list('?page=1&search=NEEDLE');
+  assert.equal(r.body.repositories.map(x => x.name).join(), 'needle'); assert.equal(r.body.hasMore, false);
+  assert.deepEqual(f.effects.filter(e => e[0] === 'list'), Array.from({ length: 10 }, (_, i) => ['list', 'token', i + 1, 100, 'updated']));
+});
+test('repository picker search stays quiet on success', async () => {
+  const repository = {
+    id: 1, name: 'needle', full_name: 'example/needle', description: null,
+    owner: { login: 'example' }, private: true, permissions: { admin: true },
+  };
+  const f = fixture({ providerFetch: async url => ({
+    ok: true,
+    json: async () => new URL(url).searchParams.get('page') === '3' ? [repository] : [],
+    headers: new Headers(),
+  }) });
+
+  const response = await f.list('?search=needle');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.repositories.map(row => row.full_name).join(), 'example/needle');
+  assert.equal(f.logs.length, 0);
+});
+test('search asks for its ten provider pages at once, not one after another', async () => {
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  const f = fixture({ onList: () => gate }); const pending = f.list('?search=repo');
+  for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.effects.filter(e => e[0] === 'list').length, 10);
+  release(); assert.equal((await pending).status, 200);
+});
+test('searches pass cancellation to every provider request', async () => {
+  const controller = new AbortController(); const received = [];
+  const f = fixture({ onList: (...args) => { received.push(args[4]); } });
+  await f.list('?search=repo', controller.signal);
+  assert.equal(received.length, 10); assert.ok(received.every(signal => signal === controller.signal));
+});
+test('repository provider forwards cancellation to fetch', async () => {
+  const controller = new AbortController();
+  let received;
+  const provider = load('src/lib/github/oauth-config.ts', {}, { URLSearchParams, process: { env: {} }, console: { log() {}, error() {} }, fetch: async (_url, options) => { received = options.signal; return { ok: true, json: async () => [], headers: new Headers() }; } });
+  await provider.getUserRepositories('token', 1, 30, 'updated', controller.signal);
+  assert.equal(received, controller.signal);
 });
 test('both connection entries reject inactive/foreign project before credentials or writes', async () => {
   for (const manual of [false, true]) for (const project of ['revoked', 'foreign', 'missing']) { const f = fixture(); assert.equal((await f.connect(project, manual)).status, 404); assert.deepEqual(f.effects, []); }
@@ -84,5 +134,7 @@ test('rejected GitHub token prompts reconnection while other provider errors rem
   const rejected = await fixture({ providerStatus: 401 }).list();
   assert.equal(rejected.status, 401);
   assert.match(rejected.body.error, /reconnect/i);
-  assert.equal((await fixture({ providerStatus: 500 }).list()).status, 500);
+  const failing = fixture({ providerStatus: 500 });
+  assert.equal((await failing.list('?search=needle')).status, 500);
+  assert.equal(failing.logs.length, 1);
 });

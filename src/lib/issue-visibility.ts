@@ -114,6 +114,7 @@ export function issueVisibilityExtension(models: readonly Model[]) {
     }
     // Checked relation connects validate the active parent in the same Prisma operation.
     // Switching from unchecked input requires converting every supplied foreign key.
+    const scalarDisconnects = new Set<string>();
     if (linksGuardedRow) {
       for (const field of fields) {
         const from = field.relationFromFields || [];
@@ -123,7 +124,10 @@ export function issueVisibilityExtension(models: readonly Model[]) {
         if (result[field.name]) throw new Error('Use either a relation or its foreign key');
         for (const key of from) delete result[key];
         if (values.some(value => value === null)) {
-          if (!creating) result[field.name] = { disconnect: true };
+          if (!creating) {
+            result[field.name] = { disconnect: true };
+            scalarDisconnects.add(field.name);
+          }
         } else {
           const to = field.relationToFields || [];
           // Current issue-related foreign keys all reference a single unique id.
@@ -137,7 +141,7 @@ export function issueVisibilityExtension(models: readonly Model[]) {
       if (!value || typeof value !== 'object') continue;
       const guard = guards.get(field.type);
       const nested = { ...value };
-      if (guard && (nested.delete || nested.deleteMany || nested.set || nested.disconnect)) {
+      if (guard && (nested.delete || nested.deleteMany || nested.set || (nested.disconnect && !scalarDisconnects.has(field.name)))) {
         throw new Error('Change issue-related records through a guarded model operation');
       }
       // Nested updates bypass model query extensions; existing callers use root operations.

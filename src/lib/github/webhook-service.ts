@@ -25,7 +25,7 @@ interface PullRequestData {
   repositoryId: string;
   githubPrId: number;
   title: string;
-  description?: string;
+  description?: string | null;
   state: 'OPEN' | 'CLOSED' | 'MERGED' | 'DRAFT';
   baseBranch: string;
   headBranch: string;
@@ -162,16 +162,35 @@ export class GitHubWebhookService {
     }
   }
 
-  async updatePullRequest(
-    repositoryId: string,
-    githubPrId: number,
-    updates: Partial<{
-      state: 'OPEN' | 'CLOSED' | 'MERGED' | 'DRAFT';
-      mergedAt: Date | null;
-      closedAt: Date;
-      mergedById: string | null;
-    }>
-  ) {
+  async recordPullRequestMerge(prData: Omit<PullRequestData, 'state'> & {
+    authorName?: string;
+    mergedAt: Date;
+    closedAt: Date;
+    mergedById: string | null;
+  }) {
+    const { repositoryId, githubPrId, mergedAt, closedAt, mergedById } = prData;
+    const merge = { state: 'MERGED' as const, mergedAt, closedAt };
+    return this.prisma.pullRequest.upsert({
+      where: { repositoryId_githubPrId: { repositoryId, githubPrId } },
+      update: { ...merge, mergedById: mergedById ?? undefined },
+      create: {
+        ...merge,
+        repositoryId,
+        githubPrId,
+        mergedById,
+        title: prData.title,
+        description: prData.description,
+        baseBranchName: prData.baseBranch,
+        headBranchName: prData.headBranch,
+        authorName: prData.authorName,
+        createdById: prData.createdById,
+        githubCreatedAt: prData.githubCreatedAt,
+        githubUpdatedAt: prData.githubUpdatedAt,
+      },
+    });
+  }
+
+  async closePullRequest(repositoryId: string, githubPrId: number, closedAt: Date) {
     try {
       return await this.prisma.pullRequest.update({
         where: {
@@ -179,12 +198,12 @@ export class GitHubWebhookService {
             repositoryId,
             githubPrId,
           },
+          state: { not: 'MERGED' },
         },
-        data: updates,
+        data: { state: 'CLOSED', closedAt },
       });
     } catch (error) {
-      // A pull request Collab never stored (opened before the repository was connected, or its
-      // opened event was missed) has no row to update; a repository sync brings it in.
+      // Unknown PRs and late close events for already merged PRs need no update.
       if ((error as { code?: string }).code === 'P2025') {
         console.log(`Pull request ${githubPrId} not found`);
         return null;

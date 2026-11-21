@@ -2,13 +2,13 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 
 // Files in Context folders: who may put one in, what the server decides a file is, who may read the
 // bytes back, and what is left behind when an upload fails.
-const CLOUD = { NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'demo', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' };
+const STORE = { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'collab', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' };
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 1, 2, 3, 4]);
 const PDF = Buffer.from('%PDF-1.7\n1 0 obj\n');
 const HTML = Buffer.from('<!DOCTYPE html><html><body><script>alert(1)</script></body></html>');
 
-function fixture(userId = 'alice', environment = CLOUD) {
+function fixture(userId = 'alice', environment = STORE, logger = console) {
   const ws = [
     { id: 'joined', slug: 'joined', ownerId: 'bob', members: [
       { userId: 'alice', status: true, role: 'MEMBER' },
@@ -32,7 +32,7 @@ function fixture(userId = 'alice', environment = CLOUD) {
   const files = [];
   function addFile(id, fields = {}) {
     const row = {
-      id, name: id, mimeType: 'application/octet-stream', size: 1, storageUrl: `https://res.cloudinary.test/demo/raw/authenticated/v1/collab/context/${id}`,
+      id, name: id, mimeType: 'application/octet-stream', size: 1, storageUrl: 'storage:context/00000000-0000-4000-8000-000000000000',
       folderId: 'ideation', uploadedById: 'alice', createdAt: new Date(), updatedAt: new Date(),
       deletedAt: null, deletedById: null, ...fields,
     };
@@ -76,36 +76,27 @@ function fixture(userId = 'alice', environment = CLOUD) {
     },
   };
 
-  // Storage: the bytes, the options they went up with, and every address this server signed.
+  // Storage: a bucket that keeps what it is sent, and every request this server made to it.
   const stored = new Map();
-  const destroyed = [];
-  const uploads = [];
-  const signed = [];
-  const cloudinary = {
-    uploader: {
-      upload_stream: (options, callback) => ({
-        end: (buffer) => {
-          if (state.failUpload) return callback(new Error('storage refused'), null);
-          const publicId = `${options.folder}/asset-${stored.size + 1}`;
-          uploads.push({ options, publicId });
-          stored.set(publicId, Buffer.from(buffer));
-          callback(null, { public_id: publicId, secure_url: `https://res.cloudinary.test/demo/raw/authenticated/v1/${publicId}` });
-        },
-      }),
-      destroy: async (publicId, options) => { destroyed.push({ publicId, options }); stored.delete(publicId); return { result: 'ok' }; },
-    },
-    url: (publicId, options) => {
-      signed.push({ publicId, options });
-      return `https://res.cloudinary.test/demo/raw/authenticated/s--sign--/${publicId}`;
-    },
-  };
+  const requests = [];
   const fetched = [];
-  async function fakeFetch(url) {
-    fetched.push(url);
-    const publicId = /\/raw\/authenticated\/s--sign--\/(.+)$/.exec(url)?.[1];
-    const bytes = publicId && stored.get(publicId);
-    if (!bytes) return new Response(null, { status: 404 });
-    return new Response(bytes, { status: 200 });
+  async function fakeFetch(url, { method = 'GET', body, headers = {} } = {}) {
+    const key = /^https:\/\/s3\.test\/collab\/(.+)$/.exec(String(url))?.[1];
+    fetched.push(String(url));
+    requests.push({ method, key, authorization: headers.authorization });
+    if (!key || !/^AWS4-HMAC-SHA256 Credential=key\//.test(headers.authorization ?? '')) return new Response(null, { status: 403 });
+    if (state.away > 0) { state.away -= 1; return new Response(null, { status: 503 }); }
+    if (method === 'PUT') {
+      if (state.failUpload) return new Response(null, { status: 403 });
+      stored.set(key, Buffer.from(body));
+      return new Response(null, { status: 200 });
+    }
+    if (method === 'DELETE') {
+      if (state.failDelete) return new Response(null, { status: 403 });
+      stored.delete(key); return new Response(null, { status: 204 });
+    }
+    const bytes = stored.get(key);
+    return bytes ? new Response(bytes, { status: 200 }) : new Response(null, { status: 404 });
   }
 
   const dependencies = {
@@ -113,10 +104,9 @@ function fixture(userId = 'alice', environment = CLOUD) {
     'next-auth': { getServerSession: async () => ({ user: { id: userId } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: db },
-    '@/utils/cloudinary-server': { cloudinary },
     '@/lib/rate-limit': { withRateLimit: handler => handler, mediaUploadRateLimit: {} },
   };
-  const globals = { URL, console, TextDecoder, Buffer, Response, fetch: fakeFetch, process: { env: { ...environment } } };
+  const globals = { URL, console: logger, TextDecoder, Buffer, Response, fetch: fakeFetch, process: { env: { ...environment } } };
   const routes = new Map();
   function route(file) {
     if (!routes.has(file)) routes.set(file, load(file, dependencies, globals));
@@ -142,7 +132,7 @@ function fixture(userId = 'alice', environment = CLOUD) {
     if (length) headers['content-length'] = String(declared ?? raw.length);
     return call(FILES, 'POST', { raw, headers });
   }
-  return { ws, folders, files, state, addFolder, addFile, call, upload, stored, destroyed, uploads, signed, fetched };
+  return { ws, folders, files, state, addFolder, addFile, call, upload, stored, requests, fetched };
 }
 
 const FILES = 'src/app/api/context/files/route.ts';
@@ -167,8 +157,11 @@ test('a file goes into a folder its workspace reads, with the type worked out fr
   assert.equal(file.uploadedById, 'alice');
   // Where the bytes are is the server's business and never leaves it.
   assert.equal(file.storageUrl, undefined);
-  assert.equal(f.uploads[0].options.type, 'authenticated');
-  assert.equal(f.uploads[0].options.resource_type, 'raw');
+  // The bytes went into the bucket, under a name storage made up, in a request this server signed.
+  assert.equal(f.requests[0].method, 'PUT');
+  assert.match(f.requests[0].key, /^context\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.match(f.requests[0].authorization, /^AWS4-HMAC-SHA256 Credential=key\/\d{8}\/us-east-1\/s3\/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=[0-9a-f]{64}$/);
+  assert.deepEqual([...f.stored.values()], [PNG]);
 
   const listed = await (await f.call(FILES, 'GET', { query: '?folder=ideation' })).json();
   assert.deepEqual(listed.files.map(row => row.id), [file.id]);
@@ -202,9 +195,9 @@ test('a file is read back only by someone who reads its folder, and never as a p
   assert.match(download.headers.get('content-disposition'), /^attachment; filename="report\.html"/);
   assert.match(download.headers.get('content-security-policy'), /default-src 'none'/);
   assert.equal(Buffer.from(await download.arrayBuffer()).toString(), HTML.toString());
-  // The address the bytes came from is signed here and used here; the caller never sees it.
-  assert.equal(f.signed[0].options.sign_url, true);
-  assert.equal(f.signed[0].options.type, 'authenticated');
+  // The bytes came out of the bucket through this server; the caller is told nothing of where they are kept.
+  assert.equal(f.requests.at(-1).method, 'GET');
+  assert.equal([...download.headers].some(([, value]) => value.includes('s3.test')), false);
 
   // A member of another workspace has no file and no bytes, however the address was come by.
   const stranger = fixture('mallory');
@@ -228,8 +221,7 @@ test('an upload that fails leaves no half file and says what went wrong', async 
   assert.match((await refused.json()).error, /reload and retry/);
   assert.equal(f.files.length, 0);
   assert.equal(f.stored.size, 0);
-  assert.equal(f.destroyed.length, 1);
-  assert.equal(f.destroyed[0].options.type, 'authenticated');
+  assert.deepEqual(f.requests.map(request => request.method), ['PUT', 'DELETE']);
 
   // Storage that refuses the bytes is said plainly, and writes nothing.
   f.state.failCreate = null;
@@ -239,12 +231,46 @@ test('an upload that fails leaves no half file and says what went wrong', async 
   assert.match((await unstored.json()).error, /could not be stored/);
   assert.equal(f.files.length, 0);
 
+  // A store that is away for a moment, as it is during its daily backup, is asked again.
+  f.state.failUpload = false;
+  f.state.away = 1;
+  const afterPause = await f.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } });
+  assert.equal(afterPause.status, 201);
+  assert.equal(f.files.length, 1);
+
   // Without storage configured, nothing is stored and the reason is not a surprise 500.
   const unconfigured = fixture('alice', {});
   unconfigured.addFolder('ideation');
   const refusedUpload = await unconfigured.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } });
   assert.equal(refusedUpload.status, 503);
   assert.equal(unconfigured.files.length, 0);
+});
+
+test('malformed storage names never reach the bucket', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  for (const value of ['storage:context/' + '-'.repeat(36), 'storage:context/' + 'a'.repeat(36),
+    'storage:context/00000000-0000-0000-8000-000000000000']) {
+    const file = f.addFile(value, { storageUrl: value, mimeType: 'application/pdf' });
+    assert.equal((await f.call(DOWNLOAD, 'GET', { id: file.id })).status, 500);
+    assert.equal((await f.call('src/app/api/context/files/[id]/preview/route.ts', 'GET', { id: file.id })).status, 500);
+  }
+  assert.equal(f.requests.length, 0);
+});
+
+test('bytes that could not be taken back are named in the log, and nothing else about the store is', async () => {
+  const logs = [];
+  const f = fixture('alice', STORE, { error: (...args) => logs.push(args) });
+  f.addFolder('ideation');
+  f.state.failCreate = new Error('row failed');
+  f.state.failDelete = true;
+  await f.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } });
+  assert.equal(f.stored.size, 1);
+  // The made-up name is what lets someone remove the bytes by hand; the endpoint, bucket and key stay out.
+  const orphan = logs.find(args => args[0] === 'context_file_orphan_bytes');
+  assert.equal(JSON.stringify(orphan[1]), JSON.stringify({ object: f.requests[0].key }));
+  assert.equal(/s3\.test|collab\/|secret|Credential/.test(JSON.stringify(logs)), false);
+  assert.ok(logs.some(args => args[0] === 'file_storage_request_failed' && args[1].method === 'DELETE' && args[1].status === 403));
 });
 
 test('a file over the stated limit is turned away before it is stored', async () => {
@@ -505,7 +531,7 @@ test('the policy of Collab pages never replaces the seal a preview puts on its b
   const { downloadHeaders } = load('src/lib/context-files.ts', {
     '@prisma/client': { Prisma: {} },
     '@/lib/prisma': { prisma: {} },
-    '@/utils/cloudinary-server': { cloudinary: {} },
+    '@/lib/file-storage': { FileStorageError: Error },
   }, { URL, console, TextDecoder, Buffer, Response, process: { env: {} } });
   const seal = headers => headers['Content-Security-Policy'];
   assert.equal(seal(previewHeaders({ name: 'sketch.png', mimeType: 'image/png' }, 'image')),

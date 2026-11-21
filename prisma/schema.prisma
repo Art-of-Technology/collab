@@ -505,11 +505,14 @@ model Project {
   agentMode        String   @default("handoffs") // handoffs | seats
   agentDefaultRepositoryId String? // Active Repository or GitConnection id, validated within this project
   agentSwitchedAt  DateTime?
+  agentRepositoryUrl String? // an https address typed for a project with no repository connected; every seat of the project gets it
+  membersMayAddSeats Boolean @default(false) // the owner's switch: a member may add their own seats to this project
   agentSeats       AgentSeat[]
 
   // Relationships
   workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issues          Issue[]
+  baselines       ProjectBaseline[]
   statuses        ProjectStatus[] // New status system
   followers       ProjectFollower[]
   featureRequests FeatureRequest[] // Feature requests linked to this project
@@ -525,6 +528,17 @@ model Project {
   @@unique([issuePrefix, workspaceId])
   @@index([workspaceId])
   @@index([workspaceId, isArchived])
+}
+
+model ProjectBaseline {
+  id        String   @id @default(cuid())
+  projectId String
+  setById   String
+  createdAt DateTime @default(now())
+  dates     Json
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
 
 model ForgeExecutionAttempt {
@@ -586,6 +600,10 @@ model Issue {
   parent   Issue?  @relation("IssueHierarchy", fields: [parentId], references: [id])
   children Issue[] @relation("IssueHierarchy")
 
+  milestoneId String?
+  milestone   Issue?  @relation("IssueMilestone", fields: [milestoneId], references: [id], onDelete: SetNull)
+  milestoneIssues Issue[] @relation("IssueMilestone")
+
   // Core relationships
   assigneeId  String?
   reporterId  String?
@@ -601,6 +619,10 @@ model Issue {
   // Trash retains the original issue and its dependent records.
   deletedAt   DateTime?
   deletedById String?
+
+  baselineStartDate DateTime?
+  baselineDueDate   DateTime?
+  finishedAt        DateTime?
 
   // Lifecycle tracking
   firstStartedAt DateTime? // When first moved to In Progress
@@ -669,6 +691,7 @@ model Issue {
   @@index([assigneeId])
   @@index([reporterId])
   @@index([parentId])
+  @@index([milestoneId])
   @@index([issueKey])
   @@index([type])
   @@index([status]) // Legacy index
@@ -3051,6 +3074,10 @@ model AgentSeat {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   byRunner    Boolean    @default(false) // run by a runner, which fetches its tokens; no token is made by hand
+  repositoryId String? // the seat's own pick: an active Repository or GitConnection id of its project, validated in the application
+  room        Int? // 0 to 100: percent of allowance left on roomProgram, as its runner last reported; validated in the application
+  roomProgram String? // the program the seat would run next
+  roomAt      DateTime? // when the figure arrived; one older than 15 minutes reads as unknown
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User       @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
@@ -3077,6 +3104,7 @@ model AgentRunner {
   removedAt        DateTime?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+  state            String? // working | paused | disk_full, as the runner last reported; null from a runner that reports none
   workspace        Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner            User?      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
@@ -3101,6 +3129,7 @@ model AgentRun {
   leaseUntil  DateTime?
   startedAt   DateTime   @default(now())
   endedAt     DateTime?
+  program     String? // the program the run used, as its runner reported; "runner" names the runner itself
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issue       Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
   seat        AgentSeat? @relation(fields: [seatId], references: [id], onDelete: SetNull)

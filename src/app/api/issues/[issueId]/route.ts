@@ -88,6 +88,9 @@ export async function PUT(
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
     const { issue: updatedIssue, oldIssue, assigneeChanged, updateData } = result;
+    const movedProject = oldIssue.projectId !== updatedIssue.projectId
+      ? { previousProjectId: oldIssue.projectId }
+      : {};
 
     // Track activities for changed fields (Issue-centric)
     let changes: any[] = [];
@@ -167,6 +170,7 @@ export async function PUT(
         'title',
         'description',
         'priority',
+        'startDate',
         'dueDate',
         'storyPoints',
         'type',
@@ -194,6 +198,7 @@ export async function PUT(
       type: 'issue.updated',
       workspaceId: updatedIssue.workspaceId,
       projectId: updatedIssue.projectId,
+      ...movedProject,
       issueId: updatedIssue.id,
       issueKey: updatedIssue.issueKey,
       status: updatedIssue.status ?? undefined,
@@ -291,7 +296,7 @@ export async function PUT(
       console.warn('[ISSUES_PUT_WEBHOOK]', webhookError);
     }
 
-    return NextResponse.json({ issue: updatedIssue });
+    return NextResponse.json({ issue: updatedIssue, ...movedProject });
 
   } catch (error) {
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });

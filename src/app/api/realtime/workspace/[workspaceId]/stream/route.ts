@@ -181,6 +181,12 @@ export async function GET(
                       where: { id: parsed.statusId, project: issueAccessWhere(user.id) }, select: { id: true },
                     }))) return;
                   }
+                  if (parsed.previousProjectId !== undefined && (
+                    parsed.type !== 'issue.updated' || typeof parsed.previousProjectId !== 'string' ||
+                    !await prisma.project.findFirst({
+                      where: { id: parsed.previousProjectId, workspaceId, ...issueAccessWhere(user.id) }, select: { id: true },
+                    })
+                  )) delete parsed.previousProjectId;
                   sendEvent(parsed);
                 }
               } catch (parseError) {

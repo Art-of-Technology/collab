@@ -101,36 +101,26 @@ async function revokeToken(
   installationId?: string;
 }> {
   try {
-    // Search for access tokens first (or if hint suggests access_token)
-    if (!tokenTypeHint || tokenTypeHint === 'access_token') {
-      const accessTokenResult = await revokeTokenFromInstallations(token, 'access', appId);
-      if (accessTokenResult.success) {
-        return {
-          success: true,
-          tokenType: 'access_token',
-          installationId: accessTokenResult.installationId
-        };
+    // A hint changes search order, but does not restrict the search.
+    const types: ('access' | 'refresh')[] = tokenTypeHint === 'refresh_token'
+      ? ['refresh', 'access'] : ['access', 'refresh'];
+    let decryptFailure: unknown;
+    for (const type of types) {
+      const result = await revokeTokenFromInstallations(token, type, appId);
+      decryptFailure ??= result.decryptFailure;
+      if (result.success) {
+        return { success: true, tokenType: type === 'access' ? 'access_token' : 'refresh_token', installationId: result.installationId };
       }
     }
 
-    // Search for refresh tokens if access token not found (or if hint suggests refresh_token)
-    if (!tokenTypeHint || tokenTypeHint === 'refresh_token') {
-      const refreshTokenResult = await revokeTokenFromInstallations(token, 'refresh', appId);
-      if (refreshTokenResult.success) {
-        return {
-          success: true,
-          tokenType: 'refresh_token',
-          installationId: refreshTokenResult.installationId
-        };
-      }
-    }
+    if (decryptFailure) throw decryptFailure;
 
     // Token not found - still return success as per RFC 7009
     return { success: false };
 
   } catch (error) {
     console.error('Token revocation failed:', error);
-    return { success: false };
+    throw error;
   }
 }
 
@@ -142,18 +132,22 @@ async function revokeTokenFromInstallations(
 ): Promise<{
   success: boolean;
   installationId?: string;
+  decryptFailure?: unknown;
 }> {
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
 
-    // Find tokens for this specific app that are not revoked
+    // Find tokens for this specific app that are not revoked.
+    // accessToken is a required column, so only the refresh search filters out empty values:
+    // Prisma rejects `{ not: null }` on a required field.
     const tokens = await prisma.appToken.findMany({
       where: {
         isRevoked: false,
-        [tokenField]: { not: null },
-        installation: {
-          appId: appId
-        }
+        ...(tokenType === 'refresh' ? { refreshToken: { not: null } } : {}),
+        OR: [
+          { installation: { appId } },
+          { installationId: null, appId, app: { isSystemApp: true } }
+        ]
       },
       include: {
         installation: {
@@ -165,43 +159,46 @@ async function revokeTokenFromInstallations(
     });
 
     // Check each token
+    let decryptFailure: unknown;
     for (const appToken of tokens) {
+      let decryptedToken: string;
       try {
         const storedToken = appToken[tokenField as keyof typeof appToken] as string | null;
-        if (!storedToken || !appToken.installation) continue;
+        if (!storedToken) continue;
 
         // Decrypt the stored token
         const storedTokenData = Buffer.from(storedToken, 'base64');
-        const decryptedToken = await decryptToken(storedTokenData);
-
-        // Compare with provided token
-        if (decryptedToken === token) {
-          // Revoke the token by marking it as revoked
-          await prisma.appToken.update({
-            where: { id: appToken.id },
-            data: {
-              isRevoked: true,
-              revokedAt: new Date(),
-              updatedAt: new Date()
-            }
-          });
-
-          return {
-            success: true,
-            installationId: appToken.installation.id
-          };
-        }
+        decryptedToken = await decryptToken(storedTokenData);
       } catch (error) {
-        // If decryption fails for this token, continue to next
         console.error(`Failed to decrypt ${tokenType} token for appToken:`, appToken.id, error);
+        decryptFailure ??= error;
         continue;
       }
+
+      // Compare with provided token
+      if (decryptedToken === token) {
+        // Revoke the token by marking it as revoked
+        await prisma.appToken.update({
+          where: { id: appToken.id },
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+
+        return {
+          success: true,
+          installationId: appToken.installation?.id
+        };
+      }
+
     }
 
-    return { success: false };
+    return { success: false, decryptFailure };
 
   } catch (error) {
     console.error(`Error revoking ${tokenType} token:`, error);
-    return { success: false };
+    throw error;
   }
 }

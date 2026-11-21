@@ -27,9 +27,12 @@ export interface UpdateIssueData {
   statusValue?: string;
   priority?: string;
   assigneeId?: string | null;
+  milestoneId?: string | null;
   reporterId?: string;
   labels?: string[];
-  dueDate?: Date;
+  projectId?: string;
+  startDate?: Date | null;
+  dueDate?: Date | null;
   position?: number;
 }
 
@@ -139,6 +142,7 @@ export function useCreateIssue() {
           query.queryKey[2] === variables.workspaceId
       });
       queryClient.invalidateQueries({ queryKey: issueKeys.byProject(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: ['projectSummary', variables.projectId] });
       queryClient.invalidateQueries({ queryKey: issueKeys.lists() });
       
       // Optionally add the new issue to the cache immediately
@@ -173,7 +177,7 @@ export function useUpdateIssue() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to update issue');
+        throw new Error(error.error || error.message || 'Failed to update issue');
       }
 
       return response.json();
@@ -230,8 +234,10 @@ export function useUpdateIssue() {
               query.queryKey[2] === updatedIssue.workspaceId
           });
         }
-        if (updatedIssue.projectId) {
-          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(updatedIssue.projectId) });
+        for (const projectId of [updatedIssue.projectId, data.previousProjectId]) {
+          if (!projectId) continue;
+          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(projectId) });
+          queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
         }
       }
     }

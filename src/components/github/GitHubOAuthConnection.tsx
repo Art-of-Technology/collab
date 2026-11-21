@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,8 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   const [connecting, setConnecting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const failedPageRollback = useRef<{ page: number; search: string } | null>(null);
+  const connectedRepositories = useRef(new Set<number>());
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
@@ -82,10 +84,23 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   }, []);
 
   useEffect(() => {
-    if (isConnected) {
-      fetchRepositories();
+    if (!isConnected) return;
+    if (failedPageRollback.current?.page === currentPage && failedPageRollback.current.search === searchTerm) {
+      failedPageRollback.current = null;
+      return;
     }
-  }, [isConnected, currentPage]);
+    failedPageRollback.current = null;
+    const controller = new AbortController();
+    // Set before the debounce, so a search is not answered "no match" before the server was asked.
+    setLoading(true);
+    const load = () => fetchRepositories(currentPage, searchTerm, controller.signal);
+    // Debounced: a search makes the server read every repository the account can see.
+    const timer = searchTerm ? setTimeout(load, 300) : void load();
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isConnected, currentPage, searchTerm]);
 
   useEffect(() => {
     filterRepositories();
@@ -100,7 +115,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
         const data = await response.json();
         setIsConnected(true);
         setGithubUser(data.githubUser);
-        setRepositories(data.repositories || []);
+        setRepositories((data.repositories || []).map(markConnected));
         setHasMore(data.hasMore || false);
       } else if (response.status === 400 || response.status === 401) {
         setIsConnected(false);
@@ -118,30 +133,42 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
     }
   };
 
-  const fetchRepositories = async (page = 1) => {
+  const markConnected = (repo: GitHubRepository) =>
+    connectedRepositories.current.has(repo.id) ? { ...repo, isConnected: true } : repo;
+
+  const fetchRepositories = async (page: number, search: string, signal: AbortSignal) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/github/oauth/repositories?page=${page}`);
+      const response = await fetch(`/api/github/oauth/repositories?${new URLSearchParams({ page: String(page), search })}`, { signal });
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch repositories');
       }
 
       const data = await response.json();
+      if (signal.aborted) return;
       
       if (page === 1) {
-        setRepositories(data.repositories || []);
+        setRepositories((data.repositories || []).map(markConnected));
       } else {
-        setRepositories(prev => [...prev, ...(data.repositories || [])]);
+        setRepositories(prev => [...prev, ...(data.repositories || []).map(markConnected)]);
       }
       
       setHasMore(data.hasMore || false);
       setGithubUser(data.githubUser);
     } catch (error) {
+      if (signal.aborted) return;
+      if (page > 1) {
+        failedPageRollback.current = { page: page - 1, search };
+        setCurrentPage(page - 1);
+      } else {
+        setRepositories([]);
+        setHasMore(false);
+      }
       console.error('Error fetching repositories:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch repositories');
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   };
 
@@ -233,6 +260,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
         );
       }
 
+      connectedRepositories.current.add(repo.id);
       // Update repository status
       setRepositories(prev => 
         prev.map(r => 
@@ -271,6 +299,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       }
 
       toast.success('GitHub account disconnected successfully');
+      connectedRepositories.current.clear();
       
       // Reset search term
       setSearchTerm('');
@@ -389,14 +418,17 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
           <Input
             placeholder="Search repositories..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             className="h-10 pl-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
           />
         </div>
 
         {/* Repository List */}
         <div className="space-y-2">
-          {loading && repositories.length === 0 ? (
+          {loading && filteredRepos.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-5 w-5 animate-spin text-collab-500/60" />
             </div>

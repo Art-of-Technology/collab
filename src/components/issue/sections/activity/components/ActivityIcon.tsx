@@ -43,6 +43,8 @@ export function ActivityIcon({ action, className }: ActivityIconProps) {
         return <AlertTriangle className="h-3 w-3 text-orange-500" />;
       case 'ASSIGNED':
       case 'LEAD_ASSIGNED':
+      case 'REQUEST_PLACED':
+      case 'STORY_MOVED':
       case 'UNASSIGNED':
       case 'REPORTER_CHANGED':
         return <User className="h-3 w-3 text-cyan-500" />;

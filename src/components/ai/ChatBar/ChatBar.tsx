@@ -62,7 +62,7 @@ interface QuickAction {
   action: () => void;
 }
 
-export default function ChatBar() {
+export default function ChatBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const {
     isExpanded,
     messages,
@@ -136,7 +136,7 @@ export default function ChatBar() {
     { id: "nav-views", label: "Go to Views", icon: <Eye className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/views")) },
     { id: "nav-agents", label: "Go to Agents", icon: <Bot className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/agents")) },
     { id: "nav-timeline", label: "Go to Timeline", icon: <Clock className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/timeline")) },
-    { id: "nav-context", label: "Go to Context", icon: <FileText className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/notes")) },
+    { id: "nav-context", label: "Go to Context", icon: <FileText className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/context")) },
     { id: "nav-features", label: "Feature Requests", icon: <Lightbulb className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/features")) },
     { id: "nav-docs", label: "Go to Docs", icon: <BookOpen className="h-3.5 w-3.5" />, action: () => router.push("/docs") },
     { id: "copy-url", label: "Copy current URL", icon: <Copy className="h-3.5 w-3.5" />, action: () => { navigator.clipboard.writeText(window.location.href); toast({ title: "Copied", description: "URL copied to clipboard" }); } },
@@ -273,7 +273,7 @@ export default function ChatBar() {
     <>
       <div
         className={cn(
-          "fixed bottom-0 z-40",
+          "fixed bottom-[env(safe-area-inset-bottom,0px)] z-40",
           "left-0 right-0 md:left-[var(--sidebar-width)]",
           "flex justify-center pointer-events-none",
           "pb-4 md:pb-6 px-4",
@@ -495,6 +495,7 @@ export default function ChatBar() {
             }
             onFocus={handleFocus}
             onBlur={handleBlur}
+            onOpenMenu={onOpenMenu}
             onArrowKey={handleArrowKey}
             onEscape={handleEscape}
             hasSelectedResult={selectedIndex >= 0}

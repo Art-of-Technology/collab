@@ -350,7 +350,8 @@ async function handleRefreshTokenGrant(
     }
   }
 
-  if (!matchedToken) {
+  const maxRefreshTokenAge = 90 * 24 * 60 * 60 * 1000;
+  if (!matchedToken || Date.now() - matchedToken.updatedAt.getTime() > maxRefreshTokenAge) {
     return NextResponse.json(
       {
         error: 'invalid_grant',

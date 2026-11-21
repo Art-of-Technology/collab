@@ -63,15 +63,16 @@ function validDateTime(value) {
     Number.isFinite(Date.parse(value)) &&
     new Date(value.slice(0, 10)).toISOString().slice(0, 10) === value.slice(0, 10);
 }
-async function boundedInput(file) {
+async function boundedBytes(file, limit, message) {
   const stream = file === '-' ? process.stdin : fs.createReadStream(file);
   const chunks = []; let size = 0;
   const timer = setTimeout(() => stream.destroy(new Error('input timeout')), 30000);
   try {
-    for await (const chunk of stream) { size += chunk.length; if (size > 1024 * 1024) throw new CliError('input_too_large', 'Input is limited to 1 MiB.'); chunks.push(Buffer.from(chunk)); }
-    return Buffer.concat(chunks).toString('utf8');
+    for await (const chunk of stream) { size += chunk.length; if (size > limit) throw new CliError('input_too_large', message); chunks.push(Buffer.from(chunk)); }
+    return Buffer.concat(chunks);
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
+const boundedInput = async file => (await boundedBytes(file, 1024 * 1024, 'Input is limited to 1 MiB.')).toString('utf8');
 function help() {
   return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], workerCommands, coordinatorCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
@@ -197,7 +198,7 @@ async function main() {
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
   const textFiles = ['content', 'description', 'body', 'note'].filter(key => Object.hasOwn(spec.fields, key));
   // --project is declared only by a command that reads a project; elsewhere it used to be dropped without a word.
-  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' || spec.setupPreview ? ['yes'] : []), ...(spec.seatRun ? [] : ['dry-run']), ...(spec.pagination ? ['all'] : [])]);
+  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length && name !== 'issues attach' ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' || spec.setupPreview ? ['yes'] : []), ...(spec.seatRun ? [] : ['dry-run']), ...(spec.pagination ? ['all'] : [])]);
   if (spec.method === 'DELETE' && !options.yes && !(spec.deletePreview && options['dry-run'])) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   if (spec.requiredQuery?.includes('projectId') && options.project && options['project-id'] && options.project !== options['project-id']) {
     throw new CliError('conflicting_project', '--project and --project-id must identify the same project.');
@@ -220,6 +221,15 @@ async function main() {
     if (Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
   }
+  let attachmentBytes;
+  if (name === 'issues attach') {
+    if (options.file === undefined) throw new CliError('required_field', 'Missing required --file.');
+    try { attachmentBytes = await boundedBytes(options.file, 5 * 1024 * 1024, 'A file to attach is limited to 5 MiB.'); }
+    catch (error) { if (error instanceof CliError) throw error; throw new CliError('invalid_input', 'The file given with --file could not be read.'); }
+    if (!attachmentBytes.length) throw new CliError('invalid_input', 'The file given with --file is empty.');
+    if (body.name === undefined && options.file !== '-') body.name = path.basename(options.file);
+    if (body.name === undefined || body.name === null || body.name === '') throw new CliError('required_field', 'Missing required --name.');
+  }
   if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
       (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {
     throw new CliError('invalid_value', '--request-id must be a UUID. Generate one with uuidgen and reuse it for retries.');
@@ -228,6 +238,7 @@ async function main() {
     const type = spec.fields[key];
     if (value !== null && !(type === 'array' ? Array.isArray(value) && value.every(v => typeof v === 'string') : type === 'integer' ? Number.isSafeInteger(value) : typeof value === type)) throw new CliError('invalid_input', 'A JSON field has the wrong type.');
   }
+  if (attachmentBytes) body.contentBase64 = attachmentBytes.toString('base64');
   if (name.startsWith('notes ')) {
     if (body.type && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(body.type)) throw new CliError('unsupported_note_type', 'This CLI manages project context, not secret documents.');
     if (body.scope && !['WORKSPACE', 'PROJECT', 'PUBLIC'].includes(body.scope)) throw new CliError('unsupported_note_scope', 'Use WORKSPACE, PROJECT or PUBLIC for shared Notes.');
@@ -364,6 +375,8 @@ async function main() {
     if (options['dry-run'] || !options.yes) return { dryRun: Boolean(options['dry-run']), applied: false, preview };
     await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ setupPreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
+  // A preview says how much would be sent, never the file itself: a screenshot does not belong in a transcript.
+  if (options['dry-run'] && attachmentBytes) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: { ...payload, contentBase64: `(${attachmentBytes.length} bytes, not shown)` }, ...(options.comment !== undefined && { thenComment: String(options.comment).trim() }) };
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
   if (spec.seatRun) {
     if (!rest?.length) throw new CliError('required_field', 'Name the program to start after --, for example: collab seat run -- claude -p PROMPT');
@@ -378,6 +391,18 @@ async function main() {
   }
   const send = async (requestTimeout = timeout) => {
     const result = await request(selected.base, apiPath(), { token: selected.token, method: spec.method, body: payload, timeout: requestTimeout });
+    if (name === 'issues attach' && options.comment !== undefined) {
+      // One step: the comment carries the text and the line that shows the file. The file is stored by now, so a
+      // comment that fails says so and gives the line, and nothing has to be uploaded twice.
+      const content = [String(options.comment).trim(), result?.markdown].filter(Boolean).join('\n\n');
+      try {
+        const comment = await request(selected.base, `/api/apps/auth/issues/${args[0]}/comments${query.size ? `?${query}` : ''}`,
+          { token: selected.token, method: 'POST', body: { content }, timeout: requestTimeout });
+        return { ...result, comment: { id: comment?.id } };
+      } catch (error) {
+        throw new CliError('comment_failed', `The file is attached, but the comment outcome is unknown (${error?.code || 'request failed'}). Check the issue before adding the comment with comments add. Do not attach the file again. Markdown: ${result?.markdown}`, 2, { file: result?.file, markdown: result?.markdown });
+      }
+    }
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);
     if (name === 'seat request' && result?.warning === 'seat_idle') process.stderr.write(JSON.stringify({ warning: 'seat_idle', message: 'The request was filed, but the seat it went to has not read its inbox for 10 minutes and may not be running. Tell a person.' }) + '\n');
     return result;

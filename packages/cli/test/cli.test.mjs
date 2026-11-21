@@ -291,6 +291,20 @@ test('handoff validation errors do not expose server response text', async t => 
   assert.equal(f.calls.length, 2);
 });
 
+test('issue updates describe reversed milestone dates without exposing server response text', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid_milestone_dates', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['issues', 'update', 'APP-1', '--due-date', '2026-11-05T00:00:00.000Z']);
+  assert.equal(result.error.error, 'invalid_milestone_dates');
+  assert.equal(result.error.message, 'The due date is before the start.');
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  const unrelated = await f.run(['issues', 'create', '--project', 'project-one', '--title', 'Test']);
+  assert.equal(unrelated.error.error, 'invalid_request');
+  assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
+});
+
 test('handoff and transfer request IDs match server UUID validation before dispatch', async t => {
   const f = await fixture(t);
   const send = ['handoffs', 'send', '--agent', 'builder-a', '--issue', 'APP-1', '--content', 'Review', '--to-agents', '["reviewer"]'];
@@ -1371,6 +1385,23 @@ test('project creation, issue updates and comments preserve exact supplied paylo
     assert.equal((await f.run(args, { input })).code, 0);
     const call = f.calls.at(-1); assert.equal(call.url, `/api/apps/auth${expectedPath}`); assert.equal(call.method, method); assert.deepEqual(JSON.parse(call.body), expectedBody);
   }
+});
+
+test('issue CLI commands set, clear and filter by milestone ID', async t => {
+  const f = await fixture(t);
+  const milestoneId = 'cfixturemilestone';
+  const create = await f.run(['issues', 'create', '--project', 'project-one', '--title', 'Plan', '--milestone-id', milestoneId]);
+  assert.equal(create.code, 0);
+  assert.equal(JSON.parse(f.calls.at(-1).body).milestoneId, milestoneId);
+  const update = await f.run(['issues', 'update', 'APP-1', '--milestone-id', milestoneId]);
+  assert.equal(update.code, 0);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { milestoneId });
+  const clear = await f.run(['issues', 'update', 'APP-1', '--input', '-'], { input: JSON.stringify({ milestoneId: null }) });
+  assert.equal(clear.code, 0);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { milestoneId: null });
+  const list = await f.run(['issues', 'list', '--milestone-id', milestoneId]);
+  assert.equal(list.code, 0);
+  assert.equal(new URL(f.calls.at(-1).url, f.url).searchParams.get('milestoneId'), milestoneId);
 });
 
 test('Notes create uses project scope; updates do not silently move Notes', async t => {
@@ -2637,6 +2668,97 @@ test('seat run: a program that ignores the request to stop is killed, so a fence
   assert.ok(Date.now() - start < 10000, `took ${Date.now() - start} ms`);
   assert.equal(s.log.at(-1), 'close run-1');
   assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: null }]);
+});
+
+test('issues attach sends a file as base64 with its name, and refuses what it cannot send', async t => {
+  const f = await fixture(t);
+  const spec = (await f.run(['schema'])).data.commands['issues attach'];
+  assert.deepEqual(spec.requiredOptions, ['file']);
+  assert.ok(!spec.required?.includes('name'));
+  const directory = mkdtempSync(path.join(tmpdir(), 'collab-attach-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3, 255]);
+  const file = path.join(directory, 'overview.png');
+  writeFileSync(file, png);
+
+  // The bytes travel as they are, not as text, and the file's own name is used unless another is given.
+  const sent = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--workspace', 'w']);
+  assert.equal(sent.code, 0, sent.stderr);
+  assert.equal(f.calls.at(-1).method, 'POST');
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/issues/APP-1/attachments?workspaceId=w');
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { contentBase64: png.toString('base64'), name: 'overview.png' });
+  await f.run(['issues', 'attach', 'APP-1', '--file', file, '--name', 'first screen.png', '--workspace', 'w']);
+  assert.equal(JSON.parse(f.calls.at(-1).body).name, 'first screen.png');
+  const stdin = await f.run(['issues', 'attach', 'APP-1', '--file', '-', '--name', 'stdin.png', '--workspace', 'w'], { input: 'image' });
+  assert.equal(stdin.code, 0, stdin.stderr);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { name: 'stdin.png', contentBase64: 'aW1hZ2U=' });
+  const beforeUnnamed = f.calls.length;
+  const unnamed = await f.run(['issues', 'attach', 'APP-1', '--file', '-', '--workspace', 'w'], { input: 'image' });
+  assert.equal(unnamed.error?.error, 'required_field');
+  assert.equal(f.calls.length, beforeUnnamed);
+
+  // A preview sends nothing and shows how much it would send, not the file.
+  const before = f.calls.length;
+  const preview = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--dry-run', '--workspace', 'w']);
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.equal(f.calls.length, before);
+  assert.equal(preview.stdout.includes(png.toString('base64')), false);
+  assert.match(preview.stdout, /13 bytes, not shown/);
+
+  // Nothing is sent for a file that is missing, empty or over the stated limit, or when no file is named.
+  const calls = f.calls.length;
+  const empty = path.join(directory, 'empty.png'), large = path.join(directory, 'large.bin');
+  writeFileSync(empty, '');
+  writeFileSync(large, Buffer.alloc(5 * 1024 * 1024 + 1));
+  for (const [args, error] of [
+    [['--file', path.join(directory, 'missing.png')], 'invalid_input'],
+    [['--file', empty], 'invalid_input'],
+    [['--file', large], 'input_too_large'],
+    [['--name', 'overview.png'], 'required_field'],
+    [['--file', file, '--content-base64', 'AAAA'], 'unknown_flag'],
+    [['--input', file], 'unknown_flag'],
+  ]) {
+    const refused = await f.run(['issues', 'attach', 'APP-1', ...args, '--workspace', 'w']);
+    assert.equal(refused.error?.error, error, JSON.stringify(args.slice(0, 1)));
+  }
+  assert.equal(f.calls.length, calls);
+});
+
+test('issues attach --comment attaches the file and then adds a comment that shows it', async t => {
+  const state = { failComment: false, createdComments: 0 };
+  const f = await fixture(t, async (req, res) => {
+    if (req.url.includes('/attachments')) return res.end(JSON.stringify({ file: { id: 'file1', name: 'overview.png' }, markdown: '![overview.png](/api/context/files/file1/preview)' }));
+    if (state.failComment) { state.createdComments++; res.statusCode = 500; return res.end(JSON.stringify({ error: 'internal_error' })); }
+    res.end(JSON.stringify({ id: 'comment1' }));
+  });
+  const directory = mkdtempSync(path.join(tmpdir(), 'collab-attach-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'overview.png');
+  writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]));
+
+  const done = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--workspace', 'w']);
+  assert.equal(done.code, 0, done.stderr);
+  assert.deepEqual(f.calls.map(call => `${call.method} ${call.url}`), [
+    'POST /api/apps/auth/issues/APP-1/attachments?workspaceId=w', 'POST /api/apps/auth/issues/APP-1/comments?workspaceId=w']);
+  // The comment is the text, then the line that shows the file. The comment request carries no file.
+  assert.deepEqual(JSON.parse(f.calls[1].body), { content: 'Overview as built\n\n![overview.png](/api/context/files/file1/preview)' });
+  assert.equal(JSON.parse(done.stdout).comment.id, 'comment1');
+  assert.equal(JSON.parse(done.stdout).markdown, '![overview.png](/api/context/files/file1/preview)');
+
+  state.failComment = true;
+  const half = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--workspace', 'w']);
+  assert.equal(half.error?.error, 'comment_failed');
+  assert.match(half.error.message, /file is attached/);
+  assert.equal(state.createdComments, 1);
+  assert.match(half.error.message, /outcome is unknown/);
+  assert.match(half.error.message, /Check the issue before adding/);
+  assert.match(half.error.message, /!\[overview\.png\]\(\/api\/context\/files\/file1\/preview\)/);
+
+  // A preview of the one step sends nothing and names the comment it would add.
+  const calls = f.calls.length;
+  const preview = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--comment', 'Overview as built', '--dry-run', '--workspace', 'w']);
+  assert.equal(f.calls.length, calls);
+  assert.equal(JSON.parse(preview.stdout).thenComment, 'Overview as built');
 });
 
 test('folder and file reads forward their ids and project through authenticated GETs', async t => {
