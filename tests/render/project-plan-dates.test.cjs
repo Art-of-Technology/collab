@@ -18,6 +18,7 @@ function loadPlanComponents(writes) {
     '@/components/ui/button': { Button: ({ asChild, variant, ...props }) => asChild ? props.children : React.createElement('button', props) },
     '@/hooks/queries/useIssues': { useUpdateIssue: () => ({ mutateAsync: async value => writes.push(value) }) },
     '@/hooks/use-permissions': { usePermissions: () => ({ checkPermission: () => ({ hasPermission: true }) }) },
+    '@/hooks/use-chart-width': load('src/hooks/use-chart-width.ts', { react: React }, { window }),
     '@/lib/permission-types': load('src/lib/permission-types.ts'),
     '@/lib/utils': { cn: () => '' },
   }, { window });

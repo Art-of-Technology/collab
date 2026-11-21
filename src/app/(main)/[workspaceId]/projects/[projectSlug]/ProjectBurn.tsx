@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
+import { useChartWidth } from '@/hooks/use-chart-width';
 import { cn } from '@/lib/utils';
 import type { ProjectBurn as BurnData } from '@/lib/project-burn';
 
@@ -22,7 +23,7 @@ const scope = '#9c9ca1';
 const done = '#34d399';
 const grid = 'rgba(255,255,255,.09)';
 const axis = { fill: '#9c9ca1', fontSize: 11 };
-const width = 500;
+const designWidth = 500;
 const height = 230;
 const left = 40;
 const right = 16;
@@ -57,7 +58,7 @@ function Toggle<T extends string>({ label, value, options, onChange }: {
   );
 }
 
-function chartScale(maximum: number, plotWidth = width) {
+function chartScale(maximum: number, plotWidth: number) {
   const target = Math.max(1, maximum / 4);
   const power = 10 ** Math.floor(Math.log10(target));
   const step = ([1, 2, 2.5, 5, 10].find(size => size * power >= target) ?? 10) * power;
@@ -76,6 +77,7 @@ function chartScale(maximum: number, plotWidth = width) {
 }
 
 function BurnUp({ burn, recent }: { burn: BurnData; recent: boolean }) {
+  const [width, chartRef] = useChartWidth(designWidth);
   const start = recent ? burn.recentStart : burn.historyStart;
   const history = burn.points.filter(point => point.day >= start);
   const last = history[history.length - 1];
@@ -83,7 +85,7 @@ function BurnUp({ burn, recent }: { burn: BurnData; recent: boolean }) {
   const milestones = recent ? [] : burn.milestones;
   const end = recent ? Math.max(start + 1, burn.today) : burn.wholeProjectEnd;
   const x = (day: number) => left + (width - left - right) * (day - start) / (end - start);
-  const { y, lines } = chartScale(last?.scope ?? 0);
+  const { y, lines } = chartScale(last?.scope ?? 0, width);
   const path = (key: 'scope' | 'closed') => history.map(point => `${x(point.day)},${y(point[key])}`).join(' ');
   const ticks = Math.min(4, end - start);
   const rangeLabel = forecast && (forecast.latest !== null && forecast.latest > end ? 'forecast range'
@@ -97,7 +99,7 @@ function BurnUp({ burn, recent }: { burn: BurnData; recent: boolean }) {
   };
 
   return (
-    <>
+    <div ref={chartRef}>
       <svg viewBox={`0 0 ${width} ${height}`} className="block w-full" role="img" aria-label="Burn-up, issues done against all known issues">
         <title>{last ? `${last.closed} of ${last.scope} issues done` : 'No issue history'}</title>
         {lines}
@@ -140,7 +142,7 @@ function BurnUp({ burn, recent }: { burn: BurnData; recent: boolean }) {
       <Legend entries={[
         ['all known issues', scope], ['done', done], ...(rangeLabel ? [[rangeLabel, 'rgba(52,211,153,.3)'] as [string, string]] : []),
       ]} />
-    </>
+    </div>
   );
 }
 
@@ -149,7 +151,8 @@ function WeeklyWork({ burn }: { burn: BurnData }) {
   const [choice, setChoice] = useState<number | null>(null);
   const start = measure === 'issues' ? burn.weeklyStart : burn.prStart;
   const weeks = burn.weeks.filter(week => week.day >= start);
-  const plotWidth = Math.max(width, left + right + weeks.length * 59);
+  const minimumWidth = left + right + weeks.length * 59;
+  const [plotWidth, chartRef] = useChartWidth(Math.max(designWidth, minimumWidth));
   const columnWidth = (plotWidth - left - right) / Math.max(1, weeks.length);
   const barWidth = Math.min(52, columnWidth * .66);
   const { y, lines } = chartScale(weeks.reduce((max, week) => {
@@ -168,8 +171,8 @@ function WeeklyWork({ burn }: { burn: BurnData }) {
         <h2 className="font-semibold">Who did the work, per week</h2>
         <Toggle label="Measure" value={measure} options={[['issues', 'Issues closed'], ['prs', 'PRs merged']]} onChange={setMeasure} />
       </div>
-      <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${plotWidth} ${height}`} className="block w-full" style={{ minWidth: plotWidth > width ? plotWidth : undefined }}
+      <div ref={chartRef} className="overflow-x-auto">
+        <svg viewBox={`0 0 ${plotWidth} ${height}`} className="block w-full" style={{ minWidth: minimumWidth > designWidth ? minimumWidth : undefined }}
           role="group" aria-label={`Weekly ${unit}`}>
           {lines}
           {weeks.map((entry, index) => {

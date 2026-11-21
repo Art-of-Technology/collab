@@ -10,6 +10,7 @@ function loadProjectBurn(window) {
     'react/jsx-runtime': require('react/jsx-runtime'),
     'next/link': { default: 'a' },
     '@/components/ui/card': { Card: 'div' },
+    '@/hooks/use-chart-width': load('src/hooks/use-chart-width.ts', { react: React }, { window }),
     '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
   }, { window }).ProjectBurn;
 }

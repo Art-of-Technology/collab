@@ -32,6 +32,7 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
   };
   const plan = load(`${components}/ProjectPlan.tsx`, {
     ...deps,
+    '@/hooks/use-chart-width': { useChartWidth: width => [width, null] },
     '@/hooks/queries/useIssues': { useUpdateIssue: () => ({}) },
     '@/hooks/use-permissions': { usePermissions: () => ({ checkPermission: () => ({ hasPermission: false }) }) },
     '@/lib/permission-types': load('src/lib/permission-types.ts'),
