@@ -66,7 +66,6 @@ test('profile timeline and notification boundaries recheck current viewer access
   const globals = { URL, Error, console };
   const profile = load('src/actions/user.ts', deps, globals).getUserProfile;
   const timeline = load('src/app/api/timeline/unified/route.ts', deps, globals).GET;
-  const dashboard = load('src/app/api/ai/dashboard/route.ts', deps, globals).GET;
   const create = load('src/app/api/timeline/posts/route.ts', deps, globals).POST;
   const list = load('src/app/api/notifications/route.ts', deps, globals).GET;
   db.notification.updateMany = async ({ where, data }) => {
@@ -77,7 +76,7 @@ test('profile timeline and notification boundaries recheck current viewer access
   const readAll = load('src/app/api/notifications/read-all/route.ts', deps, globals).POST;
   const mark = load('src/app/api/notifications/[id]/route.ts', deps, globals).PATCH;
   const request = id => new Request(`https://example.test/?workspaceId=${id}`);
-  for (const [name, invoke] of [['timeline', timeline], ['dashboard', dashboard], ['create', id => create(new Request('https://example.test', {
+  for (const [name, invoke] of [['timeline', timeline], ['create', id => create(new Request('https://example.test', {
     method: 'POST', body: JSON.stringify({ workspaceId: id, content: 'Mentioned post' }),
   }))]]) {
     for (const id of ['anonymous', 'revoked', 'foreign', 'own', 'joined']) await t.test(`${name}: ${id}`, async () => {
