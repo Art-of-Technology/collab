@@ -26,6 +26,10 @@ jobs:
         run: npx tsc --noEmit -p .
       - name: Security and render tests, compared with tests/known-failures.txt
         run: npm test
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Browser tests
+        run: npm run test:browser
   lint:
     name: lint
     runs-on: ubuntu-latest
