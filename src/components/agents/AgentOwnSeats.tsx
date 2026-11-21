@@ -15,8 +15,9 @@ type Project = SeatsView['projects'][number];
 interface Props { workspaceId: string; projects: Project[]; canManage: boolean }
 
 /**
- * Per project that uses seats: for who manages the workspace, the switch that lets members add their own seats; for
- * everyone else, their own seats there, with one button to add them and one to remove them.
+ * Per project that uses seats: a person's own seats there, with one button to add them and one to remove them. Who
+ * manages the workspace also has the switch that lets members add their own seats, and adds their own the same way,
+ * but removes none here.
  */
 export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
   const router = useRouter();
@@ -52,10 +53,10 @@ export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
     (body: { removed?: string[]; kept?: { name: string; reason: string }[] }) => ({ title: body.kept?.length ? 'Not every seat was removed' : 'Your seats were removed',
       description: [body.removed?.length && `Removed: ${body.removed.join(', ')}.`, ...(body.kept ?? []).map(seat => `${seat.name} stays: ${seat.reason.replace(/\.$/, '')}.`)].filter(Boolean).join(' ') }));
 
-  // The switch is only for a project that seats can be added to; a person's own seats are shown wherever they are.
+  // The switch is only for a project that seats can be added to; a member's own seats are shown wherever they are.
   const rows = canManage ? projects.filter(project => project.addable) : projects;
   if (!rows.length) return null;
-  return <section aria-label={canManage ? "Members' own seats" : 'Your seats'} className="divide-y rounded-lg border text-sm">
+  return <section aria-label={canManage ? "Your seats, and members' own seats" : 'Your seats'} className="divide-y rounded-lg border text-sm">
     {rows.map(project => {
       const id = `members-add-seats-${project.id}`;
       const missing = project.addable && project.mine.length < 3;
@@ -63,18 +64,21 @@ export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
       return <div key={project.id} role="group" aria-labelledby={`${id}-name`} className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="min-w-0 space-y-1">
           <p id={`${id}-name`} className="font-medium">{project.name}</p>
-          {!canManage && <p className="text-muted-foreground">{project.mine.length
+          <p className="text-muted-foreground">{project.mine.length
             ? <>Your seats in this project: <span className="capitalize">{project.mine.join(', ')}</span>.</>
-            : 'You have no seats in this project. Your seats run on your own runner and your own allowance.'}</p>}
+            : 'You have no seats in this project. Your seats run on your own runner and your own allowance.'}</p>
+          {/* Who manages the workspace has the switch itself beside the button, so needs no word about it. */}
           {!canManage && missing && !project.membersMayAddSeats && <p className="text-xs text-destructive">The project owner has not switched this on.</p>}
         </div>
-        {canManage ? <div className="flex items-center gap-2">
-          <Checkbox id={id} checked={project.membersMayAddSeats} disabled={busy} onCheckedChange={checked => allow(project, checked === true)} />
-          <label htmlFor={id}>Members may add their own seats to this project</label>
-        </div> : <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {canManage && <div className="flex items-center gap-2">
+            <Checkbox id={id} checked={project.membersMayAddSeats} disabled={busy} onCheckedChange={checked => allow(project, checked === true)} />
+            <label htmlFor={id}>Members may add their own seats to this project</label>
+          </div>}
           {missing && <Button disabled={busy || !project.membersMayAddSeats} onClick={() => add(project)}>Add my seats to this project</Button>}
-          {project.mine.length > 0 && <Button variant="outline" disabled={busy} onClick={() => setRemoving(project)}>Remove my seats</Button>}
-        </div>}
+          {/* Who manages the workspace often owns a project's main seats: no one-press removal beside the switch. They retire a seat in the settings. */}
+          {!canManage && project.mine.length > 0 && <Button variant="outline" disabled={busy} onClick={() => setRemoving(project)}>Remove my seats</Button>}
+        </div>
       </div>;
     })}
 

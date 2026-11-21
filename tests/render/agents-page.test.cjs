@@ -209,7 +209,7 @@ test('Seats tab: room is a bar with its words, "no room" or "unknown" with the r
   assert.doesNotMatch(await page({ manage: true }).open('inbox'), /% room|Room private|role="img"/);
 });
 
-test('Seats tab: a member adds and removes their own seats per project, and who manages the workspace has the switch instead', async () => {
+test('Seats tab: a person adds and removes their own seats per project, and who manages the workspace has the switch as well', async () => {
   const project = { id: 'p1', slug: 'collab', name: 'Collab', membersMayAddSeats: false, mine: [], addable: true };
   const open = (projects, manage = false, ...tab) => page({ manage, view: { workspace: { id: 'ws', slug: 'team' }, seats, projects } }).open(...tab);
   // Switched off: the button is there, cannot be pressed, and says why.
@@ -232,11 +232,19 @@ test('Seats tab: a member adds and removes their own seats per project, and who 
   assert.match(text(await open(closed)), /Closed Your seats in this project: developer \. Remove my seats/);
   assert.doesNotMatch(await open(closed), /Add my seats|not switched this on/);
   assert.doesNotMatch(await open(closed, true), /Closed|Members may add/);
-  // Who manages the workspace gets the switch per project, as it stands, and none of a member's buttons.
+  // Who manages the workspace gets the switch per project, as it stands, and the same buttons as anyone for their own seats.
   const managed = await open([{ ...project, membersMayAddSeats: true }, { ...project, id: 'p2', name: 'Other' }], true);
-  assert.match(managed, /Collab<\/p><\/div><div[^>]*><input type="checkbox"[^>]*id="members-add-seats-p1"[^>]*checked=""[^>]*\/><label for="members-add-seats-p1">Members may add their own seats to this project<\/label>/);
+  assert.match(managed, /<input type="checkbox"[^>]*id="members-add-seats-p1"[^>]*checked=""[^>]*\/><label for="members-add-seats-p1">Members may add their own seats to this project<\/label>/);
   assert.doesNotMatch(managed.match(/<input[^>]*id="members-add-seats-p2"[^>]*>/)[0], /checked/);
-  assert.doesNotMatch(managed, /Add my seats|Remove my seats|You have no seats/);
+  assert.match(text(managed), /Collab You have no seats in this project\..*Members may add their own seats to this project Add my seats to this project/);
+  // The button follows the switch for a manager as for anyone: on for the first project, off for the second.
+  assert.deepEqual([...managed.matchAll(/<button( disabled="")?>Add my seats to this project<\/button>/g)].map(match => !match[1]), [true, false]);
+  // The switch is right there, so a manager is not told that the owner has not switched it on.
+  assert.doesNotMatch(managed, /not switched this on|Remove my seats/);
+  const own = await open([{ ...project, membersMayAddSeats: true, mine: ['developer', 'reviewer', 'security'] }], true);
+  // A manager often owns a project's main seats, so there is no one-press removal beside the switch.
+  assert.match(text(own), /Your seats in this project: developer, reviewer, security \..*Members may add their own seats to this project/);
+  assert.doesNotMatch(own, /Add my seats|Remove my seats/);
   // Nothing of it on the Inbox tab, and nothing at all where no project uses seats.
   assert.doesNotMatch(await open([project], false, 'inbox'), /Add my seats/);
   assert.doesNotMatch(await page().open(), /Add my seats|Members may add|Your seats/);
