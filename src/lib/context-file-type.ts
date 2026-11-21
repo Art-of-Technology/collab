@@ -2,8 +2,8 @@
  * What a file is, worked out from its first bytes.
  *
  * The type a browser sends with an upload is the uploader's word for it, so Context never keeps it.
- * The type kept here is a label for the people who see the file in a folder; it is never what the
- * bytes are served with. A download always leaves as an attachment of one opaque type (see
+ * Inline previews use the stored type (see `context-file-preview.ts`).
+ * A download always leaves as an attachment of one opaque type (see
  * `downloadHeaders` in `context-files.ts`), so a file that says it is HTML still cannot run.
  *
  * Bytes we do not recognise are text when they read as text, and `application/octet-stream`

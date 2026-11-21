@@ -9,9 +9,9 @@ import {
  * A file of a Context folder, shown rather than downloaded.
  *
  * An image is drawn as an image and a PDF in the browser's viewer, both straight from
- * `/api/context/files/[id]/preview`, which serves them sealed (see `previewHeaders`). A text file and
+ * `/api/context/files/[id]/preview` (see `previewHeaders`). A text file and
  * a CSV are read from the same address as JSON and drawn here as text: React escapes every character,
- * so a file that says it is HTML is read and never run. A PDF sits in a frame of its own origin.
+ * so a file that says it is HTML is read and never run.
  * Anything else is named — its name, type and size — with a download beside it.
  */
 
@@ -57,10 +57,9 @@ export function ContextFilePreview({ file, className = '' }: { file: PreviewFile
       {kind === 'image' &&
         // eslint-disable-next-line @next/next/no-img-element
         <img src={contextPreviewUrl(file.id)} alt={file.name} className="mx-auto max-h-[70vh] object-contain" />}
-      {/* The file's own origin, with nothing allowed out: the viewer runs, the document reaches nothing.
-          A browser that will not open a PDF under that seal is not given it unsealed; the file downloads. */}
+      {/* Chrome needs the sandbox attribute omitted. See the PDF safeguards in context-file-preview.ts. */}
       {kind === 'pdf' && <>
-        <iframe src={contextPreviewUrl(file.id)} title={file.name} sandbox="allow-scripts"
+        <iframe src={contextPreviewUrl(file.id)} title={file.name}
           className="h-[70vh] w-full border-0" />
         <p className="border-t px-3 py-2 text-sm text-muted-foreground">
           A PDF opens in the browser&apos;s own viewer. If it does not appear, download the file.

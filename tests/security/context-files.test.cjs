@@ -410,12 +410,30 @@ test('a file is previewed as what it is, and never as something a browser runs',
   assert.equal(image.headers.get('content-security-policy'), "default-src 'none'; sandbox; frame-ancestors 'self'");
   assert.equal(Buffer.from(await image.arrayBuffer()).toString('hex'), PNG.toString('hex'));
 
-  // The PDF viewer is the browser's own program and needs its scripts; the document still gets an
-  // origin of its own and may fetch nothing, so what the file carries reaches neither Collab nor the page.
+  // The PDF viewer is the browser's own program and needs its scripts. The seal is kept for the browsers
+  // that honour it on a PDF; what holds everywhere is the type from the bytes and `nosniff`.
   const viewer = await f.call(PREVIEW, 'GET', { id: pdf.id });
   assert.equal(viewer.headers.get('content-type'), 'application/pdf');
   assert.equal(viewer.headers.get('content-security-policy'), "default-src 'none'; sandbox allow-scripts; frame-ancestors 'self'");
   assert.match(viewer.headers.get('content-disposition'), /^inline;/);
+  assert.equal(viewer.headers.get('x-content-type-options'), 'nosniff');
+
+  // Collab frames a PDF without a sandbox mark (Chrome's viewer will not start in one), so only bytes
+  // that are a PDF ever get that frame. A page named like a PDF is still read as text, never served inline.
+  const fake = await put(HTML, 'fake.pdf');
+  const fakeRead = await f.call(PREVIEW, 'GET', { id: fake.id });
+  assert.match(fakeRead.headers.get('content-type'), /^application\/json/);
+  const fakeText = await fakeRead.json();
+  assert.equal(fakeText.kind, 'text');
+  assert.equal(fakeText.text, HTML.toString());
+  // A PDF that carries a page after its header leaves as a PDF the browser may not sniff, so the page
+  // only ever reaches the PDF viewer, never the browser's HTML reader.
+  const polyglotBytes = Buffer.concat([PDF, HTML]);
+  const polyglot = await f.call(PREVIEW, 'GET', { id: (await put(polyglotBytes, 'mixed.pdf')).id });
+  assert.equal(polyglot.headers.get('content-type'), 'application/pdf');
+  assert.equal(polyglot.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(polyglot.headers.get('content-security-policy'), "default-src 'none'; sandbox allow-scripts; frame-ancestors 'self'");
+  assert.equal(Buffer.from(await polyglot.arrayBuffer()).toString('hex'), polyglotBytes.toString('hex'));
 
   // A file that says it is HTML is read, not run: its bytes leave as JSON, never with a type a browser runs.
   const read = await f.call(PREVIEW, 'GET', { id: page.id });
