@@ -71,7 +71,7 @@ test('an edit is refused only when it takes a complete issue to an incomplete on
 
 test('an issue row is read as its type, its description and the six template fields', () => {
   const row = { id: 'issue', title: 'Ignored', type: 'BUG', description: 'Text', priority: 'high', dueDate: null, labels: [{ id: 'label' }] };
-  assert.deepEqual(plain(issueShape(row)), { type: 'BUG', isSeatRequest: false, description: 'Text', fields: { priority: 'high', dueDate: null, labels: [{ id: 'label' }] } });
+  assert.deepEqual(plain(issueShape(row)), { type: 'BUG', description: 'Text', fields: { priority: 'high', dueDate: null, labels: [{ id: 'label' }] } });
   assert.equal(issueShape({ type: 'TASK', description: 42 }).description, null);
 });
 
@@ -240,6 +240,19 @@ test('an agent edit that would leave a complete issue incomplete is refused and 
   assert.equal(cleared.status, 422);
   assert.deepEqual([(await cleared.json()).missing_fields, milestone.state.updated.length], [['dueDate'], 0]);
   assert.equal((await milestone.patch({ dueDate: '2027-01-15T00:00:00.000Z' })).status, 200);
+});
+
+test('agents may edit unestimated standard issues but must preserve complete sections', async () => {
+  for (const type of ['STORY', 'TASK']) {
+    const on = workspace({ issue: issueRow(type, complete(type)) });
+    assert.equal((await on.patch({ title: 'Renamed' })).status, 200);
+    const removed = STANDARD_TEMPLATES[type].sections[0].title;
+    const response = await on.patch({ description: complete(type, removed) });
+    assert.equal(response.status, 422);
+    assert.deepEqual((await response.json()).missing_sections, [removed]);
+    assert.equal((await on.patch({ storyPoints: 3 })).status, 200);
+    assert.deepEqual(on.state.updated.map(change => change.storyPoints), [undefined, 3]);
+  }
 });
 
 test('an unestimated seat request keeps its required Task sections on agent edits', async () => {
