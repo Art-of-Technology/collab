@@ -73,11 +73,11 @@ function planMilestones(
       const decision = due !== null && !issue.startDate && !linked.length;
       const state: 'decision' | 'done' | 'running' | 'planned' = decision ? 'decision' : isDone(issue) ? 'done'
         : issue.firstStartedAt || issue.projectStatus?.category === 'in_progress' ? 'running' : 'planned';
-      const forecast = start !== null && state !== 'done' && !decision
+      const forecast = due !== null && state !== 'done' && !decision
         ? forecastFinish(today, start, linked.length - completed, recentClosures) : null;
       const baselineDue = issue.baselineDueDate ? day(issue.baselineDueDate) : null;
       const end = due ?? start;
-      const comparison = due === null ? forecast : Math.max(due, forecast ?? due);
+      const comparison = due === null ? null : Math.max(due, forecast ?? due);
       return {
         ...issueRef(issue), state, completed, total: linked.length,
         startDate: issue.startDate?.toISOString() ?? null, dueDate: dateOf(due),
