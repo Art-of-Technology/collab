@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { Prisma } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
+const { extraRole, extendedCatalogue } = require('./role-catalogue-fixture.cjs');
 
 // Token-facing routes accept only cuid-shaped ids.
 const owner = 'cowner00001', person = 'cperson0001';
@@ -45,8 +46,9 @@ test('requests: one seat asks another, in its own project or in another one', as
   const handoffs = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod,
     '@/lib/prisma': { prisma }, '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }), '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
   const tokens = load('src/lib/agent-tokens.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/apps/crypto': crypto }, { Buffer, Date });
-  const assignee = load('src/lib/issue-assignee.ts', { './agent-handoffs': handoffs });
-  const seats = load('src/lib/agent-seats.ts', { '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': tokens, '@/lib/issue-assignee': assignee }, { Date });
+  const roleDeps = { '@/lib/agent-role-catalogue': extendedCatalogue() };
+  const assignee = load('src/lib/issue-assignee.ts', { ...roleDeps, './agent-handoffs': handoffs });
+  const seats = load('src/lib/agent-seats.ts', { ...roleDeps, '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': tokens, '@/lib/issue-assignee': assignee }, { Date });
   const middleware = load('src/lib/apps/auth-middleware.ts', { crypto: require('node:crypto'), 'next/server': response,
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
@@ -57,6 +59,7 @@ test('requests: one seat asks another, in its own project or in another one', as
   class ForgeProjectWriteError extends Error {}
   const guard = async () => { if (forge) throw new ForgeProjectWriteError('Use the Forge board'); };
   const deps = {
+    ...roleDeps,
     '@/lib/redis': { publishEvent: async (channel, event, timeoutMs) => {
       assert.equal(channel, 'workspace:w:events');
       assert.equal(event.type, 'issue.comments.changed');
@@ -379,4 +382,30 @@ test('requests: one seat asks another, in its own project or in another one', as
     assert.equal((await finish(devA, plainRun, 'p1'))[0], 200);
     await settle(A); await settle(B);
   });
+  await t.test('one catalogue entry enables seat creation and request routing', async () => {
+    const collection = load('src/app/api/workspaces/[workspaceId]/agent-seats/route.ts', {
+      ...deps,
+      '@/lib/request-session': { getServerSession: async () => ({ user: { id: owner } }) },
+      '@/lib/auth-options': {},
+      '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' }, checkUserPermission: async () => ({ hasPermission: true }) },
+    }, globals);
+    const create = sent => call(collection.POST, '', { params: { workspaceId: 'w' }, body: {
+      name: 'maps', projectId: A, role: extraRole.id, ...sent,
+    } });
+    assert.deepEqual(await create({ platformPrompt: 'An organisation edit.' }), [400, { error: 'Invalid request' }]);
+    const [status, made] = await create();
+    assert.equal(status, 201, JSON.stringify(made));
+    assert.equal(made.seat.role, extraRole.id);
+    assert.equal((await create({ name: 'second map seat' }))[0], 409, 'the catalogue limit applies');
+
+    const kind = extraRole.requests[0];
+    await raw.taskLabel.create({ data: { workspaceId: 'w', name: kind.label, color: '#123456' } });
+    const source = await issue(devA);
+    const { row } = await filed(devA, source, { role: kind.id });
+    assert.deepEqual([row.agentRequestRole, row.assigneeId, row.labels[0]?.name], [kind.id, made.seat.userId, kind.label]);
+    assert.deepEqual(await offered({ token: made.token.token }, row), ['assigned']);
+    await assert.rejects(assignee.assertAssignable(prisma, { workspaceId: 'w', projectId: A, agentRequestRole: 'review' }, made.seat.userId),
+      { code: 'role_mismatch', status: 422 });
+  });
+
 });
