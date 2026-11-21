@@ -24,6 +24,11 @@ export const metadata: Metadata = {
 type OverviewSearch = Partial<Record<"project" | "scope" | "kind" | "q" | "dormant" | "page", string | string[]>>;
 type WorkspaceData = { kind: "workspace"; overview: ComponentProps<typeof WorkspaceOverview> };
 
+function unavailablePanel(panel: string) {
+  console.error(`Workspace dashboard: ${panel} unavailable`);
+  return { kind: "unavailable" as const };
+}
+
 async function loadOverview(workspaceSelector: string, search: OverviewSearch): Promise<DashboardData | WorkspaceData | { kind: "login" }> {
   try {
     const session = await getAuthSession();
@@ -65,9 +70,9 @@ async function loadOverview(workspaceSelector: string, search: OverviewSearch): 
           ? loadWorkspaceIssueOverview({ ...viewer, scope, projectSearch: q, projectPage: page, dormant })
           : denied,
         issuesUnavailable ? unavailable : issues.hasPermission ? loadWorkspaceRepositoryOverview(viewer) : denied,
-        loadNeedsYou({ ...viewer, scope, kind }).catch(() => unavailable),
-        loadAgentsNow(viewer).catch(() => unavailable),
-        loadShipped(viewer).catch(() => unavailable),
+        loadNeedsYou({ ...viewer, scope, kind }).catch(() => unavailablePanel("Needs you")),
+        loadAgentsNow(viewer).catch(() => unavailablePanel("Agents now")),
+        loadShipped(viewer).catch(() => unavailablePanel("Shipped today")),
       ]);
       return {
         kind: "workspace",
