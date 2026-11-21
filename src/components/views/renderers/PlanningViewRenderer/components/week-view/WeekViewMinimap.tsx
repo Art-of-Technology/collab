@@ -93,7 +93,7 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
   return (
     <div 
       className={cn(
-        "fixed bottom-4 right-4 z-50 transition-all duration-200",
+        "fixed bottom-[calc(var(--ai-bar-clearance)+1rem)] right-4 z-50 transition-all duration-200 md:bottom-4",
         isHovered || isDragging ? "opacity-100" : "opacity-70 hover:opacity-100"
       )}
       onMouseEnter={() => setIsHovered(true)}

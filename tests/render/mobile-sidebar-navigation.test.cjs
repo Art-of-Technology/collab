@@ -80,8 +80,9 @@ function renderLayout({ isMobileOpen, isMdUp = false }) {
     '@/context/AIContext': { AIProvider: Container },
     '@heroicons/react/24/outline': { ChevronLeftIcon: Empty, ChevronRightIcon: Empty },
     '@/components/ui/button': { Button: Empty },
-    '@/components/layout/MobileBottomNav': { MobileBottomNav: () => React.createElement('button', { id: 'bottom-menu' }, 'Menu') },
-    '@/components/ai/ChatBar': { ChatBar: () => React.createElement('textarea', { id: 'search-or-ask' }) },
+    '@/components/ai/ChatBar': { ChatBar: () => React.createElement(React.Fragment, null,
+      React.createElement('button', { id: 'bottom-menu' }, 'Open menu'),
+      React.createElement('textarea', { id: 'search-or-ask' })) },
   });
   const html = renderToStaticMarkup(React.createElement(Layout, {pathname: '/weezboo/dashboard'},
     React.createElement('button', { id: 'page-action' }, 'Page action')));

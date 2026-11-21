@@ -62,7 +62,7 @@ interface QuickAction {
   action: () => void;
 }
 
-export default function ChatBar() {
+export default function ChatBar({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const {
     isExpanded,
     messages,
@@ -273,7 +273,7 @@ export default function ChatBar() {
     <>
       <div
         className={cn(
-          "fixed bottom-0 z-40",
+          "fixed bottom-[env(safe-area-inset-bottom,0px)] z-40",
           "left-0 right-0 md:left-[var(--sidebar-width)]",
           "flex justify-center pointer-events-none",
           "pb-4 md:pb-6 px-4",
@@ -495,6 +495,7 @@ export default function ChatBar() {
             }
             onFocus={handleFocus}
             onBlur={handleBlur}
+            onOpenMenu={onOpenMenu}
             onArrowKey={handleArrowKey}
             onEscape={handleEscape}
             hasSelectedResult={selectedIndex >= 0}

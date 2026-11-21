@@ -85,25 +85,6 @@ test('sidebar highlights only the current workspace section and matching item', 
   }
 });
 
-test('the phone menu has the same Agents entry', () => {
-  const pushed = [];
-  const pass = ({ children }) => children;
-  const plain = tag => ({ children, initial: _i, animate: _a, transition: _t, whileTap: _w, ...props }) => React.createElement(tag, props, children);
-  const { MobileBottomNav } = load('src/components/layout/MobileBottomNav.tsx', {
-    react: React, 'react/jsx-runtime': jsx, 'lucide-react': require('lucide-react'),
-    'framer-motion': { motion: { div: plain('div'), button: plain('button') }, AnimatePresence: pass },
-    '@/lib/utils': { cn: (...args) => args.filter(Boolean).join(' ') },
-    '@/components/ui/tooltip': { Tooltip: pass, TooltipProvider: pass, TooltipTrigger: pass, TooltipContent: ({ children }) => React.createElement('span', { 'data-tip': '' }, children) },
-    '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: 'workspace', slug: 'weezboo' } }) },
-    '@/components/providers/SidebarProvider': { useSidebar: () => ({}) },
-    '@/context/AIContext': { useAI: () => ({}) },
-    'next/navigation': { useRouter: () => ({ push: href => pushed.push(href) }), usePathname: () => '/weezboo/agent-inbox' },
-  });
-  const html = renderToStaticMarkup(React.createElement(MobileBottomNav));
-  // Marked as the current section on the old handoff inbox too.
-  assert.match(html, /<button aria-label="Agents" class="[^"]*ring-1[^"]*">(?:(?!<button).)*<span data-tip=""><div[^>]*>Agents<\/div>/);
-});
-
 test('"Handoffs (old)" is a tab only while a project still uses handoffs', () => {
   const { AgentsTabs } = load('src/components/agents/AgentsTabs.tsx', { 'react/jsx-runtime': jsx, 'next/link': link });
   const tabs = props => renderToStaticMarkup(React.createElement(AgentsTabs, { base: '/team', ...props }));
@@ -306,7 +287,7 @@ test('the menu is told the page being read, not only the workspace the layout kn
     '@/components/providers/SidebarProvider': { useSidebar: () => ({ isMdUp: true }) },
     '@/context/AIContext': { AIProvider: ({ children }) => children },
     '@heroicons/react/24/outline': { ChevronLeftIcon: Empty, ChevronRightIcon: Empty },
-    '@/components/ui/button': { Button: Empty }, '@/components/layout/MobileBottomNav': { MobileBottomNav: Empty }, '@/components/ai/ChatBar': { ChatBar: Empty },
+    '@/components/ui/button': { Button: Empty }, '@/components/ai/ChatBar': { ChatBar: Empty },
   }).default;
   renderToStaticMarkup(React.createElement(Layout, { pathname: '/weezboo' }, 'page'));
   assert.deepEqual(seen, ['/weezboo/agents/inbox', '/weezboo/agents/inbox']);
