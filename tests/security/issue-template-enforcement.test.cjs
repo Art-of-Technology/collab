@@ -255,6 +255,27 @@ test('agents may edit unestimated standard issues but must preserve complete sec
   }
 });
 
+for (const [source, target] of [['TASK', 'STORY'], ['STORY', 'TASK']]) {
+  test(`converting a section-complete unestimated ${source} to ${target} requires points`, async () => {
+    for (const update of [
+      (api, change) => api.patch(change),
+      (api, change) => api.assistant('update_issue', { issueId: 'issue', ...change }),
+    ]) {
+      const api = workspace({ issue: issueRow(source, complete(source)) });
+      const conversion = { type: target, description: complete(target) };
+      const refused = await update(api, conversion);
+      assert.equal(refused.status, 422);
+      const body = await refused.json();
+      assert.deepEqual([body.issue_type, body.missing_sections, body.missing_fields], [target, [], ['storyPoints']]);
+      assert.deepEqual(api.state.updated, []);
+
+      const estimated = { ...conversion, storyPoints: 3 };
+      assert.equal((await update(api, estimated)).status, 200);
+      assert.deepEqual(plain(api.state.updated), [estimated]);
+    }
+  });
+}
+
 test('an unestimated seat request keeps its required Task sections on agent edits', async () => {
   const on = workspace({ issue: issueRow('TASK', complete('TASK'), { agentRequestRole: 'release' }) });
   const description = complete('TASK', 'Done when');
