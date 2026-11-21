@@ -85,13 +85,18 @@ const issueRow = (type, description, fields = {}) => ({
 // One workspace with one stored issue, the real routes, and counters for what they write.
 function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLATES, realUpdate = false } = {}) {
   const state = { issue, created: [], updated: [], beforeTransaction: null, transactionOptions: null, afterRead: null };
+  function readIssue({ select }) {
+    if (!state.issue) return null;
+    if (!select) return { ...state.issue };
+    return Object.fromEntries(Object.entries(state.issue).filter(([field]) => select[field]));
+  }
   const db = {
     workspace: { findFirst: async () => ({ id: 'workspace', slug: 'workspace' }) },
     project: { findFirst: async () => ({ id: PROJECT, workspaceId: 'workspace' }) },
     projectStatus: { findFirst: async () => null },
     issue: {
-      findFirst: async () => state.issue && { ...state.issue },
-      findUniqueOrThrow: async () => ({ ...state.issue }),
+      findFirst: readIssue,
+      findUniqueOrThrow: readIssue,
       create: async ({ data }) => { state.created.push(data); return { id: 'created', issueKey: 'P-2', ...data }; },
       update: async ({ data }) => { state.updated.push(data); return { ...state.issue, ...data }; },
     },
@@ -122,8 +127,8 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'person', name: 'Person' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/permissions': { Permission: { CREATE_TASK: 'CREATE_TASK' }, checkUserPermission: async () => ({ hasPermission: true }) },
-    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async () => {
-      const row = state.issue && { ...state.issue };
+    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async (_id, options) => {
+      const row = readIssue(options);
       if (state.afterRead) state.afterRead();
       return row;
     } },
@@ -329,6 +334,25 @@ test('the assistant can supply required points when converting a subtask', async
     assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 0 })).status, 400);
     assert.equal((await on.assistant('update_issue', { ...params, storyPoints: 3 })).status, 200);
     assert.deepEqual(plain(on.state.updated), [{ type, description: params.description, storyPoints: 3 }]);
+  }
+});
+
+test('agent updates can clear only optional estimates on complete issues', async () => {
+  for (const clearEstimate of [
+    api => api.patch({ storyPoints: null }),
+    api => api.assistant('update_issue', { issueId: 'issue', storyPoints: null }),
+  ]) {
+    const bug = workspace({ issue: issueRow('BUG', complete('BUG'), { storyPoints: 3 }) });
+    assert.equal((await clearEstimate(bug)).status, 200);
+    assert.deepEqual(plain(bug.state.updated), [{ storyPoints: null }]);
+
+    for (const type of ['STORY', 'TASK']) {
+      const required = workspace({ issue: issueRow(type, complete(type), { storyPoints: 3 }) });
+      const response = await clearEstimate(required);
+      assert.equal(response.status, 422);
+      assert.deepEqual((await response.json()).missing_fields, ['storyPoints']);
+      assert.deepEqual(required.state.updated, []);
+    }
   }
 });
 

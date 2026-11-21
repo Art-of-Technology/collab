@@ -32,7 +32,7 @@ A section counts when the description has a heading with the section's title and
 
 ## When templates are required
 
-The standard Story and Task templates require story points. Workspace admins can change this under **Required fields**.
+The standard Story and Task templates require story points. System-generated seat requests are filed without an estimate. When an agent edits one under the standard Task template, the required sections still apply and points are optional. If the workspace has customized the Task template, its configured requirements apply to edits. Workspace admins can change the fields under **Required fields**.
 
 A workspace can require templates for agents. An agent's create or update that misses something is then refused with `422 template_required`, and nothing is written:
 
@@ -46,7 +46,7 @@ A workspace can require templates for agents. An agent's create or update that m
 }
 ```
 
-- The reply also carries `template_version` and `template`, the type's whole current template.
+- The reply also carries `template_version` and `template`. Its `sections` and `requiredFields` describe what the server checked for this operation.
 - Add what `missing_sections` and `missing_fields` list and send it again. The CLI prints the same lists as `missingSections` and `missingFields`.
 - On a create, a required field counts only when you state it. A default does not count.
 - An update is refused only when the issue had everything before the change and would not after it. Issues written before templates were required can still be edited.
