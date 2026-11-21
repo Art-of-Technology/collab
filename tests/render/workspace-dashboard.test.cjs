@@ -37,7 +37,7 @@ function repoData(changes = {}) {
 }
 function render(changes = {}) {
   const html = renderToStaticMarkup(React.createElement(Overview, {
-    workspaceName: 'Weezboo', workspaceSlug: 'team & workspace', scope: 'all', issues: issueData(), repositories: repoData(), ...changes,
+    workspaceName: 'Weezboo', workspaceSlug: 'team & workspace', scope: 'all', now: '2026-10-23T12:00:00Z', issues: issueData(), repositories: repoData(), ...changes,
   }));
   return { html, document: JSDOM.fragment(html) };
 }
@@ -133,4 +133,42 @@ test('each failed section keeps the other usable and preserves My work on reload
   assert.match(denied.querySelector('#repository-activity').textContent, /don't have permission/);
   assert.equal(denied.querySelector('#repository-activity a'), null);
   assert.equal(denied.querySelector('#issue-summary a'), null);
+});
+
+test('a panel whose loader returns null is skipped', () => {
+  const { document } = render({ needsYou: null, agentsNow: null, shipped: null });
+  const headings = [...document.querySelectorAll('h2')].map(heading => heading.textContent);
+  assert.deepEqual(headings, ['Needs attention', 'Recent repository activity', 'Project overview']);
+  assert.match(document.querySelector('#needs-attention').textContent, /Finish release review/);
+  assert.match(document.querySelector('#repository-activity').textContent, /Review invitation feedback/);
+  assert.equal(document.querySelector('dl'), null);
+});
+
+test('the sentence leaves out a clause whose panel did not load', () => {
+  const ready = {
+    kind: 'ready', oldestQuestion: { seatName: 'Collab Release', since: '2026-10-23T09:00:00Z' },
+    items: [], counts: { question: 2, review: 0, failed: 1, due: 0 }, byProject: {}, waitingSeats: [],
+  };
+  const sentence = changes => render(changes).document.querySelector('h1 + p')?.textContent;
+  for (const state of [null, { kind: 'denied' }, { kind: 'unavailable' }]) {
+    assert.equal(sentence({ needsYou: ready, shipped: state, kind: 'review' }),
+      '3 things need you. Oldest question: Collab Release, 3 h ago. 1 failed run.');
+    assert.equal(sentence({ needsYou: state, shipped: { kind: 'ready', total: 2 } }),
+      '2 changes shipped today.');
+    assert.equal(sentence({ needsYou: state, shipped: state }), undefined);
+  }
+  const empty = { ...ready, oldestQuestion: null, counts: { question: 0, review: 0, failed: 0, due: 0 } };
+  assert.equal(sentence({ needsYou: empty, shipped: { kind: 'ready', total: 0 } }), 'Nothing needs you.');
+  assert.equal(sentence({ needsYou: empty, shipped: { kind: 'ready', total: 1 } }), '1 change shipped today.');
+});
+
+test('a time is relative and carries the exact UTC time', () => {
+  const { document } = render();
+  const times = [...document.querySelectorAll('time')];
+  for (const time of times) assert.equal(time.title, time.dateTime);
+  const repository = document.querySelector('#repository-activity time');
+  assert.equal(repository.textContent, '3 h ago');
+  assert.equal(repository.dateTime, '2026-10-23T09:00:00.000Z');
+  const { document: due } = render({ issues: issueData({ attention: [{ ...issue, dueDate: '2026-10-24T10:00:00Z' }] }) });
+  assert.equal(due.querySelector('#needs-attention time').textContent, 'due tomorrow');
 });
