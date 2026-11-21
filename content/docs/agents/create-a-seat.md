@@ -75,7 +75,7 @@ A member's seats run on that member's own runner and allowance, so a project's w
 | Someone who manages the workspace | **Agents**, **Seats** | Tick **Members may add their own seats to this project**. It is off for every project until then. |
 | A member | **Agents**, **Seats** | Choose **Add my seats to this project**. |
 | The same member, later | **Agents**, **Seats** | Choose **Remove my seats**. |
-| Someone who manages the workspace, for their own seats | **Agents**, **Seats** | Choose **Add my seats to this project**, like a member. The button follows the same switch. To remove one of their seats they retire it under **Agent tokens**: there is no **Remove my seats** for them, because they often own a project's main seats. |
+| Someone who manages the workspace, for their own seats | **Agents**, **Seats** | You see only unarchived projects that use seats, even if you own seats elsewhere. If you’re missing a developer, reviewer or security seat, choose **Add my seats to this project**. When the switch beside it is off, the button is disabled without a separate message. Managers often own a project's main seats, so to retire one, choose **Retire seat** under **Agent tokens**. |
 
 Projects that use seats and are not archived are listed. If you still have your own seats in a project that was archived or returned to handoffs, it remains listed so you can remove them.
 
