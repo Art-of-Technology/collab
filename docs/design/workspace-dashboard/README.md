@@ -75,6 +75,7 @@ For both questions and reviews, the unfinished issue must still be assigned to t
 | `due` | The issue is assigned to the viewer, not done, due before now plus 7 days, and in an active project (see Projects) | It is done or its date moves | Open issue |
 
 - **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. `due` rows are the viewer's own in both.
+- `waitingSeats` is the one value that ignores the scope: it covers every question and review the viewer may read, also in My work. A seat that waits for somebody else is still waiting, and must not be shown as idle.
 - Only `due` rows are held to the active-project rule. A seat that asks, or a run that is lost, is itself the sign that the project is being worked on.
 - The shell takes the selected chip from the request. The All link omits `kind`; Questions, Reviews, Failed runs and Due set it to `question`, `review`, `failed` or `due`. Each link keeps `scope` and shows its exact count. Under the rows: "Showing 20 of N" when there are more.
 - A `question` row opens in place with the seat's next step and a text field. Sending posts a comment through the existing issue comment route, with that route's own checks. Empty text is refused in the row. After a successful send the page reloads its rows and counts, and the panel names the seat that will pick the reply up, if it still holds the issue.
@@ -87,7 +88,8 @@ From `readSeats` in `src/lib/agents-page.ts`, read only, with its rules unchange
 
 - One chip per seat with one state. `failed`: the seat has an open run that `readSeats` marks lost. `working`: it has an open run and none is lost. `waiting_on_person`: no open run, and the seat is in the waiting set from Needs you. `idle`: the rest. A seat with a lost run and a working run is `failed`, because that is the one a person must act on, and its issue key is the lost run's.
 - The loader returns `failed`, `working` or `idle`. The panel turns `idle` into `waiting_on_person` for the seats in its `waitingSeats` prop, and takes that seat's issue key from the same prop.
-- While the waiting set is unknown (Needs you is not built yet, or did not load), a seat with no open run is labelled "not running", and the counts line has no "waiting on you" part.
+- While the waiting set is unknown (Needs you is not built yet, or did not load), a seat with no open run is labelled "not running", and the counts line has no waiting part.
+- The chip and the counts line say "waiting on a person", not "waiting on you": in All work, and for a seat in My work, the person asked may be somebody else.
 - The counts line sums the chips. Pressing a chip shows the seat's line: name, state, issue key.
 - "Open Floor" links to `/[workspace]/agent-inbox/floor`.
 - There is no runner line. `readSeats` gives a runner's name but not its state, and showing another person's runner state would need its own access decision.
@@ -120,7 +122,7 @@ Build the sentence from the panels that are ready: `N things need you. Oldest qu
 
 ## Contexts
 
-A finer cut of the dashboard paths, for this work. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
+A finer cut, for this work, of the dashboard paths that [`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md) gives to `projects-and-views`. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
 
 | Context | Paths | Tests |
 | --- | --- | --- |
@@ -158,7 +160,7 @@ type NeedsYouOverview = Panel<{
   items: NeedsYouItem[];                       // at most 20, of the chosen kind
   counts: Record<NeedsYouKind, number>;        // every matching row of the scope, whatever chip is chosen
   byProject: Record<string, number>;           // the same rows by project id
-  waitingSeats: Array<{ seatId: string; issueKey: string | null }>; // every seat with a question or review, one issue each
+  waitingSeats: Array<{ seatId: string; issueKey: string | null }>; // every seat with a readable question or review, one issue each, in both scopes
 }>;
 
 type SeatState = 'working' | 'waiting_on_person' | 'failed' | 'idle';
@@ -198,7 +200,7 @@ type ShippedOverview = Panel<{
 | 1 | Shipped today | `dashboard-shipped` | the shell |
 | 2 | Needs you: answer a seat, and clear a lost run after the person confirms its session stopped | `dashboard-needs-you` | the list |
 | 2 | Projects: cards, the table switch and the trend line | `dashboard-projects` | active and dormant |
-| 3 | Remove the shell fallbacks, `attention`, `recent` and the old repository loader. Migrate their tests in the same change and rewrite `docs/workspace-dashboard.md`. | `dashboard-shell`, `dashboard-projects`, `dashboard-shipped` | everything above |
+| 3 | Remove the shell fallbacks, `attention`, `recent` and the old repository loader. Migrate their tests in the same change and rewrite `docs/workspace-dashboard.md`. | `dashboard-shell`. It may also change the two old loaders and the three existing test files named in the table above, because nothing else is open by then | everything above |
 
 In wave 3, carry the old repository suite's applicable access, release visibility and deduplication cases over to Shipped. Move the issue visibility and My work checks on `attention` and `recent` to the replacement issue lists. Update the shell's render fixtures and Home loader stubs and expectations for the new panels, keeping the routing checks for default Home, an empty project selector and a selected project.
 
