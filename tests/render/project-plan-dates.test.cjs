@@ -9,7 +9,7 @@ const React = require('react');
 const { createRoot } = require('react-dom/client');
 after(() => dom.window.close());
 
-function loadProjectPlan(writes) {
+function loadPlanComponents(writes) {
   return load('src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectPlan.tsx', {
     react: React,
     'react/jsx-runtime': require('react/jsx-runtime'),
@@ -20,7 +20,11 @@ function loadProjectPlan(writes) {
     '@/hooks/use-permissions': { usePermissions: () => ({ checkPermission: () => ({ hasPermission: true }) }) },
     '@/lib/permission-types': load('src/lib/permission-types.ts'),
     '@/lib/utils': { cn: () => '' },
-  }).ProjectPlan;
+  }, { window });
+}
+
+function loadProjectPlan(writes) {
+  return loadPlanComponents(writes).ProjectPlan;
 }
 
 const start = Date.parse('2026-11-20') / 86_400_000;
@@ -35,6 +39,60 @@ const reversed = {
   startDate: milestone.dueDate, dueDate: milestone.startDate,
   start: null, end: null, invalidDates: true,
 };
+
+test('the plan chart keeps its label size when it is given a wide drawing width', async () => {
+  const observers = new Map();
+  window.ResizeObserver = class {
+    constructor(callback) { this.callback = callback; }
+    observe(element) { observers.set(element, this.callback); }
+    disconnect() {
+      for (const [element, callback] of observers) {
+        if (callback === this.callback) observers.delete(element);
+      }
+    }
+  };
+  const { ProjectPlan, ProjectPlanPreview } = loadPlanComponents([]);
+  const overview = { plan: { today: start, milestones: [milestone] } };
+  const root = createRoot(document.getElementById('root'));
+  const resize = width => React.act(async () => {
+    for (const callback of observers.values()) callback([{ contentRect: { width } }]);
+  });
+
+  try {
+    for (const [element, designWidth] of [
+      [React.createElement(ProjectPlan, {
+        summary: { project: { id: 'project' }, overview },
+        workspaceId: 'workspace', workspaceSlug: 'demo', base: '/demo/projects/example',
+        refetch: async () => {},
+      }), 1000],
+      [React.createElement(ProjectPlanPreview, { overview, base: '/demo/projects/example' }), 520],
+    ]) {
+      await React.act(async () => root.render(element));
+      const chart = document.querySelector('svg');
+      const drawingWidth = () => Number(chart.getAttribute('viewBox').split(' ')[2]);
+      const label = chart.querySelector('g[role="button"] text, a text');
+      const today = [...chart.querySelectorAll('text')].find(text => text.textContent.startsWith('today,'));
+      const bar = chart.querySelector('rect[fill="rgba(96,165,250,.25)"]');
+      const originalBarWidth = Number(bar.getAttribute('width'));
+      assert.equal(drawingWidth(), designWidth);
+
+      await resize(2300);
+      assert.equal(drawingWidth(), 2300);
+      assert.equal(label.getAttribute('font-size'), '12');
+      assert.equal(today.getAttribute('font-size'), '11');
+      assert.equal(label.getAttribute('x'), '8');
+      assert.ok(Number(bar.getAttribute('width')) > originalBarWidth);
+
+      await resize(340);
+      assert.equal(drawingWidth(), designWidth);
+      assert.equal(Number(bar.getAttribute('width')), originalBarWidth);
+    }
+  } finally {
+    await React.act(async () => root.unmount());
+    delete window.ResizeObserver;
+  }
+  assert.equal(observers.size, 0);
+});
 
 test('Plan keeps date edits local until Save dates and commits the date pair together', async () => {
   const writes = [];
