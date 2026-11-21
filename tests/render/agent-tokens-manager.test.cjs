@@ -1,5 +1,6 @@
 const { assert, test, load } = require('../security/helpers.cjs');
 const { JSDOM } = require('jsdom');
+const { extraRole, extendedCatalogue } = require('../agents/role-catalogue-fixture.cjs');
 const dom = new JSDOM('<div id="root"></div>', { url: 'https://collab.test/workspaces/w1/settings/agent-tokens' });
 global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
@@ -33,6 +34,7 @@ const ui = {
     SelectContent: ({ children }) => children, SelectItem: ({ value, children }) => React.createElement('option', { value }, children), SelectTrigger: () => null, SelectValue: () => null },
 };
 const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
+  '@/lib/agent-role-catalogue': extendedCatalogue(),
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   '@tanstack/react-query': { useQueryClient: () => queryClient },
   'next/navigation': { useRouter: () => ({ refresh: () => { refreshed += 1; } }) },
@@ -458,5 +460,15 @@ test('an active seat without tokens can still be retired', async () => {
     answer = { ok: true, json: async () => ({ unassigned: [] }) };
     await React.act(async () => buttons('Confirm: Retire seat')[0].click());
     assert.deepEqual(calls.at(-1).slice(0, 2), ['/api/workspaces/w1/agent-seats/s1', 'DELETE']);
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('the create-seat form offers a new catalogue entry', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await choose(0, 'p1');
+    const options = [...document.querySelectorAll('select')[1].options];
+    assert.ok(options.some(option => option.value === extraRole.id && option.textContent === extraRole.name));
   } finally { await React.act(async () => root.unmount()); }
 });

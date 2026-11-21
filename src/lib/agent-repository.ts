@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { prisma } from '@/lib/prisma';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 
 /**
  * The repository Collab works out for an issue, so that nobody types an address into a runner. It is always taken
@@ -18,11 +19,7 @@ export interface SeatRepository {
   defaultBranch: string | null;
 }
 
-/**
- * The roles whose work is in a repository. A lead hands work out and needs none, so its checkout succeeds with no
- * repository worked out. The role catalogue takes this over (CLB-605), and a role it does not list needs none.
- */
-export const NEEDS_REPOSITORY = ['developer', 'reviewer', 'release', 'security'];
+const needsRepository = (id: string) => (ROLE_CATALOGUE.getRole(id)?.repository ?? 'none') !== 'none';
 
 /** Read in a checkout's transaction and outside one, as `agent-seats.ts` does. */
 type Database = Prisma.TransactionClient | typeof prisma;
@@ -152,7 +149,7 @@ export async function projectRepositoryState(db: Database, projectId: string, pi
 export async function repositoryStateForSeat(db: Database, projectId: string, seat: { role: string; repositoryId?: string | null } | null) {
   // The role first, so that a seat which works in none is answered null whatever its project has: a lead handed a
   // repository would be told to work in a copy it has no business in, and the run context answers null for it.
-  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return { repositories: [] as SeatRepository[], repository: null };
+  if (!seat || !needsRepository(seat.role)) return { repositories: [] as SeatRepository[], repository: null };
   return projectRepositoryState(db, projectId, seat.repositoryId);
 }
 
@@ -162,6 +159,6 @@ export async function repositoryStateForSeat(db: Database, projectId: string, se
  */
 export async function repositoryOfIssue(db: Database, projectId: string, assigneeId: string | null): Promise<SeatRepository | null> {
   const seat = assigneeId ? await db.agentSeat.findUnique({ where: { userId: assigneeId }, select: { role: true, retiredAt: true, repositoryId: true } }) : null;
-  if (!seat || seat.retiredAt || !NEEDS_REPOSITORY.includes(seat.role)) return null;
+  if (!seat || seat.retiredAt || !needsRepository(seat.role)) return null;
   return (await projectRepositoryState(db, projectId, seat.repositoryId)).repository;
 }

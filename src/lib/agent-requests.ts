@@ -5,6 +5,7 @@ import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE, pushedWork, waitsPushed, type Pushed } from '@/lib/agent-runs';
 import { ASSIGN_CAP, byRoom, countSeatHandoff, fromLead, HandoffError, IDLE_MS, LEAD_CAP, NO_ROOM_MOVE_MS, noRoomDue, STARTED_MOVE_MS, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated, emitIssueUpdated } from '@/lib/event-bus';
 import { assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
@@ -15,18 +16,12 @@ import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 
 /** Open requests one project may have in another. */
 export const REQUEST_CAP = 5;
-/** Per request role: the seat role that takes it, and the label people know it by. */
-const REQUESTS = {
-  developer: { seat: 'developer', label: null },
-  review: { seat: 'reviewer', label: 'Review request' },
-  release: { seat: 'release', label: 'Release request' },
-  security: { seat: 'security', label: null },
-} as const;
-type RequestRole = keyof typeof REQUESTS;
+const requestRoles = ROLE_CATALOGUE.requests.map(request => request.id) as [string, ...string[]];
+type RequestKind = (typeof ROLE_CATALOGUE.requests)[number];
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 export const requestSchema = z.object({
-  project: text(128).optional(), role: z.enum(['developer', 'review', 'release', 'security']), title: text(200), body: text(32_000),
+  project: text(128).optional(), role: z.enum(requestRoles), title: text(200), body: text(32_000),
   fromIssue: text(128), blocks: z.boolean().optional(),
 }).strict();
 
@@ -57,7 +52,8 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     throw error instanceof ForgeProjectWriteError ? new HandoffError('forge_connected_project', error.message, 409) : error;
   });
 
-  const kind = REQUESTS[input.role];
+  const kind = ROLE_CATALOGUE.getRequest(input.role);
+  if (!kind) throw new HandoffError('invalid_request', 'Choose a request role');
   const label = kind.label ? await prisma.taskLabel.findFirst({ where: { workspaceId, name: kind.label }, select: { id: true } }) : null;
   // Only the body is held to the template. A request's fields are the server's (its source's priority, its role's
   // label, its assignee) and the asking seat can state no other, so a required field could only refuse every request.
@@ -76,7 +72,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     if (currentSeat.projectId !== seat.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
     const refusal = enforced && createRefusal(sections, issueShape({ type: 'TASK', description: input.body }));
     if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
-    return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId, role: input.role, title: input.title, body: input.body,
+    return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId, kind, title: input.title, body: input.body,
       source: currentSource, blocks: input.blocks, labelId: label?.id });
   });
 
@@ -116,9 +112,9 @@ function placeRequest<T extends { room: SeatRoom; openRuns: number; isDefault: b
  * role in that project and linked to its source. The seat it goes to cannot be retired until the caller's transaction
  * ends: its row is held here.
  */
-async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; role: RequestRole;
+async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; kind: RequestKind;
   title: string; body: string; source: { id: string; issueKey: string | null; projectId: string; priority: string }; blocks?: boolean; labelId?: string }) {
-  const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
+  const { workspaceId, me, projectId, kind } = input, role = kind.id;
   const now = new Date();
   const place = async () => {
     const seats = await seatsWithRoom(tx, projectId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
@@ -127,7 +123,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
     if (fallback.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
     // Developer work is the lead's to place, and a role with one seat to give it to leaves nothing to choose: both go to
     // the default seat with nothing said, as before room.
-    const able = input.role === 'developer' ? [] : seats.filter(seat => seat.userId !== me);
+    const able = role === 'developer' ? [] : seats.filter(seat => seat.userId !== me);
     const placed = able.length > 1 ? placeRequest(able, fallback) : null;
     return { placed, to: placed?.seat ?? fallback };
   };
@@ -140,7 +136,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   // last seen changing is no reason to: that would place again on every report of a runner.
   while (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = ${kind.seat}
     AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) ({ placed, to } = await place());
-  await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: input.role }, to.userId);
+  await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: role }, to.userId);
   if (input.from && input.from !== projectId) {
     // A request is from a project when a seat of that project reported it.
     const open = await tx.issue.count({ where: { projectId, agentRequestRole: { not: null }, reporter: { agentSeat: { projectId: input.from } }, ...NOT_DONE } });
@@ -151,11 +147,11 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   const status = await tx.projectStatus.findFirst({ where: { projectId, isDefault: true }, orderBy: DEFAULT_STATUS_ORDER, select: { id: true, name: true } });
   const issue = await tx.issue.create({ data: {
     workspaceId, projectId, issueKey, type: 'TASK', title: input.title, description: input.body, priority: input.source.priority,
-    statusId: status?.id, statusValue: status?.name, status: status?.name, reporterId: me, assigneeId: to.userId, agentRequestRole: input.role,
+    statusId: status?.id, statusValue: status?.name, status: status?.name, reporterId: me, assigneeId: to.userId, agentRequestRole: role,
     ...(input.labelId && { labels: { connect: { id: input.labelId } } }),
   } });
   await tx.issueAssignee.create({ data: { issueId: issue.id, userId: to.userId, role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: me } });
-  const security = input.role === 'security';
+  const security = role === 'security';
   await tx.issueRelation.create({ data: { sourceIssueId: issue.id, targetIssueId: input.source.id, relationType: input.blocks || security ? 'BLOCKS' : 'RELATES_TO', createdBy: me } });
   if (security) {
     // On both timelines. The request's entry is what its verdict is later written from: the issue it was filed for,
@@ -216,9 +212,10 @@ const continues = (pushed: Pushed | undefined) => pushed ? `; the work continues
 export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'workspace'>) {
   const reader = await seatFor(prisma, context);
   if (reader?.role === 'developer') return moveStories(context, reader);
-  const role = reader && (Object.keys(REQUESTS) as RequestRole[]).find(name => name !== 'developer' && REQUESTS[name].seat === reader.role);
-  if (!reader || !role) return;
-  const requests = { projectId: reader.projectId, agentRequestRole: role, ...NOT_DONE };
+  if (!reader) return;
+  const roles = ROLE_CATALOGUE.getRole(reader.role)?.requests.map(request => request.id);
+  if (!roles?.length) return;
+  const requests = { projectId: reader.projectId, agentRequestRole: { in: roles }, ...NOT_DONE };
   const waiting = await prisma.issue.findMany({ where: { ...requests, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
     select: { id: true, assigneeId: true, reporterId: true, agentRuns: { take: 1, select: { id: true } } } });
   if (!waiting.length) return;
@@ -258,7 +255,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${reader.projectId} AND "role" = ${reader.role}
         AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) return;
       await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
-      const issue = await tx.issue.findFirst({ where: { ...requests, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
+      const issue = await tx.issue.findFirst({ where: { ...requests, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true, agentRequestRole: true } });
       if (!issue || !await asDecided(tx, issue, pushed, from)) return;
       const currentPlacements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { details: true, userId: true } });
       const currentLinks = await tx.issueRelation.findMany({ where: { sourceIssueId: request.id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { createdBy: true } });
@@ -272,7 +269,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       const since = await noRoomDue(tx, source, at, wait);
       if (!since || since > at) return;
       const why = `${from.name} had no room for ${wait / 60_000} minutes (${source.room.reason})${continues(pushed)}`;
-      await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
+      await assertAssignable(tx, issue, to.userId);
       const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
       const attributedTo = currentFilers[0] ?? to.userId;
@@ -424,8 +421,9 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
   const source = await tx.issue.findUnique({ where: { id: issue.id }, select: { id: true, issueKey: true, title: true, priority: true, agentRequestRole: true } });
   if (!source || source.agentRequestRole) return true;
   let agent: boolean | undefined;
-  for (const role of ['review', 'release'] as const) {
-    const kind = REQUESTS[role], label = added.find(candidate => candidate.name === kind.label);
+  for (const kind of ROLE_CATALOGUE.requests) {
+    if (!kind.label) continue;
+    const role = kind.id, label = added.find(candidate => candidate.name === kind.label);
     if (!label) continue;
     // An agent token that is not a seat.
     agent ??= !await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && !!await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } });
@@ -441,7 +439,7 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     }
     const name = source.issueKey ?? source.id;
     // shortcut: no issue.created event, so semantic search learns of this request only when it is next edited; emit after commit if that matters.
-    const made = await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, role, source: { ...source, projectId: issue.projectId }, labelId: label.id,
+    const made = await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, kind, source: { ...source, projectId: issue.projectId }, labelId: label.id,
       title: `${kind.label}: ${name} ${source.title}`.slice(0, 200),
       body: `Asked for by adding the "${kind.label}" label to ${name}.\n\nRead ${name}, its comments and its timeline for what is asked.` });
     if (agent) await countSeatHandoff(tx, issue.workspaceId, me, made.issue.id, made.issue.assigneeId!);

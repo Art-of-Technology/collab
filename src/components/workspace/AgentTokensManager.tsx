@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { SeatRepositoryField, useSeatRepository } from '@/components/workspace/SeatRepositoryField';
-import { NEEDS_REPOSITORY } from '@/lib/agent-repository';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 
 export interface WorkspaceRef {
   id: string;
@@ -50,7 +50,7 @@ interface AgentTokensManagerProps {
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
-const roleLabel: Record<string, string> = { developer: 'Developer', reviewer: 'Reviewer', release: 'Release', security: 'Security', lead: 'Lead' };
+const roleLabel = (id: string) => ROLE_CATALOGUE.getRole(id)?.name ?? id;
 // The select cannot hold an empty value.
 const NONE = 'none';
 // Who pays for the seat's session, which the seat list says next to each seat.
@@ -76,7 +76,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   // seat is not created while a role that works in a repository has none to work in.
   const [repositoryId, setRepositoryId] = useState('');
   const repository = useSeatRepository(asSeat ? projectId : null);
-  const needsRepository = NEEDS_REPOSITORY.includes(role);
+  const needsRepository = (ROLE_CATALOGUE.getRole(role)?.repository ?? 'none') !== 'none';
   const several = (repository.data?.repositories.length ?? 0) > 1;
   const candidate = repositoryId || repository.data?.repository?.id || '';
   const pick = needsRepository && several && repository.data?.repositories.some(item => item.id === candidate) ? candidate : '';
@@ -227,7 +227,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         <CardContent className="px-4 pb-4">
           {orphanSeats.map(seat => (
             <div key={seat.id} className="flex items-center justify-between gap-3 py-2">
-              <span>{seat.name} <span className="text-xs text-muted-foreground">{roleLabel[seat.role] ?? seat.role} seat of {seat.project}{seat.isDefault && ', default for its role'} · {ownerLabel(seat.owner)}</span></span>
+              <span>{seat.name} <span className="text-xs text-muted-foreground">{roleLabel(seat.role)} seat of {seat.project}{seat.isDefault && ', default for its role'} · {ownerLabel(seat.owner)}</span></span>
               <Button variant="outline" size="sm" onClick={() => setRetiring({ name: seat.name, seat: { ...seat, retired: false } })}>Retire seat</Button>
             </div>
           ))}
@@ -251,7 +251,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                       {token.name}
                       {token.seat && (
                         <div className="text-xs font-normal text-muted-foreground">
-                          {token.seat.retired ? 'Retired seat' : `${roleLabel[token.seat.role] ?? token.seat.role} seat`} of {token.seat.project}
+                          {token.seat.retired ? 'Retired seat' : `${roleLabel(token.seat.role)} seat`} of {token.seat.project}
                           {token.seat.isDefault && ', default for its role'} · {ownerLabel(token.seat.owner)}
                         </div>
                       )}
@@ -320,11 +320,11 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   <Select value={role} onValueChange={setRole}>
                     <SelectTrigger id="agent-token-role"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(roleLabel).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                      {ROLE_CATALOGUE.roles.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <SeatRepositoryField key={projectId} projectId={projectId} roleName={roleLabel[role] ?? role} needed={needsRepository} query={repository}
+                <SeatRepositoryField key={projectId} projectId={projectId} roleName={roleLabel(role)} needed={needsRepository} query={repository}
                   pick={pick} onPick={setRepositoryId} />
                 <div className="space-y-2">
                   <Label htmlFor="agent-token-owner">Owner</Label>
@@ -450,7 +450,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         confirmText="Retire seat"
         isLoading={busy}
         onConfirm={retire}
-        metadata={retiring?.seat ? { title: retiring.name, subtitle: `${roleLabel[retiring.seat.role] ?? retiring.seat.role} seat of ${retiring.seat.project}` } : undefined}
+        metadata={retiring?.seat ? { title: retiring.name, subtitle: `${roleLabel(retiring.seat.role)} seat of ${retiring.seat.project}` } : undefined}
       />
 
       <ConfirmDialog
