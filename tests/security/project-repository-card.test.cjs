@@ -3,7 +3,8 @@ const { assert, test, load } = require('./helpers.cjs');
 function fixture({ connections = [], error = false, tab, milestones = [], expanded = null } = {}) {
   let retries = 0;
   const jsx = (type, props) => ({ type, props });
-  const Component = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectDashboard.tsx', {
+  const components = 'src/app/(main)/[workspaceId]/projects/[projectSlug]';
+  const deps = {
     react: { useState: initial => [initial === null ? expanded : initial, () => {}] },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/navigation': { useSearchParams: () => new URLSearchParams(tab) }, 'next/link': { default: 'a' }, 'lucide-react': { ChevronRight: 'svg' },
@@ -12,13 +13,29 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
     '@/hooks/queries/useProjects': { useProjectSummary: () => ({
       data: error ? undefined : {
         project: { id: 'project-1' },
-        overview: { stats: {}, milestones, lateMilestoneIds: [], unplanned: [], blocked: [] },
+        overview: {
+          stats: {}, milestones, lateMilestoneIds: [], unplanned: [], blocked: [],
+          plan: {
+            today: 20,
+            milestones: milestones.map(milestone => ({
+              ...milestone, state: 'planned', completed: 0, total: 0, issues: [],
+              start: 20, end: 25, baselineDue: null, baselineStart: null, forecast: null, driftDays: null,
+            })),
+          },
+        },
         repositories: { connections, activities: [] }, notes: [], featureRequests: [],
       },
       isLoading: false, isError: error, refetch: () => retries++,
     }) },
     '@/lib/utils': { cn: () => '' },
-  }).ProjectDashboard;
+  };
+  const plan = load(`${components}/ProjectPlan.tsx`, {
+    ...deps,
+    '@/hooks/queries/useIssues': { useUpdateIssue: () => ({}) },
+    '@/hooks/use-permissions': { usePermissions: () => ({ checkPermission: () => ({ hasPermission: false }) }) },
+    '@/lib/permission-types': load('src/lib/permission-types.ts'),
+  });
+  const Component = load(`${components}/ProjectDashboard.tsx`, { ...deps, './ProjectPlan': plan }).ProjectDashboard;
   function render(node) {
     if (Array.isArray(node)) return node.map(render);
     if (!node || typeof node !== 'object') return node;
@@ -54,7 +71,10 @@ test('failed summary read shows retry instead of disconnected', () => {
   assert.equal(f.retries(), 1);
 });
 test('the project tabs follow the URL and a milestone opens in Plan', () => {
-  const f = fixture({ tab: 'tab=plan&milestone=first', milestones: [{ id: 'first', issueKey: 'DEMO-1', title: 'First milestone' }] });
+  const f = fixture({ tab: 'tab=plan&milestone=first', milestones: [
+    { id: 'other', issueKey: 'DEMO-2', title: 'Other milestone' },
+    { id: 'first', issueKey: 'DEMO-1', title: 'First milestone' },
+  ] });
   assert.deepEqual(f.tabs.map(n => n.props.children), ['Overview', 'Plan', 'Burn', 'Work']);
   assert.equal(f.tabs.find(n => n.props['aria-current'] === 'page').props.children, 'Plan');
   assert.match(f.text, /DEMO-1 · First milestone/);

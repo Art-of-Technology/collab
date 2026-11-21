@@ -30,7 +30,8 @@ export interface UpdateIssueData {
   milestoneId?: string | null;
   reporterId?: string;
   labels?: string[];
-  dueDate?: Date;
+  startDate?: Date | null;
+  dueDate?: Date | null;
   position?: number;
 }
 
@@ -174,7 +175,7 @@ export function useUpdateIssue() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to update issue');
+        throw new Error(error.error || error.message || 'Failed to update issue');
       }
 
       return response.json();
