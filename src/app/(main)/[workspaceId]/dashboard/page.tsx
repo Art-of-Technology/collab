@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
+import type { ComponentProps } from "react";
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
@@ -11,15 +12,22 @@ import DashboardOverview, { type DashboardData } from "./components/DashboardCli
 import WorkspaceOverview from "./components/WorkspaceOverview";
 import { loadWorkspaceIssueOverview } from "@/lib/dashboard/workspace-overview";
 import { loadWorkspaceRepositoryOverview } from "@/lib/dashboard/repository-overview";
-import type { DashboardScope, RepositoryOverview, WorkspaceIssueOverview } from "@/types/workspace-dashboard";
+import { loadNeedsYou } from "@/lib/dashboard/needs-you";
+import { loadAgentsNow } from "@/lib/dashboard/agents-now";
+import { loadShipped } from "@/lib/dashboard/shipped";
 
 export const metadata: Metadata = {
   title: "Workspace overview",
   description: "Project progress, issues needing attention and recent repository activity",
 };
 
-type OverviewSearch = { project?: string | string[]; scope?: string | string[]; q?: string | string[]; page?: string | string[] };
-type WorkspaceData = { kind: "workspace"; workspaceName: string; workspaceSlug: string; scope: DashboardScope; issues: WorkspaceIssueOverview; repositories: RepositoryOverview };
+type OverviewSearch = Partial<Record<"project" | "scope" | "kind" | "q" | "dormant" | "page", string | string[]>>;
+type WorkspaceData = { kind: "workspace"; overview: ComponentProps<typeof WorkspaceOverview> };
+
+function unavailablePanel(panel: string) {
+  console.error(`Workspace dashboard: ${panel} unavailable`);
+  return { kind: "unavailable" as const };
+}
 
 async function loadOverview(workspaceSelector: string, search: OverviewSearch): Promise<DashboardData | WorkspaceData | { kind: "login" }> {
   try {
@@ -29,6 +37,9 @@ async function loadOverview(workspaceSelector: string, search: OverviewSearch): 
     if (!workspaceSelector || workspaceSelector.length > 200 ||
       (projectSelector !== undefined && (typeof projectSelector !== "string" || projectSelector.length > 200))) return { kind: "denied" };
     if (search.scope !== undefined && search.scope !== "all" && search.scope !== "mine") return { kind: "denied" };
+    const { kind } = search;
+    if (kind !== undefined && kind !== "question" && kind !== "review" && kind !== "failed" && kind !== "due") return { kind: "denied" };
+    if (search.dormant !== undefined && search.dormant !== "1") return { kind: "denied" };
     if (search.q !== undefined && (typeof search.q !== "string" || search.q.length > 100)) return { kind: "denied" };
     if (search.page !== undefined && (typeof search.page !== "string" || !/^[1-9]\d{0,3}$/.test(search.page))) return { kind: "denied" };
     const actorId = session.user.id;
@@ -46,15 +57,30 @@ async function loadOverview(workspaceSelector: string, search: OverviewSearch): 
     if (!issues.hasPermission && !notes.hasPermission) return { kind: issuesUnavailable || notesUnavailable ? "unavailable" : "denied" };
     const workspaceSlug = workspace.slug || workspace.id;
     if (!projectSelector) {
-      const [issueOverview, repositories] = await Promise.all([
-        issuesUnavailable ? { kind: "unavailable" as const } : issues.hasPermission
-          ? loadWorkspaceIssueOverview({ actorId, workspaceId: workspace.id, scope: search.scope === "mine" ? "mine" : "all", projectSearch: typeof search.q === "string" ? search.q.trim() : "", projectPage: Number(search.page ?? 1) })
-          : { kind: "denied" as const },
-        issuesUnavailable ? { kind: "unavailable" as const } : issues.hasPermission
-          ? loadWorkspaceRepositoryOverview({ actorId, workspaceId: workspace.id })
-          : { kind: "denied" as const },
+      const scope = search.scope === "mine" ? "mine" : "all";
+      const q = search.q?.trim() ?? "";
+      const page = Number(search.page ?? 1);
+      const dormant = search.dormant === "1";
+      const viewer = { actorId, workspaceId: workspace.id };
+      const startedAt = new Date();
+      const unavailable = { kind: "unavailable" as const };
+      const denied = { kind: "denied" as const };
+      const [issueOverview, repositories, needsYou, agentsNow, shipped] = await Promise.all([
+        issuesUnavailable ? unavailable : issues.hasPermission
+          ? loadWorkspaceIssueOverview({ ...viewer, scope, projectSearch: q, projectPage: page, dormant })
+          : denied,
+        issuesUnavailable ? unavailable : issues.hasPermission ? loadWorkspaceRepositoryOverview(viewer) : denied,
+        loadNeedsYou({ ...viewer, scope, kind }).catch(() => unavailablePanel("Needs you")),
+        loadAgentsNow(viewer).catch(() => unavailablePanel("Agents now")),
+        loadShipped(viewer).catch(() => unavailablePanel("Shipped today")),
       ]);
-      return { kind: "workspace", workspaceName: workspace.name, workspaceSlug, scope: search.scope === "mine" ? "mine" : "all", issues: issueOverview, repositories };
+      return {
+        kind: "workspace",
+        overview: {
+          workspaceSlug, scope, kind, q, dormant, page, updatedAt: startedAt.toISOString(),
+          now: new Date().toISOString(), issues: issueOverview, repositories, needsYou, agentsNow, shipped,
+        },
+      };
     }
     const projects = await prisma.project.findMany({
       where: { workspaceId: workspace.id, workspace: postWorkspaceAccessWhere(actorId) },
@@ -101,6 +127,6 @@ export default async function DashboardPage({ params, searchParams }: {
   const data = await loadOverview(workspaceId, await searchParams);
   if (data.kind === "login") redirect("/login");
   if (data.kind === "denied") notFound();
-  if (data.kind === "workspace") return <WorkspaceOverview workspaceName={data.workspaceName} workspaceSlug={data.workspaceSlug} scope={data.scope} issues={data.issues} repositories={data.repositories} />;
+  if (data.kind === "workspace") return <WorkspaceOverview {...data.overview} />;
   return <DashboardOverview data={data} />;
 }

@@ -31,6 +31,7 @@ export async function loadWorkspaceIssueOverview({
   scope: DashboardScope;
   projectSearch: string;
   projectPage: number;
+  dormant?: boolean;
   now?: Date;
 }): Promise<WorkspaceIssueOverview> {
   try {
