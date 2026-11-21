@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
@@ -24,6 +24,7 @@ interface ProjectDashboardProps {
 
 type Milestone = ProjectSummary['overview']['milestones'][number];
 const tabs = ['Overview', 'Plan', 'Burn', 'Work'] as const;
+const attentionLimit = 5;
 const cardStyle = 'rounded-[10px] border-white/[.09]';
 const controlStyle = 'h-auto rounded-lg border-white/[.09] bg-collab-800 px-3 py-1.5 text-[13px] font-normal text-collab-50 hover:bg-collab-700 focus-visible:ring-2 focus-visible:ring-blue-500';
 const dateLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -57,6 +58,8 @@ function ProjectOverview({
   openMilestoneForm: () => void;
   refetch: () => Promise<unknown>;
 }) {
+  const [attentionExpanded, setAttentionExpanded] = useState(false);
+  const attentionListId = useId();
   const { overview } = summary;
   const { stats, milestones, unplanned, blocked } = overview;
   const next = milestones.find(milestone => milestone.id === overview.nextMilestoneId);
@@ -75,15 +78,18 @@ function ProjectOverview({
       href: planLink(milestone), key: `late-${milestone.id}`, color: 'bg-amber-400',
       label: `${milestone.issueKey ?? milestone.title} is forecast ${days(milestone.driftDays)} after its baseline`,
     })),
-    ...blocked.map(issue => ({
+    ...[...blocked].sort((a, b) => b.blockedDays - a.blockedDays).map(issue => ({
       href: issueLink(issue), key: `blocked-${issue.id}`, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
         : `${issue.issueKey ?? issue.title} is blocked`,
     })),
-    ...(unplanned.length ? [{
-      href: workLink, key: workLink, color: 'bg-collab-400',
-      label: unplanned.length === 1 ? '1 open issue has no milestone' : `${unplanned.length} open issues have no milestone`,
-    }] : []),
   ];
+  const unplannedAttention = unplanned.length ? {
+    href: workLink, key: workLink, color: 'bg-collab-400',
+    label: unplanned.length === 1 ? '1 open issue has no milestone' : `${unplanned.length} open issues have no milestone`,
+  } : null;
+  const attentionCount = attention.length + (unplannedAttention ? 1 : 0);
+  const visibleAttention = attentionExpanded ? attention : attention.slice(0, attentionLimit - (unplannedAttention ? 1 : 0));
+  const attentionLines = unplannedAttention ? [...visibleAttention, unplannedAttention] : visibleAttention;
 
   return (
     <div className="grid gap-3">
@@ -157,10 +163,10 @@ function ProjectOverview({
       </div>
 
       <Card className={cn(cardStyle, 'p-3')}>
-        <h2 className="mb-2 text-[13px] font-semibold text-collab-400">Needs attention · {attention.length}</h2>
-        {attention.length ? (
-          <ul className="divide-y divide-white/[.09]">
-            {attention.map(item => (
+        <h2 className="mb-2 text-[13px] font-semibold text-collab-400">Needs attention · {attentionCount}</h2>
+        {attentionCount ? (
+          <ul id={attentionListId} className="divide-y divide-white/[.09]">
+            {attentionLines.map(item => (
               <li key={item.key}>
                 <Link href={item.href} className="flex items-center gap-2 px-1.5 py-2 text-[13px] hover:bg-collab-700">
                   <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', item.color)} />
@@ -170,6 +176,12 @@ function ProjectOverview({
             ))}
           </ul>
         ) : <p className="text-[13px] text-collab-400">Nothing needs attention.</p>}
+        {attentionCount > attentionLimit && (
+          <Button type="button" variant="outline" className={cn(controlStyle, 'mt-2')}
+            aria-expanded={attentionExpanded} aria-controls={attentionListId} onClick={() => setAttentionExpanded(expanded => !expanded)}>
+            {attentionExpanded ? 'Show fewer' : `Show all ${attentionCount}`}
+          </Button>
+        )}
       </Card>
 
       <ProjectDetails base={base} summary={summary} workspaceSlug={workspaceSlug} />
