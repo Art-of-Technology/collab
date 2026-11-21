@@ -291,6 +291,20 @@ test('handoff validation errors do not expose server response text', async t => 
   assert.equal(f.calls.length, 2);
 });
 
+test('issue updates describe reversed milestone dates without exposing server response text', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid_milestone_dates', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['issues', 'update', 'APP-1', '--due-date', '2026-11-05T00:00:00.000Z']);
+  assert.equal(result.error.error, 'invalid_milestone_dates');
+  assert.equal(result.error.message, 'The due date is before the start.');
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  const unrelated = await f.run(['issues', 'create', '--project', 'project-one', '--title', 'Test']);
+  assert.equal(unrelated.error.error, 'invalid_request');
+  assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
+});
+
 test('handoff and transfer request IDs match server UUID validation before dispatch', async t => {
   const f = await fixture(t);
   const send = ['handoffs', 'send', '--agent', 'builder-a', '--issue', 'APP-1', '--content', 'Review', '--to-agents', '["reviewer"]'];

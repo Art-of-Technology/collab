@@ -5,7 +5,7 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
   const jsx = (type, props) => ({ type, props });
   const components = 'src/app/(main)/[workspaceId]/projects/[projectSlug]';
   const deps = {
-    react: { useState: initial => [initial === null ? expanded : initial, () => {}] },
+    react: { useId: () => 'fixture-id', useState: initial => [initial === null ? expanded : initial, () => {}] },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/navigation': { useSearchParams: () => new URLSearchParams(tab) }, 'next/link': { default: 'a' }, 'lucide-react': { ChevronRight: 'svg' },
     '@/components/ui/button': { Button: ({ asChild, children, ...props }) => asChild ? children : jsx('button', { ...props, children }) },
@@ -28,6 +28,7 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
       isLoading: false, isError: error, refetch: () => retries++,
     }) },
     '@/lib/utils': { cn: () => '' },
+    './ProjectBurn': { BurnOverviewCard: () => 'Burn-up · last 30 days', ProjectBurn: () => 'Seats and people' },
   };
   const plan = load(`${components}/ProjectPlan.tsx`, {
     ...deps,
@@ -80,10 +81,14 @@ test('the project tabs follow the URL and a milestone opens in Plan', () => {
   assert.match(f.text, /DEMO-1 · First milestone/);
   assert.doesNotMatch(f.text, /Project board/);
 });
-test('a project without milestones offers only Overview and Work and an invitation', () => {
-  const f = fixture({ tab: 'tab=burn' });
-  assert.deepEqual(f.tabs.map(n => n.props.children), ['Overview', 'Work']);
+test('a project without milestones offers Overview, Burn and Work, with the milestone invitation on Overview', () => {
+  const f = fixture({ tab: 'tab=plan' });
+  assert.deepEqual(f.tabs.map(n => n.props.children), ['Overview', 'Burn', 'Work']);
   assert.equal(f.tabs.find(n => n.props['aria-current'] === 'page').props.children, 'Overview');
   assert.match(f.text, /Create your first milestone/);
+  assert.match(f.text, /Burn-up · last 30 days/);
+  const burn = fixture({ tab: 'tab=burn' });
+  assert.equal(burn.tabs.find(n => n.props['aria-current'] === 'page').props.children, 'Burn');
+  assert.match(burn.text, /Seats and people/);
   assert.doesNotMatch(f.text, /Feature requests/);
 });

@@ -1,7 +1,7 @@
 const { assert, test, load } = require('./helpers.cjs');
 
 const { calculateProjectOverview } = load('src/lib/project-overview.ts', {
-  '@/lib/issue-finder': {}, '@/lib/post-access': {}, '@/lib/prisma': {},
+  '@/lib/issue-finder': {}, '@/lib/post-access': {}, '@/lib/prisma': {}, '@/lib/project-burn': load('src/lib/project-burn.ts'),
 });
 const date = day => new Date(`2026-11-${String(day).padStart(2, '0')}T00:00:00.000Z`);
 const now = date(20);
@@ -63,6 +63,79 @@ test('an open milestone with outstanding work and no recent closures has no fore
   assert.equal(result.milestones[0].forecastDate, null);
 });
 
+test('Burn forecasts the current scope using the mean and extremes of three weeks', () => {
+  const { calculateProjectBurn, burnDay } = load('src/lib/project-burn.ts');
+  const workspaceId = 'workspace';
+  const actor = { id: 'person', name: 'Person', agentSeat: null };
+  const work = [
+    ...Array.from({ length: 12 }, () => ({ ...issue('open'), done: false })),
+    ...[2, 4, 6].flatMap((count, week) => Array.from({ length: count }, () => ({
+      ...closed('finished', { finishedAt: date(19 - week * 7) }), done: true, closer: actor,
+    }))),
+  ];
+  const input = {
+    workspaceId, createdAt: date(1), now, work, milestones: [{ label: 'M1', dueDate: date(27) }],
+    accounts: [], merges: [], runs: [], logs: [], spend: undefined,
+  };
+  const burn = calculateProjectBurn(input);
+  assert.equal(burn.forecast.day, burnDay(date(20)) + 21);
+  assert.equal(burn.forecast.earliest, burnDay(date(20)) + 14);
+  assert.equal(burn.forecast.latest, burnDay(date(20)) + 42);
+  assert.equal(burn.forecast.remaining, 12);
+  assert.equal(burn.points.at(-1).closed, 12);
+  assert.equal(burn.points.at(-1).scope, 24);
+  assert.equal(burn.milestones[0].day, burnDay(date(27)));
+  const incomplete = calculateProjectBurn({
+    ...input, work: [...work, { ...closed('legacy'), finishedAt: null, updatedAt: date(10), done: true }],
+  });
+  assert.equal(incomplete.historyStart, burnDay(date(11)));
+  assert.equal(incomplete.points[0].day, burnDay(date(11)));
+  assert.equal(incomplete.points.at(-1).closed, 13);
+  assert.equal(incomplete.forecast, null);
+});
+
+test('Burn keeps a reopened closure in its week, the pace and the done line until the reopen', () => {
+  const { calculateProjectBurn, burnDay } = load('src/lib/project-burn.ts');
+  const plain = value => JSON.parse(JSON.stringify(value));
+  const person = { id: 'person', name: 'Person', agentSeat: null };
+  const seat = { id: 'seat', name: 'Seat', agentSeat: { name: 'Seat', workspaceId: 'workspace' } };
+  const open = id => ({ ...issue(id), updatedAt: date(1), done: false });
+  const reopened = {
+    ...open('reopened'), updatedAt: date(17),
+    history: [{ at: date(10), closed: true, actor: seat }, { at: date(17), closed: false, actor: person }],
+  };
+  const input = {
+    workspaceId: 'workspace', createdAt: date(1), now, work: [reopened, open('a'), open('b')],
+    milestones: [], accounts: [], merges: [], runs: [], logs: [], spend: undefined,
+  };
+  const burn = calculateProjectBurn(input);
+  const closedOn = day => burn.points.filter(point => point.day <= burnDay(date(day))).at(-1).closed;
+  assert.equal(burn.historyLimited, false);
+  assert.deepEqual([closedOn(9), closedOn(10), closedOn(16), closedOn(17), closedOn(20)], [0, 1, 1, 0, 0]);
+  const week = burn.weeks.find(entry => entry.day <= burnDay(date(10)) && burnDay(date(10)) < entry.day + 7);
+  assert.deepEqual(plain(week.issues), { agents: 1, people: 0, unmatched: 0 });
+  assert.deepEqual(plain(burn.recentClosures), { agents: 1, people: 0, unmatched: 0 });
+  // One closure ten days ago gives weekly paces of 0, 1 and 0 for the three reopened issues.
+  assert.deepEqual(plain(burn.forecast), {
+    day: burnDay(now) + 63, earliest: burnDay(now) + 21, latest: null, remaining: 3,
+  });
+
+  const closedAgain = calculateProjectBurn({ ...input, work: [{
+    ...reopened, done: true, finishedAt: date(19), closer: person,
+  }] });
+  assert.deepEqual(plain(closedAgain.weeks.flatMap(entry => entry.issues.agents + entry.issues.people ? [entry.issues] : [])),
+    [{ agents: 1, people: 0, unmatched: 0 }, { agents: 0, people: 1, unmatched: 0 }]);
+  assert.equal(closedAgain.points.at(-1).closed, 1);
+
+  // A reopen without its closure, or a closure without its reopen, limits the history.
+  const missingClose = calculateProjectBurn({ ...input, work: [{ ...open('x'), history: [{ at: date(8), closed: false }] }] });
+  assert.equal(missingClose.historyStart, burnDay(date(9)));
+  assert.equal(missingClose.points.at(-1).closed, 0);
+  const missingReopen = calculateProjectBurn({ ...input, work: [{ ...open('y'), updatedAt: date(12), history: [{ at: date(6), closed: true }] }] });
+  assert.equal(missingReopen.historyStart, burnDay(date(13)));
+  assert.equal(missingReopen.points.at(-1).closed, 0);
+});
+
 test('Plan moves the scheduled bar and its drift while keeping the saved outline fixed until re-baseline', () => {
   const earlier = milestone('M1', { startDate: date(20), dueDate: date(22), baselineStartDate: date(20), baselineDueDate: date(22) });
   const changed = milestone('M2', { dueDate: date(25), baselineDueDate: date(25) });
@@ -111,4 +184,20 @@ test('Plan orders due-only milestones, chains their starts, and includes decisio
   assert.equal(startOnly.driftDays, null);
   assert.equal(undated.start, null);
   assert.equal(undated.end, null);
+});
+
+test('Plan preserves reversed dates for repair without charting them or chaining a start from them', () => {
+  const result = calculateProjectOverview([
+    milestone('valid', { dueDate: date(22), baselineDueDate: date(22) }),
+    milestone('reversed', { startDate: date(28), dueDate: date(24), baselineStartDate: date(28), baselineDueDate: date(24) }),
+    milestone('next', { dueDate: date(27), baselineDueDate: date(27) }),
+    issue('linked', { milestoneId: 'next' }),
+  ], date(21), now);
+  const [valid, reversed, next] = result.plan.milestones;
+  assert.equal(reversed.invalidDates, true);
+  assert.deepEqual([reversed.start, reversed.end, reversed.forecast, reversed.driftDays], [null, null, null, null]);
+  assert.equal(reversed.startDate, date(28).toISOString());
+  assert.equal(reversed.dueDate, date(24).toISOString());
+  assert.equal(next.start, valid.end);
+  assert.equal(next.baselineStart, valid.baselineDue);
 });

@@ -1055,7 +1055,7 @@ export function IssueDetailContent({
               ) : (
                 <Button
                   variant="ghost"
-                  className="h-auto w-full justify-start p-0 hover:bg-transparent group flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
+                  className="h-auto w-full min-w-0 whitespace-normal justify-start p-0 hover:bg-transparent group flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
                   onClick={() => setEditingTitle(true)}
                 >
                   {/* Issue Key Badge */}
@@ -1068,8 +1068,8 @@ export function IssueDetailContent({
                   >
                     {issue.issueKey}
                   </Badge>
-                  <div className="flex flex-row items-center gap-2 min-h-[2rem] w-full">
-                    <h1 className="text-2xl sm:text-[26px] leading-snug font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 break-words text-left" data-issue-title>
+                  <div className="flex flex-row items-center gap-2 min-h-[2rem] min-w-0 w-full sm:flex-1">
+                    <h1 className="text-2xl sm:text-[26px] leading-snug font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 [overflow-wrap:anywhere] text-left" data-issue-title>
                       {issue.title}
                     </h1>
                     <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-collab-500 flex-shrink-0" />

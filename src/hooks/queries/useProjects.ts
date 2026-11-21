@@ -1,3 +1,4 @@
+import type { ProjectBurn } from '@/lib/project-burn';
 import type { ProjectOverview } from '@/lib/project-overview';
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -336,6 +337,7 @@ export interface NoteSummary {
 
 export interface ProjectSummary {
   overview: ProjectOverview;
+  burn: ProjectBurn;
   project: {
     id: string;
     name: string;

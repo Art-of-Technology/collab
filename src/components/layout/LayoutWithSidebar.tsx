@@ -26,6 +26,7 @@ export default function LayoutWithSidebar({
     isMobileOpen,
     toggleDesktop,
     toggleMobile,
+    closeMobile,
     isMdUp,
     isCollapsed,
   } = useSidebar();
@@ -70,6 +71,7 @@ export default function LayoutWithSidebar({
             <SimplifiedSidebar
               pathname={pathname}
               isCollapsed={false}
+              onNavigate={closeMobile}
             />
           </div>
         </div>

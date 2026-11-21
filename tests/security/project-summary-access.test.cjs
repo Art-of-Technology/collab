@@ -41,13 +41,16 @@ function query(rows,args={}){
 }
 function fixture(options={}){
  const reads=[],logs=[];const now=new Date(),day=86400000,date=n=>new Date(now.getTime()+n*day);
- const actor={id:'alice',email:'alice@example.test',createdAt:now,updatedAt:now};
+ const actor={id:'alice',name:'Alice',agentSeat:null,email:'alice@example.test',createdAt:now,updatedAt:now};
  const spaces=structuredClone(workspaces);const projects=spaces.map(workspace=>({id:workspace.id,name:workspace.id,slug:workspace.id,workspaceId:workspace.id,workspace,color:'#fff',description:'description',createdAt:now,updatedAt:now}));
  const target=projects.find(x=>x.id===(options.target||'joined')),foreign=projects.find(x=>x.id==='foreign');const sibling={...target,id:'sibling'};projects.push(sibling);
+ const seat = { id: 'seat', name: 'Working seat', workspaceId: target.workspaceId, project: target, retiredAt: null };
+ const agent = { id: 'seat-user', name: 'Seat account', agentSeat: seat };
+ seat.user = agent;
  if (options.role) target.workspace.members.find(m => m.userId === actor.id).role = options.role;
  const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,category:null,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
- const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],...overrides});
+ const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],createdAt:date(-60),...overrides});
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
  const visibleParent=issue('visible-parent');
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
@@ -56,17 +59,45 @@ function fixture(options={}){
   for (let i=0;i<520;i++) issues.push(issue(`paged-${i}`, { dueDate:null }));
  }
  if (options.overviewHistory) {
-  const blockedStatus = { ...statuses[0], id:'blocked', category:'blocked' };
+  const blockedStatus = { ...statuses[0], id:'blocked', name:'blocked', displayName:'Blocked', category:'blocked' };
   statuses.push(blockedStatus);
   const completed = issues.find(row => row.id === 'completed');
   completed.finishedAt = date(-4);
   issues.push(issue('blocked', { statusId: 'blocked', projectStatus: blockedStatus }));
-  const transition = (itemId, newStatus, createdAt, seat) => ({
+  const transition = (itemId, newStatus, createdAt, user) => ({
    id: itemId + '-change', itemId, itemType: 'ISSUE', workspaceId: target.workspaceId, projectId: target.id,
    action: 'STATUS_CHANGED', oldStatusId: 'todo', oldStatus: statuses[0], newStatus, createdAt,
-   user: { agentSeat: seat ? { workspaceId: target.workspaceId } : null },
+   user,
   });
-  activity.push(transition('completed', statuses[1], date(-4), true), transition('blocked', blockedStatus, date(-6), false));
+  const closer = options.crossWorkspaceSeat
+    ? { ...agent, id: 'cross-seat-user', agentSeat: { ...seat, workspaceId: foreign.workspaceId, name: 'Private seat name' } } : agent;
+  activity.push(transition('completed', statuses[1], date(-4), closer), transition('blocked', blockedStatus, date(-6), actor));
+  if (options.burn) {
+   const finished = new Date(now.getTime() - 3_600_000);
+   const nearFinish = seconds => new Date(finished.getTime() + seconds * 1_000);
+   completed.finishedAt = finished;
+   activity[0].createdAt = finished;
+   issues.push(issue('human-completed', {statusId:'done',projectStatus:statuses[1],finishedAt:finished,assignee:agent}));
+   activity.push(
+    { ...transition('human-completed', statuses[1], options.rapidReopen ? nearFinish(-30) : date(-12), agent), id: 'old-close' },
+    { ...transition('human-completed', statuses[1], nearFinish(options.rapidReopen ? 35 : 1), actor),
+      action: 'UPDATED', fieldName: 'status', projectId: null, newStatusId: null, oldValue: 'Todo', newValue: 'Done' },
+    { ...transition('human-completed', statuses[1], new Date(finished.getTime() + 2_000), agent),
+      id: 'final-to-final', oldStatusId: 'done', oldStatus: statuses[1] },
+    { ...transition('human-completed', statuses[0], options.rapidReopen ? nearFinish(-15) : date(-10), actor),
+      id: 'old-reopen', oldStatusId: 'done', oldStatus: statuses[1] },
+   );
+   if (options.reopen) {
+    target.createdAt = date(-60);
+    issues.push(issue('reopened'));
+    activity.push(
+     { ...transition('reopened', statuses[1], date(-9), agent), id: 'reopened-close' },
+     { ...transition('reopened', statuses[0], date(-2), actor), id: 'reopened-open', oldStatusId: 'done', oldStatus: statuses[1] },
+    );
+   }
+   completed.assignee = actor;
+   issues.push(issue('human-open', {assignee: {id:'unlogged',name:'Unlogged person',agentSeat:null}}));
+  }
  }
  if (options.large) {
   for (let i=0;i<11;i++) issues.push(issue(`extra-overdue-${i}`), issue(`extra-upcoming-${i}`,{dueDate:date(1)}));
@@ -77,6 +108,16 @@ function fixture(options={}){
  connections.push({id:'foreign-git',provider:'gitlab',repositoryPath:'secret/repo',projectId:target.id,project:foreign,isActive:true,createdAt:now,activity:[]},{id:'inactive-git',provider:'forgejo',repositoryPath:'old/repo',projectId:target.id,project:target,isActive:false,createdAt:now,activity:[]});
  const commits=[{id:'commit',repositoryId:'repo',repository:repo,sha:'abc',message:'message\nbody',authorName:'Alice',commitDate:date(-1)}];
  const pulls=[{id:'pull',repositoryId:'repo',repository:repo,githubPrId:1,title:'PR',state:'OPEN',createdAt:date(-1),updatedAt:now,mergedAt:null,createdBy:{name:'Alice'}}];
+ if (options.burn) {
+  const mergedAt = new Date(now.getTime() - 3_600_000);
+  const merger = (user, workspaceMemberships) => ({...user, ownedWorkspaces:[],workspaceMemberships});
+  const inWorkspace = [{id:'membership',workspaceId:target.workspaceId}];
+  for (const [id, mergedBy, repository] of [
+   ['seat-merge',merger(agent,[]),repo],['human-merge',merger(actor,inWorkspace),repo],
+   ['unmatched-merge',null,repo],['foreign-merger',merger({id:'external',name:'External merger',agentSeat:null},[]),repo],
+   ['foreign-merge',merger(actor,inWorkspace),{...repo,project:sibling}],
+  ]) pulls.push({id,mergedAt,mergedBy,repository,state:'MERGED',updatedAt:now,createdAt:date(-1),githubPrId:pulls.length+1});
+ }
  const version={repository:repo,issueAccessInvalidated:!!options.invalidVersion,issues:options.foreignVersionIssue?[{issue:hidden}]:[]};
  const releases=[{version,id:'release',repositoryId:'repo',repository:repo,tagName:'v1',name:'Release',publishedAt:date(-1)}];
  const author={id:'alice',name:'Alice',image:null};
@@ -89,7 +130,7 @@ function fixture(options={}){
   { usage:{estimatedUSD:17.25}, workspaceId:target.workspaceId, issue:issues[0], state:'finished', seatId:'seat', seat:{workspaceId:target.workspaceId} },
   { usage:{estimatedUSD:400}, workspaceId:target.workspaceId, issue:hidden, state:'finished', seatId:'seat', seat:{workspaceId:target.workspaceId} },
   { usage:{estimatedUSD:900}, workspaceId:target.workspaceId, issue:issues[0], state:'finished', seatId:null, seat:null },
- ].map((run, index) => ({ ...run, id: 'run-' + index, workspace: target.workspace })) : [];
+ ].map((run, index) => ({ ...run, id: 'run-' + index, workspace: target.workspace, userId: index === 2 ? actor.id : agent.id, user: index === 2 ? actor : agent, startedAt: date(-4), endedAt: new Date(date(-4).getTime()+7_200_000) })) : [];
  if (options.paged) {
   const [run] = runs;
   for (let i=0;i<520;i++) runs.push({ ...run, id: `paged-run-${i}`, usage: { estimatedUSD: 1 } });
@@ -98,7 +139,18 @@ function fixture(options={}){
   if (options.paged) assert.ok(args.take > 0 && args.take <= 500, 'fixture database rejects oversized reads');
   return query(rows, args);
  };
- const db={projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length,findMany:async args=>boundedQuery(runs,args)},
+ const logsForBurn = options.burn ? [
+  {id:'log',user:actor,timeSpent:90,issue:issues[0],workspaceId:target.workspaceId},
+  {id:'seat-log',user:agent,timeSpent:600,issue:issues[0],workspaceId:target.workspaceId},
+  {id:'foreign-log',user:actor,timeSpent:600,issue:hidden,workspaceId:target.workspaceId},
+ ] : [];
+ const db={agentSeat:{findMany:async args=>boundedQuery([seat],args)},workLog:{findMany:async args=>boundedQuery(logsForBurn,args)},projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length,findMany:async args=>{
+   const selected = boundedQuery(runs,args);
+   if (options.revokeBillingDuringRunRead && args.select?.usage) {
+    target.workspace.members.find(m => m.userId === actor.id).role = 'MEMBER';
+   }
+   return selected;
+  }},
  workspace:{findFirst:async args=>query(spaces,args)[0]??null},
  issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return args.select?.milestoneId ? boundedQuery(issues,args) : query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
@@ -108,6 +160,7 @@ function fixture(options={}){
  const deps={'@/lib/prisma':{prisma:db},'@/lib/auth':{authConfig:{}},'@/lib/auth-options':{authOptions:{}},'next-auth/next':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/request-session':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/post-access':load('src/lib/post-access.ts'),'next/server':{NextResponse:{json:(body,init={})=>({body,status:init.status||200,headers:new Headers(init.headers)})}}};
  const globals={Error,console:{error:(...args)=>logs.push(args)}};deps['@/lib/session']=load('src/lib/session.ts',deps,globals);deps['@/lib/issue-finder']=load('src/lib/issue-finder.ts',deps,globals);deps['@/lib/secrets/access']=load('src/lib/secrets/access.ts',deps,globals);
  deps['@/lib/github/version-access']=load('src/lib/github/version-access.ts',{...deps,'./access':load('src/lib/github/access.ts',deps)});
+ deps['@/lib/project-burn']=load('src/lib/project-burn.ts');
  deps['@/lib/project-overview']=load('src/lib/project-overview.ts',deps,globals);
  const route=load('src/app/api/projects/[projectId]/summary/route.ts',deps,globals);
  return{reads,logs,call:(id=target.id)=>route.GET({}, {params:Promise.resolve({projectId:id})})};
@@ -159,12 +212,18 @@ test('project overview returns scoped spend only to workspace owners and active 
  for (const [options, expected] of [
   [{ target: 'own' }, 17.25], [{ role: 'ADMIN' }, 17.25], [{ role: 'MEMBER' }, undefined],
   [{ role: 'ADMIN', revokeLookup: true }, undefined],
+  [{ role: 'ADMIN', revokeBillingDuringRunRead: true }, undefined],
  ]) {
   const result = await fixture({ costs: true, ...options }).call();
   assert.equal(result.status, 200);
   assert.equal(result.body.overview.agentSpendUsd, expected);
   assert.equal(Object.hasOwn(result.body.overview, 'agentSpendUsd'), expected !== undefined);
+  assert.equal(result.body.burn.spendUsd, expected);
+  assert.equal(result.body.burn.contributors.find(row => row.agent)?.spendUsd, expected);
+  if (expected === undefined) assert.doesNotMatch(JSON.stringify(result.body.burn), /spendUsd|spendPerIssueUsd/);
+  else assert.ok(result.body.burn.weeks.some(week => week.spendUsd === expected));
   assert.doesNotMatch(JSON.stringify(result.body), /estimatedUSD|chargedUSD/);
+  if (options.revokeBillingDuringRunRead) assert.equal(result.body.burn.runCount, 1);
   if (expected === undefined) assert.doesNotMatch(JSON.stringify(result.body), /17\.25/);
  }
 });
@@ -187,4 +246,63 @@ test('pagination preserves Overview issue counts and the authorized spend total'
  assert.ok(result.body.overview.work.every(issue => issue.milestoneId === null));
  assert.equal(result.body.overview.runCount, 521);
  assert.equal(result.body.overview.agentSpendUsd, 537.25);
+});
+
+test('Burn attributes the finish transition and recorded merge actor independently of assignment', async () => {
+ const result = await fixture({ overviewHistory: true, burn: true, costs: true }).call();
+ assert.equal(result.status, 200);
+ const { burn } = result.body;
+ assert.deepEqual(plain(burn.closures), { agents: 1, people: 1, unmatched: 0 });
+ const weekOf = at => burn.weeks.find(entry => entry.day <= Math.floor(at / 86400000) && Math.floor(at / 86400000) < entry.day + 7);
+ const week = weekOf(Date.now() - 3_600_000);
+ assert.deepEqual(plain(week.issues), { agents: 1, people: 1, unmatched: 0 });
+ assert.deepEqual(plain(week.prs), { agents: 1, people: 1, unmatched: 2 });
+ assert.deepEqual(plain(burn.prCounts), plain(week.prs));
+ assert.equal(burn.runCount, 1);
+ assert.equal(burn.runHours, 2);
+ assert.equal(burn.peopleCount, 2);
+ assert.equal(burn.peopleLogged, 1);
+ assert.equal(burn.humanHours, 1.5);
+ assert.equal(burn.contributors.find(row => row.name === 'Unlogged person').hoursLogged, 0);
+ assert.doesNotMatch(JSON.stringify(burn), /External merger/);
+});
+
+test('Overview counts seats in its workspace while Burn classifies the account that closed the issue', async () => {
+ const result = await fixture({ overviewHistory: true, crossWorkspaceSeat: true }).call();
+ assert.equal(result.status, 200);
+ assert.equal(result.body.overview.closedByAgents, 0);
+ assert.equal(result.body.burn.closures.agents, 1);
+ assert.doesNotMatch(JSON.stringify(result.body.burn), /Private seat name/);
+});
+
+test('Burn keeps the week and pace of a closure that was later reopened', async () => {
+ const result = await fixture({ overviewHistory: true, burn: true, reopen: true }).call();
+ assert.equal(result.status, 200);
+ const { burn } = result.body;
+ const today = Math.floor(Date.now() / 86400000);
+ const total = burn.weeks.reduce((sum, entry) => sum + entry.issues.agents + entry.issues.people + entry.issues.unmatched, 0);
+ // Two current finishes, the closure before the earlier reopen, and the reopened issue's closure.
+ assert.equal(total, 4);
+ const week = burn.weeks.find(entry => entry.day <= today - 9 && today - 9 < entry.day + 7);
+ assert.ok(week.issues.agents >= 1);
+ const closedOn = day => burn.points.filter(point => point.day <= day).at(-1).closed;
+ assert.equal(closedOn(today - 9) - closedOn(today - 10), 1);
+ assert.equal(closedOn(today - 2) - closedOn(today - 3), -1);
+ assert.equal(burn.points.at(-1).closed, 2);
+ assert.equal(burn.historyLimited, false);
+ assert.ok(burn.forecast.remaining >= 1);
+});
+
+test('Burn counts both rapid closures and attributes the current finish to the actor after the reopen', async () => {
+ const result = await fixture({ overviewHistory: true, burn: true, reopen: true, rapidReopen: true }).call();
+ assert.equal(result.status, 200);
+ const { burn, overview } = result.body;
+ const seatClosures = burn.weeks.reduce((sum, week) => sum + week.issues.agents, 0);
+ assert.equal(seatClosures, 3);
+ assert.deepEqual(plain(burn.recentClosures), { agents: 3, people: 1, unmatched: 0 });
+ assert.deepEqual(plain(burn.closures), { agents: 1, people: 1, unmatched: 0 });
+ assert.equal(overview.closedByAgents, 1);
+ assert.equal(burn.historyLimited, false);
+ assert.equal(burn.points.at(-1).closed, 2);
+ assert.equal(burn.forecast.day, burn.today + Math.ceil(7 * burn.forecast.remaining / (4 / 3)));
 });

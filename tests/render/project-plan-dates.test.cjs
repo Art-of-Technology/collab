@@ -27,6 +27,11 @@ test('Plan keeps date edits local until Save dates and commits the date pair tog
     startDate: '2026-11-20T00:00:00.000Z', dueDate: '2026-11-25T00:00:00.000Z',
     start, end, baselineStart: start, baselineDue: end, forecast: null, driftDays: 0,
   };
+  const reversed = {
+    ...milestone, id: 'reversed', issueKey: 'DEMO-2', title: 'Reversed',
+    startDate: milestone.dueDate, dueDate: milestone.startDate,
+    start: null, end: null, driftDays: null, invalidDates: true,
+  };
   const root = createRoot(document.getElementById('root'));
   const enter = (label, value) => React.act(async () => {
     const input = [...document.querySelectorAll('label')].find(item => item.textContent === label).querySelector('input');
@@ -38,7 +43,7 @@ test('Plan keeps date edits local until Save dates and commits the date pair tog
   });
   try {
     await React.act(async () => root.render(React.createElement(ProjectPlan, {
-      summary: { project: { id: 'project' }, overview: { plan: { today: start, milestones: [milestone] } } },
+      summary: { project: { id: 'project' }, overview: { plan: { today: start, milestones: [milestone, reversed] } } },
       workspaceId: 'workspace', workspaceSlug: 'demo', base: '/demo/projects/example', milestoneId: 'launch',
       refetch: async () => {},
     })));
@@ -55,6 +60,11 @@ test('Plan keeps date edits local until Save dates and commits the date pair tog
     assert.equal(writes.length, 1);
     assert.equal(writes[0].startDate.toISOString(), '2026-11-26T00:00:00.000Z');
     assert.equal(writes[0].dueDate.toISOString(), '2026-11-29T00:00:00.000Z');
+
+    assert.doesNotMatch(document.querySelector('svg').textContent, /DEMO-2/);
+    const repair = [...document.querySelectorAll('button')].find(button => button.textContent.includes('Due before start'));
+    await React.act(async () => repair.click());
+    assert.deepEqual([...document.querySelectorAll('input[type="date"]')].map(input => input.value), ['2026-11-25', '2026-11-20']);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();

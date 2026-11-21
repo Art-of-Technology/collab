@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import NewIssueModal from '@/components/issue/NewIssueModal';
 import { useProjectSummary, type ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
+import { BurnOverviewCard, ProjectBurn } from './ProjectBurn';
 import { BaselineControl, ProjectPlan, ProjectPlanPreview } from './ProjectPlan';
 import { ProjectWork } from './ProjectWork';
 
@@ -26,6 +27,7 @@ interface ProjectDashboardProps {
 
 type Milestone = ProjectSummary['overview']['milestones'][number];
 const tabs = ['Overview', 'Plan', 'Burn', 'Work'] as const;
+const attentionLimit = 5;
 const cardStyle = 'rounded-[10px] border-white/[.09]';
 const controlStyle = 'h-auto rounded-lg border-white/[.09] bg-collab-800 px-3 py-1.5 text-[13px] font-normal text-collab-50 hover:bg-collab-700 focus-visible:ring-2 focus-visible:ring-blue-500';
 const dateLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -59,6 +61,8 @@ function ProjectOverview({
   openMilestoneForm: () => void;
   refetch: () => Promise<unknown>;
 }) {
+  const [attentionExpanded, setAttentionExpanded] = useState(false);
+  const attentionListId = useId();
   const { overview } = summary;
   const { stats, milestones, unplanned, blocked } = overview;
   const next = milestones.find(milestone => milestone.id === overview.nextMilestoneId);
@@ -77,15 +81,18 @@ function ProjectOverview({
       href: planLink(milestone), key: `late-${milestone.id}`, color: 'bg-amber-400',
       label: `${milestone.issueKey ?? milestone.title} is forecast ${days(milestone.driftDays)} after its baseline`,
     })),
-    ...blocked.map(issue => ({
+    ...[...blocked].sort((a, b) => b.blockedDays - a.blockedDays).map(issue => ({
       href: issueLink(issue), key: `blocked-${issue.id}`, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
         : `${issue.issueKey ?? issue.title} is blocked`,
     })),
-    ...(unplanned.length ? [{
-      href: workLink, key: workLink, color: 'bg-collab-400',
-      label: unplanned.length === 1 ? '1 open issue has no milestone' : `${unplanned.length} open issues have no milestone`,
-    }] : []),
   ];
+  const unplannedAttention = unplanned.length ? {
+    href: workLink, key: workLink, color: 'bg-collab-400',
+    label: unplanned.length === 1 ? '1 open issue has no milestone' : `${unplanned.length} open issues have no milestone`,
+  } : null;
+  const attentionCount = attention.length + (unplannedAttention ? 1 : 0);
+  const visibleAttention = attentionExpanded ? attention : attention.slice(0, attentionLimit - (unplannedAttention ? 1 : 0));
+  const attentionLines = unplannedAttention ? [...visibleAttention, unplannedAttention] : visibleAttention;
 
   return (
     <div className="grid gap-3">
@@ -153,31 +160,16 @@ function ProjectOverview({
           detail={overview.agentSpendUsd != null ? `${dollars.format(overview.agentSpendUsd)} agent spend` : `${overview.runCount} ${overview.runCount === 1 ? 'run' : 'runs'}`} />
       </div>
 
-      {milestones.length > 0 && (
-        <div className="grid gap-3 min-[861px]:grid-cols-2">
-          {([
-            ['Plan · next 8 weeks', 'Plan'],
-            ['Burn-up · last 30 days', 'Burn'],
-          ] as const).map(([heading, tab]) => tab === 'Plan' ? (
-            <ProjectPlanPreview key={tab} overview={overview} base={base} />
-          ) : (
-            <Card key={tab} className={cn(cardStyle, 'p-3')}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-[13px] font-semibold">{heading}</h2>
-                <Button variant="outline" asChild className={cn(controlStyle, 'bg-transparent')}>
-                  <Link href={`${base}?tab=${tab.toLowerCase()}`}>Open {tab} →</Link>
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div className="grid gap-3 min-[861px]:grid-cols-2">
+        {milestones.length > 0 && <ProjectPlanPreview overview={overview} base={base} />}
+        <BurnOverviewCard burn={summary.burn} base={base} />
+      </div>
 
       <Card className={cn(cardStyle, 'p-3')}>
-        <h2 className="mb-2 text-[13px] font-semibold text-collab-400">Needs attention · {attention.length}</h2>
-        {attention.length ? (
-          <ul className="divide-y divide-white/[.09]">
-            {attention.map(item => (
+        <h2 className="mb-2 text-[13px] font-semibold text-collab-400">Needs attention · {attentionCount}</h2>
+        {attentionCount ? (
+          <ul id={attentionListId} className="divide-y divide-white/[.09]">
+            {attentionLines.map(item => (
               <li key={item.key}>
                 <Link href={item.href} className="flex items-center gap-2 px-1.5 py-2 text-[13px] hover:bg-collab-700">
                   <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', item.color)} />
@@ -187,6 +179,12 @@ function ProjectOverview({
             ))}
           </ul>
         ) : <p className="text-[13px] text-collab-400">Nothing needs attention.</p>}
+        {attentionCount > attentionLimit && (
+          <Button type="button" variant="outline" className={cn(controlStyle, 'mt-2')}
+            aria-expanded={attentionExpanded} aria-controls={attentionListId} onClick={() => setAttentionExpanded(expanded => !expanded)}>
+            {attentionExpanded ? 'Show fewer' : `Show all ${attentionCount}`}
+          </Button>
+        )}
       </Card>
 
       <ProjectDetails base={base} summary={summary} workspaceSlug={workspaceSlug} />
@@ -263,7 +261,7 @@ export function ProjectDashboard({
   const [creatingMilestone, setCreatingMilestone] = useState(false);
   const { data: summary, isLoading, isError, refetch } = useProjectSummary(projectId, workspaceId);
   const base = `/${workspaceSlug}/projects/${projectSlug}`;
-  const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Work'] as const);
+  const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Burn', 'Work'] as const);
   const selected = available.find(tab => tab.toLowerCase() === search.get('tab')) ?? 'Overview';
   const milestoneId = search.get('milestone');
   const noMilestone = search.get('group') === 'no-milestone';
@@ -323,10 +321,7 @@ export function ProjectDashboard({
           <ProjectPlan key={milestoneId} summary={summary} workspaceId={workspaceId} workspaceSlug={workspaceSlug}
             base={base} milestoneId={milestoneId} refetch={refreshSummary} />
         ) : (
-          <Card className={cn(cardStyle, 'space-y-2 p-3')}>
-            <h2 className="text-base font-semibold">{selected}</h2>
-            <p className="text-collab-400">{selected} is coming.</p>
-          </Card>
+          <ProjectBurn burn={summary.burn} />
         ))}
         {creatingMilestone && (
           <NewIssueModal open onOpenChange={setCreatingMilestone} workspaceId={workspaceId} projectId={projectId}
