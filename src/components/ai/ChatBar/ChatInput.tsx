@@ -405,7 +405,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           isRecording ? "h-0 overflow-hidden opacity-0" : "opacity-100"
         )}
       >
-        <div className="flex items-center gap-2 px-3 pt-3 pb-1.5 md:items-end">
+        <div className="flex items-center gap-1 px-1.5 pt-3 pb-1.5 md:items-end md:gap-2 md:px-3">
           {onOpenMenu && (
             <button
               type="button"
@@ -431,7 +431,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               rows={1}
               className={cn(
                 "block w-full resize-none bg-transparent text-sm text-white/90",
-                "placeholder:text-white/25 placeholder-shown:overflow-hidden",
+                "placeholder:text-white/25 placeholder-shown:truncate",
                 "outline-none py-1.5 max-h-[120px]",
                 "scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
               )}
