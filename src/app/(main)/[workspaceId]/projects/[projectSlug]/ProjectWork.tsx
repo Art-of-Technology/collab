@@ -13,7 +13,7 @@ type Milestone = ProjectSummary['overview']['milestones'][number];
 const segment = 'inline-flex overflow-hidden rounded-[9px] border border-white/[.09]';
 const segmentItem = 'px-3 py-1.5 text-[13px] text-collab-400 hover:text-collab-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-300';
 const activeSegment = 'bg-blue-500 text-white hover:text-white';
-const chip = 'w-fit rounded-full border border-white/[.09] px-2 py-px text-[11px] text-collab-400';
+const chip = 'w-fit rounded-full border border-white/[.09] px-2 py-px text-[11px] leading-normal text-collab-400';
 const dueDateLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 function Assignee({ issue, className }: { issue: WorkIssue; className?: string }) {
@@ -39,7 +39,7 @@ function IssueGroup({ milestone, issues, openIssue }: {
         <span className={cn('flex min-w-0 flex-1 items-center gap-2', milestone && 'max-[479px]:basis-full')}>
           <span aria-hidden="true">{open ? '▾' : '▸'}</span>
           {milestone?.issueKey && <strong>{milestone.issueKey}</strong>}
-          <span className="truncate" title={milestone?.title}>{milestone?.title ?? 'No milestone'}</span>
+          <span className={cn('truncate', !milestone && 'pl-2')} title={milestone?.title}>{milestone?.title ?? 'No milestone'}</span>
         </span>
         <span className="whitespace-nowrap text-collab-400">{milestone?.completed ?? issues.filter(issue => issue.done).length} of {issues.length}</span>
         {milestone && (
