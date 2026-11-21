@@ -95,17 +95,20 @@ test('Plan orders due-only milestones, chains their starts, and includes decisio
   const result = calculateProjectOverview([
     milestone('M4', { dueDate: date(29) }), milestone('M1', { dueDate: date(21) }),
     milestone('M2', { dueDate: date(24) }), milestone('M3', { dueDate: date(27) }),
-    milestone('M5'),
+    milestone('M5'), milestone('M6', { startDate: date(30), baselineDueDate: date(29) }),
     issue('first', { milestoneId: 'M1' }), issue('second', { milestoneId: 'M2' }),
     issue('fourth', { milestoneId: 'M4' }), issue('undated', { milestoneId: 'M5' }),
   ], null, now);
-  const [first, second, decision, fourth, undated] = result.plan.milestones;
-  assert.deepEqual([first.id, second.id, decision.id, fourth.id, undated.id], ['M1', 'M2', 'M3', 'M4', 'M5']);
+  const [first, second, decision, fourth, startOnly, undated] = result.plan.milestones;
+  assert.deepEqual([first.id, second.id, decision.id, fourth.id, startOnly.id, undated.id], ['M1', 'M2', 'M3', 'M4', 'M6', 'M5']);
   assert.equal(first.start, first.end);
   assert.equal(second.start, first.end);
   assert.equal(decision.state, 'decision');
   assert.equal(decision.start, decision.end);
   assert.equal(fourth.start, decision.end);
+  assert.equal(startOnly.start, startOnly.end);
+  assert.equal(startOnly.forecast, null);
+  assert.equal(startOnly.driftDays, null);
   assert.equal(undated.start, null);
   assert.equal(undated.end, null);
 });
