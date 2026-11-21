@@ -101,7 +101,9 @@ test('milestones, repeated baselines and finish dates use the project issue writ
   ]) {
     const refused = await appPatch(launch.id, { ...dates, title: 'Must not save' });
     assert.equal(refused.status, 400);
-    assert.equal((await refused.json()).error_description, 'The due date is before the start.');
+    assert.deepEqual(await refused.json(), {
+      error: 'invalid_milestone_dates', error_description: 'The due date is before the start.',
+    });
     const { title, startDate, dueDate } = await fresh(launch.id);
     assert.deepEqual([title, startDate, dueDate], [launch.title, entry, later]);
   }

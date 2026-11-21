@@ -22,6 +22,8 @@ import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 import { assertTokenMayAssign, fromLead, LEAD_CAP, leadPlaces, NOT_DONE, seatWriteGuard } from '@/lib/agent-seats';
 
+class InvalidMilestoneDates extends Error {}
+
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -363,7 +365,7 @@ export const PATCH = withAppAuth(
           });
           if (current.projectId !== existingIssue.projectId) throw new InvalidMilestone('Issue changed; reload and retry');
           const dateError = milestoneDateError(current, updateData);
-          if (dateError) throw new InvalidMilestone(dateError);
+          if (dateError) throw new InvalidMilestoneDates(dateError);
           await validateMilestone(tx, current, updateData.milestoneId, existingIssue.id);
           if (current.type === 'MILESTONE' && updateData.type && updateData.type !== 'MILESTONE') {
             await assertMilestoneHasNoIssues(tx, existingIssue.id);
@@ -498,6 +500,7 @@ export const PATCH = withAppAuth(
     } catch (error) {
       if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
       if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
+      if (error instanceof InvalidMilestoneDates) return NextResponse.json({ error: 'invalid_milestone_dates', error_description: error.message }, { status: 400 });
       if (error instanceof InvalidMilestone) return NextResponse.json({ error: 'invalid_milestone', error_description: error.message }, { status: 400 });
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       // P2010 with 40001 is the same lost race, reported by the raw row lock in `leadPlaces`.
