@@ -230,9 +230,8 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
           AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
         },
       },
-      select: { createdAt: true },
+      select: { createdAt: true, sourceIssueId: true },
       orderBy: { createdAt: 'asc' },
-      take: 1,
     },
   } satisfies Prisma.IssueSelect;
   const issues: Prisma.IssueGetPayload<{ select: typeof issueSelect }>[] = [];
@@ -451,20 +450,23 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     })),
     runs, logs, spend,
   });
-  const blocked = issues.filter(issue => !isDone(issue) &&
-    (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
+  const legacyDoneIds = new Set(issues.filter(issue => issue.statusId === null && isDone(issue)).map(issue => issue.id));
+  const blocked = issues.flatMap(issue => {
+    if (isDone(issue)) return [];
+    const relation = issue.targetRelations.find(relation => !legacyDoneIds.has(relation.sourceIssueId));
+    if (!relation && issue.projectStatus?.category !== 'blocked') return [];
+    const sinceStatus = blockedSince.get(issue.id) ?? now;
+    const sinceRelation = relation?.createdAt ?? now;
+    const elapsed = day(now) - Math.min(day(sinceStatus), day(sinceRelation));
+    return [{ ...issueRef(issue), blockedDays: Math.max(0, elapsed) }];
+  });
   // The Overview tile keeps its original workspace-specific attribution.
   const closedByAgents = work.filter(issue => closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
   return {
     burn,
     overview: {
       ...overview, work: workItems, baselineSetBy: baselineSetter?.name ?? null,
-      blocked: blocked.map(issue => {
-        const sinceStatus = blockedSince.get(issue.id) ?? now;
-        const sinceRelation = issue.targetRelations[0]?.createdAt ?? now;
-        const elapsed = day(now) - Math.min(day(sinceStatus), day(sinceRelation));
-        return { ...issueRef(issue), blockedDays: Math.max(0, elapsed) };
-      }),
+      blocked,
       closedByAgents, closedByAgentsPercent: percent(closedByAgents, overview.stats.done),
       runCount: burn.runCount,
       ...(billingAllowed ? { agentSpendUsd: burn.spendUsd ?? null } : {}),

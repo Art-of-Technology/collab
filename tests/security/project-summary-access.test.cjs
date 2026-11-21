@@ -72,6 +72,12 @@ function fixture(options={}){
   );
   issues[0].status = 'done';
   issues.find(row => row.id === 'completed').updatedAt = date(-40);
+  const blocks = (sourceIssue, days) => ({
+   relationType: 'BLOCKS', sourceIssue, sourceIssueId: sourceIssue.id, createdAt: date(-days),
+  });
+  const completedBlocker = blocks(issues.find(row => row.id === 'legacy-done'), 10);
+  issues[0].targetRelations = [completedBlocker, blocks(visibleParent, 3)];
+  issues[1].targetRelations = [completedBlocker];
  }
  if (options.paged) {
   for (let i=0;i<520;i++) issues.push(issue(`paged-${i}`, { dueDate:null }));
@@ -274,6 +280,7 @@ test('Project Home counts legacy finishes in Overview, Burn and Plan and maps Wo
  assert.equal(overview.stats.open, 8);
  assert.equal(overview.stats.donePercent, 27);
  assert.equal(overview.unplanned.length, 7);
+ assert.deepEqual(plain(overview.blocked.map(({ id, blockedDays }) => [id, blockedDays])), [['overdue', 3]]);
  assert.equal(overview.pacePerWeek, 1 / 3);
  assert.equal(overview.milestones[0].completed, 1);
  const plan = overview.plan.milestones[0];
