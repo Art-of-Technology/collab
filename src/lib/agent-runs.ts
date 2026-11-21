@@ -423,7 +423,7 @@ async function askOnRun(context: Caller, run: {
       data: { state: 'waiting', ask: [...questionsOf(current.ask), question] } });
     if (!changed.count) throw fenced();
     await tx.notification.create({ data: { type: 'ISSUE_RUN_QUESTION', senderId: userId, userId: owner.id,
-      content: `asked a question on ${current.issue.issueKey ?? issueId}. Open the issue in Collab to answer.` } });
+      content: `asked a question on ${current.issue.issueKey ?? issueId}. Open the issue in Collab and select Activity to answer.` } });
     return withKeyAndTime(await tx.agentRun.findFirstOrThrow({ where: live, select: RUN_WITH_KEY }));
   });
 }

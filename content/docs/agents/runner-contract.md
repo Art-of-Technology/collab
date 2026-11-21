@@ -187,7 +187,7 @@ Needs `issues:write`, the run holder's token and its generation.
 { "event": "ask", "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11", "ask": "Step: deploy\nCommit: 0123456789abcdef" }
 ```
 
-`ask` is nonblank plain text of up to 16,000 characters. Spaces and line breaks are preserved. Collab gives the question its own ID, puts the run in `waiting`, notifies the owner in Collab and returns `{ "run": { ... }, "now": "..." }`. The notification tells the owner to open the issue in the app.
+`ask` is nonblank plain text of up to 16,000 characters. Spaces and line breaks are preserved. Collab gives the question its own ID, puts the run in `waiting`, notifies the owner in Collab and returns `{ "run": { ... }, "now": "..." }`. The notification tells the owner to open the issue in Collab and select **Activity**.
 
 The holder cannot edit, replace, withdraw or answer a question. A second ask while a question is open returns `409 question_open`. After the owner answers, the run returns to `running` and may ask again. The runner reads the question history to tell whether the owner answered. A seat without an owner who can read the issue gets `409 owner_required`. A person's own run gets `403 seat_required`. A wrong generation, lost lease, ended run or changed assignee gets `409 run_fenced`.
 
