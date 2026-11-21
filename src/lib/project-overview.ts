@@ -34,9 +34,14 @@ const overviewIssueSelect = {
 } satisfies Prisma.IssueSelect;
 
 const statusFields = { isFinal: true, category: true } satisfies Prisma.ProjectStatusSelect;
+const projectHomeStatusSelect = {
+  ...statusFields, id: true, name: true, displayName: true, isActive: true, projectId: true,
+} satisfies Prisma.ProjectStatusSelect;
 
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
-const legacyStatusLabel = (issue: OverviewIssue) => issue.statusValue?.trim() || issue.status?.trim() || '';
+type ProjectHomeStatus = Prisma.ProjectStatusGetPayload<{ select: typeof projectHomeStatusSelect }>;
+const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
+  issue.statusValue?.trim() || issue.status?.trim() || '';
 const isLegacyFinal = (label: string) => LEGACY_FINAL_STATUSES.has(label.toLowerCase());
 const isDone = (issue: OverviewIssue) =>
   issue.projectStatus?.isFinal ?? (!issue.statusId && isLegacyFinal(legacyStatusLabel(issue)));
@@ -46,6 +51,18 @@ const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
   a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
 const dateOrder = (a: Date | null, b: Date | null) =>
   (a?.getTime() ?? Infinity) - (b?.getTime() ?? Infinity);
+
+function resolveLegacyStatus(label: string, activeStatuses: ProjectHomeStatus[]) {
+  if (!label) return null;
+  const exact = activeStatuses.filter(status => status.name === label || status.displayName === label);
+  if (exact.length === 1) return exact[0];
+  const key = normalizeStatus(label);
+  const matches = activeStatuses.filter(status => [status.name, status.displayName].some(name => normalizeStatus(name) === key));
+  if (matches.length === 1) return matches[0];
+  if (!isLegacyFinal(label)) return null;
+  const finalStatuses = activeStatuses.filter(status => status.isFinal);
+  return finalStatuses.find(status => status.name === 'done') ?? (finalStatuses.length === 1 ? finalStatuses[0] : null);
+}
 
 function forecastFinish(today: number, start: number | null, remaining: number, recentClosures: number) {
   const forecastStart = Math.max(today, start ?? today);
@@ -230,7 +247,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
           AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
         },
       },
-      select: { createdAt: true, sourceIssueId: true },
+      select: { createdAt: true, sourceIssue: { select: { projectId: true, statusId: true, status: true, statusValue: true } } },
       orderBy: { createdAt: 'asc' },
     },
   } satisfies Prisma.IssueSelect;
@@ -240,22 +257,9 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const closureHistory = new Map<string, BurnTransition[]>();
   const projectStatuses = await prisma.projectStatus.findMany({
     where: { projectId, project: projectWhere },
-    select: { id: true, name: true, displayName: true, isFinal: true, isActive: true, category: true, projectId: true },
+    select: projectHomeStatusSelect,
   });
   const activeStatuses = projectStatuses.filter(status => status.isActive);
-  const finalStatuses = activeStatuses.filter(status => status.isFinal);
-  const defaultFinal = finalStatuses.find(status => status.name === 'done') ??
-    (finalStatuses.length === 1 ? finalStatuses[0] : null);
-
-  function resolveLegacyStatus(label: string) {
-    if (!label) return null;
-    const exact = activeStatuses.filter(status => status.name === label || status.displayName === label);
-    if (exact.length === 1) return exact[0];
-    const key = normalizeStatus(label);
-    const matches = activeStatuses.filter(status => [status.name, status.displayName].some(name => normalizeStatus(name) === key));
-    if (matches.length === 1) return matches[0];
-    return isLegacyFinal(label) ? defaultFinal : null;
-  }
 
   function legacyActivityStatus(label: string | null) {
     if (!label) return undefined;
@@ -272,7 +276,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     }))) {
       // Resolve old labels for Project Home only. A linked status takes precedence.
       const batch = stored.map(issue => issue.statusId === null
-        ? { ...issue, projectStatus: resolveLegacyStatus(legacyStatusLabel(issue)) }
+        ? { ...issue, projectStatus: resolveLegacyStatus(legacyStatusLabel(issue), activeStatuses) }
         : issue);
       issues.push(...batch);
       const datedIssues = new Map(batch.flatMap(issue => issue.type !== 'MILESTONE' && isDone(issue) && issue.finishedAt
@@ -450,10 +454,45 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     })),
     runs, logs, spend,
   });
-  const legacyDoneIds = new Set(issues.filter(issue => issue.statusId === null && isDone(issue)).map(issue => issue.id));
+  const externalProjectIds = new Set<string>();
+  for (const issue of issues) {
+    if (isDone(issue)) continue;
+    for (const { sourceIssue } of issue.targetRelations) {
+      if (sourceIssue.projectId !== projectId && sourceIssue.statusId === null && legacyStatusLabel(sourceIssue)) {
+        externalProjectIds.add(sourceIssue.projectId);
+      }
+    }
+  }
+  const activeStatusesByProject = new Map([[projectId, activeStatuses]]);
+  const externalProjects = [...externalProjectIds];
+  for (let start = 0; start < externalProjects.length; start += PAGE_SIZE) {
+    for await (const statuses of pages(after => prisma.projectStatus.findMany({
+      where: {
+        projectId: { in: externalProjects.slice(start, start + PAGE_SIZE) },
+        project: { workspace: postWorkspaceAccessWhere(userId) },
+        isActive: true,
+        id: after ? { gt: after } : undefined,
+      },
+      select: projectHomeStatusSelect,
+      orderBy: pageOrder,
+      take: PAGE_SIZE,
+    }))) {
+      for (const status of statuses) {
+        const active = activeStatusesByProject.get(status.projectId) ?? [];
+        active.push(status);
+        activeStatusesByProject.set(status.projectId, active);
+      }
+    }
+  }
   const blocked = issues.flatMap(issue => {
     if (isDone(issue)) return [];
-    const relation = issue.targetRelations.find(relation => !legacyDoneIds.has(relation.sourceIssueId));
+    const relation = issue.targetRelations.find(({ sourceIssue }) => {
+      // The relation query already excludes linked final statuses.
+      if (sourceIssue.statusId !== null) return true;
+      const label = legacyStatusLabel(sourceIssue);
+      const resolved = resolveLegacyStatus(label, activeStatusesByProject.get(sourceIssue.projectId) ?? []);
+      return !(resolved?.isFinal ?? isLegacyFinal(label));
+    });
     if (!relation && issue.projectStatus?.category !== 'blocked') return [];
     const sinceStatus = blockedSince.get(issue.id) ?? now;
     const sinceRelation = relation?.createdAt ?? now;
