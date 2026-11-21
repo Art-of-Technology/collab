@@ -35,7 +35,7 @@ export default async function AgentInboxPage({ params, searchParams }: {
   }
   // The old handoff inbox: a tab of the Agents page while a project still uses handoffs, and readable at this address after that.
   return <>
-    <AgentsTabs base={`/${encodeURIComponent(workspace.slug || workspace.id)}`} current="handoffs" handoffs={await usesHandoffs(workspace.id)} className="mx-auto w-full max-w-5xl px-6 pt-6" />
+    <AgentsTabs base={`/${encodeURIComponent(workspace.slug || workspace.id)}`} current="handoffs" handoffs={await usesHandoffs(workspace.id)} className="w-full px-6 pt-6" />
     <AgentInboxView workspace={workspace} agents={inbox.agents} selected={selected} state={state} inbox={inbox} />
   </>;
 }
