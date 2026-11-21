@@ -292,7 +292,7 @@ export function ProjectDashboard({
 
   return (
     <div className="h-full w-full overflow-y-auto bg-collab-900 text-collab-50">
-      <div className={cn('mx-auto max-w-[1180px] p-4 text-sm', selected === 'Work' ? 'pb-32' : 'pb-12')}>
+      <div className={cn('p-4 text-sm', selected === 'Work' ? 'pb-32' : 'pb-12')}>
         <header className="mb-2.5 flex flex-wrap items-center gap-2.5">
           <div className="flex min-w-0 flex-1 items-stretch gap-2.5">
             <span aria-hidden="true" className="w-1 shrink-0 rounded-sm" style={{ backgroundColor: projectColor || '#2563eb' }} />

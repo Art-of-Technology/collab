@@ -23,14 +23,14 @@ export default async function AgentsPage({ params }: { params: Promise<{ workspa
     if (!snapshot) notFound();
     const base = `/${encodeURIComponent(snapshot.workspace.slug || snapshot.workspace.id)}`;
     return <>
-      <AgentsTabs base={base} current="floor" handoffs={await usesHandoffs(snapshot.workspace.id)} className="mx-auto w-full max-w-[1600px] px-4 pt-4 md:px-6 md:pt-6" />
+      <AgentsTabs base={base} current="floor" handoffs={await usesHandoffs(snapshot.workspace.id)} className="w-full px-4 pt-4 md:px-6 md:pt-6" />
       <OrganisationFloor initial={snapshot} />
     </>;
   }
   if (tab === 'runners') {
     const view = await readRunnersTab(session.user.id, workspaceId);
     if (!view) notFound();
-    return <main className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    return <main className="w-full space-y-6 p-6">
       <AgentsTabs base={`/${encodeURIComponent(view.workspace.slug || view.workspace.id)}`} current="runners" handoffs={await usesHandoffs(view.workspace.id)} />
       <AgentRunnersView workspaceId={view.workspace.id} me={session.user.id} people={view.people} />
     </main>;
