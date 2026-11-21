@@ -41,10 +41,10 @@ function fixture() {
 }
 async function stream(f) { const response = await f.open(); assert.equal(response.status, 200); const reader = response.body.getReader(); assert.match(new TextDecoder().decode((await reader.read()).value), /connected/); if (!f.state.getWait && !f.state.subscribeWait) assert.match(new TextDecoder().decode((await reader.read()).value), /realtime.ready/); return reader; }
 const sentinel = { type: 'workspace.updated', marker: 'allowed sentinel' };
-async function delivered(f, reader, event, allowed) {
+async function delivered(f, reader, event, allowed, forwarded = event) {
   await f.state.callback(JSON.stringify(event)); await f.state.callback(JSON.stringify(sentinel));
   const first = new TextDecoder().decode((await reader.read()).value);
-  assert.equal(first, `data: ${JSON.stringify(allowed ? event : sentinel)}\n\n`);
+  assert.equal(first, `data: ${JSON.stringify(allowed ? forwarded : sentinel)}\n\n`);
   if (allowed) assert.equal(new TextDecoder().decode((await reader.read()).value), `data: ${JSON.stringify(sentinel)}\n\n`);
 }
 test('inactive membership and absent subject deny before subscribing; owner remains allowed', async () => {
@@ -80,14 +80,14 @@ test('hidden issue project or linked status and retained inaccessible references
   f.rows[0].statusId = null; await delivered(f, reader, { ...event, statusId: 'status' }, false); await delivered(f, reader, { ...event, projectId: 'hidden-project' }, false);
   f.status.project = f.project; await delivered(f, reader, event, true); await reader.cancel();
 });
-test('issue move events expose a previous project only within the stream workspace', async () => {
+test('issue moves still reach the destination when the source project cannot be sent', async () => {
   const f = fixture(), reader = await stream(f);
   const event = { type: 'issue.updated', workspaceId: 'space', issueId: 'one', projectId: 'project' };
   await delivered(f, reader, { ...event, previousProjectId: 'previous' }, true);
   for (const previousProjectId of ['hidden-project', 'outside', 'missing', null]) {
-    await delivered(f, reader, { ...event, previousProjectId }, false);
+    await delivered(f, reader, { ...event, previousProjectId }, true, event);
   }
-  await delivered(f, reader, { type: 'workspace.updated', previousProjectId: 'previous' }, false);
+  await delivered(f, reader, { type: 'workspace.updated', previousProjectId: 'previous' }, true, { type: 'workspace.updated' });
   await reader.cancel();
 });
 test('private, unshared, foreign-workspace and missing views cannot disclose view-bearing events', async () => {
