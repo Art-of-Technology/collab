@@ -39,7 +39,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
   const base = `/${encodeURIComponent(workspace.slug || workspace.id)}`;
   const issue = (id: string, key: string | null, title: string) =>
     <Link className="text-primary underline-offset-4 hover:underline" href={`${base}/issues/${encodeURIComponent(key || id)}`}>{key && `${key} `}{title}</Link>;
-  return <main className="mx-auto w-full max-w-5xl space-y-6 p-6">
+  return <main className="w-full space-y-6 p-6">
     <AgentsTabs base={base} current={tab} handoffs={handoffs} />
     <div className="flex flex-wrap items-start justify-between gap-4">
       <p className="max-w-2xl text-sm text-muted-foreground">{tab === 'seats'

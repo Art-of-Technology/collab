@@ -167,7 +167,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
   );
   const names = new Map(snapshot.agents.map((a) => [a.id, a.name]));
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+    <main className="w-full space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">

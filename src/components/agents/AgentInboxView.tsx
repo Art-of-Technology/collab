@@ -13,7 +13,7 @@ type Props = {
 
 export function AgentInboxView({ workspace, agents, selected, state, inbox }: Props) {
   const base = `/${encodeURIComponent(workspace.slug || workspace.id)}`;
-  return <main className="mx-auto w-full max-w-5xl space-y-6 p-6">
+  return <main className="w-full space-y-6 p-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h2 className="text-lg font-semibold">Handoffs (old)</h2>
         <p className="mt-2 text-sm text-muted-foreground">Projects that use seats take no new handoffs. Monitor all registered agents in this workspace. Only handoffs on issues you and the receiving agent can access are shown. Opening this page does not mark work as seen or claim it.</p></div>
