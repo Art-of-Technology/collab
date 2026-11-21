@@ -63,7 +63,7 @@ The server starts the panel reads in parallel with the current session. Each pan
 
 ### Needs you
 
-A row is one issue that cannot go on until a person acts. Count every matching row for the kind counts, the project totals and the sentence, then send at most 20. Sort by kind in the order below, then by `since`, oldest first.
+A row is one issue that cannot go on until a person acts. From all rows the viewer can open in the current scope, compute the counts and project totals and take the seat name and `since` from the oldest `question` (`null` if none). Then apply the chip, sort by kind in the order below and by `since` oldest first, and send at most 20 rows.
 
 For both questions and reviews, the unfinished issue must still be assigned to the user of the seat that ran it, in that seat's project. Its latest run must be a seat's run, must have finished `in_review` or `blocked`, and must have named a person (`askedUser`). Match the finish facts to that run's id. As in `inboxOf`, the run must have ended on or after the current assignment time (the assignee's helper record's `approvedAt`, then `assignedAt`, then the issue's creation). A later comment by anyone other than the seat's user answers the question.
 
@@ -76,7 +76,7 @@ For both questions and reviews, the unfinished issue must still be assigned to t
 
 - **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. `due` rows are the viewer's own in both.
 - Only `due` rows are held to the active-project rule. A seat that asks, or a run that is lost, is itself the sign that the project is being worked on.
-- The chips (All, Questions, Reviews, Failed runs, Due) are links: `?kind=question`, `review`, `failed` or `due`, kept together with `scope`. Each shows its exact count. The server applies the chosen kind before it takes the 20 rows, so a count never points at rows that cannot be reached. Under the rows: "Showing 20 of N" when there are more.
+- The shell takes the selected chip from the request. The All link omits `kind`; Questions, Reviews, Failed runs and Due set it to `question`, `review`, `failed` or `due`. Each link keeps `scope` and shows its exact count. Under the rows: "Showing 20 of N" when there are more.
 - A `question` row opens in place with the seat's next step and a text field. Sending posts a comment through the existing issue comment route, with that route's own checks. Empty text is refused in the row. After a successful send the page reloads its rows and counts, and the panel names the seat that will pick the reply up, if it still holds the issue.
 - Only viewers with the permission to assign issues see "Session has stopped: clear run", the label the issue page already uses. A missed lease alone does not prove that the old process stopped, and clearing lets another session take the issue. So pressing the button first asks, in the row, for the person's confirmation that they checked the session is gone; only then is `POST /api/issues/:issueId/runs/:runId/clear` called. The route checks the permission and the run's state again. On success the page reloads its rows and counts.
 - The mockup shows two suggested answers per question and a one-press "Retry run". Seats do not record suggestions, and a lost run needs the confirmation above, so neither is built.
@@ -116,7 +116,7 @@ Unfinished issues of active projects due from now through 7 days ahead, earliest
 
 ### The sentence
 
-Build the sentence from the panels that are ready: `N things need you. Oldest question: <seat>, <age> ago. N failed runs. N changes shipped today.` Use the exact Needs you counts for the current scope and the Shipped today total. Leave out a clause whose number is zero or unknown. When no clause remains, show "Nothing needs you." only if Needs you is ready with zero rows; otherwise show no sentence.
+Build the sentence from the panels that are ready: `N things need you. Oldest question: <seat>, <age> ago. N failed runs. N changes shipped today.` Use the exact Needs you counts for the current scope and the Shipped today total. For the oldest question, show `oldestQuestion.seatName` and the age of `oldestQuestion.since` on every chip. Omit that clause when `oldestQuestion` is null. Leave out a count whose value is zero or unknown. When no clause remains, show "Nothing needs you." only if Needs you is ready and its counts sum to zero.
 
 ## Contexts
 
@@ -124,11 +124,11 @@ A finer cut of the dashboard paths, for this work. Each issue holds one context.
 
 | Context | Paths | Tests |
 | --- | --- | --- |
-| `dashboard-shell` | `src/app/(main)/[workspaceId]/dashboard/page.tsx`, `.../dashboard/components/WorkspaceOverview.tsx`, `.../dashboard/components/DashboardRefresh.tsx`, `.../dashboard/components/RelativeTime.tsx`, `src/types/workspace-dashboard.ts`, `docs/workspace-dashboard.md` | `tests/render/workspace-dashboard.test.cjs` |
+| `dashboard-shell` | `src/app/(main)/[workspaceId]/dashboard/page.tsx`, `.../dashboard/components/WorkspaceOverview.tsx`, `.../dashboard/components/DashboardRefresh.tsx`, `.../dashboard/components/RelativeTime.tsx`, `src/types/workspace-dashboard.ts`, `docs/workspace-dashboard.md` | `tests/render/workspace-dashboard.test.cjs`, `tests/security/selected-project-dashboard.test.cjs` (Home routing and panel reads) |
 | `dashboard-needs-you` | `src/lib/dashboard/needs-you.ts`, `.../dashboard/components/NeedsYouPanel.tsx` | `tests/security/dashboard-needs-you.test.cjs`, `tests/render/dashboard-needs-you.test.cjs` |
 | `dashboard-agents` | `src/lib/dashboard/agents-now.ts`, `.../dashboard/components/AgentsNowPanel.tsx` | `tests/security/dashboard-agents-now.test.cjs`, `tests/render/dashboard-agents-now.test.cjs` |
-| `dashboard-shipped` | `src/lib/dashboard/shipped.ts`, `src/lib/dashboard/repository-overview.ts` (only to export what the new loader imports), `.../dashboard/components/ShippedPanel.tsx` | `tests/security/dashboard-shipped.test.cjs`, `tests/render/dashboard-shipped.test.cjs` |
-| `dashboard-projects` | `src/lib/dashboard/workspace-overview.ts`, `.../dashboard/components/ProjectsPanel.tsx`, `.../dashboard/components/DueSoonPanel.tsx` | `tests/security/workspace-dashboard-data.test.cjs`, `tests/render/dashboard-projects.test.cjs` |
+| `dashboard-shipped` | `src/lib/dashboard/shipped.ts`, `src/lib/dashboard/repository-overview.ts` (only to export what the new loader imports), `.../dashboard/components/ShippedPanel.tsx` | `tests/security/dashboard-shipped.test.cjs`, `tests/render/dashboard-shipped.test.cjs`, `tests/security/workspace-repository-overview.test.cjs` (old feed through wave 2) |
+| `dashboard-projects` | `src/lib/dashboard/workspace-overview.ts`, `.../dashboard/components/ProjectsPanel.tsx`, `.../dashboard/components/DueSoonPanel.tsx` | `tests/security/workspace-dashboard-data.test.cjs` (including `attention` and `recent` through wave 2), `tests/render/dashboard-projects.test.cjs` |
 | `dashboard-legacy` | `src/components/dashboard/**`, `src/app/api/ai/dashboard/**` | `tests/security/ai-dashboard-access.test.cjs`, and the load of that route with its one case in `tests/security/profile-notifications.test.cjs` |
 
 Not in any of them, and not changed: `.../dashboard/components/DashboardClient.tsx` (the single-project view), `src/lib/agents-page.ts`, `src/lib/agent-runs.ts`, `src/lib/project-overview.ts`, the comment and run routes.
@@ -154,7 +154,7 @@ type NeedsYouItem = {
 };
 type NeedsYouOverview = Panel<{
   generatedAt: string;
-  kind: NeedsYouKind | null;                   // the chip that is chosen; null is All
+  oldestQuestion: { seatName: string; since: string } | null;
   items: NeedsYouItem[];                       // at most 20, of the chosen kind
   counts: Record<NeedsYouKind, number>;        // every matching row of the scope, whatever chip is chosen
   byProject: Record<string, number>;           // the same rows by project id
@@ -198,7 +198,9 @@ type ShippedOverview = Panel<{
 | 1 | Shipped today | `dashboard-shipped` | the shell |
 | 2 | Needs you: answer a seat, and clear a lost run after the person confirms its session stopped | `dashboard-needs-you` | the list |
 | 2 | Projects: cards, the table switch and the trend line | `dashboard-projects` | active and dormant |
-| 3 | Finish: remove the fallbacks with the `attention` and `recent` fields and the old repository loader, and rewrite `docs/workspace-dashboard.md` | `dashboard-shell`, and the two old loaders | everything above |
+| 3 | Remove the shell fallbacks, `attention`, `recent` and the old repository loader. Migrate their tests in the same change and rewrite `docs/workspace-dashboard.md`. | `dashboard-shell`, `dashboard-projects`, `dashboard-shipped` | everything above |
+
+In wave 3, carry the old repository suite's applicable access, release visibility and deduplication cases over to Shipped. Move the issue visibility and My work checks on `attention` and `recent` to the replacement issue lists. Update the shell's render fixtures and Home loader stubs and expectations for the new panels, keeping the routing checks for default Home, an empty project selector and a selected project.
 
 In wave 1, the list and the projects issue are handed out first. Each issue is released when it merges, the way this project already releases.
 
