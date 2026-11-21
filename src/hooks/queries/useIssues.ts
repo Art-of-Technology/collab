@@ -141,6 +141,7 @@ export function useCreateIssue() {
           query.queryKey[2] === variables.workspaceId
       });
       queryClient.invalidateQueries({ queryKey: issueKeys.byProject(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: ['projectSummary', variables.projectId] });
       queryClient.invalidateQueries({ queryKey: issueKeys.lists() });
       
       // Optionally add the new issue to the cache immediately
@@ -234,6 +235,7 @@ export function useUpdateIssue() {
         }
         if (updatedIssue.projectId) {
           queryClient.invalidateQueries({ queryKey: issueKeys.byProject(updatedIssue.projectId) });
+          queryClient.invalidateQueries({ queryKey: ['projectSummary', updatedIssue.projectId] });
         }
       }
     }

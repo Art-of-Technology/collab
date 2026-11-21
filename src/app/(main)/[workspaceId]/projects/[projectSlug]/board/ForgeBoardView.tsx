@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -15,11 +16,12 @@ import { refreshForgeBoard } from './actions';
 const labels: Record<TaskStatus, string> = { backlog: 'Backlog', 'in-progress': 'In progress', waiting: 'Waiting', blocked: 'Blocked', done: 'Done' };
 
 export function ForgeBoardView({ initial, rights, workspaceSlug, projectSlug }: {
-  initial: Exclude<ForgeBoard, { kind: 'denied' }>;
+  initial: Exclude<ForgeBoard, { kind: 'denied' | 'not-connected' }>;
   rights?: IssueRights | null;
   workspaceSlug: string;
   projectSlug: string;
 }) {
+  const router = useRouter();
   const [board, setBoard] = useState<ForgeBoard>(initial);
   const [refreshError, setRefreshError] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -39,7 +41,8 @@ export function ForgeBoardView({ initial, rights, workspaceSlug, projectSlug }: 
   const refresh = () => startTransition(async () => {
     try {
       const next = await refreshForgeBoard(workspaceSlug, projectSlug);
-      if (next.kind === 'unavailable' && ready) setRefreshError(true);
+      if (next.kind === 'not-connected') router.replace(`/${workspaceSlug}/projects/${projectSlug}?tab=work`);
+      else if (next.kind === 'unavailable' && ready) setRefreshError(true);
       else { setBoard(next); setRefreshError(false); if (next.kind !== 'ready') setSelected(null); }
     } catch { setRefreshError(true); }
   });
@@ -59,8 +62,8 @@ export function ForgeBoardView({ initial, rights, workspaceSlug, projectSlug }: 
     {task.warning && <p className="mt-2 text-sm text-amber-300">{task.warning}</p>}
   </button>;
 
-  return <div className="h-full overflow-y-auto p-4 pb-32 text-collab-50 md:p-8 md:pb-32">
-    <div className="mx-auto max-w-7xl space-y-6">
+  return <div className="min-w-0 py-3 text-collab-50">
+    <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <Link className="text-sm text-collab-400 underline underline-offset-4" href={`/${workspaceSlug}/projects`}>Projects</Link>
@@ -78,10 +81,6 @@ export function ForgeBoardView({ initial, rights, workspaceSlug, projectSlug }: 
           ready && <p>{rights?.canCreate || rights?.canEdit || rights?.canStatus ? 'Forge issues' : 'Read-only'} · {ready.tasks.length} issues · Updated {new Date(ready.fetchedAt).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })} London time</p>}
       </div>
       {board.kind === 'denied' && <p role="alert">You no longer have access to this project.</p>}
-      {board.kind === 'not-connected' && <div className="rounded-xl border border-collab-700 bg-collab-800 p-6">
-        <h2 className="font-medium">Project connection is not ready</h2>
-        <p className="mt-2 text-sm text-collab-400">A workspace owner must finish verifying the project connection before issues can be shown here.</p>
-      </div>}
       {board.kind === 'unavailable' && <div role="alert" className="rounded-xl border border-collab-700 bg-collab-800 p-6">
         <h2 className="font-medium">Could not load project issues</h2><p className="mt-2 text-sm text-collab-400">Try Refresh. If this continues, ask a workspace owner to check the connection.</p>
       </div>}

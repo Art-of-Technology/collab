@@ -35,7 +35,7 @@ function fixture({ connections = [], error = false, tab, milestones = [], expand
     '@/hooks/use-permissions': { usePermissions: () => ({ checkPermission: () => ({ hasPermission: false }) }) },
     '@/lib/permission-types': load('src/lib/permission-types.ts'),
   });
-  const Component = load(`${components}/ProjectDashboard.tsx`, { ...deps, './ProjectPlan': plan }).ProjectDashboard;
+  const Component = load(`${components}/ProjectDashboard.tsx`, { ...deps, './ProjectPlan': plan, './ProjectWork': { ProjectWork: 'div' } }).ProjectDashboard;
   function render(node) {
     if (Array.isArray(node)) return node.map(render);
     if (!node || typeof node !== 'object') return node;

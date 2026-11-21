@@ -194,6 +194,8 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
   };
   const issueSelect = {
     ...overviewIssueSelect,
+    projectStatus: { select: { ...overviewIssueSelect.projectStatus.select, id: true, name: true, projectId: true } },
+    assignee: { select: { name: true, agentSeat: { select: { workspaceId: true } } } },
     targetRelations: {
       where: {
         relationType: 'BLOCKS',
@@ -296,6 +298,20 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
   });
   const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now, userId);
   const closed = issues.filter(issue => issue.type !== 'MILESTONE' && isDone(issue));
+  const milestoneIds = new Set(overview.milestones.map(milestone => milestone.id));
+  const work = issues.filter(issue => issue.type !== 'MILESTONE').map(issue => {
+    const status = issue.projectStatus?.projectId === projectId ? issue.projectStatus : null;
+    return {
+      ...issueRef(issue),
+      milestoneId: issue.milestoneId && milestoneIds.has(issue.milestoneId) ? issue.milestoneId : null,
+      statusId: status?.id ?? null,
+      status: status?.displayName ?? status?.name ?? issue.status ?? 'No status',
+      done: isDone(issue),
+      blocked: status?.category === 'blocked',
+      assignee: issue.assignee?.name ?? null,
+      agent: issue.assignee?.agentSeat?.workspaceId === workspaceId,
+    };
+  });
   const blocked = issues.filter(issue => !isDone(issue) &&
     (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
   const closedByAgents = closed.filter(issue => {
@@ -306,7 +322,7 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
   }).length;
 
   return {
-    ...overview, baselineSetBy: baselineSetter?.name ?? null,
+    ...overview, work, baselineSetBy: baselineSetter?.name ?? null,
     blocked: blocked.map(issue => {
       const sinceStatus = latestChange.get(issue.id)?.createdAt ?? now;
       const sinceRelation = issue.targetRelations[0]?.createdAt ?? now;
