@@ -43,10 +43,10 @@ type ProjectHomeStatus = Prisma.ProjectStatusGetPayload<{ select: typeof project
 const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
   issue.statusValue?.trim() || issue.status?.trim() || '';
 const isLegacyFinal = (label: string) => LEGACY_FINAL_STATUSES.has(label.toLowerCase());
-const isDone = (issue: OverviewIssue) =>
+const isDone = (issue: Pick<OverviewIssue, 'projectStatus' | 'statusId' | 'status' | 'statusValue'>) =>
   issue.projectStatus?.isFinal ?? (!issue.statusId && isLegacyFinal(legacyStatusLabel(issue)));
 const normalizeStatus = (label: string) => label.toLowerCase().replace(/[\s_-]+/g, '');
-const issueRef = ({ id, issueKey, title }: OverviewIssue) => ({ id, issueKey, title });
+const issueRef = ({ id, issueKey, title }: Pick<OverviewIssue, 'id' | 'issueKey' | 'title'>) => ({ id, issueKey, title });
 const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
   a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
 const dateOrder = (a: Date | null, b: Date | null) =>
@@ -224,7 +224,8 @@ export function calculateProjectOverview(
 }
 
 export async function loadProjectHome(projectId: string, workspaceId: string, userId: string, createdAt: Date, now: Date, issuePrefix: string) {
-  const issueWhere = { projectId, workspaceId, deletedAt: null, AND: [issueReadAccessWhere(userId)] };
+  const readableIssue = { deletedAt: null, AND: [issueReadAccessWhere(userId)] };
+  const issueWhere = { ...readableIssue, projectId, workspaceId };
   const projectWhere = { id: projectId, workspaceId, workspace: postWorkspaceAccessWhere(userId) };
   const seatRunWhere = { workspaceId, issue: issueWhere, state: 'finished', seatId: { not: null }, seat: { workspaceId } };
   const billingWhere = {
@@ -234,24 +235,30 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       { members: { some: { userId, status: true, role: { in: ['OWNER', 'ADMIN'], mode: 'insensitive' as const } } } },
     ],
   };
-  const issueSelect = {
-    ...overviewIssueSelect,
-    projectStatus: { select: { ...overviewIssueSelect.projectStatus.select, id: true, name: true, projectId: true } },
-    updatedAt: true,
-    agentRequestRole: true,
-    assignee: { select: burnAccountSelect },
+  const dependencySelect = {
+    id: true, issueKey: true, title: true, projectId: true, statusId: true, status: true, statusValue: true,
+    assigneeId: true, updatedAt: true,
+    projectStatus: { select: overviewIssueSelect.projectStatus.select },
     targetRelations: {
-      where: {
-        relationType: 'BLOCKS',
-        sourceIssue: {
-          deletedAt: null,
-          AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
-        },
-      },
-      select: { createdAt: true, sourceIssue: { select: { projectId: true, statusId: true, status: true, statusValue: true } } },
-      orderBy: { createdAt: 'asc' },
+      where: { relationType: 'BLOCKS', sourceIssue: readableIssue },
+      select: { sourceIssue: { select: { id: true } } },
+    },
+    sourceRelations: {
+      where: { relationType: 'BLOCKED_BY', targetIssue: readableIssue },
+      select: { targetIssue: { select: { id: true } } },
     },
   } satisfies Prisma.IssueSelect;
+  const issueSelect = {
+    ...overviewIssueSelect, ...dependencySelect,
+    projectStatus: { select: { ...overviewIssueSelect.projectStatus.select, id: true, name: true, projectId: true } },
+    agentRequestRole: true,
+    assignee: { select: burnAccountSelect },
+  } satisfies Prisma.IssueSelect;
+  type DependencyIssue = Prisma.IssueGetPayload<{ select: typeof dependencySelect }>;
+  const prerequisites = (issue: DependencyIssue) => [
+    ...issue.targetRelations.map(({ sourceIssue }) => sourceIssue.id),
+    ...issue.sourceRelations.map(({ targetIssue }) => targetIssue.id),
+  ];
   const issues: Prisma.IssueGetPayload<{ select: typeof issueSelect }>[] = [];
   const blockedSince = new Map<string, Date>();
   const closingActors = new Map<string, BurnAccount | undefined>();
@@ -524,12 +531,32 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     }),
     runs, logs, spend,
   });
+  // Project issues are already loaded. Read each additional prerequisite at most once.
+  const dependencyIssues = new Map<string, DependencyIssue>(issues.map(issue => [issue.id, issue]));
+  const seen = new Set(dependencyIssues.keys());
   const externalProjectIds = new Set<string>();
-  for (const issue of issues) {
-    if (isDone(issue)) continue;
-    for (const { sourceIssue } of issue.targetRelations) {
-      if (sourceIssue.projectId !== projectId && sourceIssue.statusId === null && legacyStatusLabel(sourceIssue)) {
-        externalProjectIds.add(sourceIssue.projectId);
+  let frontier: DependencyIssue[] = issues;
+  while (frontier.length) {
+    const missing: string[] = [];
+    for (const issue of frontier) {
+      if (issue.projectStatus?.isFinal) continue;
+      for (const id of prerequisites(issue)) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        missing.push(id);
+      }
+    }
+    frontier = [];
+    for (let start = 0; start < missing.length; start += PAGE_SIZE) {
+      const batch = await prisma.issue.findMany({
+        where: { ...readableIssue, id: { in: missing.slice(start, start + PAGE_SIZE) } },
+        select: dependencySelect,
+        take: PAGE_SIZE,
+      });
+      frontier.push(...batch);
+      for (const issue of batch) {
+        dependencyIssues.set(issue.id, issue);
+        if (issue.statusId === null && legacyStatusLabel(issue)) externalProjectIds.add(issue.projectId);
       }
     }
   }
@@ -554,21 +581,74 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       }
     }
   }
+  const closedDependencies = new Set<string>();
+  for (const issue of dependencyIssues.values()) {
+    const status = issue.statusId === null && !issue.projectStatus
+      ? resolveLegacyStatus(legacyStatusLabel(issue), activeStatusesByProject.get(issue.projectId) ?? [])
+      : issue.projectStatus;
+    if (status?.isFinal ?? isDone(issue)) closedDependencies.add(issue.id);
+  }
+
+  const terminals = new Set(dependencyIssues.keys());
+  const dependents = new Map<string, string[]>();
+  const remainingPrerequisites = new Map<string, number>();
+  for (const issue of dependencyIssues.values()) {
+    if (closedDependencies.has(issue.id)) continue;
+    const links = prerequisites(issue).filter(id => dependencyIssues.has(id));
+    const open = links.filter(id => !closedDependencies.has(id));
+    // Prefer live prerequisites, keeping a closed link when it's the end of a longer chain.
+    const next = open.length ? open : links;
+    if (!next.length) continue;
+    terminals.delete(issue.id);
+    remainingPrerequisites.set(issue.id, next.length);
+    for (const id of next) {
+      const waiting = dependents.get(id) ?? [];
+      waiting.push(issue.id);
+      dependents.set(id, waiting);
+    }
+  }
   const blocked = issues.flatMap(issue => {
-    if (isDone(issue)) return [];
-    const relation = issue.targetRelations.find(({ sourceIssue }) => {
-      // The relation query already excludes linked final statuses.
-      if (sourceIssue.statusId !== null) return true;
-      const label = legacyStatusLabel(sourceIssue);
-      const resolved = resolveLegacyStatus(label, activeStatusesByProject.get(sourceIssue.projectId) ?? []);
-      return !(resolved?.isFinal ?? isLegacyFinal(label));
-    });
-    if (!relation && issue.projectStatus?.category !== 'blocked') return [];
-    const sinceStatus = blockedSince.get(issue.id) ?? now;
-    const sinceRelation = relation?.createdAt ?? now;
-    const elapsed = day(now) - Math.min(day(sinceStatus), day(sinceRelation));
+    if (isDone(issue) || issue.projectStatus?.category !== 'blocked') return [];
+    const elapsed = day(now) - day(blockedSince.get(issue.id) ?? now);
     return [{ ...issueRef(issue), blockedDays: Math.max(0, elapsed) }];
   });
+  const workThatCanWait = new Set(issues.filter(issue =>
+    !isDone(issue) && issue.type !== 'MILESTONE' && issue.projectStatus?.category !== 'blocked').map(issue => issue.id));
+  const waiting = [...terminals].flatMap(id => {
+    if (!dependents.has(id)) return [];
+    const pending = new Set([id]);
+    const issueIds: string[] = [];
+    for (const blockerId of pending) {
+      for (const dependent of dependents.get(blockerId) ?? []) {
+        if (pending.has(dependent)) continue;
+        pending.add(dependent);
+        // A direct link to already closed work doesn't make an issue wait.
+        if (!closedDependencies.has(blockerId) && workThatCanWait.has(dependent)) issueIds.push(dependent);
+      }
+    }
+    if (!issueIds.length) return [];
+    const issue = dependencyIssues.get(id)!;
+    const state: 'closed' | 'unassigned' | null = closedDependencies.has(id) ? 'closed'
+      : !issue.assigneeId && now.getTime() - issue.updatedAt.getTime() >= 14 * DAY ? 'unassigned' : null;
+    return [{ blocker: issueRef(issue), state, issueIds }];
+  }).sort((a, b) => b.issueIds.length - a.issueIds.length ||
+    (a.blocker.issueKey ?? a.blocker.title).localeCompare(b.blocker.issueKey ?? b.blocker.title) ||
+    a.blocker.id.localeCompare(b.blocker.id));
+
+  // Remove branches from the terminals up. The remaining issues still lead into a cycle.
+  const resolvable = [...terminals];
+  for (const id of resolvable) {
+    for (const dependent of dependents.get(id) ?? []) {
+      const remaining = remainingPrerequisites.get(dependent)! - 1;
+      if (remaining) {
+        remainingPrerequisites.set(dependent, remaining);
+      } else {
+        remainingPrerequisites.delete(dependent);
+        resolvable.push(dependent);
+      }
+    }
+  }
+  const waitingOnCycle = [...remainingPrerequisites.keys()].filter(id => workThatCanWait.has(id));
   // The Overview tile keeps its original workspace-specific attribution.
   const closedByAgents = work.filter(issue => issue.agentRequestRole == null &&
     closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
@@ -577,7 +657,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     burn,
     overview: {
       ...overview, work: workItems, baselineSetBy: baselineSetter?.name ?? null,
-      blocked,
+      blocked, waiting, waitingOnCycle,
       closedByAgents, closedByAgentsPercent: percent(closedByAgents, agents + people + unmatched),
       runCount: burn.runCount,
       ...(billingAllowed ? { agentSpendUsd: burn.spendUsd ?? null } : {}),

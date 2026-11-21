@@ -25,13 +25,15 @@ function Assignee({ issue, className }: { issue: WorkIssue; className?: string }
   );
 }
 
-function IssueGroup({ milestone, issues, openIssue }: {
+function IssueGroup({ milestone, issues, openIssue, filtered = false }: {
   milestone: Milestone | null;
   issues: WorkIssue[];
   openIssue: (id: string) => void;
+  filtered?: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const drift = milestone?.forecastDate ? milestone.driftDays ?? 0 : 0;
+  const completed = (!filtered ? milestone?.completed : undefined) ?? issues.filter(issue => issue.done).length;
   return (
     <section>
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
@@ -41,7 +43,7 @@ function IssueGroup({ milestone, issues, openIssue }: {
           {milestone?.issueKey && <strong>{milestone.issueKey}</strong>}
           <span className={cn('truncate', !milestone && 'pl-2')} title={milestone?.title}>{milestone?.title ?? 'No milestone'}</span>
         </span>
-        <span className="whitespace-nowrap text-collab-400">{milestone?.completed ?? issues.filter(issue => issue.done).length} of {issues.length}</span>
+        <span className="whitespace-nowrap text-collab-400">{completed} of {issues.length}</span>
         {milestone && (
           <span className="whitespace-nowrap text-collab-400">
             {milestone.dueDate ? <>due <time dateTime={milestone.dueDate}>{dueDateLabel.format(new Date(milestone.dueDate))}</time></> : 'No due date'}
@@ -115,21 +117,24 @@ function WorkBoard({ issues, statuses, milestones, openIssue }: {
   );
 }
 
-export function ProjectWork({ base, summary, hasForge, forgeBoard, milestoneId, noMilestone }: {
+export function ProjectWork({ base, summary, hasForge, forgeBoard, milestoneId, noMilestone, waitingIssueIds }: {
   base: string;
   summary?: ProjectSummary;
   hasForge: boolean;
   forgeBoard?: ReactNode;
   milestoneId: string | null;
   noMilestone: boolean;
+  waitingIssueIds?: string[];
 }) {
   const [view, setView] = useState<'milestone' | 'board'>('milestone');
   const { selectedIssueId, setSelectedIssueId, closeModal } = useIssueModalUrlState();
   const workUrl = `${base}?tab=work`;
   const work = summary?.overview.work ?? [];
   const milestones = new Map(summary?.overview.milestones.map(milestone => [milestone.id, milestone]));
-  const filter = noMilestone ? null : milestoneId && milestones.has(milestoneId) ? milestoneId : undefined;
-  const visible = filter === undefined ? work : work.filter(issue => issue.milestoneId === filter);
+  const waiting = waitingIssueIds ? new Set(waitingIssueIds) : undefined;
+  const filter = waiting ? undefined : noMilestone ? null : milestoneId && milestones.has(milestoneId) ? milestoneId : undefined;
+  const visible = waiting ? work.filter(issue => waiting.has(issue.id))
+    : filter === undefined ? work : work.filter(issue => issue.milestoneId === filter);
   const grouped = new Map<string | null, WorkIssue[]>();
   for (const issue of visible) {
     const group = grouped.get(issue.milestoneId) ?? [];
@@ -162,7 +167,7 @@ export function ProjectWork({ base, summary, hasForge, forgeBoard, milestoneId, 
         </div>
         {!forgeBoard && (
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-collab-400">
-            {filter !== undefined && <Link href={workUrl} scroll={false} className="text-blue-400 hover:underline">Show all issues</Link>}
+            {(waiting || filter !== undefined) && <Link href={workUrl} scroll={false} className="text-blue-400 hover:underline">Show all issues</Link>}
             <span>{visible.length} of {work.length} issues shown</span>
           </div>
         )}
@@ -174,12 +179,15 @@ export function ProjectWork({ base, summary, hasForge, forgeBoard, milestoneId, 
           ) : (
             <div className="mt-2 space-y-2">
               {groups.map(milestone => (
-                <IssueGroup key={milestone.id} milestone={milestone} issues={grouped.get(milestone.id) ?? []} openIssue={setSelectedIssueId} />
+                <IssueGroup key={milestone.id} milestone={milestone} issues={grouped.get(milestone.id) ?? []}
+                  openIssue={setSelectedIssueId} filtered={Boolean(waiting)} />
               ))}
               {showUnplanned && <IssueGroup milestone={null} issues={grouped.get(null) ?? []} openIssue={setSelectedIssueId} />}
             </div>
           )}
-          {groups.length === 0 && !showUnplanned && <p className="py-2 text-collab-400">No project issues yet.</p>}
+          {groups.length === 0 && !showUnplanned && (
+            <p className="py-2 text-collab-400">{waiting ? 'No issues match this waiting filter.' : 'No project issues yet.'}</p>
+          )}
           {selectedIssueId && work.some(issue => issue.id === selectedIssueId) && <IssueDetailModal issueId={selectedIssueId} onClose={closeModal} />}
         </>
       )}

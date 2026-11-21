@@ -64,7 +64,7 @@ function ProjectOverview({
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const attentionListId = useId();
   const { overview } = summary;
-  const { stats, milestones, unplanned, blocked } = overview;
+  const { stats, milestones, unplanned, blocked, waiting = [], waitingOnCycle = [] } = overview;
   const next = milestones.find(milestone => milestone.id === overview.nextMilestoneId);
   const byId = new Map(milestones.map(milestone => [milestone.id, milestone]));
   const late = overview.lateMilestoneIds.flatMap(id => {
@@ -75,6 +75,8 @@ function ProjectOverview({
   const verdict = overview.verdict ? verdictStyle[overview.verdict] : null;
   const planLink = (milestone: Milestone) => `${base}?tab=plan&milestone=${encodeURIComponent(milestone.id)}`;
   const workLink = `${base}?tab=work&group=no-milestone`;
+  const cycleLink = `${base}?tab=work&group=dependency-cycle`;
+  const cycleCount = waitingOnCycle.length;
   const issueLink = (issue: { id: string }) => `/${workspaceSlug}/issues/${issue.id}`;
   const attention = [
     ...late.map(milestone => ({
@@ -85,6 +87,23 @@ function ProjectOverview({
       href: issueLink(issue), key: `blocked-${issue.id}`, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
         : `${issue.issueKey ?? issue.title} is blocked`,
     })),
+    ...waiting.map(({ blocker, issueIds, state }) => {
+      const title = blocker.title.trim();
+      const shortTitle = title.length > 60 ? `${title.slice(0, 59).trimEnd()}…` : title;
+      const name = blocker.issueKey && shortTitle && title !== blocker.issueKey
+        ? `${blocker.issueKey}, ${shortTitle}` : blocker.issueKey ?? shortTitle;
+      const count = issueIds.length;
+      const ending = state === 'closed' ? ', which is closed' : state === 'unassigned' ? ', which nobody is working on' : '';
+      return {
+        href: `${base}?tab=work&waitingOn=${encodeURIComponent(blocker.id)}`,
+        key: `waiting-${blocker.id}`, color: 'bg-amber-400',
+        label: `${count} ${count === 1 ? 'issue waits' : 'issues wait'} on ${name}${ending}`,
+      };
+    }),
+    ...(cycleCount ? [{
+      href: cycleLink, key: cycleLink, color: 'bg-amber-400',
+      label: `${cycleCount} ${cycleCount === 1 ? 'issue waits' : 'issues wait'} on a dependency cycle`,
+    }] : []),
   ];
   const unplannedAttention = unplanned.length ? {
     href: workLink, key: workLink, color: 'bg-collab-400',
@@ -173,7 +192,7 @@ function ProjectOverview({
               <li key={item.key}>
                 <Link href={item.href} className="flex items-center gap-2 px-1.5 py-2 text-[13px] hover:bg-collab-700">
                   <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', item.color)} />
-                  <span>{item.label}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{item.label}</span>
                 </Link>
               </li>
             ))}
@@ -265,6 +284,9 @@ export function ProjectDashboard({
   const selected = available.find(tab => tab.toLowerCase() === search.get('tab')) ?? 'Overview';
   const milestoneId = search.get('milestone');
   const noMilestone = search.get('group') === 'no-milestone';
+  const waitingOn = selected === 'Work' ? search.get('waitingOn') : null;
+  const waitingIssueIds = selected === 'Work' && search.get('group') === 'dependency-cycle' ? summary?.overview.waitingOnCycle ?? []
+    : waitingOn === null ? undefined : summary?.overview.waiting?.find(group => group.blocker.id === waitingOn)?.issueIds ?? [];
   const showingForge = selected === 'Work' && Boolean(forgeBoard);
   const refreshSummary = () => refetch({ throwOnError: true });
 
@@ -312,7 +334,8 @@ export function ProjectDashboard({
         )}
         {selected === 'Work' && (showingForge || (summary && !isError)) && (
           <ProjectWork key={noMilestone ? 'no-milestone' : milestoneId} base={base} summary={summary}
-            hasForge={hasForge} forgeBoard={forgeBoard} milestoneId={milestoneId} noMilestone={noMilestone} />
+            hasForge={hasForge} forgeBoard={forgeBoard} milestoneId={milestoneId} noMilestone={noMilestone}
+            waitingIssueIds={waitingIssueIds} />
         )}
         {selected !== 'Work' && summary && !isError && (selected === 'Overview' ? (
           <ProjectOverview summary={summary} base={base} workspaceSlug={workspaceSlug} projectName={projectName}
