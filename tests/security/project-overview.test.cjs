@@ -1,7 +1,7 @@
 const { assert, test, load } = require('./helpers.cjs');
 
 const { calculateProjectOverview } = load('src/lib/project-overview.ts', {
-  '@/lib/issue-finder': {}, '@/lib/post-access': {}, '@/lib/prisma': {},
+  '@/lib/issue-finder': {}, '@/lib/post-access': {}, '@/lib/prisma': {}, '@/lib/project-burn': load('src/lib/project-burn.ts'),
 });
 const date = day => new Date(`2026-11-${String(day).padStart(2, '0')}T00:00:00.000Z`);
 const now = date(20);
@@ -61,4 +61,35 @@ test('an open milestone with outstanding work and no recent closures has no fore
   assert.equal(result.hasBaseline, true);
   assert.equal(result.verdict, null);
   assert.equal(result.milestones[0].forecastDate, null);
+});
+
+test('Burn forecasts the current scope using the mean and extremes of three weeks', () => {
+  const { calculateProjectBurn, burnDay } = load('src/lib/project-burn.ts');
+  const workspaceId = 'workspace';
+  const actor = { id: 'person', name: 'Person', agentSeat: null };
+  const work = [
+    ...Array.from({ length: 12 }, () => ({ ...issue('open'), done: false })),
+    ...[2, 4, 6].flatMap((count, week) => Array.from({ length: count }, () => ({
+      ...closed('finished', { finishedAt: date(19 - week * 7) }), done: true, closer: actor,
+    }))),
+  ];
+  const input = {
+    workspaceId, createdAt: date(1), now, work, milestones: [{ label: 'M1', dueDate: date(27) }],
+    accounts: [], merges: [], runs: [], logs: [], spend: undefined,
+  };
+  const burn = calculateProjectBurn(input);
+  assert.equal(burn.forecast.day, burnDay(date(20)) + 21);
+  assert.equal(burn.forecast.earliest, burnDay(date(20)) + 14);
+  assert.equal(burn.forecast.latest, burnDay(date(20)) + 42);
+  assert.equal(burn.forecast.remaining, 12);
+  assert.equal(burn.points.at(-1).closed, 12);
+  assert.equal(burn.points.at(-1).scope, 24);
+  assert.equal(burn.milestones[0].day, burnDay(date(27)));
+  const incomplete = calculateProjectBurn({
+    ...input, work: [...work, { ...closed('legacy'), finishedAt: null, updatedAt: date(10), done: true }],
+  });
+  assert.equal(incomplete.historyStart, burnDay(date(11)));
+  assert.equal(incomplete.points[0].day, burnDay(date(11)));
+  assert.equal(incomplete.points.at(-1).closed, 13);
+  assert.equal(incomplete.forecast, null);
 });
