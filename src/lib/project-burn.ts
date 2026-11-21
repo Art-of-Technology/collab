@@ -16,6 +16,7 @@ type Run = { startedAt: Date; endedAt: Date | null; user: BurnAccount };
 type Spend = { endedAt: Date | null; userId: string; amount: number };
 type WorkCount = { agents: number; people: number; unmatched: number };
 const count = (): WorkCount => ({ agents: 0, people: 0, unmatched: 0 });
+// A seat is identified by the account. A seat name is only shown in its own workspace.
 const group = (actor: BurnAccount | null | undefined) => actor ? (actor.agentSeat ? 'agents' : 'people') : 'unmatched';
 
 export function calculateProjectBurn({

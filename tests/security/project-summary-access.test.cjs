@@ -69,7 +69,9 @@ function fixture(options={}){
    action: 'STATUS_CHANGED', oldStatusId: 'todo', oldStatus: statuses[0], newStatus, createdAt,
    user,
   });
-  activity.push(transition('completed', statuses[1], date(-4), agent), transition('blocked', blockedStatus, date(-6), actor));
+  const closer = options.crossWorkspaceSeat
+    ? { ...agent, id: 'cross-seat-user', agentSeat: { ...seat, workspaceId: foreign.workspaceId, name: 'Private seat name' } } : agent;
+  activity.push(transition('completed', statuses[1], date(-4), closer), transition('blocked', blockedStatus, date(-6), actor));
   if (options.burn) {
    const finished = new Date(now.getTime() - 3_600_000);
    completed.finishedAt = finished;
@@ -131,7 +133,13 @@ function fixture(options={}){
   {id:'seat-log',user:agent,timeSpent:600,issue:issues[0],workspaceId:target.workspaceId},
   {id:'foreign-log',user:actor,timeSpent:600,issue:hidden,workspaceId:target.workspaceId},
  ] : [];
- const db={agentSeat:{findMany:async args=>boundedQuery([seat],args)},workLog:{findMany:async args=>boundedQuery(logsForBurn,args)},projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length,findMany:async args=>boundedQuery(runs,args)},
+ const db={agentSeat:{findMany:async args=>boundedQuery([seat],args)},workLog:{findMany:async args=>boundedQuery(logsForBurn,args)},projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length,findMany:async args=>{
+   const selected = boundedQuery(runs,args);
+   if (options.revokeBillingDuringRunRead && args.select?.usage) {
+    target.workspace.members.find(m => m.userId === actor.id).role = 'MEMBER';
+   }
+   return selected;
+  }},
  workspace:{findFirst:async args=>query(spaces,args)[0]??null},
  issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return args.select?.milestoneId ? boundedQuery(issues,args) : query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
@@ -193,6 +201,7 @@ test('project overview returns scoped spend only to workspace owners and active 
  for (const [options, expected] of [
   [{ target: 'own' }, 17.25], [{ role: 'ADMIN' }, 17.25], [{ role: 'MEMBER' }, undefined],
   [{ role: 'ADMIN', revokeLookup: true }, undefined],
+  [{ role: 'ADMIN', revokeBillingDuringRunRead: true }, undefined],
  ]) {
   const result = await fixture({ costs: true, ...options }).call();
   assert.equal(result.status, 200);
@@ -203,6 +212,7 @@ test('project overview returns scoped spend only to workspace owners and active 
   if (expected === undefined) assert.doesNotMatch(JSON.stringify(result.body.burn), /spendUsd|spendPerIssueUsd/);
   else assert.ok(result.body.burn.weeks.some(week => week.spendUsd === expected));
   assert.doesNotMatch(JSON.stringify(result.body), /estimatedUSD|chargedUSD/);
+  if (options.revokeBillingDuringRunRead) assert.equal(result.body.burn.runCount, 1);
   if (expected === undefined) assert.doesNotMatch(JSON.stringify(result.body), /17\.25/);
  }
 });
@@ -240,4 +250,12 @@ test('Burn attributes the finish transition and recorded merge actor independent
  assert.equal(burn.humanHours, 1.5);
  assert.equal(burn.contributors.find(row => row.name === 'Unlogged person').hoursLogged, 0);
  assert.doesNotMatch(JSON.stringify(burn), /External merger/);
+});
+
+test('Overview counts seats in its workspace while Burn classifies the account that closed the issue', async () => {
+ const result = await fixture({ overviewHistory: true, crossWorkspaceSeat: true }).call();
+ assert.equal(result.status, 200);
+ assert.equal(result.body.overview.closedByAgents, 0);
+ assert.equal(result.body.burn.closures.agents, 1);
+ assert.doesNotMatch(JSON.stringify(result.body.burn), /Private seat name/);
 });

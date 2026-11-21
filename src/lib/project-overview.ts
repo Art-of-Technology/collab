@@ -228,30 +228,19 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     }
   }
 
-  const readSpend = async () => {
-    const amounts: { userId: string; endedAt: Date | null; amount: number }[] = [];
-    for await (const batch of pages(after => prisma.agentRun.findMany({
-      where: { ...seatRunWhere, workspace: billingWhere, id: after ? { gt: after } : undefined },
-      select: { id: true, usage: true, userId: true, endedAt: true },
-      orderBy: pageOrder,
-      take: PAGE_SIZE,
-    }))) {
-      for (const { userId, endedAt, usage } of batch) {
-        if (!usage || typeof usage !== 'object' || Array.isArray(usage)) continue;
-        const amount = usage.estimatedUSD;
-        if (typeof amount === 'number' && Number.isFinite(amount) && amount > 0) amounts.push({ userId, endedAt, amount });
-      }
-    }
-    return amounts;
-  };
-
   async function collect<Row extends { id: string }>(read: (after: string | undefined) => Promise<Row[]>) {
     const rows: Row[] = [];
     for await (const batch of pages(read)) rows.push(...batch);
     return rows;
   }
 
-  const [baseline, seats, merges, runs, logs, spend] = await Promise.all([
+  const readRuns = (billing: boolean) => collect(after => prisma.agentRun.findMany({
+    where: { ...seatRunWhere, ...(billing ? { workspace: billingWhere } : {}), id: after ? { gt: after } : undefined },
+    select: { id: true, startedAt: true, endedAt: true, user: { select: burnAccountSelect }, usage: billing },
+    orderBy: pageOrder, take: PAGE_SIZE,
+  }));
+  const billingAtStart = !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  const [baseline, seats, merges, initialRuns, logs] = await Promise.all([
     prisma.projectBaseline.findFirst({
       where: { project: projectWhere },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -269,20 +258,23 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
         workspaceMemberships: { where: { workspaceId }, select: { id: true } },
       } } }, orderBy: pageOrder, take: PAGE_SIZE,
     })),
-    collect(after => prisma.agentRun.findMany({
-      where: { ...seatRunWhere, id: after ? { gt: after } : undefined },
-      select: { id: true, startedAt: true, endedAt: true, user: { select: burnAccountSelect } },
-      orderBy: pageOrder, take: PAGE_SIZE,
-    })),
+    readRuns(billingAtStart),
     collect(after => prisma.workLog.findMany({
       where: { workspaceId, issue: issueWhere, id: after ? { gt: after } : undefined },
       select: { id: true, timeSpent: true, user: { select: burnAccountSelect } },
       orderBy: pageOrder, take: PAGE_SIZE,
     })),
-    readSpend(),
     readIssues(),
   ]);
-  const billingAllowed = await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  const billingAllowed = billingAtStart && !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  // If billing access was revoked while reading, fetch the ordinary run fields
+  // again. The billed query may have returned only the pages read before revocation.
+  const runs = (billingAtStart && !billingAllowed ? await readRuns(false) : initialRuns).filter(run => run.user.agentSeat);
+  const spend = billingAllowed ? runs.flatMap(({ user, endedAt, usage }) => {
+    if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return [];
+    const amount = usage.estimatedUSD;
+    return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 ? [{ userId: user.id, endedAt, amount }] : [];
+  }) : undefined;
   const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now);
   const work = issues.filter(issue => issue.type !== 'MILESTONE');
   const burn = calculateProjectBurn({
@@ -295,13 +287,12 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       mergedAt, mergedBy: mergedBy && (mergedBy.agentSeat?.workspaceId === workspaceId ||
         mergedBy.ownedWorkspaces.length > 0 || mergedBy.workspaceMemberships.length > 0) ? mergedBy : null,
     })),
-    runs: runs.filter(run => run.user.agentSeat),
-    logs,
-    spend: billingAllowed ? spend : undefined,
+    runs, logs, spend,
   });
   const blocked = issues.filter(issue => !isDone(issue) &&
     (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
-  const closedByAgents = burn.closures.agents;
+  // The Overview tile keeps its original workspace-specific attribution.
+  const closedByAgents = work.filter(issue => closingEvents.get(issue.id)?.actor?.agentSeat?.workspaceId === workspaceId).length;
   return {
     burn,
     overview: {
