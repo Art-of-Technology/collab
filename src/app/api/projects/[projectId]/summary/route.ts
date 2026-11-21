@@ -6,6 +6,7 @@ import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
+import { loadProjectOverview } from '@/lib/project-overview';
 
 export async function GET(
   request: NextRequest,
@@ -503,7 +504,10 @@ export async function GET(
       comments: note.comments,
     }));
 
+    const overview = await loadProjectOverview(projectId, project.workspaceId, actor.id, now);
+
     return NextResponse.json({
+      overview,
       project: {
         id: project.id,
         name: project.name,

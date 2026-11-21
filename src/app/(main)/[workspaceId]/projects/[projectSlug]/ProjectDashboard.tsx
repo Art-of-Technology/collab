@@ -1,44 +1,14 @@
 "use client";
 
-import React, { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import {
-  LayoutGrid,
-  List,
-  Table2,
-  Calendar,
-  GanttChart,
-  Star,
-  Settings,
-  GitBranch,
-  Tag,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Plus,
-  ExternalLink,
-  Lightbulb,
-  Activity,
-  StickyNote,
-  ChevronRight,
-  GitPullRequest,
-  GitCommit,
-  GitMerge,
-  Rocket,
-  Github,
-  MessageSquare,
-  ThumbsUp,
-  Loader2,
-  Circle,
-} from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useViews, type View } from '@/hooks/queries/useViews';
-import { useProjectSummary } from '@/hooks/queries/useProjects';
+import { Card } from '@/components/ui/card';
+import NewIssueModal from '@/components/issue/NewIssueModal';
+import { useProjectSummary, type ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
-import { formatDistanceToNow } from 'date-fns';
-import { NotesCarousel } from '@/components/widgets';
 
 interface ProjectDashboardProps {
   projectId: string;
@@ -50,645 +20,333 @@ interface ProjectDashboardProps {
   workspaceSlug: string;
 }
 
-// View type icons
-const viewTypeIcons: Record<string, React.ReactNode> = {
-  KANBAN: <LayoutGrid className="h-3.5 w-3.5" />,
-  LIST: <List className="h-3.5 w-3.5" />,
-  TABLE: <Table2 className="h-3.5 w-3.5" />,
-  CALENDAR: <Calendar className="h-3.5 w-3.5" />,
-  TIMELINE: <GanttChart className="h-3.5 w-3.5" />,
+type Milestone = ProjectSummary['overview']['milestones'][number];
+const tabs = ['Overview', 'Plan', 'Burn', 'Work'] as const;
+const cardStyle = 'rounded-[10px] border-white/[.09]';
+const controlStyle = 'h-auto rounded-lg border-white/[.09] bg-collab-800 px-3 py-1.5 text-[13px] font-normal text-collab-50 hover:bg-collab-700 focus-visible:ring-2 focus-visible:ring-blue-500';
+const dateLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+const titleOf = ({ issueKey, title }: { issueKey: string | null; title: string }) => issueKey ? `${issueKey} · ${title}` : title;
+const days = (count: number) => `${count} ${count === 1 ? 'day' : 'days'}`;
+
+const verdictStyle = {
+  on_track: { label: 'On track', text: 'text-emerald-400', band: 'border-emerald-400/45 bg-[linear-gradient(90deg,rgba(52,211,153,.14),transparent_60%)]' },
+  at_risk: { label: 'At risk', text: 'text-amber-400', band: 'border-amber-400/45 bg-[linear-gradient(90deg,rgba(251,191,36,.13),transparent_60%)]' },
+  behind: { label: 'Behind', text: 'text-red-400', band: 'border-red-400/45 bg-[linear-gradient(90deg,rgba(248,113,113,.13),transparent_60%)]' },
 };
 
-const viewTypeLabels: Record<string, string> = {
-  KANBAN: 'Board',
-  LIST: 'List',
-  TABLE: 'Table',
-  CALENDAR: 'Calendar',
-  TIMELINE: 'Timeline',
-};
-
-// ─── Compact Stat ─────────────────────────────────────────────────────────────
-
-interface CompactStatProps {
-  label: string;
-  value: number | string;
-  icon: React.ReactNode;
-  variant?: "default" | "success" | "warning" | "danger";
-}
-
-function CompactStat({ label, value, icon, variant = "default" }: CompactStatProps) {
-  const variantStyles = {
-    default: { text: "text-collab-50", icon: "text-collab-500" },
-    success: { text: "text-emerald-400", icon: "text-emerald-400" },
-    warning: { text: "text-amber-400", icon: "text-amber-400" },
-    danger: { text: "text-red-400", icon: "text-red-400" },
-  };
-
+function OverviewStat({ label, value, detail, color }: { label: string; value: ReactNode; detail: string; color?: string }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <div className={cn("flex-shrink-0", variantStyles[variant].icon)}>
-        {icon}
-      </div>
-      <div>
-        <div className={cn("text-xl font-semibold", variantStyles[variant].text)}>
-          {value}
-        </div>
-        <div className="text-[11px] text-collab-500/60">{label}</div>
-      </div>
-    </div>
+    <Card className={cn(cardStyle, 'grid content-start gap-px px-3 py-2.5 text-[13px] text-collab-400')}>
+      <span>{label}</span>
+      <strong className={cn('text-2xl font-[650] leading-[1.2] text-collab-50', color)}>{value}</strong>
+      <span>{detail}</span>
+    </Card>
   );
 }
 
-// ─── View Chip (for horizontal scroll) ────────────────────────────────────────
-
-function ViewChip({
-  view,
-  workspaceSlug,
-  isDefault,
+function ProjectOverview({
+  summary, base, workspaceSlug, projectName, openMilestoneForm, refetch,
 }: {
-  view: View;
+  summary: ProjectSummary;
+  base: string;
   workspaceSlug: string;
-  isDefault: boolean;
+  projectName: string;
+  openMilestoneForm: () => void;
+  refetch: () => Promise<unknown>;
 }) {
-  return (
-    <Link
-      href={`/${workspaceSlug}/views/${view.slug || view.id}`}
-      className={cn(
-        "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-all flex-shrink-0",
-        isDefault
-          ? "bg-blue-500/10 border-blue-500/20 hover:border-blue-500/40"
-          : "bg-collab-800 border-collab-700 hover:border-collab-600 hover:bg-collab-700"
-      )}
-    >
-      <div className={cn(
-        "flex-shrink-0",
-        isDefault ? "text-blue-400" : "text-collab-500 group-hover:text-collab-400"
-      )}>
-        {viewTypeIcons[view.displayType] || <LayoutGrid className="h-3.5 w-3.5" />}
-      </div>
-      <span className={cn(
-        "text-sm transition-colors",
-        isDefault ? "text-blue-400" : "text-collab-400 group-hover:text-collab-50"
-      )}>
-        {view.name}
-      </span>
-      {view.isFavorite && (
-        <Star className="h-3 w-3 text-amber-400 fill-amber-400 flex-shrink-0" />
-      )}
-      <span className="text-xs text-collab-500/60">
-        {view._count?.issues || 0}
-      </span>
-    </Link>
-  );
-}
-
-// ─── Issue Row (Compact) ──────────────────────────────────────────────────────
-
-function IssueRow({
-  issue,
-  onClick,
-  variant = "default",
-}: {
-  issue: {
-    id: string;
-    title: string;
-    issueKey: string;
-    daysOverdue?: number;
-    daysUntilDue?: number;
-    assignee?: { name: string | null; image: string | null } | null;
-  };
-  onClick: () => void;
-  variant?: "default" | "danger" | "warning";
-}) {
-  const indicatorColors = {
-    default: "bg-blue-400",
-    danger: "bg-red-400",
-    warning: "bg-amber-400",
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-collab-700 cursor-pointer transition-colors"
-    >
-      <div className={cn("w-1 h-6 rounded-full flex-shrink-0", indicatorColors[variant])} />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-collab-400 group-hover:text-collab-50 truncate transition-colors">
-          {issue.title}
-        </p>
-        <span className="text-[11px] text-collab-500/60 font-mono">{issue.issueKey}</span>
-      </div>
-      {issue.daysOverdue && issue.daysOverdue > 0 && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 flex-shrink-0">
-          {issue.daysOverdue}d late
-        </span>
-      )}
-      {issue.daysUntilDue && issue.daysUntilDue > 0 && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 flex-shrink-0">
-          {issue.daysUntilDue}d
-        </span>
-      )}
-      {issue.assignee && (
-        <Avatar className="h-5 w-5 flex-shrink-0">
-          <AvatarImage src={issue.assignee.image || undefined} />
-          <AvatarFallback className="text-[8px] bg-collab-600">
-            {issue.assignee.name?.charAt(0)?.toUpperCase() || '?'}
-          </AvatarFallback>
-        </Avatar>
-      )}
-    </div>
-  );
-}
-
-// ─── Activity Item Row ────────────────────────────────────────────────────────
-
-interface ActivityItem {
-  id: string;
-  type: 'commit' | 'pull_request' | 'review' | 'release' | 'branch' | 'deployment';
-  title: string;
-  description?: string;
-  timestamp: string;
-  author: {
-    name: string;
-    avatar?: string;
-  };
-  metadata?: {
-    sha?: string;
-    prNumber?: number;
-  };
-}
-
-const activityIcons: Record<string, React.ReactNode> = {
-  commit: <GitCommit className="h-3.5 w-3.5" />,
-  pull_request: <GitPullRequest className="h-3.5 w-3.5" />,
-  review: <MessageSquare className="h-3.5 w-3.5" />,
-  release: <Tag className="h-3.5 w-3.5" />,
-  deployment: <Rocket className="h-3.5 w-3.5" />,
-  branch: <GitMerge className="h-3.5 w-3.5" />,
-};
-
-const activityColors: Record<string, string> = {
-  commit: "text-blue-400",
-  pull_request: "text-purple-400",
-  review: "text-amber-400",
-  release: "text-emerald-400",
-  deployment: "text-cyan-400",
-  branch: "text-pink-400",
-};
-
-function ActivityRow({ activity }: { activity: ActivityItem }) {
-  const timeAgo = formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true });
-
-  return (
-    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-collab-700 transition-colors">
-      <div className={cn("flex-shrink-0 mt-0.5", activityColors[activity.type] || "text-collab-500")}>
-        {activityIcons[activity.type] || <Circle className="h-3.5 w-3.5" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-collab-400">
-          <span className="text-collab-50">{activity.author.name}</span>
-          {' '}{activity.title}
-        </p>
-        {activity.description && (
-          <p className="text-xs text-collab-500/60 truncate mt-0.5">{activity.description}</p>
-        )}
-      </div>
-      <span className="text-[10px] text-collab-500/60 flex-shrink-0">{timeAgo}</span>
-    </div>
-  );
-}
-
-// ─── Feature Request Row ──────────────────────────────────────────────────────
-
-interface FeatureRequest {
-  id: string;
-  title: string;
-  status: string;
-  voteScore: number;
-  createdAt: string;
-  _count: { comments: number };
-}
-
-const featureStatusColors: Record<string, { bg: string; text: string }> = {
-  pending: { bg: "bg-collab-600/20", text: "text-collab-400" },
-  under_review: { bg: "bg-blue-500/10", text: "text-blue-400" },
-  planned: { bg: "bg-purple-500/10", text: "text-purple-400" },
-  in_progress: { bg: "bg-amber-500/10", text: "text-amber-400" },
-  completed: { bg: "bg-emerald-500/10", text: "text-emerald-400" },
-  declined: { bg: "bg-red-500/10", text: "text-red-400" },
-};
-
-function FeatureRow({ feature, onClick }: { feature: FeatureRequest; onClick: () => void }) {
-  const statusStyle = featureStatusColors[feature.status] || featureStatusColors.pending;
-
-  return (
-    <div
-      onClick={onClick}
-      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-collab-700 cursor-pointer transition-colors"
-    >
-      <div className={cn("flex items-center gap-1 flex-shrink-0", feature.voteScore >= 0 ? "text-emerald-400" : "text-red-400")}>
-        <ThumbsUp className="h-3 w-3" />
-        <span className="text-xs font-medium">{feature.voteScore > 0 ? '+' : ''}{feature.voteScore}</span>
-      </div>
-      <p className="text-sm text-collab-400 truncate flex-1">{feature.title}</p>
-      <span className={cn("text-[10px] px-1.5 py-0.5 rounded flex-shrink-0", statusStyle.bg, statusStyle.text)}>
-        {feature.status.replace('_', ' ')}
-      </span>
-    </div>
-  );
-}
-
-// ─── Section Card ─────────────────────────────────────────────────────────────
-
-function SectionCard({
-  title,
-  subtitle,
-  icon,
-  iconBg,
-  viewAllHref,
-  children,
-  className,
-}: {
-  title: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  iconBg: string;
-  viewAllHref?: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
-        <div className="flex items-center gap-2.5">
-          <div className={cn("p-1.5 rounded-lg", iconBg)}>
-            {icon}
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-collab-50">{title}</h3>
-            {subtitle && <p className="text-[11px] text-collab-500/60">{subtitle}</p>}
-          </div>
-        </div>
-        {viewAllHref && (
-          <Link
-            href={viewAllHref}
-            className="flex items-center gap-1 text-[11px] text-collab-500/60 hover:text-collab-400 transition-colors"
-          >
-            View all <ExternalLink className="h-2.5 w-2.5" />
-          </Link>
-        )}
-      </div>
-      <div className="p-2">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
-function EmptyState({ text, icon }: { text: string; icon: React.ReactNode }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-8 text-center">
-      <div className="p-3 rounded-xl bg-collab-900 mb-3 text-collab-500/50">
-        {icon}
-      </div>
-      <p className="text-xs text-collab-500/60">{text}</p>
-    </div>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-export function ProjectDashboard({
-  projectId,
-  projectName,
-  projectSlug,
-  projectDescription,
-  projectColor,
-  workspaceId,
-  workspaceSlug,
-}: ProjectDashboardProps) {
-  const router = useRouter();
-
-  // Fetch views for this workspace
-  const { data: views = [] } = useViews({
-    workspaceId,
-    includeStats: true,
+  const { overview } = summary;
+  const { stats, milestones, unplanned, blocked } = overview;
+  const [savingBaseline, setSavingBaseline] = useState(false);
+  const [baselineError, setBaselineError] = useState(false);
+  const next = milestones.find(milestone => milestone.id === overview.nextMilestoneId);
+  const byId = new Map(milestones.map(milestone => [milestone.id, milestone]));
+  const late = overview.lateMilestoneIds.flatMap(id => {
+    const milestone = byId.get(id);
+    return milestone?.forecastDate && milestone.driftDays !== null
+      ? [{ ...milestone, forecastDate: milestone.forecastDate, driftDays: milestone.driftDays }] : [];
   });
+  const verdict = overview.verdict ? verdictStyle[overview.verdict] : null;
+  const planLink = (milestone: Milestone) => `${base}?tab=plan&milestone=${encodeURIComponent(milestone.id)}`;
+  const workLink = `${base}?tab=work&group=no-milestone`;
+  const issueLink = (issue: { id: string }) => `/${workspaceSlug}/issues/${issue.id}`;
+  const attention = [
+    ...late.map(milestone => ({
+      href: planLink(milestone), key: `late-${milestone.id}`, color: 'bg-amber-400',
+      label: `${milestone.issueKey ?? milestone.title} is forecast ${days(milestone.driftDays)} after its baseline`,
+    })),
+    ...blocked.map(issue => ({
+      href: issueLink(issue), key: `blocked-${issue.id}`, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
+        : `${issue.issueKey ?? issue.title} is blocked`,
+    })),
+    ...(unplanned.length ? [{
+      href: workLink, key: workLink, color: 'bg-collab-400',
+      label: unplanned.length === 1 ? '1 open issue has no milestone' : `${unplanned.length} open issues have no milestone`,
+    }] : []),
+  ];
 
-  // Fetch project summary data
-  const { data: summary, isLoading, isError: summaryError, refetch: refetchSummary } = useProjectSummary(projectId);
-
-  // Filter views that include this project
-  const projectViews = useMemo(() => {
-    return views.filter((view: View) => view.projectIds.includes(projectId));
-  }, [views, projectId]);
-
-  // Find default view for this project
-  const defaultView = useMemo(() => {
-    return projectViews.find((view: View) => view.isDefault);
-  }, [projectViews]);
-
-  // Sort views: default first, then favorites, then by name
-  const sortedViews = useMemo(() => {
-    return [...projectViews].sort((a, b) => {
-      if (a.isDefault) return -1;
-      if (b.isDefault) return 1;
-      if (a.isFavorite && !b.isFavorite) return -1;
-      if (!a.isFavorite && b.isFavorite) return 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [projectViews]);
-
-  const handleIssueClick = (issueKey: string) => {
-    router.push(`/${workspaceSlug}/issues/${issueKey}`);
-  };
-
-  const handleFeatureClick = (featureId: string) => {
-    router.push(`/${workspaceSlug}/projects/${projectSlug}/features/${featureId}`);
-  };
-
-  const handleNoteClick = (noteId: string) => {
-    router.push(`/${workspaceSlug}/notes/${noteId}`);
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="h-full w-full overflow-y-auto">
-        <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto animate-pulse">
-          <div className="h-16 bg-collab-800 rounded-2xl" />
-          <div className="h-12 bg-collab-800 rounded-xl" />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 h-[400px] bg-collab-800 rounded-2xl" />
-            <div className="h-[400px] bg-collab-800 rounded-2xl" />
-          </div>
-        </div>
-      </div>
-    );
+  async function setBaseline() {
+    setSavingBaseline(true);
+    setBaselineError(false);
+    try {
+      const response = await fetch(`/api/projects/${summary.project.id}/baseline`, { method: 'POST' });
+      if (!response.ok) throw new Error('Could not set baseline');
+      await refetch();
+    } catch {
+      setBaselineError(true);
+    } finally {
+      setSavingBaseline(false);
+    }
   }
 
-  const repositories = summary?.repositories;
-  const repositoryCount = repositories?.connections.length || 0;
-  const repositorySettingsHref = `/${workspaceSlug}/projects/${projectSlug}/settings?tab=github`;
-  const overdueCount = summary?.stats.overdueCount || 0;
-  const atRiskCount = summary?.stats.atRiskCount || 0;
-  const allAttentionIssues = [
-    ...(summary?.atRisk.overdue || []).map(i => ({ ...i, variant: 'danger' as const })),
-    ...(summary?.atRisk.upcoming || []).map(i => ({ ...i, variant: 'warning' as const })),
+  return (
+    <div className="grid gap-3">
+      {milestones.length ? (
+        <Card className={cn(cardStyle, 'grid min-w-0 gap-3 p-3.5 min-[861px]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]', verdict?.band)}>
+          <div className="min-w-0">
+            <p className="text-[13px] text-collab-400">{projectName} is</p>
+            <h2 className={cn('break-words text-[28px] font-[650] leading-[1.1]', verdict?.text)}>
+              {verdict?.label ?? (overview.hasBaseline ? 'Forecast unavailable' : 'Awaiting baseline')}
+            </h2>
+            <div className="mt-1.5 text-sm text-collab-400">
+              {late.length ? (
+                <ul>
+                  {late.slice(0, 2).map(milestone => (
+                    <li key={milestone.id}>
+                      {milestone.issueKey ?? milestone.title} is forecast for {dateLabel.format(new Date(milestone.forecastDate))}, {days(milestone.driftDays)} after its baseline
+                    </li>
+                  ))}
+                </ul>
+              ) : verdict ? (
+                <p>{milestones.every(milestone => milestone.finished)
+                  ? 'All milestones are finished'
+                  : 'Every open milestone with a baseline is forecast within 2 days of it'}</p>
+              ) : overview.hasBaseline ? (
+                <p>Issue closures in the last three weeks are needed for a forecast.</p>
+              ) : overview.baselineAt ? (
+                <p>Add milestone due dates and ask the workspace owner to update the baseline.</p>
+              ) : (
+                <p>{milestones.some(milestone => milestone.dueDate)
+                  ? 'Set a baseline to compare milestone forecasts with the plan.'
+                  : 'Add milestone due dates so the workspace owner can set a baseline.'}</p>
+              )}
+              {!overview.hasBaseline && !overview.baselineAt && 'agentSpendUsd' in overview && (
+                <Button variant="outline" className={cn(controlStyle, 'mt-2')} disabled={savingBaseline || !milestones.some(milestone => milestone.dueDate)} onClick={setBaseline}>
+                  {savingBaseline ? 'Setting baseline…' : 'Set baseline'}
+                </Button>
+              )}
+              {baselineError && <p role="alert" className="mt-2 text-red-400">Could not set the baseline. Try again.</p>}
+            </div>
+          </div>
+          {next && (
+            <Link href={planLink(next)} className="grid min-w-0 content-start gap-0.5 rounded-lg border border-white/[.09] bg-collab-900 px-3 py-2.5 text-[13px] hover:bg-collab-700">
+              <span className="text-collab-400">Next milestone</span>
+              <strong className="break-words text-[15px]">{titleOf(next)}</strong>
+              <span>
+                {next.dueDate && next.daysUntilDue !== null
+                  ? `due ${dateLabel.format(new Date(next.dueDate))}, ${next.daysUntilDue < 0
+                    ? `${days(-next.daysUntilDue)} overdue` : next.daysUntilDue === 0 ? 'today' : `in ${days(next.daysUntilDue)}`}`
+                  : 'No due date'}
+                {' · '}{next.completed} of {next.total} done
+              </span>
+            </Link>
+          )}
+        </Card>
+      ) : (
+        <Card className={cn(cardStyle, 'p-3.5 text-sm text-collab-400')}>
+          <button type="button" className="text-blue-400 hover:underline" onClick={openMilestoneForm}>Create your first milestone</button> to see the project plan and forecast.
+        </Card>
+      )}
+
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(140px,100%),1fr))] gap-2.5">
+        <OverviewStat label="Done" value={`${stats.donePercent}%`} detail={`${stats.done} of ${stats.total} issues`} color="text-emerald-400" />
+        <OverviewStat label="Open" value={stats.open} detail={`${unplanned.length} with no milestone`} />
+        <OverviewStat label="Overdue" value={stats.overdue} detail="counted in full, no cap" />
+        <OverviewStat label="Added since baseline" value={stats.addedSinceBaseline === null ? '—' : `+${stats.addedSinceBaseline}`}
+          detail={stats.addedSinceBaseline === null ? 'No baseline set' : 'issues'} color="text-amber-400" />
+        <OverviewStat label="Closed by agents" value={`${overview.closedByAgentsPercent}%`} color="text-violet-400"
+          detail={overview.agentSpendUsd != null ? `${dollars.format(overview.agentSpendUsd)} agent spend` : `${overview.runCount} ${overview.runCount === 1 ? 'run' : 'runs'}`} />
+      </div>
+
+      {milestones.length > 0 && (
+        <div className="grid gap-3 min-[861px]:grid-cols-2">
+          {([
+            ['Plan · next 8 weeks', 'Plan'],
+            ['Burn-up · last 30 days', 'Burn'],
+          ] as const).map(([heading, tab]) => (
+            <Card key={tab} className={cn(cardStyle, 'p-3')}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-[13px] font-semibold">{heading}</h2>
+                <Button variant="outline" asChild className={cn(controlStyle, 'bg-transparent')}>
+                  <Link href={`${base}?tab=${tab.toLowerCase()}`}>Open {tab} →</Link>
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Card className={cn(cardStyle, 'p-3')}>
+        <h2 className="mb-2 text-[13px] font-semibold text-collab-400">Needs attention · {attention.length}</h2>
+        {attention.length ? (
+          <ul className="divide-y divide-white/[.09]">
+            {attention.map(item => (
+              <li key={item.key}>
+                <Link href={item.href} className="flex items-center gap-2 px-1.5 py-2 text-[13px] hover:bg-collab-700">
+                  <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', item.color)} />
+                  <span>{item.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-[13px] text-collab-400">Nothing needs attention.</p>}
+      </Card>
+
+      <ProjectDetails base={base} summary={summary} workspaceSlug={workspaceSlug} />
+    </div>
+  );
+}
+
+function ProjectDetails({ base, summary, workspaceSlug }: { base: string; summary: ProjectSummary; workspaceSlug: string }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const { connections, activities } = summary.repositories;
+  const { notes, featureRequests } = summary;
+  const connectionLabel = connections.length === 1 ? 'repository' : 'repositories';
+  const panels = [
+    {
+      id: 'repository', label: 'Repository',
+      content: (
+        <>
+          <p>{connections.length ? `${connections.length} ${connectionLabel} connected` : 'No repository connected'}</p>
+          <ul className="break-all">{connections.map(connection => <li key={connection.id}>{connection.name}</li>)}</ul>
+          <ul>{activities.slice(0, 5).map(activity => <li key={activity.id}>{activity.author.name} {activity.title}{activity.description ? ` · ${activity.description}` : ''}</li>)}</ul>
+          <Link className="text-blue-400 hover:underline" href={`${base}/settings?tab=github`}>
+            {connections.length ? 'Repository settings' : 'Connect repository'} →
+          </Link>
+        </>
+      ),
+    },
+    {
+      id: 'notes', label: `Context notes (${notes.length})`,
+      content: (
+        <>
+          <ul>{notes.map(note => (
+            <li key={note.id}><Link className="hover:underline" href={`/${workspaceSlug}/notes/${note.id}`}>{note.title}</Link></li>
+          ))}</ul>
+          <Link className="text-blue-400 hover:underline" href={`/${workspaceSlug}/context?project=${summary.project.id}`}>Open context notes →</Link>
+        </>
+      ),
+    },
+    ...(featureRequests.length ? [{
+      id: 'features', label: `Feature requests (${featureRequests.length})`,
+      content: (
+        <>
+          <ul>{featureRequests.map(feature => (
+            <li key={feature.id}><Link className="hover:underline" href={`${base}/features/${feature.id}`}>{feature.title}</Link></li>
+          ))}</ul>
+          <Link className="text-blue-400 hover:underline" href={`${base}/features`}>Open feature requests →</Link>
+        </>
+      ),
+    }] : []),
   ];
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
+    <>
+      <div className="flex flex-wrap gap-2">
+        {panels.map(({ id, label }) => (
+          <Button key={id} type="button" variant="outline" className={controlStyle} aria-expanded={expanded === id}
+            aria-controls={`project-details-${id}`} onClick={() => setExpanded(expanded === id ? null : id)}>
+            <ChevronRight aria-hidden="true" className={cn('!size-3', expanded === id && 'rotate-90')} />{label}
+          </Button>
+        ))}
+      </div>
+      {panels.map(({ id, content }) => (
+        <Card key={id} id={`project-details-${id}`} hidden={expanded !== id} className={cn(cardStyle, 'space-y-1 p-3 text-[13px] text-collab-400')}>
+          {expanded === id && content}
+        </Card>
+      ))}
+    </>
+  );
+}
 
-        {/* ─── Header + Stats Row ──────────────────────────────────────────── */}
-        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-5">
-            <div className="flex items-center gap-4">
-              <div
-                className="w-1.5 h-12 rounded-full flex-shrink-0"
-                style={{ backgroundColor: projectColor || '#6366f1' }}
-              />
-              <div>
-                <h1 className="text-xl font-medium text-collab-50">{projectName}</h1>
-                <p className="text-sm text-collab-500 max-w-lg">
-                  {projectDescription || "Project dashboard"}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/${workspaceSlug}/projects/${projectSlug}/board`}><LayoutGrid className="mr-1.5 h-4 w-4" />Project board</Link>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/${workspaceSlug}/projects/${projectSlug}/github`)}
-                className="h-8 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-lg"
-              >
-                <Github className="h-4 w-4 mr-1.5" />
-                GitHub
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/${workspaceSlug}/projects/${projectSlug}/changelog`)}
-                className="h-8 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-lg"
-              >
-                <Tag className="h-4 w-4 mr-1.5" />
-                Releases
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/${workspaceSlug}/projects/${projectSlug}/settings`)}
-                className="h-8 w-8 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-lg"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+export function ProjectDashboard({
+  projectId, projectName, projectSlug, projectDescription, projectColor, workspaceId, workspaceSlug,
+}: ProjectDashboardProps) {
+  const search = useSearchParams();
+  const [creatingMilestone, setCreatingMilestone] = useState(false);
+  const { data: summary, isLoading, isError, refetch } = useProjectSummary(projectId);
+  const base = `/${workspaceSlug}/projects/${projectSlug}`;
+  const available = summary?.overview.milestones.length ? tabs : (['Overview', 'Work'] as const);
+  const selected = available.find(tab => tab.toLowerCase() === search.get('tab')) ?? 'Overview';
+  const milestone = selected === 'Plan' ? summary?.overview.milestones.find(item => item.id === search.get('milestone')) : undefined;
+  const unplanned = selected === 'Work' && search.get('group') === 'no-milestone' ? summary?.overview.unplanned : undefined;
+
+  return (
+    <div className="h-full w-full overflow-y-auto bg-collab-900 text-collab-50">
+      <div className="mx-auto max-w-[1180px] p-4 pb-12 text-sm">
+        <header className="mb-2.5 flex flex-wrap items-center gap-2.5">
+          <div className="flex min-w-0 flex-1 items-stretch gap-2.5">
+            <span aria-hidden="true" className="w-1 shrink-0 rounded-sm" style={{ backgroundColor: projectColor || '#2563eb' }} />
+            <div className="min-w-0">
+              <h1 className="break-words text-base font-semibold">{projectName}</h1>
+              {projectDescription && <p className="truncate text-[13px] text-collab-400" title={projectDescription}>{projectDescription}</p>}
             </div>
           </div>
-
-          {/* Stats Row */}
-          <div className="flex items-center border-t border-collab-700 divide-x divide-collab-700">
-            <CompactStat
-              label="Completion"
-              value={`${summary?.stats.completionRate || 0}%`}
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              variant="success"
-            />
-            <CompactStat
-              label="Open Issues"
-              value={summary?.stats.openIssues || 0}
-              icon={<Activity className="h-4 w-4" />}
-            />
-            <CompactStat
-              label="Overdue"
-              value={overdueCount}
-              icon={<AlertTriangle className="h-4 w-4" />}
-              variant={overdueCount > 0 ? "danger" : "default"}
-            />
-            <CompactStat
-              label="At Risk"
-              value={atRiskCount}
-              icon={<Clock className="h-4 w-4" />}
-              variant={atRiskCount > 0 ? "warning" : "default"}
-            />
-          </div>
-        </div>
-
-        {/* ─── Views (Horizontal Scroll) ───────────────────────────────────── */}
-        {sortedViews.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium uppercase tracking-wider text-collab-500/60">
-                Views ({sortedViews.length})
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-collab-500/60 hover:text-collab-400"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                New
+          <div className="flex flex-wrap gap-2">
+            {([
+              ['GitHub', 'github'], ['Releases', 'changelog'], ['Settings', 'settings'],
+            ] as const).map(([label, path]) => (
+              <Button key={path} variant="outline" asChild className="h-auto rounded-full border-white/[.09] bg-transparent px-2 py-px text-[11px] font-normal text-collab-400 hover:bg-collab-700 hover:text-collab-50">
+                <Link href={`${base}/${path}`}>{label}</Link>
               </Button>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-collab-700 scrollbar-track-transparent">
-              {sortedViews.map((view: View) => (
-                <ViewChip
-                  key={view.id}
-                  view={view}
-                  workspaceSlug={workspaceSlug}
-                  isDefault={view.id === defaultView?.id}
-                />
-              ))}
-            </div>
+            ))}
           </div>
+        </header>
+
+        {summary && (
+          <nav aria-label="Project tabs" className="mb-3.5 flex gap-0.5 border-b border-white/[.09]">
+            {available.map(tab => (
+              <Link key={tab} href={tab === 'Overview' ? base : `${base}?tab=${tab.toLowerCase()}`}
+                aria-current={tab === selected ? 'page' : undefined} scroll={false}
+                className={cn('-mb-px border-b-2 px-3.5 py-2', tab === selected ? 'border-blue-500 text-collab-50' : 'border-transparent text-collab-400 hover:text-collab-50')}>
+                {tab}
+              </Link>
+            ))}
+          </nav>
         )}
 
-        {/* ─── Main Content Grid ───────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Left Column: Issues */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-
-            {/* Needs Attention */}
-            <SectionCard
-              title="Needs Attention"
-              subtitle={`${allAttentionIssues.length} issues require action`}
-              icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
-              iconBg="bg-amber-500/10"
-            >
-              {allAttentionIssues.length === 0 ? (
-                <EmptyState text="All caught up! No urgent issues." icon={<CheckCircle2 className="h-5 w-5" />} />
-              ) : (
-                <div className="max-h-[240px] overflow-y-auto">
-                  {allAttentionIssues.slice(0, 8).map((issue) => (
-                    <IssueRow
-                      key={issue.id}
-                      issue={issue}
-                      onClick={() => handleIssueClick(issue.issueKey)}
-                      variant={issue.variant}
-                    />
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-
-            {/* Recent Issues */}
-            <SectionCard
-              title="Recent Activity"
-              subtitle={`${summary?.recentIssues?.length || 0} recently updated`}
-              icon={<Activity className="h-4 w-4 text-blue-400" />}
-              iconBg="bg-blue-500/10"
-            >
-              {(!summary?.recentIssues || summary.recentIssues.length === 0) ? (
-                <EmptyState text="No recent issue activity" icon={<Activity className="h-5 w-5" />} />
-              ) : (
-                <div className="max-h-[240px] overflow-y-auto">
-                  {summary.recentIssues.slice(0, 6).map((issue) => (
-                    <IssueRow
-                      key={issue.id}
-                      issue={issue}
-                      onClick={() => handleIssueClick(issue.issueKey)}
-                    />
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          </div>
-
-          {/* Right Column: Activity Feed */}
-          <div className="flex flex-col gap-4">
-
-            {/* Repository Activity */}
-            <SectionCard
-              title="Repository"
-              subtitle={summaryError ? "Connection status unavailable" : repositoryCount ? `${repositoryCount} ${repositoryCount === 1 ? 'repository' : 'repositories'} connected` : "No repository connected"}
-              icon={<GitBranch className="h-4 w-4 text-collab-500" />}
-              iconBg="bg-collab-900"
-              viewAllHref={repositorySettingsHref}
-            >
-              {summaryError ? (
-                <div role="alert" className="p-3 text-sm text-collab-400 space-y-2">
-                  <p>Could not load repository connections.</p>
-                  <Button variant="outline" size="sm" onClick={() => refetchSummary()}>Retry</Button>
-                </div>
-              ) : !repositoryCount ? (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <p className="text-xs text-collab-500/60 mb-2">Link a repository from your Git provider</p>
-                  <Link
-                    href={repositorySettingsHref}
-                    className="text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    Connect repository →
-                  </Link>
-                </div>
-              ) : (
-                <div>
-                  <div className="px-3 pb-2 text-xs text-collab-400 space-y-1">
-                    {repositories?.connections.map(connection => <p key={connection.id} className="break-all">{connection.name}</p>)}
-                  </div>
-                  {!repositories?.activities.length ? (
-                    <EmptyState text="No recent activity" icon={<GitBranch className="h-5 w-5" />} />
-                  ) : (
-                    <div className="max-h-[200px] overflow-y-auto">
-                      {repositories.activities.slice(0, 5).map((activity: ActivityItem) => (
-                        <ActivityRow key={activity.id} activity={activity} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </SectionCard>
-
-            {/* Feature Requests */}
-            <SectionCard
-              title="Feature Requests"
-              subtitle={`${summary?.featureRequests?.length || 0} requests`}
-              icon={<Lightbulb className="h-4 w-4 text-amber-400" />}
-              iconBg="bg-amber-500/10"
-              viewAllHref={`/${workspaceSlug}/projects/${projectSlug}/features`}
-            >
-              {!summary?.featureRequests?.length ? (
-                <EmptyState text="No feature requests" icon={<Lightbulb className="h-5 w-5" />} />
-              ) : (
-                <div className="max-h-[200px] overflow-y-auto">
-                  {summary.featureRequests.slice(0, 5).map((feature: FeatureRequest) => (
-                    <FeatureRow
-                      key={feature.id}
-                      feature={feature}
-                      onClick={() => handleFeatureClick(feature.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          </div>
-        </div>
-
-        {/* ─── Context Section ─────────────────────────────────────────────── */}
-        <SectionCard
-          title="Context"
-          subtitle={`${summary?.notes?.length || 0} notes`}
-          icon={<StickyNote className="h-4 w-4 text-blue-400" />}
-          iconBg="bg-blue-500/10"
-          viewAllHref={`/${workspaceSlug}/context?project=${projectId}`}
-          className="p-0"
-        >
-          <div className="p-3">
-            <NotesCarousel
-              notes={summary?.notes || []}
-              onNoteClick={handleNoteClick}
-              isLoading={isLoading}
-            />
-          </div>
-        </SectionCard>
+        {isLoading && <p role="status" className="text-collab-400">Loading project overview…</p>}
+        {(isError || (!summary && !isLoading)) && (
+          <Card className={cn(cardStyle, 'space-y-2 p-3')} role="alert">
+            <p>Could not load project overview.</p>
+            <p className="text-collab-400">Connection status unavailable</p>
+            <Button variant="outline" className={controlStyle} onClick={() => refetch()}>Retry</Button>
+          </Card>
+        )}
+        {summary && !isError && (selected === 'Overview' ? (
+          <ProjectOverview summary={summary} base={base} workspaceSlug={workspaceSlug} projectName={projectName}
+            openMilestoneForm={() => setCreatingMilestone(true)} refetch={refetch} />
+        ) : (
+          <Card className={cn(cardStyle, 'space-y-2 p-3')}>
+            <h2 className="text-base font-semibold">{selected}{unplanned && ' · No milestone'}</h2>
+            <p className="text-collab-400">{selected} is coming.</p>
+            {milestone && (
+              <p><Link className="text-blue-400 hover:underline" href={`/${workspaceSlug}/issues/${milestone.id}`}>{titleOf(milestone)} →</Link></p>
+            )}
+            {unplanned && (
+              <ul className="space-y-1">
+                {unplanned.map(issue => (
+                  <li key={issue.id}><Link className="text-blue-400 hover:underline" href={`/${workspaceSlug}/issues/${issue.id}`}>{titleOf(issue)}</Link></li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        ))}
+        {creatingMilestone && (
+          <NewIssueModal open onOpenChange={setCreatingMilestone} workspaceId={workspaceId} projectId={projectId}
+            defaultType="MILESTONE" onCreated={() => refetch()} />
+        )}
       </div>
     </div>
   );
 }
-
-export default ProjectDashboard;

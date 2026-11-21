@@ -67,6 +67,7 @@ interface NewIssueModalProps {
   workspaceId: string;
   projectId?: string | null;
   defaultStatus?: string;
+  defaultType?: IssueType;
   currentUserId?: string;
   onCreated?: (issueId: string) => void;
   fullscreen?: boolean;
@@ -78,6 +79,7 @@ export default function NewIssueModal({
   workspaceId,
   projectId,
   defaultStatus,
+  defaultType = "TASK",
   currentUserId,
   onCreated,
   fullscreen = false,
@@ -90,7 +92,7 @@ export default function NewIssueModal({
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
   const [labels, setLabels] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
-  const [issueType, setIssueType] = useState<IssueType>("TASK");
+  const [issueType, setIssueType] = useState<IssueType>(defaultType);
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(projectId || undefined);
   const [creating, setCreating] = useState(false);
   const [createMore, setCreateMore] = useState(false);
@@ -292,7 +294,7 @@ export default function NewIssueModal({
         setAssigneeId(undefined);
         setLabels([]);
         setDueDate(undefined);
-        setIssueType("TASK");
+        setIssueType(defaultType);
         setSelectedProjectId(projectId || undefined);
         setRelations([]);
         
@@ -320,7 +322,7 @@ export default function NewIssueModal({
     } finally {
       setCreating(false);
     }
-  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient, storedDescription, startingDescription]);
+  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, defaultType, onOpenChange, onCreated, projectId, toast, queryClient, storedDescription, startingDescription]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

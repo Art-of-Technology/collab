@@ -1,3 +1,4 @@
+import type { ProjectOverview } from '@/lib/project-overview';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
@@ -332,6 +333,7 @@ export interface NoteSummary {
 }
 
 export interface ProjectSummary {
+  overview: ProjectOverview;
   project: {
     id: string;
     name: string;
