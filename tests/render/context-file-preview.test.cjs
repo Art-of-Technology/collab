@@ -54,9 +54,9 @@ test('a preview shows an image, a PDF, text and a table, and runs nothing inside
     await show({ id: 'f4', name: 'plan.pdf', mimeType: 'application/pdf', size: 3 * 1024 * 1024 });
     const frame = document.querySelector('iframe');
     assert.equal(frame.getAttribute('src'), '/api/context/files/f4/preview');
-    // An origin of its own: the browser's viewer runs, the file reaches neither Collab nor this page.
-    assert.equal(frame.getAttribute('sandbox'), 'allow-scripts');
-    // A browser that will not open a PDF under that seal is not given it unsealed: the file downloads.
+    // No sandbox mark on the frame: Chrome will not start its PDF viewer in a sandboxed frame (CLB-854).
+    assert.equal(frame.hasAttribute('sandbox'), false);
+    // A browser whose viewer does not appear is pointed to the download.
     assert.match(document.body.textContent, /If it does not appear, download the file/);
     assert.match(document.body.textContent, /3\.0 MB/);
     assert.equal(asked.length, reads);
@@ -70,6 +70,13 @@ test('a preview shows an image, a PDF, text and a table, and runs nothing inside
     assert.match(document.body.textContent, /not shown here/);
     assert.equal(document.querySelector('a[download]').getAttribute('href'), '/api/context/files/f5/download');
     assert.equal(asked.length, reads);
+
+    // The PDF frame carries no sandbox mark, so it is only ever drawn for a stored type of PDF, which the
+    // server set from the bytes. A name ending in .pdf decides nothing.
+    for (const [index, mimeType] of ['text/html', 'image/svg+xml', 'image/png', 'application/octet-stream', 'application/zip'].entries()) {
+      await show({ id: `x${index}`, name: 'x.pdf', mimeType, size: 10 }, { kind: 'text', text: '<p>hi</p>', truncated: false });
+      assert.equal(document.querySelector('iframe'), null, mimeType);
+    }
 
     // A CSV whose first row is longer than the bytes that were read has no rows to show, but it is not
     // an empty file, and it is not told it is one.

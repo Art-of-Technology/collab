@@ -18,10 +18,13 @@
  *    and every fetch even when the address is opened on its own. Only types a browser draws and never
  *    runs are in that list: an SVG is a document when it is opened on its own, so it is named here,
  *    not drawn.
- *  - A PDF is drawn by the browser's own viewer, which is a program of the browser and needs its
- *    scripts, so its sandbox allows them. The sandbox still puts the document in an origin of its
- *    own, with nothing allowed out: anything inside the file is sealed away from Collab's site, the
- *    session and the page that framed it.
+ *  - A PDF is drawn by the browser's own viewer. What keeps the file away from Collab's site is that
+ *    its type comes from the bytes (only bytes that start `%PDF` are `application/pdf`), that it leaves
+ *    `nosniff` so no browser reads it as a page, and that the viewer runs apart from the page: Chrome
+ *    hands the bytes to its viewer and never into the frame's document. Collab's frame carries no
+ *    sandbox mark, because Chrome will not start its viewer in a sandboxed frame (CLB-854); Chrome
+ *    also ignores the header's `sandbox` for a PDF. The header keeps `sandbox allow-scripts` for the
+ *    browsers that honour it there.
  *
  * Only the start of a text file is read, and only a stated number of rows of a CSV: a preview of a
  * file of a few megabytes stays small, and says when there is more.
@@ -154,8 +157,8 @@ export function contextDownloadUrl(id: string): string {
 
 /**
  * Bytes that are drawn in the page: their own type, shown rather than downloaded, and sealed. The
- * PDF viewer is the browser's own program and needs its scripts; the sandbox still gives the document
- * an origin of its own, so nothing in the file reaches Collab's site or the session.
+ * PDF viewer is the browser's own program and needs its scripts, so a PDF's sandbox allows them; it is
+ * kept for the browsers that honour it on a PDF (Chrome does not, see the header of this file).
  *
  * The seal says who may frame these bytes as well: `frame-ancestors` is not covered by `default-src`,
  * and an API reply inherits no policy from Collab's pages, so it has to be said here. It is `'self'`

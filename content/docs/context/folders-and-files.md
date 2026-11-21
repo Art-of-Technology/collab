@@ -106,7 +106,7 @@ Choose a file in the list to see it on the right.
 | File | Preview |
 | --- | --- |
 | Image: PNG, JPEG, GIF, WebP or BMP | The image. |
-| PDF | Your browser's PDF viewer. |
+| PDF | Your browser's PDF viewer. Tested in Chrome only; if it does not appear in another browser, download the file. |
 | Text, including JSON and XML | The first 256 KiB as text. The preview says when there is more. |
 | CSV | A table of the first 200 rows. The preview says when there are more. |
 | Anything else, SVG and Office files included | Its name, type and size. |
