@@ -78,7 +78,8 @@ function fixture(options={}){
   a.targetRelations = [blocks(b, 20)];
   issues.push(bridge, assigned, a, b,
    issue('behind-closed', { targetRelations: [blocks(bridge, 20)] }),
-   issue('behind-assigned', { targetRelations: [blocks(assigned, 20)] }));
+   issue('behind-assigned', { targetRelations: [blocks(assigned, 20)] }),
+   issue('behind-cycle', { targetRelations: [blocks(a, 20), blocks(assigned, 20)] }));
  }
  if (options.legacyStatuses) {
   target.createdAt = date(-90);
@@ -355,14 +356,15 @@ test('Overview groups sixteen issues through both dependency directions into two
  ]);
 });
 
-test('Overview marks a closed chain endpoint, keeps assigned work active and handles dependency cycles', async () => {
+test('Overview marks closed endpoints and lists cycle waits even when a branch reaches a terminal', async () => {
  const result = await fixture({ waitingEnds: true }).call();
  assert.equal(result.status, 200);
  assert.deepEqual(plain(result.body.overview.waiting.filter(row => row.blocker.id !== 'visible-parent')
   .map(row => [row.blocker.id, row.state, row.issueIds])), [
-  ['assigned-root', null, ['behind-assigned']],
+  ['assigned-root', null, ['behind-assigned', 'behind-cycle']],
   ['completed', 'closed', ['behind-closed']],
  ]);
+ assert.deepEqual(plain(result.body.overview.waitingOnCycle).sort(), ['behind-cycle', 'cycle-a', 'cycle-b']);
 });
 
 test('pagination preserves Overview issue counts and the authorized spend total', async () => {

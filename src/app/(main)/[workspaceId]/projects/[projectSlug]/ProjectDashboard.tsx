@@ -64,7 +64,7 @@ function ProjectOverview({
   const [attentionExpanded, setAttentionExpanded] = useState(false);
   const attentionListId = useId();
   const { overview } = summary;
-  const { stats, milestones, unplanned, blocked, waiting = [] } = overview;
+  const { stats, milestones, unplanned, blocked, waiting = [], waitingOnCycle = [] } = overview;
   const next = milestones.find(milestone => milestone.id === overview.nextMilestoneId);
   const byId = new Map(milestones.map(milestone => [milestone.id, milestone]));
   const late = overview.lateMilestoneIds.flatMap(id => {
@@ -75,6 +75,8 @@ function ProjectOverview({
   const verdict = overview.verdict ? verdictStyle[overview.verdict] : null;
   const planLink = (milestone: Milestone) => `${base}?tab=plan&milestone=${encodeURIComponent(milestone.id)}`;
   const workLink = `${base}?tab=work&group=no-milestone`;
+  const cycleLink = `${base}?tab=work&group=dependency-cycle`;
+  const cycleCount = waitingOnCycle.length;
   const issueLink = (issue: { id: string }) => `/${workspaceSlug}/issues/${issue.id}`;
   const attention = [
     ...late.map(milestone => ({
@@ -98,6 +100,10 @@ function ProjectOverview({
         label: `${count} ${count === 1 ? 'issue waits' : 'issues wait'} on ${name}${ending}`,
       };
     }),
+    ...(cycleCount ? [{
+      href: cycleLink, key: cycleLink, color: 'bg-amber-400',
+      label: `${cycleCount} ${cycleCount === 1 ? 'issue waits' : 'issues wait'} on a dependency cycle`,
+    }] : []),
   ];
   const unplannedAttention = unplanned.length ? {
     href: workLink, key: workLink, color: 'bg-collab-400',
@@ -279,8 +285,8 @@ export function ProjectDashboard({
   const milestoneId = search.get('milestone');
   const noMilestone = search.get('group') === 'no-milestone';
   const waitingOn = selected === 'Work' ? search.get('waitingOn') : null;
-  const waitingIssueIds = waitingOn === null ? undefined
-    : summary?.overview.waiting?.find(group => group.blocker.id === waitingOn)?.issueIds ?? [];
+  const waitingIssueIds = selected === 'Work' && search.get('group') === 'dependency-cycle' ? summary?.overview.waitingOnCycle ?? []
+    : waitingOn === null ? undefined : summary?.overview.waiting?.find(group => group.blocker.id === waitingOn)?.issueIds ?? [];
   const showingForge = selected === 'Work' && Boolean(forgeBoard);
   const refreshSummary = () => refetch({ throwOnError: true });
 

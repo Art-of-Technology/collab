@@ -186,7 +186,7 @@ export function ProjectWork({ base, summary, hasForge, forgeBoard, milestoneId, 
             </div>
           )}
           {groups.length === 0 && !showUnplanned && (
-            <p className="py-2 text-collab-400">{waiting ? 'No issues are waiting on this issue.' : 'No project issues yet.'}</p>
+            <p className="py-2 text-collab-400">{waiting ? 'No issues match this waiting filter.' : 'No project issues yet.'}</p>
           )}
           {selectedIssueId && work.some(issue => issue.id === selectedIssueId) && <IssueDetailModal issueId={selectedIssueId} onClose={closeModal} />}
         </>

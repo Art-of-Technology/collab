@@ -34,11 +34,11 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
   const renderDashboard = () => React.act(async () => root.render(React.createElement(ProjectDashboard, {
     projectId: 'project', projectName: 'Demo', projectSlug: 'demo', workspaceSlug: 'demo',
   })));
-  const render = (milestones, lateMilestoneIds, blocked, unplanned = [], waiting = []) => {
+  const render = (milestones, lateMilestoneIds, blocked, unplanned = [], waiting = [], waitingOnCycle = []) => {
     summary = {
       project: { id: 'project' },
       repositories: { connections: [], activities: [] }, notes: [], featureRequests: [],
-      overview: { stats: {}, milestones, lateMilestoneIds, unplanned, blocked, waiting, hasBaseline: true },
+      overview: { stats: {}, milestones, lateMilestoneIds, unplanned, blocked, waiting, waitingOnCycle, hasBaseline: true },
     };
     return renderDashboard();
   };
@@ -90,18 +90,23 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
       { blocker: { id: 'idle', issueKey: 'DEMO-1', title: 'Review capacity' }, issueIds: ['one', 'two'], state: 'unassigned' },
       { blocker: { id: 'closed', issueKey: 'DEMO-2', title: 'Confirm scope' }, issueIds: ['three'], state: 'closed' },
     ];
-    await render([], [], [blocked(6)], [], waiting);
+    await render([], [], [blocked(6)], [], waiting, ['cycle-a', 'cycle-b']);
     assert.deepEqual(lines(), [
       blockedLabel(6),
       '2 issues wait on DEMO-1, Review capacity, which nobody is working on',
       '1 issue waits on DEMO-2, Confirm scope, which is closed',
+      '2 issues wait on a dependency cycle',
     ]);
     const target = new URL(card().querySelectorAll('li a')[1].href, 'https://example.test');
+    const cycleTarget = new URL(card().querySelectorAll('li a')[3].href, 'https://example.test');
     assert.equal(target.pathname, '/demo/projects/demo');
     assert.equal(target.searchParams.get('tab'), 'work');
     search = target.searchParams;
     await renderDashboard();
     assert.equal(document.querySelector('output').textContent, 'one,two');
+    search = cycleTarget.searchParams;
+    await renderDashboard();
+    assert.equal(document.querySelector('output').textContent, 'cycle-a,cycle-b');
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();

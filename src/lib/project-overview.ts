@@ -591,13 +591,17 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
 
   const terminals = new Set(dependencyIssues.keys());
   const dependents = new Map<string, string[]>();
+  const remainingPrerequisites = new Map<string, number>();
   for (const issue of dependencyIssues.values()) {
     if (closedDependencies.has(issue.id)) continue;
     const links = prerequisites(issue).filter(id => dependencyIssues.has(id));
     const open = links.filter(id => !closedDependencies.has(id));
     // Prefer live prerequisites, keeping a closed link when it's the end of a longer chain.
-    for (const id of open.length ? open : links) {
-      terminals.delete(issue.id);
+    const next = open.length ? open : links;
+    if (!next.length) continue;
+    terminals.delete(issue.id);
+    remainingPrerequisites.set(issue.id, next.length);
+    for (const id of next) {
       const waiting = dependents.get(id) ?? [];
       waiting.push(issue.id);
       dependents.set(id, waiting);
@@ -630,6 +634,21 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   }).sort((a, b) => b.issueIds.length - a.issueIds.length ||
     (a.blocker.issueKey ?? a.blocker.title).localeCompare(b.blocker.issueKey ?? b.blocker.title) ||
     a.blocker.id.localeCompare(b.blocker.id));
+
+  // Remove branches from the terminals up. The remaining issues still lead into a cycle.
+  const resolvable = [...terminals];
+  for (const id of resolvable) {
+    for (const dependent of dependents.get(id) ?? []) {
+      const remaining = remainingPrerequisites.get(dependent)! - 1;
+      if (remaining) {
+        remainingPrerequisites.set(dependent, remaining);
+      } else {
+        remainingPrerequisites.delete(dependent);
+        resolvable.push(dependent);
+      }
+    }
+  }
+  const waitingOnCycle = [...remainingPrerequisites.keys()].filter(id => workThatCanWait.has(id));
   // The Overview tile keeps its original workspace-specific attribution.
   const closedByAgents = work.filter(issue => issue.agentRequestRole == null &&
     closingActors.get(issue.id)?.agentSeat?.workspaceId === workspaceId).length;
@@ -638,7 +657,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     burn,
     overview: {
       ...overview, work: workItems, baselineSetBy: baselineSetter?.name ?? null,
-      blocked, waiting,
+      blocked, waiting, waitingOnCycle,
       closedByAgents, closedByAgentsPercent: percent(closedByAgents, agents + people + unmatched),
       runCount: burn.runCount,
       ...(billingAllowed ? { agentSpendUsd: burn.spendUsd ?? null } : {}),

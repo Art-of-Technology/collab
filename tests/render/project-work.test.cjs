@@ -143,7 +143,7 @@ test('Work regroups refreshed issues in place and carries the filter between the
 
     await render(moving, { waitingIssueIds: [] });
     assert.match(document.body.textContent, /0 of 5 issues shown/);
-    assert.match(document.body.textContent, /No issues are waiting on this issue/);
+    assert.match(document.body.textContent, /No issues match this waiting filter/);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();
