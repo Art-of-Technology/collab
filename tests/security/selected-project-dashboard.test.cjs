@@ -101,6 +101,19 @@ function fixture(actualLoaders = false) {
       state.reads.push('workspace-repositories'); state.overviewReads.push(['repositories', input]);
       return { kind: 'ready', connectionCount: 0, neverRefreshedCount: 0, items: [] };
     } },
+    '@/lib/dashboard/needs-you': { loadNeedsYou: async input => {
+      state.reads.push('needs-you'); state.overviewReads.push(['needs-you', input]);
+      if (state.needsYouFails) throw Error('private loader failure');
+      return null;
+    } },
+    '@/lib/dashboard/agents-now': { loadAgentsNow: async input => {
+      state.reads.push('agents-now'); state.overviewReads.push(['agents-now', input]);
+      return null;
+    } },
+    '@/lib/dashboard/shipped': { loadShipped: async input => {
+      state.reads.push('shipped'); state.overviewReads.push(['shipped', input]);
+      return null;
+    } },
     './components/WorkspaceOverview': { default: props => React.createElement('section', { 'aria-label': 'Workspace overview' }, JSON.stringify(props)) },
     './components/DashboardClient': { default: Overview },
     'next/navigation': { redirect: path => { throw Error('redirect:' + path); }, notFound: () => { throw Error('not-found'); } },
@@ -178,20 +191,28 @@ test('failed permission with the other denied exposes no chooser or project payl
 test('notes-only permission does not call issue loader or offer Ready link', async () => { const f = fixture(); f.state.permissions.delete('VIEW_TASKS'); const html = await f.html(); assert.match(html, /do not have access to Issues/); assert.doesNotMatch(html, /Open an issue for Ready review/); assert.deepEqual(f.state.provider, [['memory', 'space', 'alpha']]); });
 test('issues-only permission does not call memory loader', async () => { const f = fixture(); f.state.permissions.delete('VIEW_NOTES'); const html = await f.html(); assert.match(html, /do not have access to Project memory/); assert.deepEqual(f.state.provider, [['issues', 'space', 'alpha']]); });
 test('explicit foreign/missing/multiple project selector is denied without provider reads', async () => { for (const selector of ['hidden', 'missing', ['a', 'b']]) { const f = fixture(); await assert.rejects(f.render(selector), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); } });
-test('default Home loads workspace summaries without provider fanout or a project choice', async () => { const f = fixture(); const node = await f.render(''); assert.equal(node.props.workspaceSlug, 'space'); assert.equal(node.props.issues.kind, 'ready'); assert.equal(node.props.repositories.kind, 'ready'); assert.equal(f.state.provider.length, 0); assert.deepEqual(f.state.reads, ['workspace', 'workspace-issues', 'workspace-repositories']); assert.doesNotMatch(renderToStaticMarkup(node), /Secret|not-selected/); });
+test('default Home loads workspace summaries without provider fanout or a project choice', async () => { const f = fixture(); const node = await f.render(''); assert.equal(node.props.workspaceSlug, 'space'); assert.equal(node.props.issues.kind, 'ready'); assert.equal(node.props.repositories.kind, 'ready'); assert.equal(f.state.provider.length, 0); assert.deepEqual(f.state.reads, ['workspace', 'workspace-issues', 'workspace-repositories', 'needs-you', 'agents-now', 'shipped']); assert.doesNotMatch(renderToStaticMarkup(node), /Secret|not-selected/); });
 test('single-project workspaces also open the workspace overview by default', async () => { const f = fixture(); f.projects.splice(1, 1); assert.match(await f.html(undefined), /Workspace overview/); assert.deepEqual(f.state.provider, []); });
-test('explicit empty project selector returns the workspace overview', async () => { const f = fixture(); f.projects.splice(1, 1); const node = await f.render(''); assert.equal(node.props.issues.kind, 'ready'); assert.deepEqual(f.state.reads, ['workspace', 'workspace-issues', 'workspace-repositories']); assert.deepEqual(f.state.provider, []); });
+test('explicit empty project selector returns the workspace overview', async () => { const f = fixture(); f.projects.splice(1, 1); const node = await f.render(''); assert.equal(node.props.issues.kind, 'ready'); assert.deepEqual(f.state.reads, ['workspace', 'workspace-issues', 'workspace-repositories', 'needs-you', 'agents-now', 'shipped']); assert.deepEqual(f.state.provider, []); });
 test('workspaces without projects still use the aggregate empty-state renderer', async () => { for (const selector of [undefined, '']) { const f = fixture(); f.projects.splice(0, 2); assert.match(await f.html(selector), /Workspace overview/); assert.deepEqual(f.state.provider, []); } });
-test('My work passes stable actor scope only to native summaries', async () => {
-  const f = fixture(); const node = await f.renderSearch({ scope: 'mine', q: '  Alpha  ', page: '2' });
+test('Home passes validated filters and a stable actor to its loaders', async () => {
+  const f = fixture(); const node = await f.renderSearch({ scope: 'mine', q: '  Alpha  ', page: '2', kind: 'review', dormant: '1' });
   assert.equal(node.props.scope, 'mine');
+  assert.equal(node.props.kind, 'review');
+  assert.equal(node.props.dormant, true);
+  assert.equal(node.props.needsYou, null);
+  assert.equal(node.props.agentsNow, null);
+  assert.equal(node.props.shipped, null);
   assert.deepEqual(JSON.parse(JSON.stringify(f.state.overviewReads)), [
-    ['issues', { actorId: 'actor', workspaceId: 'ws', scope: 'mine', projectSearch: 'Alpha', projectPage: 2 }],
+    ['issues', { actorId: 'actor', workspaceId: 'ws', scope: 'mine', projectSearch: 'Alpha', projectPage: 2, dormant: true }],
     ['repositories', { actorId: 'actor', workspaceId: 'ws' }],
+    ['needs-you', { actorId: 'actor', workspaceId: 'ws', scope: 'mine', kind: 'review' }],
+    ['agents-now', { actorId: 'actor', workspaceId: 'ws' }],
+    ['shipped', { actorId: 'actor', workspaceId: 'ws' }],
   ]);
 });
 test('invalid dashboard filters are denied before workspace data reads', async () => {
-  for (const search of [{ scope: ['mine'] }, { scope: 'admin' }, { q: ['secret'] }, { q: 'x'.repeat(101) }, { page: '0' }, { page: '1.5' }, { page: '10000' }]) {
+  for (const search of [{ scope: ['mine'] }, { scope: 'admin' }, { q: ['secret'] }, { q: 'x'.repeat(101) }, { page: '0' }, { page: '1.5' }, { page: '10000' }, { kind: ['due'] }, { kind: 'all' }, { dormant: ['1'] }, { dormant: '0' }]) {
     const f = fixture(); await assert.rejects(f.renderSearch(search), { message: 'not-found' }); assert.deepEqual(f.state.reads, []);
   }
 });
@@ -200,10 +221,20 @@ test('a native summary failure keeps the cached repository section available', a
   const node = await f.renderSearch({ scope: 'mine' });
   assert.equal(node.props.issues.kind, 'unavailable'); assert.equal(node.props.repositories.kind, 'ready'); assert.equal(node.props.scope, 'mine');
 });
+test('a new panel failure leaves the other Home panels intact', async () => {
+  const f = fixture(); f.state.needsYouFails = true;
+  const node = await f.renderSearch({});
+  assert.equal(node.props.needsYou.kind, 'unavailable');
+  assert.equal(node.props.issues.kind, 'ready');
+  assert.equal(node.props.repositories.kind, 'ready');
+  assert.equal(node.props.agentsNow, null);
+  assert.equal(node.props.shipped, null);
+});
 test('notes-only permission does not trigger issue or repository summaries', async () => {
   const f = fixture(); f.state.permissions.delete('VIEW_TASKS');
   const node = await f.renderSearch({});
-  assert.equal(node.props.issues.kind, 'denied'); assert.equal(node.props.repositories.kind, 'denied'); assert.deepEqual(f.state.overviewReads, []);
+  assert.equal(node.props.issues.kind, 'denied'); assert.equal(node.props.repositories.kind, 'denied');
+  assert.deepEqual(f.state.overviewReads.map(([name]) => name), ['needs-you', 'agents-now', 'shipped']);
 });
 test('selected payload repeats current access after chooser', async () => { const f = fixture(); f.state.beforeSelected = () => { f.workspace.members[0].status = false; }; await assert.rejects(f.render(), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); });
 test('project moving workspaces between chooser and payload is refused', async () => { const f = fixture(); f.state.beforeSelected = () => { f.projects[0].workspaceId = 'foreign'; }; await assert.rejects(f.render(), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); });

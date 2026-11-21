@@ -9,8 +9,20 @@ const uiDependencies = {
   react: React, 'react/jsx-runtime': jsx,
   '@/lib/utils': load('src/lib/utils.ts', { clsx: require('clsx'), 'tailwind-merge': require('tailwind-merge') }),
 };
-const Overview = load('src/app/(main)/[workspaceId]/dashboard/components/WorkspaceOverview.tsx', {
-  'react/jsx-runtime': jsx,
+const components = 'src/app/(main)/[workspaceId]/dashboard/components/';
+const relativeTime = load(components + 'RelativeTime.tsx', uiDependencies);
+function loadRefresh(navigation, globals) {
+  return load(components + 'DashboardRefresh.tsx', {
+    ...uiDependencies, './RelativeTime': relativeTime, 'next/navigation': navigation,
+  }, globals);
+}
+const Overview = load(components + 'WorkspaceOverview.tsx', {
+  ...uiDependencies,
+  './RelativeTime': relativeTime,
+  './DashboardRefresh': loadRefresh({ useRouter: () => ({ refresh() {} }) }),
+  './ProjectsPanel': load(components + 'ProjectsPanel.tsx', { ...uiDependencies, './RelativeTime': relativeTime }),
+  ...Object.fromEntries(['NeedsYouPanel', 'AgentsNowPanel', 'ShippedPanel', 'DueSoonPanel'].map(name =>
+    ['./' + name, load(components + name + '.tsx', uiDependencies)])),
   '@/components/ui/page-layout': load('src/components/ui/page-layout.tsx', uiDependencies),
   '@/components/ui/page-header': load('src/components/ui/page-header.tsx', uiDependencies),
 }, { URL, URLSearchParams }).default;
@@ -37,17 +49,17 @@ function repoData(changes = {}) {
 }
 function render(changes = {}) {
   const html = renderToStaticMarkup(React.createElement(Overview, {
-    workspaceName: 'Weezboo', workspaceSlug: 'team & workspace', scope: 'all', now: '2026-10-23T12:00:00Z', issues: issueData(), repositories: repoData(), ...changes,
+    workspaceSlug: 'team & workspace', scope: 'all', q: '', dormant: false, page: 1,
+    now: '2026-10-23T12:00:00Z', updatedAt: '2026-10-23T11:58:00Z',
+    issues: issueData(), repositories: repoData(), needsYou: null, agentsNow: null, shipped: null, ...changes,
   }));
   return { html, document: JSDOM.fragment(html) };
 }
 
-test('workspace overview renders exact counters, actionable issues and project slug links immediately', () => {
+test('workspace overview renders actionable issues and project slug links immediately', () => {
   const { document, html } = render();
   assert.equal(document.querySelector('h1').textContent, 'Workspace overview');
   assert.equal(document.querySelector('select'), null);
-  assert.deepEqual([...document.querySelectorAll('dl dd > p:first-child')].map(el => el.textContent), ['18', '146', '7', '12']);
-  assert.match(document.querySelector('dl').textContent, /Open Collab issues/);
   assert.equal(document.querySelector('#needs-attention a').getAttribute('href'), '/team%20%26%20workspace/issues/CLB-7');
   assert.match(document.querySelector('#needs-attention').textContent, /Overdue/);
   assert.match(document.querySelector('#needs-attention').textContent, /Due in the next 7 days/);
@@ -55,26 +67,27 @@ test('workspace overview renders exact counters, actionable issues and project s
   assert.equal(document.querySelector('tbody a').getAttribute('href'), '/team%20%26%20workspace/projects/release%20%26%20plans');
   assert.doesNotMatch(html, /private-database-id/);
   assert.equal(document.querySelector('tbody a').textContent, 'Release <plans>');
-  assert.match(document.querySelector('#recent-issues').textContent, /In progress/);
-  assert.equal(document.querySelector('time').getAttribute('datetime'), '2026-10-22T12:00:00.000Z');
-  assert.match(document.querySelector('time').textContent, /UTC$/);
 });
 
 test('My work uses GET navigation and search, and keeps repository activity explicitly workspace-wide', () => {
-  const { document } = render({ scope: 'mine', issues: issueData({ scope: 'mine', projectSearch: 'release & plans', projectPage: 2 }) });
+  const { document } = render({ scope: 'mine', kind: 'review', q: 'release & plans', dormant: true, page: 2, issues: issueData({ scope: 'mine', projectSearch: 'release & plans', projectPage: 2 }) });
   const nav = document.querySelector('nav[aria-label="Work scope"]');
   assert.equal(nav.querySelector('[aria-current="page"]').textContent, 'My work');
-  assert.equal(nav.querySelector('a').getAttribute('href'), '/team%20%26%20workspace/dashboard?q=release+%26+plans');
+  assert.equal(nav.querySelector('a').getAttribute('href'), '/team%20%26%20workspace/dashboard?kind=review&q=release+%26+plans&dormant=1');
   const form = document.querySelector('form');
   assert.equal(form.getAttribute('method'), 'get');
   assert.equal(form.getAttribute('action'), '/team%20%26%20workspace/dashboard');
   assert.equal(form.querySelector('[name="scope"]').getAttribute('value'), 'mine');
   assert.equal(form.querySelector('[name="q"]').getAttribute('value'), 'release & plans');
-  assert.equal(document.querySelector('nav[aria-label="Project pages"] a:last-child').getAttribute('href'), '/team%20%26%20workspace/dashboard?scope=mine&q=release+%26+plans&page=3#project-overview');
+  assert.equal(form.querySelector('[name="kind"]').getAttribute('value'), 'review');
+  assert.equal(form.querySelector('[name="dormant"]').getAttribute('value'), '1');
+  assert.equal(form.querySelector('[name="page"]'), null);
+  assert.equal(form.querySelector('a').getAttribute('href'), '/team%20%26%20workspace/dashboard?scope=mine&kind=review&dormant=1#project-overview');
+  assert.equal(document.querySelector('nav[aria-label="Project pages"] a:last-child').getAttribute('href'), '/team%20%26%20workspace/dashboard?scope=mine&kind=review&q=release+%26+plans&dormant=1&page=3#project-overview');
   assert.match(document.querySelector('#repository-activity').textContent, /across the workspace\. My work does not filter this section/);
   assert.match(document.querySelector('#repository-activity').textContent, /Forgejo/);
-  assert.match(document.querySelector('#repository-activity').textContent, /Updated 23 Oct 2026, 09:00 UTC/);
-  assert.match(document.querySelector('#repository-activity').textContent, /Published 23 Oct 2026, 08:00 UTC/);
+  assert.match(document.querySelector('#repository-activity').textContent, /Updated 3 h ago/);
+  assert.match(document.querySelector('#repository-activity').textContent, /Published 4 h ago/);
   assert.match(document.querySelector('#repository-activity').textContent, /Last refresh attempt:/);
   assert.match(document.querySelector('#repository-activity').textContent, /not a live or complete list of open PRs/);
 });
@@ -83,9 +96,9 @@ test('legacy GitHub pull requests label provider updates separately from refresh
   const legacy = { ...repoData().items[0], provider: 'github', refreshIsAttempt: true };
   const { document } = render({ repositories: repoData({ items: [legacy] }) });
   const activity = document.querySelector('#repository-activity');
-  assert.match(activity.textContent, /Updated 23 Oct 2026, 09:00 UTC/);
-  assert.match(activity.textContent, /Last refresh attempt: 23 Oct 2026, 11:00 UTC/);
-  assert.doesNotMatch(activity.textContent, /Recorded 23 Oct 2026, 09:00 UTC/);
+  assert.match(activity.textContent, /Updated 3 h ago/);
+  assert.match(activity.textContent, /Last refresh attempt: 1 h ago/);
+  assert.doesNotMatch(activity.textContent, /Recorded 3 h ago/);
 });
 
 test('repository links reject unsafe and credential-bearing URLs while retaining readable activity', () => {
@@ -110,12 +123,10 @@ test('no connections, never refreshed and empty caches have different messages',
   for (const [values, message] of states) {
     const { document } = render({ repositories: repoData({ items: [], ...values }) });
     assert.ok(document.querySelector('#repository-activity').textContent.includes(message));
-    assert.match(document.querySelector('dl').textContent, /146/);
   }
   const { document } = render({ scope: 'mine', issues: issueData({ scope: 'mine', attention: [], recent: [], projects: [], projectPages: 0, matchingProjects: 0, projectSearch: 'nothing' }) });
   assert.match(document.querySelector('#needs-attention').textContent, /No issues assigned to you are overdue/);
   assert.match(document.querySelector('#project-overview').textContent, /No projects match your search/);
-  assert.match(document.querySelector('#recent-issues').textContent, /No issues assigned to you yet/);
 });
 
 test('each failed section keeps the other usable and preserves My work on reload', () => {
@@ -124,8 +135,7 @@ test('each failed section keeps the other usable and preserves My work on reload
   assert.match(unavailableIssues.querySelector('#issue-summary').textContent, /temporarily unavailable/);
   assert.equal(unavailableIssues.querySelector('#issue-summary a').getAttribute('href'), '/team%20%26%20workspace/dashboard?scope=mine#issues-overview');
   assert.match(unavailableIssues.querySelector('#repository-activity').textContent, /Review invitation feedback/);
-  const unavailableRepos = render({ scope: 'mine', issues: issueData({ scope: 'mine', projectSearch: 'plans', projectPage: 2 }), repositories: { kind: 'unavailable' } }).document;
-  assert.equal(unavailableRepos.querySelectorAll('dl dd').length, 4);
+  const unavailableRepos = render({ scope: 'mine', q: 'plans', page: 2, issues: issueData({ scope: 'mine', projectSearch: 'plans', projectPage: 2 }), repositories: { kind: 'unavailable' } }).document;
   assert.equal(unavailableRepos.querySelector('#repository-activity a').getAttribute('href'), '/team%20%26%20workspace/dashboard?scope=mine&q=plans&page=2#repository-activity');
   assert.match(unavailableRepos.querySelector('#project-overview').textContent, /Release <plans>/);
   const denied = render({ issues: { kind: 'denied' }, repositories: { kind: 'denied' } }).document;
@@ -171,4 +181,50 @@ test('a time is relative and carries the exact UTC time', () => {
   assert.equal(repository.dateTime, '2026-10-23T09:00:00.000Z');
   const { document: due } = render({ issues: issueData({ attention: [{ ...issue, dueDate: '2026-10-24T10:00:00Z' }] }) });
   assert.equal(due.querySelector('#needs-attention time').textContent, 'due tomorrow');
+});
+
+test('Refresh and returning to the tab share a 30 second cooldown, with no polling', async () => {
+  const dom = new JSDOM('<main></main>', { pretendToBeVisual: true });
+  const { window } = dom;
+  const { document } = window;
+  const restoreGlobals = { window: global.window, document: global.document, IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  Object.assign(global, { window, document, IS_REACT_ACT_ENVIRONMENT: true });
+  const { createRoot } = require('react-dom/client');
+  const root = createRoot(document.querySelector('main'));
+  let refreshes = 0;
+  let clock = 10_000;
+  let visibility = 'visible';
+  Object.defineProperty(document, 'visibilityState', { get: () => visibility });
+  const router = { refresh: () => { refreshes++; } };
+  const unexpectedTimer = () => { assert.fail('DashboardRefresh started a timer'); };
+  const Refresh = loadRefresh({ useRouter: () => router }, {
+    document, Date: { now: () => clock }, setTimeout: unexpectedTimer, setInterval: unexpectedTimer,
+  }).default;
+  const visibilityChange = state => {
+    visibility = state;
+    document.dispatchEvent(new window.Event('visibilitychange'));
+  };
+  try {
+    await React.act(() => root.render(React.createElement(Refresh, {
+      updatedAt: '2026-10-23T11:58:00Z', now: '2026-10-23T12:00:00Z',
+    })));
+    assert.equal(document.querySelector('main').textContent.trim(), 'Updated 2 min ago · Refresh');
+    assert.equal(refreshes, 0);
+    visibilityChange('hidden');
+    assert.equal(refreshes, 0);
+    visibilityChange('visible');
+    assert.equal(refreshes, 1);
+    document.querySelector('button').click();
+    assert.equal(refreshes, 1);
+    clock += 30_000;
+    document.querySelector('button').click();
+    assert.equal(refreshes, 2);
+    visibilityChange('hidden');
+    visibilityChange('visible');
+    assert.equal(refreshes, 2);
+  } finally {
+    await React.act(() => root.unmount());
+    dom.window.close();
+    Object.assign(global, restoreGlobals);
+  }
 });
