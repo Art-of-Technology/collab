@@ -54,6 +54,9 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   if (activity.action === 'AGENT_LABEL_ADDED') return `${userName} added labels and notified role subscribers`;
   if (activity.action === 'AGENT_RUN_LOST') return `${userName} lost its run on this ${itemType}`;
   if (activity.action === 'AGENT_RUN_CLEARED') return `${userName} cleared a run on this ${itemType}`;
+  if (activity.action === 'AGENT_RUN_ANSWERED') {
+    return `${userName} ${activity.details?.decision === 'approved' ? 'approved' : 'refused'} a run question`;
+  }
   if (activity.action === 'AGENT_RUN_FINISHED') {
     const outcome = typeof activity.details?.outcome === 'string' ? `: ${activity.details.outcome.replace(/_/g, ' ')}` : '';
     return `${userName} finished a run on this ${itemType}${outcome}`;

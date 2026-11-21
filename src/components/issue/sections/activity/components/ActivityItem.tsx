@@ -34,9 +34,9 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
           {typeof securityKey === 'string' && (
             <a className="text-xs text-collab-400 underline" href={`${workspaceId ? `/${workspaceId}` : ''}/issues/${securityKey}`}>{securityKey}</a>
           )}
-          <span className="text-[10px] text-collab-500">
+          <time dateTime={activity.createdAt} title={new Date(activity.createdAt).toLocaleString()} className="text-[10px] text-collab-500">
             {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
-          </span>
+          </time>
           {activity.allowance && (
             <Badge variant="outline" className="ml-auto min-h-5 max-w-full break-all px-2 text-[10px] font-normal border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
               {activity.allowance.owner}&apos;s allowance{activity.allowance.program && ` · ${activity.allowance.program}`}
@@ -50,6 +50,9 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
         )}
         {activity.action.startsWith('AGENT_RUN_') && typeof activity.details?.nextStep === 'string' && (
           <p className="mt-1 text-xs text-collab-400 break-words">Next: {activity.details.nextStep}</p>
+        )}
+        {activity.action === 'AGENT_RUN_ANSWERED' && typeof activity.details?.answerText === 'string' && (
+          <p className="mt-1 whitespace-pre-wrap break-words text-xs text-collab-400">{activity.details.answerText}</p>
         )}
         {/* Change details for field updates */}
         {activity.action.startsWith('AGENT_') && typeof activity.details?.content === 'string' && activity.details.content && (

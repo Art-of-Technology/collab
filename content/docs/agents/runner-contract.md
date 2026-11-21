@@ -11,7 +11,7 @@ A runner is the program that starts a session for each issue of a seat. Collab d
 - A success is HTTP 200 with a JSON body, also for a checkout and a new request.
 - An error is `{ "error": "<code>", "error_description": "<text>" }`. Some errors add keys, named below.
 - A JSON body holds at most 64 KiB. A key the call does not know is refused with `400 invalid_request`.
-- Text fields are trimmed and must not be empty.
+- Text fields must not be empty. They are trimmed except for the question in an `ask`.
 
 ```sh
 curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/apps/auth/seats/me
@@ -25,7 +25,7 @@ curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/app
 | `GET seats/me/inbox` | Lists the seat's issues in the order to work them. |
 | `POST runs` | Checks an issue out: opens a run with a lease. |
 | `GET runs/{id}` | Reads a run. |
-| `PATCH runs/{id}` | Renews the lease, finishes the run, or confirms the session is gone. |
+| `PATCH runs/{id}` | Renews the lease, asks the seat owner a question, finishes the run, or confirms the session is gone. |
 | `GET issues/{key}/run-context` | Gives a fresh session what it needs in one read. |
 | `POST seats/me/requests` | Files a request for another seat. |
 
@@ -144,14 +144,26 @@ Every run call returns the run with these keys:
 | Key | Value |
 | --- | --- |
 | `id`, `issueId`, `generation` | Text. |
-| `state` | `running`, `finished`, `stopped` or `lost`. |
+| `state` | `running`, `waiting`, `finished`, `stopped` or `lost`. |
 | `outcome` | `done`, `in_review`, `blocked`, or `null` while the run is open. |
 | `note` | The exit note, or `null`. |
 | `usage` | What the finish reported, or `null`. |
 | `leaseUntil` | When the lease ends. It is not cleared when the run ends. |
 | `startedAt`, `endedAt` | Timestamps. `endedAt` is `null` while the run is open. |
 
-The key `ask` is always `null` today.
+The key `ask` is `null` until a question is sent. On an open run with questions it is an array in the order they were sent. Each entry has `id`, the `text` exactly as sent, and `answer`. The answer is `null` until the owner answers. Once answered, it has `decision` (`approved` or `refused`), `text` (the optional reply, or `null`), `userId` (the person who answered) and `at` (Collab's timestamp for the answer). For example:
+
+```json
+{
+  "id": "0486014d-905c-46c1-8867-24fe46205d83",
+  "text": "Step: deploy\nCommit: 0123456789abcdef",
+  "answer": { "decision": "approved", "text": null, "userId": "cm3user0000001", "at": "2026-11-16T10:00:42.000Z" }
+}
+```
+
+The run returns `ask: null` once it ends. The issue's timeline keeps the answer record.
+
+The read, renewal and ask replies also include `run.issueKey` and a top-level `now` timestamp from Collab. Use `now` and `answer.at` to measure the age of an answer by Collab's clock.
 
 A run is **lost** when its lease lapsed without a renewal. A lapsed lease does not prove the session stopped, so a lost run stays open: the issue is not offered and cannot be checked out until the run is closed or a person clears it. Collab notices a lapsed lease the next time the inbox or a run is read or written.
 
@@ -163,13 +175,31 @@ Needs `issues:write`.
 { "event": "renew", "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11" }
 ```
 
-The reply is `{ "run": { ... } }` with `leaseUntil` 60 seconds from now.
+The reply is `{ "run": { ... }, "now": "2026-11-16T10:00:20.000Z" }` with `leaseUntil` 60 seconds from now. A waiting seat run keeps its lease even while no session is running. The runner renews it on the same schedule.
 
 A renewal is refused with `409 run_fenced` when the generation is not the run's, the run has ended or is lost, or the issue was given to someone else. After `run_fenced`: stop the session, then close the run.
 
+## Ask the seat's owner: PATCH runs/{id}
+
+Needs `issues:write`, the run holder's token and its generation.
+
+```json
+{ "event": "ask", "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11", "ask": "Step: deploy\nCommit: 0123456789abcdef" }
+```
+
+`ask` is nonblank plain text of up to 16,000 characters. Spaces and line breaks are preserved. Collab gives the question its own ID, puts the run in `waiting`, notifies the owner in Collab and returns `{ "run": { ... }, "now": "..." }`. The notification tells the owner to open the issue in Collab and select **Activity**.
+
+The holder cannot edit, replace, withdraw or answer a question. A second ask while a question is open returns `409 question_open`. After the owner answers, the run returns to `running` and may ask again. The runner reads the question history to tell whether the owner answered. A seat without an owner who can read the issue gets `409 owner_required`. A person's own run gets `403 seat_required`. A wrong generation, lost lease, ended run or changed assignee gets `409 run_fenced`.
+
+The owner reads the question above the issue timeline. Each original line has a number, and its wrapped text stays under that number. Collab renders the text as sent, including Markdown markup or URLs as literal text. The owner chooses **Approve** or **Refuse** and can include a reply of up to 4,000 characters.
+
+Collab accepts an answer only as a same-origin JSON POST from its own browser cookie session for that owner. The POST names the specific question ID. CLI logins, OAuth grants (including MCP), seat or other agent tokens, and gateway identities cannot answer. Opening a link or replying to a notification cannot record an answer. An answered question stays bound to its ID. A duplicate submission, a submission for an earlier question or a submission after the run ends or is lost returns `409 question_not_open`. The timeline shows who answered and when.
+
+The current browser session is sufficient. Fresh Google or Maestro sign-in or a passkey would require separate work. A browser controlled by someone else, or a copy of the owner's valid session cookie, can act as the owner.
+
 ## Finish the run: PATCH runs/{id}
 
-The session that did the work finishes the run. Needs `issues:write`.
+The session that did the work finishes the run. Needs `issues:write`. A `waiting` run can finish the same way as a `running` run. An open question expires with the run.
 
 | Field | Required | What it is |
 | --- | --- | --- |
@@ -245,7 +275,7 @@ The reply is the run with `"state": "stopped"`. The issue is offered again with 
 
 ## Read a run: GET runs/{id}
 
-Needs `issues:read`. Returns `{ "run": { ... } }` for a run the token's account holds, also after it ended. Any other run gets `404 not_found`.
+Needs `issues:read`. Returns `{ "run": { ... }, "now": "..." }` for a run the token's account holds, also after it ended. Any other run gets `404 not_found`.
 
 Read the run after the session exits: `state` tells you whether it finished.
 

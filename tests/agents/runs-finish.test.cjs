@@ -66,7 +66,9 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
   const inboxRoute = load('src/app/api/apps/auth/seats/me/inbox/route.ts', deps, globals);
   const runs = load('src/app/api/apps/auth/runs/route.ts', deps, globals);
   const one = load('src/app/api/apps/auth/runs/[id]/route.ts', deps, globals);
-  const openRoute = load('src/app/api/issues/[issueId]/runs/route.ts', deps, globals);
+  const openRoute = load('src/app/api/issues/[issueId]/runs/route.ts', {
+    ...deps, '@/lib/gateway-identity': { authMode: () => 'nextauth' },
+  }, globals);
   const contextRoute = load('src/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route.ts', deps, globals);
 
   const seat = async (name, projectId, role = 'developer') => {

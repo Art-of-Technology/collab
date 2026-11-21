@@ -46,6 +46,7 @@ function fixture({ timers = { setTimeout, clearTimeout } } = {}) {
     installationId: null, installation: null, appId: app.id, app, workspaceId: 'w1', workspace: workspaces[0], tokenExpiresAt: new Date(Date.now() + 60_000), ...extra,
   });
   token('full', ALL); token('readonly', READ); token('expired', ALL, { tokenExpiresAt: new Date(Date.now() - 1000) });
+  token('owner-grant', ALL, { userId: 'owner', app: { ...app, slug: 'collab-mcp' } });
   token('useronly', ['user:read']); token('noscopes', []);
   const state = { scanError: null }, calls = [], respond = {}, logs = [];
   const prisma = {
@@ -458,4 +459,14 @@ test('a tool run by name is validated, limited to the caller\'s scopes and forwa
   }
   assert.equal(f.calls.length, before, 'a refused call never reaches a route');
   assert.equal((await run('issues_list', undefined)).isError, undefined, 'arguments may be omitted');
+});
+
+test("the owner's OAuth grant cannot answer a run question through MCP", async () => {
+  const f = fixture();
+  const attempt = await f.call('owner-grant', 'run_answer', {
+    issueIdOrKey: 'CLB-1', runId: 'crun000001', questionId: 'question-id', decision: 'approved',
+  });
+  assert.ok(attempt.isError || attempt.rpcError, JSON.stringify(attempt));
+  assert.match(attempt.text ?? attempt.rpcError.message, /tool|registered/i);
+  assert.deepEqual(f.calls, []);
 });
