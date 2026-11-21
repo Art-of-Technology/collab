@@ -23,6 +23,7 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
     '@/lib/utils': { cn: () => '' },
     './ProjectBurn': { BurnOverviewCard: () => null },
     './ProjectPlan': { ProjectPlanPreview: () => null },
+    './ProjectWork': { ProjectWork: () => null },
   });
   const root = createRoot(document.getElementById('root'));
   const forecast = driftDays => ({

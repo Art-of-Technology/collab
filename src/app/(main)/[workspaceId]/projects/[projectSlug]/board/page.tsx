@@ -1,14 +1,8 @@
-import { notFound } from 'next/navigation';
-import { loadForgeBoard } from '@/lib/forge/board';
-import { ForgeBoardView } from './ForgeBoardView';
-import { loadForgeIssueRights } from '@/lib/forge/issue-service';
+import { redirect } from 'next/navigation';
 
 export default async function ProjectBoardPage({ params }: {
   params: Promise<{ workspaceId: string; projectSlug: string }>;
 }) {
   const { workspaceId, projectSlug } = await params;
-  const board = await loadForgeBoard(workspaceId, projectSlug);
-  if (board.kind === 'denied') notFound();
-  const rights = await loadForgeIssueRights(workspaceId, projectSlug);
-  return <ForgeBoardView initial={board} rights={rights} workspaceSlug={workspaceId} projectSlug={projectSlug} />;
+  redirect(`/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectSlug)}?tab=work&view=forge`);
 }

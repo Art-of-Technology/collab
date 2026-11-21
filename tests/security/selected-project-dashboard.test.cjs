@@ -128,12 +128,14 @@ function fixture(actualLoaders = false) {
   const nativePage = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/page.tsx', {
     ...dependencies, '@/lib/request-session': { getServerSession: async () => ({ user: { id: state.actorId, email: 'stale@example.test' } }) },
     '@/lib/slug-resolvers': slugResolvers, './ProjectDashboard': { ProjectDashboard: () => null },
+    '@/lib/forge/reader': { readForgeBindings: async () => { state.bindingReads++; return []; } },
+    '@/lib/forge/issue-service': {}, './board/ForgeBoardView': {},
   }).default;
   function render(project, ws = 'space') {
     if (arguments.length === 0) project = 'a';
     return page({ params: Promise.resolve({ workspaceId: ws }), searchParams: Promise.resolve(project === undefined ? {} : { project }) });
   }
-  return { state, workspace, other, projects, render, renderSearch: search => page({ params: Promise.resolve({ workspaceId: 'space' }), searchParams: Promise.resolve(search) }), native: () => nativePage({ params: Promise.resolve({ workspaceId: 'space', projectSlug: 'alpha' }) }), html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'], resolveWorkspaceSlug: slugResolvers.resolveWorkspaceSlug, getUserWorkspaceRole: dependencies['@/lib/permissions'].getUserWorkspaceRole };
+  return { state, workspace, other, projects, render, renderSearch: search => page({ params: Promise.resolve({ workspaceId: 'space' }), searchParams: Promise.resolve(search) }), native: () => nativePage({ params: Promise.resolve({ workspaceId: 'space', projectSlug: 'alpha' }), searchParams: Promise.resolve({}) }), html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'], resolveWorkspaceSlug: slugResolvers.resolveWorkspaceSlug, getUserWorkspaceRole: dependencies['@/lib/permissions'].getUserWorkspaceRole };
 }
 
 test('missing stable actor redirects before data', async () => { const f = fixture(); f.state.actorId = undefined; await assert.rejects(f.render(), { message: 'redirect:/login' }); assert.equal(f.state.reads.length, 0); });
