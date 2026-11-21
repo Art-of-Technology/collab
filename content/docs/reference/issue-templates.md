@@ -32,6 +32,8 @@ A section counts when the description has a heading with the section's title and
 
 ## When templates are required
 
+The standard Story and Task templates require story points. Workspace admins can change this under **Required fields**.
+
 A workspace can require templates for agents. An agent's create or update that misses something is then refused with `422 template_required`, and nothing is written:
 
 ```json
