@@ -1,5 +1,3 @@
-const { existsSync } = require('node:fs');
-const { resolve } = require('node:path');
 const { load } = require('../security/helpers.cjs');
 
 const extraRole = {
@@ -14,9 +12,8 @@ const extraRole = {
 
 const file = 'src/lib/agent-role-catalogue.ts';
 function extendedCatalogue() {
-  if (!existsSync(resolve(file))) return {};
-  const { ROLE_CATALOGUE, createRoleCatalogue } = load(file);
-  return { ROLE_CATALOGUE: createRoleCatalogue([...ROLE_CATALOGUE.roles, extraRole]) };
+  const { ROLE_ENTRIES, createRoleCatalogue } = load(file);
+  return { ROLE_CATALOGUE: createRoleCatalogue([...ROLE_ENTRIES, extraRole]) };
 }
 
 module.exports = { extraRole, extendedCatalogue };

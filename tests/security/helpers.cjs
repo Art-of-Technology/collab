@@ -31,6 +31,7 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (!(name in dependencies) && name === '@/lib/agent-role-catalogue') return load('src/lib/agent-role-catalogue.ts');
       if (name === "@/lib/managed-worker-health") return load("src/lib/managed-worker-health.ts");
       if (!(name in dependencies) && ['@/lib/issue-trash', '@/lib/issue-trash-response', '@/lib/issue-trash-browser'].includes(name)) {
         // Keep error classes shared while exercising the actual lifecycle. A fixture must

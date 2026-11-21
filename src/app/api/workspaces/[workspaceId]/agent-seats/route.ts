@@ -11,7 +11,7 @@ const noStore = { 'Cache-Control': 'no-store' };
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(50),
   projectId: z.string().min(1).max(128),
-  role: z.enum(SEAT_ROLES),
+  role: z.string().refine(role => SEAT_ROLES.includes(role)),
   ownerId: z.string().min(1).max(128).nullable().default(null),
   expiresInDays: z.number().int().min(1).max(365).default(90),
   isDefault: z.boolean().optional(),

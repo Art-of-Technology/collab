@@ -3,14 +3,15 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { AGENT_APP_SLUG, createAgentToken } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
-import { SEAT_TAKES, assertAssignable } from '@/lib/issue-assignee';
-import { NEEDS_REPOSITORY, connectedRepositories } from '@/lib/agent-repository';
+import { assertAssignable } from '@/lib/issue-assignee';
+import { connectedRepositories } from '@/lib/agent-repository';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
 type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
 
-export const SEAT_ROLES = ['developer', 'reviewer', 'release', 'security', 'lead'] as const;
+export const SEAT_ROLES = ROLE_CATALOGUE.roles.map(role => role.id);
 /** The seats a member adds for themselves, and removes again. Never a lead or a release seat. */
 export const MEMBER_ROLES = ['developer', 'reviewer', 'security'] as const;
 /** Issues one agent account that is not a seat may hand to seats per UTC day. */
@@ -50,12 +51,13 @@ interface SeatInput {
  * token in one step; asking again under the same name gives the same seat a further token.
  */
 export async function createSeat(input: SeatInput) {
-  if (!(SEAT_ROLES as readonly string[]).includes(input.role)) throw new HandoffError('invalid_role', 'A seat is a developer, a reviewer, a release, a security or a lead seat');
+  const role = ROLE_CATALOGUE.getRole(input.role);
+  if (!role) throw new HandoffError('invalid_role', `Choose a seat role: ${SEAT_ROLES.join(', ')}`);
   // A runner is given only the seats of the person it was admitted for, so a seat without an owner would reach no runner.
   if (input.byRunner && !input.ownerId) throw new HandoffError('owner_required', 'A seat run by a runner needs an owner: it goes to the runner admitted for that person');
   const minted = await createAgentToken({
     workspaceId: input.workspaceId, actorId: input.actorId, name: input.name, access: 'write', expiresInDays: input.expiresInDays,
-    seat: (tx, account, agents) => writeSeat(tx, input, account, agents), mint: !input.byRunner,
+    seat: (tx, account, agents) => writeSeat(tx, input, role, account, agents), mint: !input.byRunner,
   });
   if (minted.error) return { error: minted.error };
   const { seat, token: secret, ...token } = minted;
@@ -71,7 +73,7 @@ export async function lockMemberSeatProject(tx: Prisma.TransactionClient, worksp
   if (!project.membersMayAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
 }
 
-async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>) {
+async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (typeof ROLE_CATALOGUE.roles)[number], account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>) {
   // One seat change at a time per project, so "the first of its role is the default" and "one release seat" are decided on settled rows.
   if (input.own) await lockMemberSeatProject(tx, input.workspaceId, input.projectId);
   else {
@@ -79,7 +81,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     if (!await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { id: true } })) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
   }
   if (input.repositoryId) {
-    if (!NEEDS_REPOSITORY.includes(input.role)) throw new HandoffError('repository_not_needed', `A ${input.role} seat works in no repository, so it picks none`);
+    if (role.repository === 'none') throw new HandoffError('repository_not_needed', `A ${input.role} seat works in no repository, so it picks none`);
     // Read among the seat's own project's rows, so an id of another project's repository names nothing here.
     if (!(await connectedRepositories(tx, input.projectId)).some(repository => repository.id === input.repositoryId)) {
       throw new HandoffError('invalid_repository', "Choose one of this project's connected repositories");
@@ -124,8 +126,10 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   const others = await tx.agentSeat.findMany({
     where: { projectId: input.projectId, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
   });
-  // One lead per project too. Nothing but this check holds it, which is enough under the project's lock taken above.
-  if ((input.role === 'release' || input.role === 'lead') && others.length) throw new HandoffError(`${input.role}_seat_exists`, `This project already has a ${input.role} seat; retire it first`, 409);
+  if (role.maxPerProject !== null && others.length >= role.maxPerProject) {
+    const limit = role.maxPerProject === 1 ? `a ${role.id} seat; retire it first` : `${role.maxPerProject} ${role.id} seats; retire one first`;
+    throw new HandoffError(`${role.id}_seat_exists`, `This project already has ${limit}`, 409);
+  }
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   // A seat made again starts with no figure: the one it kept was reported for the seat it was, perhaps for someone else's runner.
@@ -154,7 +158,7 @@ async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; us
   // Take the account's issues first, so a change to one of them that is already under way finishes before it is read here.
   await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "assigneeId" = ${seat.userId} FOR UPDATE`;
   // An ordinary issue has no request role; '' stands for that in the list of roles the seat takes.
-  const misfit = keep ? Prisma.sql`AND (i."projectId" <> ${keep.projectId} OR NOT (COALESCE(i."agentRequestRole", '') = ANY(${SEAT_TAKES[keep.role].map(role => role ?? '')})))` : Prisma.empty;
+  const misfit = keep ? Prisma.sql`AND (i."projectId" <> ${keep.projectId} OR NOT (COALESCE(i."agentRequestRole", '') = ANY(${(ROLE_CATALOGUE.getRole(keep.role)?.issueKinds ?? []).map(kind => kind ?? '')})))` : Prisma.empty;
   const issues = await tx.$queryRaw<{ id: string; issueKey: string | null; workspaceId: string; projectId: string }[]>`
     UPDATE "Issue" i SET "assigneeId" = NULL, "updatedAt" = ${new Date()}
     WHERE i."assigneeId" = ${seat.userId}
