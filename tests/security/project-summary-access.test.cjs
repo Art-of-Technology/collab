@@ -83,7 +83,16 @@ function fixture(options={}){
       action: 'UPDATED', fieldName: 'status', projectId: null, newStatusId: null, oldValue: 'Todo', newValue: 'Done' },
     { ...transition('human-completed', statuses[1], new Date(finished.getTime() + 2_000), agent),
       id: 'final-to-final', oldStatusId: 'done', oldStatus: statuses[1] },
+    { ...transition('human-completed', statuses[0], date(-10), actor), id: 'old-reopen', oldStatusId: 'done', oldStatus: statuses[1] },
    );
+   if (options.reopen) {
+    target.createdAt = date(-60);
+    issues.push(issue('reopened'));
+    activity.push(
+     { ...transition('reopened', statuses[1], date(-9), agent), id: 'reopened-close' },
+     { ...transition('reopened', statuses[0], date(-2), actor), id: 'reopened-open', oldStatusId: 'done', oldStatus: statuses[1] },
+    );
+   }
    completed.assignee = actor;
    issues.push(issue('human-open', {assignee: {id:'unlogged',name:'Unlogged person',agentSeat:null}}));
   }
@@ -239,7 +248,8 @@ test('Burn attributes the finish transition and recorded merge actor independent
  assert.equal(result.status, 200);
  const { burn } = result.body;
  assert.deepEqual(plain(burn.closures), { agents: 1, people: 1, unmatched: 0 });
- const week = burn.weeks.find(entry => entry.issues.agents > 0);
+ const weekOf = at => burn.weeks.find(entry => entry.day <= Math.floor(at / 86400000) && Math.floor(at / 86400000) < entry.day + 7);
+ const week = weekOf(Date.now() - 3_600_000);
  assert.deepEqual(plain(week.issues), { agents: 1, people: 1, unmatched: 0 });
  assert.deepEqual(plain(week.prs), { agents: 1, people: 1, unmatched: 2 });
  assert.deepEqual(plain(burn.prCounts), plain(week.prs));
@@ -258,4 +268,22 @@ test('Overview counts seats in its workspace while Burn classifies the account t
  assert.equal(result.body.overview.closedByAgents, 0);
  assert.equal(result.body.burn.closures.agents, 1);
  assert.doesNotMatch(JSON.stringify(result.body.burn), /Private seat name/);
+});
+
+test('Burn keeps the week and pace of a closure that was later reopened', async () => {
+ const result = await fixture({ overviewHistory: true, burn: true, reopen: true }).call();
+ assert.equal(result.status, 200);
+ const { burn } = result.body;
+ const today = Math.floor(Date.now() / 86400000);
+ const total = burn.weeks.reduce((sum, entry) => sum + entry.issues.agents + entry.issues.people + entry.issues.unmatched, 0);
+ // Two current finishes, the closure before the earlier reopen, and the reopened issue's closure.
+ assert.equal(total, 4);
+ const week = burn.weeks.find(entry => entry.day <= today - 9 && today - 9 < entry.day + 7);
+ assert.ok(week.issues.agents >= 1);
+ const closedOn = day => burn.points.filter(point => point.day <= day).at(-1).closed;
+ assert.equal(closedOn(today - 9) - closedOn(today - 10), 1);
+ assert.equal(closedOn(today - 2) - closedOn(today - 3), -1);
+ assert.equal(burn.points.at(-1).closed, 2);
+ assert.equal(burn.historyLimited, false);
+ assert.ok(burn.forecast.remaining >= 1);
 });

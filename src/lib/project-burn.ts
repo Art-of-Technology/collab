@@ -10,7 +10,12 @@ export const burnAccountSelect = {
   id: true, name: true, agentSeat: { select: { name: true, workspaceId: true } },
 } as const;
 
-type Work = { createdAt: Date; updatedAt: Date; finishedAt: Date | null; done: boolean; closer?: BurnAccount };
+// Earlier entries to and exits from a final status, before the current finish.
+export type BurnTransition = { at: Date; closed: boolean; actor?: BurnAccount };
+type Work = {
+  createdAt: Date; updatedAt: Date; finishedAt: Date | null; done: boolean; closer?: BurnAccount;
+  history?: BurnTransition[];
+};
 type Merge = { mergedAt: Date | null; mergedBy: BurnAccount | null };
 type Run = { startedAt: Date; endedAt: Date | null; user: BurnAccount };
 type Spend = { endedAt: Date | null; userId: string; amount: number };
@@ -69,29 +74,66 @@ export function calculateProjectBurn({
     }
     return entry;
   }
-  const increment = (days: Map<number, number>, day: number) => days.set(day, (days.get(day) ?? 0) + 1);
+  const add = (days: Map<number, number>, day: number, delta = 1) => days.set(day, (days.get(day) ?? 0) + delta);
   const pace = [0, 0, 0];
+  const recentClosureDays: { day: number; actor: BurnAccount | undefined }[] = [];
   let remaining = 0;
+  // History before this day is missing a transition, so its totals are unknown.
+  const limitHistory = (day: number) => { historyStart = Math.max(historyStart, Math.min(today, day)); };
+  function recordClosure(at: Date, actor: BurnAccount | undefined) {
+    const finish = burnDay(at);
+    add(closureDays, finish);
+    week(finish).issues[group(actor)]++;
+    recentClosureDays.push({ day: finish, actor });
+    if (!actor) attributionStart = Math.max(attributionStart, Math.min(today, finish + 1));
+    const age = (now.getTime() - at.getTime()) / DAY;
+    if (age >= 0 && age < WEEK * pace.length) pace[Math.floor(age / WEEK)]++;
+  }
 
   for (const issue of work) {
-    increment(scopeDays, burnDay(issue.createdAt));
+    add(scopeDays, burnDay(issue.createdAt));
+    // A closure that was later reopened still happened in its week. The reopen
+    // takes the issue out of the done line again.
+    let isClosed = false;
+    const history = [...issue.history ?? []].filter(entry => entry.at <= now)
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+    for (const entry of history) {
+      const day = burnDay(entry.at);
+      if (entry.closed) {
+        if (isClosed) {
+          // The reopen between two closures was not recorded.
+          add(closureDays, day, -1);
+          limitHistory(day);
+        }
+        recordClosure(entry.at, entry.actor);
+        isClosed = true;
+      } else if (isClosed) {
+        add(closureDays, day, -1);
+        isClosed = false;
+      } else {
+        // The closure before this reopen was not recorded.
+        limitHistory(day + 1);
+      }
+    }
+    const datedFinish = issue.done && issue.finishedAt && issue.finishedAt <= now ? issue.finishedAt : null;
+    if (isClosed) {
+      // The last recorded transition is a closure, but the issue was reopened since.
+      const reopenedBy = datedFinish ? burnDay(datedFinish) : burnDay(issue.updatedAt);
+      add(closureDays, Math.min(today, reopenedBy), -1);
+      limitHistory(datedFinish ? reopenedBy : reopenedBy + 1);
+    }
     if (!issue.done) {
       remaining++;
       continue;
     }
     closures[group(issue.closer)]++;
     if (issue.closer) contributor(issue.closer).issuesClosed++;
-    if (!issue.finishedAt || issue.finishedAt > now) {
+    if (!datedFinish) {
       undated++;
-      historyStart = Math.max(historyStart, Math.min(today, burnDay(issue.updatedAt) + 1));
+      limitHistory(burnDay(issue.updatedAt) + 1);
       continue;
     }
-    const finish = burnDay(issue.finishedAt);
-    increment(closureDays, finish);
-    week(finish).issues[group(issue.closer)]++;
-    if (!issue.closer) attributionStart = Math.max(attributionStart, Math.min(today, finish + 1));
-    const age = (now.getTime() - issue.finishedAt.getTime()) / DAY;
-    if (age < WEEK * pace.length) pace[Math.floor(age / WEEK)]++;
+    recordClosure(datedFinish, issue.closer);
   }
 
   let closed = undated;
@@ -173,10 +215,8 @@ export function calculateProjectBurn({
     weeklyStart, weeklyLimited: issuesStart > projectStart, prStart,
     weeks: [...weeks.values()].filter(entry => entry.day <= thisWeek).sort((a, b) => a.day - b.day),
     prCounts, undatedPrs, closures,
-    recentClosures: work.reduce((totals, issue) => {
-      if (issue.done && issue.finishedAt && issue.finishedAt <= now && burnDay(issue.finishedAt) >= recentStart) {
-        totals[group(issue.closer)]++;
-      }
+    recentClosures: recentClosureDays.reduce((totals, { day, actor }) => {
+      if (day >= recentStart) totals[group(actor)]++;
       return totals;
     }, count()),
     runCount: runs.length, runHours,

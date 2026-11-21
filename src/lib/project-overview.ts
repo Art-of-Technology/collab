@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { prisma } from '@/lib/prisma';
-import { burnAccountSelect, calculateProjectBurn, type BurnAccount } from '@/lib/project-burn';
+import { burnAccountSelect, calculateProjectBurn, type BurnAccount, type BurnTransition } from '@/lib/project-burn';
 
 const DAY = 86_400_000;
 const PACE_DAYS = 21;
@@ -29,6 +29,8 @@ const overviewIssueSelect = {
   baselineStartDate: true, baselineDueDate: true,
   projectStatus: { select: { isFinal: true, category: true } },
 } satisfies Prisma.IssueSelect;
+
+const statusFields = { isFinal: true, category: true } satisfies Prisma.ProjectStatusSelect;
 
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
 const isDone = (issue: OverviewIssue) => issue.projectStatus?.isFinal === true;
@@ -158,6 +160,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const issues: Prisma.IssueGetPayload<{ select: typeof issueSelect }>[] = [];
   const blockedSince = new Map<string, Date>();
   const closingEvents = new Map<string, { distance: number; actor: BurnAccount | undefined }>();
+  const closureHistory = new Map<string, BurnTransition[]>();
   const projectStatuses = await prisma.projectStatus.findMany({
     where: { projectId, project: projectWhere },
     select: { name: true, displayName: true, isFinal: true },
@@ -178,24 +181,29 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       issues.push(...batch);
       const datedIssues = new Map(batch.flatMap(issue => issue.type !== 'MILESTONE' && isDone(issue) && issue.finishedAt
         ? [[issue.id, issue.finishedAt]] as const : []));
-      const closedIds = [...datedIssues.keys()];
-      const blockedIds = batch.filter(issue => !isDone(issue) && issue.projectStatus?.category === 'blocked').map(issue => issue.id);
-      if (!closedIds.length && !blockedIds.length) continue;
+      const workIds = batch.filter(issue => issue.type !== 'MILESTONE').map(issue => issue.id);
+      const blockedIds = new Set(batch.filter(issue => !isDone(issue) && issue.projectStatus?.category === 'blocked').map(issue => issue.id));
+      if (!workIds.length && !blockedIds.size) continue;
       for await (const changes of pages(after => prisma.issueActivity.findMany({
         where: {
           workspaceId, itemType: 'ISSUE', id: after ? { gt: after } : undefined,
           OR: [
             {
-              projectId, itemId: { in: closedIds }, action: 'STATUS_CHANGED',
+              projectId, itemId: { in: workIds }, action: 'STATUS_CHANGED',
               newStatus: { project: projectWhere, isFinal: true },
               OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, isFinal: false } }],
             },
             {
-              itemId: { in: closedIds }, action: 'UPDATED', fieldName: 'status', newStatusId: null,
+              projectId, itemId: { in: workIds }, action: 'STATUS_CHANGED',
+              oldStatus: { project: projectWhere, isFinal: true },
+              newStatus: { project: projectWhere, isFinal: false },
+            },
+            {
+              itemId: { in: workIds }, action: 'UPDATED', fieldName: 'status', newStatusId: null,
               OR: [{ projectId }, { projectId: null }],
             },
             {
-              projectId, itemId: { in: blockedIds }, action: 'STATUS_CHANGED',
+              projectId, itemId: { in: [...blockedIds] }, action: 'STATUS_CHANGED',
               newStatus: { project: projectWhere, isFinal: false, category: 'blocked' },
               OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, OR: [{ category: null }, { category: { not: 'blocked' } }] } }],
             },
@@ -203,21 +211,32 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
         },
         orderBy: pageOrder,
         take: PAGE_SIZE,
-        select: { id: true, itemId: true, createdAt: true, action: true, oldValue: true, newValue: true,
-          user: { select: burnAccountSelect } },
+        select: { id: true, itemId: true, createdAt: true, action: true, oldValue: true, newValue: true, oldStatusId: true,
+          oldStatus: { select: statusFields }, newStatus: { select: statusFields }, user: { select: burnAccountSelect } },
       }))) {
         for (const change of changes) {
-          const finishedAt = datedIssues.get(change.itemId);
-          if (!finishedAt) {
+          const legacy = change.action === 'UPDATED';
+          const { oldStatus, newStatus } = change;
+          if (!legacy && blockedIds.has(change.itemId) && newStatus?.category === 'blocked' && !newStatus.isFinal &&
+            (!change.oldStatusId || (oldStatus && oldStatus.category !== 'blocked'))) {
             const previous = blockedSince.get(change.itemId);
             if (!previous || change.createdAt > previous) blockedSince.set(change.itemId, change.createdAt);
+          }
+          const wasFinal = legacy ? legacyStatus(change.oldValue) : change.oldStatusId ? oldStatus?.isFinal : false;
+          const isFinal = legacy ? legacyStatus(change.newValue) : newStatus?.isFinal;
+          const closing = wasFinal === false && isFinal === true;
+          if (!closing && !(wasFinal === true && isFinal === false)) continue;
+          const finishedAt = datedIssues.get(change.itemId);
+          // The trigger and activity writers have different clocks. An event close
+          // to the current finish is that finish. Earlier transitions are history.
+          const distance = finishedAt ? Math.abs(change.createdAt.getTime() - finishedAt.getTime()) : Infinity;
+          if (!finishedAt || (closing ? change.createdAt.getTime() < finishedAt.getTime() - 60_000
+            : change.createdAt.getTime() <= finishedAt.getTime() + 60_000)) {
+            const transition = { at: change.createdAt, closed: closing, actor: change.user };
+            closureHistory.set(change.itemId, [...closureHistory.get(change.itemId) ?? [], transition]);
             continue;
           }
-          if (change.action === 'UPDATED' && (legacyStatus(change.oldValue) !== false || legacyStatus(change.newValue) !== true)) continue;
-          // The trigger and activity writers have different clocks. An event must
-          // still be close to this finish, not an older closure before a reopen.
-          const distance = Math.abs(change.createdAt.getTime() - finishedAt.getTime());
-          if (distance > 60_000) continue;
+          if (!closing || distance > 60_000) continue;
           const previous = closingEvents.get(change.itemId);
           if (!previous || distance < previous.distance) closingEvents.set(change.itemId, { distance, actor: change.user });
           else if (distance === previous.distance && previous.actor?.id !== change.user.id) {
@@ -279,7 +298,9 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const work = issues.filter(issue => issue.type !== 'MILESTONE');
   const burn = calculateProjectBurn({
     workspaceId, createdAt, now,
-    work: work.map(issue => ({ ...issue, done: isDone(issue), closer: closingEvents.get(issue.id)?.actor })),
+    work: work.map(issue => ({
+      ...issue, done: isDone(issue), closer: closingEvents.get(issue.id)?.actor, history: closureHistory.get(issue.id),
+    })),
     milestones: issues.flatMap(issue => issue.type === 'MILESTONE' && !isDone(issue) && issue.dueDate && day(issue.dueDate) >= day(now)
       ? [{ label: issue.issueKey ?? issue.title, dueDate: issue.dueDate }] : []),
     accounts: [...seats.map(seat => seat.user), ...work.flatMap(issue => issue.assignee ?? [])],
