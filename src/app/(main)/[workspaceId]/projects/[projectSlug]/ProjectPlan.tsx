@@ -108,7 +108,7 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
   const until = today + NEXT_WEEKS;
   const rows = nextWeeks ? dated.filter(row => row.start <= until && Math.max(row.end, row.forecast ?? row.end) >= today) : dated;
   if (!rows.length) {
-    return <p className="py-2 text-[13px] text-collab-400">{nextWeeks ? 'No milestones in the next 8 weeks.' : 'No milestones have dates yet.'}</p>;
+    return <p className="py-2 text-[13px] text-collab-400">{nextWeeks ? 'No milestones in the next 8 weeks.' : 'No milestones with chartable dates.'}</p>;
   }
 
   const width = compact ? 520 : 1000;
@@ -352,7 +352,7 @@ export function ProjectPlan({ summary, workspaceId, workspaceSlug, base, milesto
   const [showBaseline, setShowBaseline] = useState(true);
   const [selected, setSelected] = useState(milestoneId ?? overview.nextMilestoneId);
   const milestone = milestones.find(item => item.id === selected) ?? milestones[0];
-  const undated = milestones.filter(item => item.start === null);
+  const unplotted = milestones.filter(item => item.start === null);
   const { checkPermission } = usePermissions(workspaceId);
   const canSetBaseline = checkPermission(Permission.EDIT_ANY_TASK).hasPermission;
   const canEdit = canSetBaseline || (milestone?.isReporter === true && checkPermission(Permission.EDIT_SELF_TASK).hasPermission);
@@ -390,12 +390,14 @@ export function ProjectPlan({ summary, workspaceId, workspaceSlug, base, milesto
         </div>
       </Card>
 
-      {undated.length > 0 && (
+      {unplotted.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-collab-400">
-          <p>{undated.length} {undated.length === 1 ? 'milestone has' : 'milestones have'} no dates yet and {undated.length === 1 ? 'waits' : 'wait'} below the chart</p>
-          {undated.map(item => (
+          <p>Milestones outside the chart</p>
+          {unplotted.map(item => (
             <button key={item.id} type="button" aria-pressed={item.id === milestone?.id} aria-controls="p-detail" onClick={() => setSelected(item.id)}
-              className={cn(chipStyle, 'hover:bg-collab-700', item.id === milestone?.id && 'border-blue-500 text-collab-50')}>{titleOf(item)}</button>
+              className={cn(chipStyle, 'hover:bg-collab-700', item.id === milestone?.id && 'border-blue-500 text-collab-50')}>
+              {titleOf(item)}{item.invalidDates && ' · Due before start'}
+            </button>
           ))}
         </div>
       )}
