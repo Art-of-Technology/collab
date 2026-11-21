@@ -184,21 +184,33 @@ async function handlePullRequestEvent(
 
       case 'closed':
         if (pr.merged) {
-          // Handle PR merge - trigger version management
+          const mergedAt = new Date(pr.merged_at);
+          const mergedById = await findUserByGithubId(pr.merged_by?.id);
+          await webhookService.recordPullRequestMerge({
+            repositoryId: repository.id,
+            githubPrId: pr.number,
+            title: pr.title,
+            description: pr.body,
+            baseBranch: pr.base.ref,
+            headBranch: pr.head.ref,
+            authorName: pr.user?.login,
+            createdById: (await findUserByGithubId(pr.user?.id)) ?? undefined,
+            githubCreatedAt: new Date(pr.created_at),
+            githubUpdatedAt: new Date(pr.updated_at),
+            mergedAt,
+            closedAt: new Date(pr.closed_at ?? pr.merged_at),
+            mergedById,
+          });
+
           await versionManager.handlePullRequestMerge(repository.id, pr.number, {
             baseBranch: pr.base.ref,
             headBranch: pr.head.ref,
-            mergedAt: new Date(pr.merged_at),
-            mergedBy: (await findUserByGithubId(pr.merged_by?.id)) || undefined,
+            mergedAt,
+            mergedBy: mergedById ?? undefined,
           });
+        } else {
+          await webhookService.closePullRequest(repository.id, pr.number, new Date(pr.closed_at ?? Date.now()));
         }
-
-        await webhookService.updatePullRequest(repository.id, pr.number, {
-          state: pr.merged ? 'MERGED' : 'CLOSED',
-          mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
-          closedAt: new Date(),
-          mergedById: pr.merged_by ? await findUserByGithubId(pr.merged_by.id) : null,
-        });
         break;
 
       case 'ready_for_review':
@@ -211,13 +223,15 @@ async function handlePullRequestEvent(
         });
 
         if (existingPR) {
-          await prisma.pullRequest.update({
-            where: { id: existingPR.id },
+          const update = await prisma.pullRequest.updateMany({
+            where: { id: existingPR.id, state: { not: 'MERGED' } },
             data: { state: 'OPEN' },
           });
 
           // Trigger AI review now that PR is ready for review
-          await triggerAIReviewIfEnabled(repository.id, existingPR.id);
+          if (update.count > 0) {
+            await triggerAIReviewIfEnabled(repository.id, existingPR.id);
+          }
         }
         break;
 
