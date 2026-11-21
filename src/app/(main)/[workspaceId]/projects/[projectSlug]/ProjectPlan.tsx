@@ -288,7 +288,7 @@ function MilestoneDetail({ milestone, workspaceId, workspaceSlug, base, canEdit,
         <div className={fieldStyle}>Issues<strong className="text-sm text-collab-50">{total ? `${completed} of ${total} done` : 'none'}</strong></div>
       </div>
       {error && <p role="alert" className="text-[13px] text-red-400">{error}</p>}
-      <p className="text-[13px] text-collab-400">Agents change these dates through the CLI and MCP; a change never moves the baseline.</p>
+      <p className="text-[13px] text-collab-400">Agents can change these dates through the CLI and MCP. The baseline moves only when you freeze it.</p>
       <ul className="divide-y divide-white/[.09] border-b-white/[.09] [&:not(:empty)]:border-b">
         {milestone.issues.map(issue => (
           <li key={issue.id}>
@@ -327,8 +327,8 @@ export function ProjectPlan({ summary, workspaceId, workspaceSlug, base, milesto
   const { milestones } = overview.plan;
   const [nextWeeks, setNextWeeks] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
-  const [selected, setSelected] = useState(milestoneId ?? overview.nextMilestoneId ?? milestones[0]?.id);
-  const milestone = milestones.find(item => item.id === selected);
+  const [selected, setSelected] = useState(milestoneId ?? overview.nextMilestoneId);
+  const milestone = milestones.find(item => item.id === selected) ?? milestones[0];
   const undated = milestones.filter(item => item.start === null);
   const { checkPermission } = usePermissions(workspaceId);
   const canSetBaseline = checkPermission(Permission.EDIT_ANY_TASK).hasPermission;
@@ -357,7 +357,7 @@ export function ProjectPlan({ summary, workspaceId, workspaceSlug, base, milesto
       </div>
 
       <Card className={cardStyle}>
-        <MilestoneChart {...overview.plan} nextWeeks={nextWeeks} showBaseline={showBaseline} selected={selected} open={setSelected} />
+        <MilestoneChart {...overview.plan} nextWeeks={nextWeeks} showBaseline={showBaseline} selected={milestone?.id} open={setSelected} />
         <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-collab-400">
           {legend.map(([label, style]) => (
             <span key={label} className="inline-flex items-center gap-[5px]">
@@ -371,8 +371,8 @@ export function ProjectPlan({ summary, workspaceId, workspaceSlug, base, milesto
         <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-collab-400">
           <p>{undated.length} {undated.length === 1 ? 'milestone has' : 'milestones have'} no dates yet and {undated.length === 1 ? 'waits' : 'wait'} below the chart</p>
           {undated.map(item => (
-            <button key={item.id} type="button" aria-pressed={item.id === selected} aria-controls="p-detail" onClick={() => setSelected(item.id)}
-              className={cn(chipStyle, 'hover:bg-collab-700', item.id === selected && 'border-blue-500 text-collab-50')}>{titleOf(item)}</button>
+            <button key={item.id} type="button" aria-pressed={item.id === milestone?.id} aria-controls="p-detail" onClick={() => setSelected(item.id)}
+              className={cn(chipStyle, 'hover:bg-collab-700', item.id === milestone?.id && 'border-blue-500 text-collab-50')}>{titleOf(item)}</button>
           ))}
         </div>
       )}
