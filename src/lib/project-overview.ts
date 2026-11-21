@@ -24,19 +24,78 @@ const percent = (done: number, total: number) => total ? Math.round(100 * done /
 
 const overviewIssueSelect = {
   id: true, issueKey: true, title: true, type: true, milestoneId: true,
+  reporterId: true, status: true,
   createdAt: true, firstStartedAt: true, finishedAt: true, dueDate: true, startDate: true,
   baselineStartDate: true, baselineDueDate: true,
-  projectStatus: { select: { isFinal: true, category: true } },
+  projectStatus: { select: { isFinal: true, category: true, displayName: true } },
 } satisfies Prisma.IssueSelect;
 
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
 const isDone = (issue: OverviewIssue) => issue.projectStatus?.isFinal === true;
 const issueRef = ({ id, issueKey, title }: OverviewIssue) => ({ id, issueKey, title });
+const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
+  a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
+const dateOrder = (a: Date | null, b: Date | null) =>
+  (a?.getTime() ?? Infinity) - (b?.getTime() ?? Infinity);
+
+function forecastFinish(today: number, start: number | null, remaining: number, recentClosures: number) {
+  const forecastStart = Math.max(today, start ?? today);
+  if (!remaining) return forecastStart;
+  return recentClosures ? forecastStart + Math.ceil(remaining * PACE_DAYS / recentClosures) : null;
+}
+
+function planMilestones(
+  milestones: OverviewIssue[], byMilestone: Map<string, OverviewIssue[]>,
+  today: number, recentClosures: number, viewerId: string | undefined,
+) {
+  // Infer the saved starts in baseline order so edits to the current plan
+  // cannot move the outlines or the boundary between two saved milestones.
+  const baselineStarts = new Map<string, number>();
+  let previousBaselineDue: number | null = null;
+  const baselineOrder = milestones.filter(issue => issue.baselineStartDate || issue.baselineDueDate)
+    .sort((a, b) => dateOrder(a.baselineDueDate ?? a.baselineStartDate, b.baselineDueDate ?? b.baselineStartDate) || milestoneTie(a, b));
+  for (const issue of baselineOrder) {
+    const due = issue.baselineDueDate ? day(issue.baselineDueDate) : null;
+    const start = issue.baselineStartDate ? day(issue.baselineStartDate) : previousBaselineDue ?? due;
+    if (start !== null) baselineStarts.set(issue.id, start);
+    previousBaselineDue = due ?? previousBaselineDue;
+  }
+
+  let previousDue: number | null = null;
+  return [...milestones]
+    .sort((a, b) => dateOrder(a.dueDate ?? a.startDate, b.dueDate ?? b.startDate) || milestoneTie(a, b))
+    .map(issue => {
+      const linked = byMilestone.get(issue.id) ?? [];
+      const completed = linked.filter(isDone).length;
+      const due = issue.dueDate ? day(issue.dueDate) : null;
+      const start = issue.startDate ? day(issue.startDate) : due === null ? null : previousDue ?? due;
+      previousDue = due ?? previousDue;
+      const decision = due !== null && !issue.startDate && !linked.length;
+      const state = decision ? 'decision' : isDone(issue) ? 'done'
+        : issue.firstStartedAt || issue.projectStatus?.category === 'in_progress' ? 'running' : 'planned';
+      const forecast = start !== null && state !== 'done' && !decision
+        ? forecastFinish(today, start, linked.length - completed, recentClosures) : null;
+      const baselineDue = issue.baselineDueDate ? day(issue.baselineDueDate) : null;
+      const end = due ?? start;
+      const comparison = due === null ? forecast : Math.max(due, forecast ?? due);
+      return {
+        ...issueRef(issue), state, completed, total: linked.length,
+        startDate: issue.startDate?.toISOString() ?? null, dueDate: dateOf(due),
+        start: decision ? due : start, end,
+        baselineStart: baselineStarts.get(issue.id) ?? null, baselineDue,
+        forecast,
+        driftDays: comparison === null || baselineDue === null ? null : Math.max(0, comparison - baselineDue),
+        isReporter: viewerId !== undefined && issue.reporterId === viewerId,
+        issues: linked.map(item => ({ ...issueRef(item), status: item.projectStatus?.displayName ?? item.status })),
+      };
+    });
+}
 
 export function calculateProjectOverview(
   issues: OverviewIssue[],
   baselineAt: Date | null,
   now: Date,
+  viewerId?: string,
 ) {
   const today = day(now);
   const work = issues.filter(issue => issue.type !== 'MILESTONE');
@@ -55,9 +114,7 @@ export function calculateProjectOverview(
   }
 
   const ordered = issues.filter(issue => issue.type === 'MILESTONE').sort((a, b) =>
-    ((a.baselineDueDate ?? a.dueDate)?.getTime() ?? Infinity) -
-    ((b.baselineDueDate ?? b.dueDate)?.getTime() ?? Infinity) ||
-    a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    dateOrder(a.baselineDueDate ?? a.dueDate, b.baselineDueDate ?? b.dueDate) || milestoneTie(a, b));
   let previousEnd: number | null = null;
   const milestones = ordered.map(issue => {
     const linked = byMilestone.get(issue.id) ?? [];
@@ -79,10 +136,7 @@ export function calculateProjectOverview(
     }
     previousEnd = end ?? previousEnd;
 
-    const forecastStart = Math.max(today, start ?? today);
-    const forecast = finished ? null : remaining === 0 ? forecastStart : recentClosures
-      ? forecastStart + Math.ceil(remaining * PACE_DAYS / recentClosures)
-      : null;
+    const forecast = finished ? null : forecastFinish(today, start, remaining, recentClosures);
     const comparison = finished ? end : forecast;
     return {
       ...issueRef(issue), finished, completed, total: linked.length, progress: percent(completed, linked.length),
@@ -110,6 +164,7 @@ export function calculateProjectOverview(
 
   return {
     milestones, verdict, hasBaseline,
+    plan: { today, milestones: planMilestones(ordered, byMilestone, today, recentClosures, viewerId) },
     baselineAt: baselineAt?.toISOString() ?? null,
     pacePerWeek: recentClosures / 3,
     nextMilestoneId: nextMilestone?.id ?? null,
@@ -147,7 +202,7 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
           AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
         },
       },
-      select: { createdAt: true },
+      select: { createdAt: true, setById: true },
       orderBy: { createdAt: 'asc' },
       take: 1,
     },
@@ -229,7 +284,17 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
     agentSpend(),
     readIssues(),
   ]);
-  const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now);
+  const baselineSetter = baseline && await prisma.user.findFirst({
+    where: {
+      id: baseline.setById,
+      OR: [
+        { ownedWorkspaces: { some: { id: workspaceId, ...postWorkspaceAccessWhere(userId) } } },
+        { workspaceMemberships: { some: { workspaceId, workspace: postWorkspaceAccessWhere(userId) } } },
+      ],
+    },
+    select: { name: true },
+  });
+  const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now, userId);
   const closed = issues.filter(issue => issue.type !== 'MILESTONE' && isDone(issue));
   const blocked = issues.filter(issue => !isDone(issue) &&
     (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
@@ -241,7 +306,7 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
   }).length;
 
   return {
-    ...overview,
+    ...overview, baselineSetBy: baselineSetter?.name ?? null,
     blocked: blocked.map(issue => {
       const sinceStatus = latestChange.get(issue.id)?.createdAt ?? now;
       const sinceRelation = issue.targetRelations[0]?.createdAt ?? now;
