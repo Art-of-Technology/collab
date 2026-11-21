@@ -145,7 +145,7 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
   return (
     <div className="overflow-x-auto">
       <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label="Milestones on a time axis"
-        className={cn('block h-auto w-full', compact ? 'min-w-[340px]' : 'min-w-[680px]')}>
+        className={cn('block h-auto w-full', compact ? 'min-w-[340px]' : 'min-w-[825px]')}>
         <g aria-hidden="true">{ticks}</g>
         {rows.map((row, index) => {
           const y = top + index * rowHeight;
@@ -158,7 +158,7 @@ function MilestoneChart({ milestones, today, nextWeeks, showBaseline, compact, s
           const baselineEnd = x(row.baselineDue ?? row.baselineStart ?? row.end);
           const active = row.id === selected;
           const { color, track } = stateStyle[row.state];
-          const limit = Math.max(6, (compact ? 16 : 29) - (row.issueKey?.length ?? 0) + 3);
+          const limit = Math.max(4, (compact ? 16 : 32) - (row.issueKey?.length ?? 0));
           const title = row.title.length > limit ? `${row.title.slice(0, limit - 1)}…` : row.title;
           const drift = row.driftDays ?? 0;
           const visual = (
