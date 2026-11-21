@@ -186,6 +186,29 @@ test('Plan orders due-only milestones, chains their starts, and includes decisio
   assert.equal(undated.end, null);
 });
 
+test('Plan charts undated completed milestones using actual dates before chaining into the scheduled work', () => {
+  const result = calculateProjectOverview([
+    milestone('scheduled', { dueDate: date(25) }),
+    issue('next', { milestoneId: 'scheduled' }),
+    closed('milestone-only', { type: 'MILESTONE', finishedAt: date(17) }),
+    closed('with-work', { type: 'MILESTONE', firstStartedAt: date(8), finishedAt: date(11) }),
+    closed('linked', { milestoneId: 'with-work', firstStartedAt: date(6), finishedAt: date(12) }),
+    milestone('reversed', { startDate: date(26), dueDate: date(19) }),
+    milestone('open', { projectStatus: { isFinal: false, category: 'in_progress' }, firstStartedAt: date(15) }),
+    closed('unknown-finish', { type: 'MILESTONE', finishedAt: null }),
+  ], null, now);
+  const charted = result.plan.milestones.filter(row => row.start !== null && row.end !== null);
+  const asDay = value => value.getTime() / 86_400_000;
+  assert.deepEqual(charted.map(({ id, state, start, end }) => ({ id, state, start, end })), [
+    { id: 'with-work', state: 'done', start: asDay(date(6)), end: asDay(date(12)) },
+    { id: 'milestone-only', state: 'done', start: asDay(date(17)), end: asDay(date(17)) },
+    { id: 'scheduled', state: 'planned', start: asDay(date(17)), end: asDay(date(25)) },
+  ]);
+  assert.deepEqual(result.plan.milestones.filter(row => row.start === null).map(row => row.id), ['reversed', 'open', 'unknown-finish']);
+  assert.equal(charted[1].startDate, null);
+  assert.equal(charted[1].dueDate, null);
+});
+
 test('Plan preserves reversed dates for repair without charting them or chaining a start from them', () => {
   const result = calculateProjectOverview([
     milestone('valid', { dueDate: date(22), baselineDueDate: date(22) }),
