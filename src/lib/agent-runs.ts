@@ -747,7 +747,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
  * was reviewed and by whom, or `closed` when it was closed without a verdict (a person moved it to done by hand).
  * Read from what filing and finishing wrote on the issue's timeline.
  */
-export async function securityReviews(issue: { id: string; workspaceId: string }) {
+async function securityReviewsByRequest(issue: { id: string; workspaceId: string }) {
   const rows = await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: issue.id, action: { in: ['SECURITY_REQUESTED', 'SECURITY_VERDICT'] } },
     orderBy: { createdAt: 'asc' }, select: { action: true, details: true, user: { select: { name: true } } } });
   const reviews = new Map<string, { requestKey: string; state: string; reviewed?: string; by?: string | null }>();
@@ -762,27 +762,63 @@ export async function securityReviews(issue: { id: string; workspaceId: string }
   }
   const waiting = [...reviews].filter(([, review]) => review.state === 'open').map(([id]) => id);
   const open = new Set((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting }, workspaceId: issue.workspaceId, ...NOT_DONE }, select: { id: true } }) : []).map(row => row.id));
-  return [...reviews].map(([id, review]) => review.state === 'open' && !open.has(id) ? { ...review, state: 'closed' } : review);
+  for (const id of waiting) {
+    const review = reviews.get(id)!;
+    if (!open.has(id)) reviews.set(id, { ...review, state: 'closed' });
+  }
+  return reviews;
+}
+
+export async function securityReviews(issue: { id: string; workspaceId: string }) {
+  return [...(await securityReviewsByRequest(issue)).values()];
+}
+
+async function latestRequests(userId: string, issue: { id: string; workspaceId: string }, security: Awaited<ReturnType<typeof securityReviewsByRequest>>) {
+  const filingLink = { relationType: { in: ['BLOCKS', 'RELATES_TO'] } } satisfies Prisma.IssueRelationWhereInput;
+  const candidates = await prisma.issue.findMany({
+    where: {
+      workspaceId: issue.workspaceId, ...issueReadAccessWhere(userId),
+      AND: [{ OR: [
+        { agentRequestRole: { notIn: ['security'] }, sourceRelations: { some: { ...filingLink, targetIssueId: issue.id } } },
+        { agentRequestRole: 'security', id: { in: [...security.keys()] } },
+      ] }],
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, issueKey: true, agentRequestRole: true, projectStatus: statusSelect,
+      sourceRelations: { where: filingLink, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1, select: { targetIssueId: true } } },
+  });
+  const requests = new Map<string, { role: string; requestKey: string; state: string; reviewed?: string; by?: string | null }>();
+  for (const request of candidates) {
+    const role = request.agentRequestRole;
+    if (!role || requests.has(role)) continue;
+    // Filing writes the request's first link. Security requests also record their source on its timeline.
+    const review = security.get(request.id);
+    if (role === 'security' ? !review : request.sourceRelations[0]?.targetIssueId !== issue.id) continue;
+    requests.set(role, { role, ...(review ?? { state: isDone(request) ? 'done' : 'open' }), requestKey: request.issueKey ?? request.id });
+  }
+  return [...requests.values()];
 }
 
 /**
  * For an issue's page: the run that is open on it (who holds it, since when, and whether this person may clear it
- * now) and its security reviews.
+ * now), its security reviews and the latest request of each role.
  */
 export async function openRun(userId: string, issueIdOrKey: string, browserSession: boolean) {
   const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   await markLost(issue.workspaceId);
-  const security = await securityReviews(issue);
+  const reviews = await securityReviewsByRequest(issue);
+  const security = [...reviews.values()];
+  const requests = await latestRequests(userId, issue, reviews);
   const run = await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { id: true, state: true, startedAt: true, leaseUntil: true, ask: true, userId: true, user: { select: { name: true } },
     seat: { select: { ownerId: true } }, issue: { select: { assigneeId: true } } } });
-  if (!run) return { run: null, security };
+  if (!run) return { run: null, security, requests };
   // What `clearRun` accepts: a lost run, or a run without a lease, from a person who may assign issues.
   const clearable = (run.state === 'lost' || !run.leaseUntil) && (await checkUserPermission(userId, issue.workspaceId, Permission.ASSIGN_TASK)).hasPermission;
   const question = browserSession && run.state === 'waiting' && run.seat?.ownerId === userId && run.issue.assigneeId === run.userId
     ? questionsOf(run.ask).at(-1) : undefined;
   return { run: { id: run.id, state: run.state, startedAt: run.startedAt, by: run.user.name, clearable,
-    ...(question?.answer === null && { question: { id: question.id, text: question.text } }) }, security };
+    ...(question?.answer === null && { question: { id: question.id, text: question.text } }) }, security, requests };
 }
 
 /**

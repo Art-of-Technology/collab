@@ -574,7 +574,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual([(await open(own.target))[1].run.by, (await open(own.target))[1].run.clearable], [person, true]);
     // No open run, no access, no login.
     await finish(personToken, own.run.id, { outcome: 'done' });
-    assert.deepEqual(await open(own.target), [200, { run: null, security: [] }]);
+    assert.deepEqual(await open(own.target), [200, { run: null, security: [], requests: [] }]);
     session = 'cstranger001';
     assert.equal((await open(target))[0], 404);
     session = null;
