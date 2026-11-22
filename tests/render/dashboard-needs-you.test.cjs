@@ -11,7 +11,7 @@ const dependencies = {
   '@/lib/utils': load('src/lib/utils.ts', { clsx: require('clsx'), 'tailwind-merge': require('tailwind-merge') }),
 };
 const relativeTime = load(components + 'RelativeTime.tsx', dependencies);
-const panel = load(components + 'NeedsYouPanel.tsx', { ...dependencies, './RelativeTime': relativeTime });
+const panel = load(components + 'NeedsYouPanel.tsx', dependencies);
 const overview = load(components + 'WorkspaceOverview.tsx', {
   ...dependencies, './RelativeTime': relativeTime, './NeedsYouPanel': panel,
   '@/components/ui/page-layout': load('src/components/ui/page-layout.tsx', dependencies),
@@ -50,7 +50,26 @@ test('each chip is a link that keeps the scope and shows its exact count', () =>
   const [first, second] = section.querySelectorAll('li');
   assert.match(first.textContent, /Review.*Check release.*REL-1.*Release.*Developer.*2 h ago/);
   assert.equal(first.querySelector('time').getAttribute('datetime'), since);
+  assert.equal(first.querySelector('time').getAttribute('title'), since);
   assert.equal(first.querySelector('a').getAttribute('href'), item.pullRequestUrl);
   assert.equal(second.querySelector('a').getAttribute('href'), '/work/issues/REL-1');
   assert.match(section.textContent, /Showing 20 of 24/);
+});
+
+test('a due row uses the UTC day and keeps its exact timestamp', () => {
+  const now = '2026-11-21T23:50:00.000Z';
+  const since = '2026-11-22T00:05:00.000Z';
+  const document = JSDOM.fragment(renderToStaticMarkup(React.createElement(panel.default, {
+    workspaceSlug: 'work', now, kind: 'due', kindHrefs: { all: '?', due: '?kind=due' },
+    data: {
+      kind: 'ready', counts: { question: 0, review: 0, failed: 0, due: 1 },
+      items: [{ id: 'due:d1', kind: 'due', since, seat: null, issue: {
+        id: 'd1', issueKey: 'REL-1', title: 'Cut release', project: { name: 'Release' },
+      } }],
+    },
+  })));
+  const time = document.querySelector('time');
+  assert.equal(time.textContent, 'due tomorrow');
+  assert.equal(time.getAttribute('datetime'), since);
+  assert.equal(time.getAttribute('title'), since);
 });

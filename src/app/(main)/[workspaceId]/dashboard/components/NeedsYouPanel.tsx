@@ -1,5 +1,4 @@
 import type { NeedsYouKind, NeedsYouOverview } from '@/types/workspace-dashboard';
-import RelativeTime from './RelativeTime';
 
 const chips = [
   ['all', 'All'], ['question', 'Questions'], ['review', 'Reviews'], ['failed', 'Failed runs'], ['due', 'Due'],
@@ -12,6 +11,25 @@ const labels = {
 };
 const focus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400';
 const format = (count: number) => count.toLocaleString('en-GB');
+const minute = 60_000;
+const hour = 60 * minute;
+const day = 24 * hour;
+
+function rowAge(timestamp: number, reference: number, due: boolean) {
+  const difference = timestamp - reference;
+  const elapsed = Math.abs(difference);
+  if (due && difference >= 0) {
+    const daysAhead = Math.floor(timestamp / day) - Math.floor(reference / day);
+    if (daysAhead === 0) return 'due today';
+    if (daysAhead === 1) return 'due tomorrow';
+  }
+  if (!due && elapsed < minute) return difference > 0 ? 'soon' : 'just now';
+
+  const duration = elapsed >= day ? `${Math.floor(elapsed / day)} d`
+    : elapsed >= hour ? `${Math.floor(elapsed / hour)} h`
+    : `${Math.max(1, Math.floor(elapsed / minute))} min`;
+  return difference > 0 ? `${due ? 'due ' : ''}in ${duration}` : `${duration} ago`;
+}
 
 export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, now }: {
   data: NeedsYouOverview;
@@ -23,6 +41,7 @@ export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, no
   const total = data.kind === 'ready' ? Object.values(data.counts).reduce((sum, count) => sum + count, 0) : null;
   const selected = kind ?? 'all';
   const visibleTotal = data.kind === 'ready' && kind ? data.counts[kind] : total;
+  const reference = Date.parse(now);
 
   return <section id="needs-you" aria-labelledby="needs-you-title" className="min-w-0 overflow-hidden rounded-xl border border-collab-600 bg-collab-800">
     <header className="border-b border-collab-600 px-5 py-4">
@@ -45,13 +64,17 @@ export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, no
             const issueHref = `/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(issue.issueKey || issue.id)}`;
             const review = item.kind === 'review' && pullRequestUrl;
             const label = labels[item.kind];
+            const timestamp = new Date(item.since);
+            const utc = Number.isNaN(timestamp.getTime()) ? null : timestamp.toISOString();
             return <li key={item.id} className="grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center">
               <span className={`text-xs font-medium ${label.color}`}>{label.text}</span>
               <div className="min-w-0">
                 <p className="break-words text-sm font-medium text-collab-50">{issue.title}</p>
                 <p className="mt-1 break-words text-xs text-collab-400">
                   {issue.issueKey && <>{issue.issueKey} · </>}{issue.project.name}{seat && <> · from {seat.name}</>}
-                  {' · '}<RelativeTime value={item.since} now={now} due={item.kind === 'due'} />
+                  {' · '}{utc
+                    ? <time dateTime={utc} title={utc}>{rowAge(timestamp.getTime(), reference, item.kind === 'due')}</time>
+                    : <span>Not recorded</span>}
                 </p>
               </div>
               <a href={review || issueHref} target={review ? '_blank' : undefined} rel={review ? 'noopener noreferrer' : undefined}

@@ -22,7 +22,7 @@ const Overview = load(components + 'WorkspaceOverview.tsx', {
   './DashboardRefresh': loadRefresh({ useRouter: () => ({ refresh() {} }) }),
   './ProjectsPanel': load(components + 'ProjectsPanel.tsx', { ...uiDependencies, './RelativeTime': relativeTime }),
   ...Object.fromEntries(['NeedsYouPanel', 'AgentsNowPanel', 'ShippedPanel', 'DueSoonPanel'].map(name =>
-    ['./' + name, load(components + name + '.tsx', { ...uiDependencies, './RelativeTime': relativeTime })])),
+    ['./' + name, load(components + name + '.tsx', uiDependencies)])),
   '@/components/ui/page-layout': load('src/components/ui/page-layout.tsx', uiDependencies),
   '@/components/ui/page-header': load('src/components/ui/page-header.tsx', uiDependencies),
 }, { URL, URLSearchParams }).default;
