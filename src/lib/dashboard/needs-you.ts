@@ -12,7 +12,6 @@ import type { DashboardScope, NeedsYouItem, NeedsYouKind, NeedsYouOverview } fro
 const day = 86_400_000;
 const projectSelect = { id: true, slug: true, name: true, color: true } as const;
 const kindOrder = { question: 0, review: 1, failed: 2, due: 3 };
-const waitingRun = { state: 'finished', endedAt: { not: null }, outcome: { in: ['blocked', 'in_review'] } };
 
 type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null };
 type Repository = { provider: string; baseUrl: string; repositoryPath: string };
@@ -94,13 +93,33 @@ export async function loadNeedsYou({
     const projectWhere = { workspaceId, workspace: workspaceAccess, OR: [{ isArchived: false }, { isArchived: null }] };
     const readableIssues = { workspaceId, project: projectWhere, AND: [issueReadAccessWhere(actorId)] };
     const dueBefore = new Date(now.getTime() + 7 * day);
+    // Probe the issue/start index for the latest run, so past finishes cannot put old issues in the candidate set.
+    // This returns IDs only. All issue and run data below is read through issueReadAccessWhere.
+    const runCandidates = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT issue.id
+      FROM "Issue" issue
+      JOIN "Project" project ON project.id = issue."projectId"
+      JOIN LATERAL (
+        SELECT id, "workspaceId", "seatId", state, outcome, "endedAt", "leaseUntil"
+        FROM "AgentRun"
+        WHERE "issueId" = issue.id
+        ORDER BY "startedAt" DESC, id DESC
+        LIMIT 1
+      ) run ON run."workspaceId" = issue."workspaceId"
+      WHERE issue."workspaceId" = ${workspaceId} AND issue."deletedAt" IS NULL
+        AND project."workspaceId" = issue."workspaceId" AND project."isArchived" IS NOT TRUE
+        AND (
+          (run."endedAt" IS NULL AND (run.state = 'lost' OR run."leaseUntil" < ${now}))
+          OR (issue."assigneeId" IS NOT NULL AND run."seatId" IS NOT NULL AND run."endedAt" IS NOT NULL
+            AND run.state = 'finished' AND run.outcome IN ('blocked', 'in_review'))
+        )
+    `;
     const issues = await prisma.issue.findMany({
       where: {
         ...readableIssues,
         OR: [
           { assigneeId: actorId, dueDate: { lt: dueBefore } },
-          { assigneeId: { not: null }, agentRuns: { some: { workspaceId, seatId: { not: null }, ...waitingRun } } },
-          { agentRuns: { some: { workspaceId, endedAt: null, OR: [{ state: 'lost' }, { leaseUntil: { lt: now } }] } } },
+          { id: { in: runCandidates.map(row => row.id) } },
         ],
       },
       select: {
@@ -143,8 +162,8 @@ export async function loadNeedsYou({
       }
 
       const done = projectStatus?.category != null ? projectStatus.category === 'done' : projectStatus?.isFinal ?? legacyDone;
-      if (done || !seat || assigneeId !== seat.userId || run.userId !== seat.userId
-        || run.state !== 'finished' || !run.endedAt || !waitingRun.outcome.in.includes(run.outcome ?? '')) continue;
+      if (done || !seat || assigneeId !== seat.userId || run.userId !== seat.userId || run.state !== 'finished'
+        || !run.endedAt || (run.outcome !== 'blocked' && run.outcome !== 'in_review')) continue;
       const helper = helpers.find(row => row.userId === assigneeId);
       if (run.endedAt >= (helper?.approvedAt ?? helper?.assignedAt ?? createdAt)) {
         waiting.set(id, { issue, seat, runId: run.id, endedAt: run.endedAt });
@@ -241,6 +260,7 @@ export async function loadNeedsYou({
       items, counts, byProject: Object.fromEntries(byProject), waitingSeats: [...waitingSeats.values()],
     };
   } catch {
+    console.error('Workspace Needs you overview unavailable');
     return { kind: 'unavailable' };
   }
 }
