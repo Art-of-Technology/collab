@@ -1,12 +1,17 @@
 const { before, beforeEach, after } = require('node:test');
+const { createRequire } = require('node:module');
 const { Prisma } = require('@prisma/client');
+const React = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
 const { assert, test, load } = require('./helpers.cjs');
 const { seatsDatabase } = require('../agents/seats-db.cjs');
+const { JSDOM } = createRequire(require.resolve('isomorphic-dompurify'))('jsdom');
 
 const now = new Date('2026-11-21T12:00:00Z');
 const date = days => new Date(now.getTime() + days * 86400000);
 const plain = value => JSON.parse(JSON.stringify(value));
 let db, raw, loadNeedsYou;
+let forgeBindings = [];
 
 before(async () => {
   db = await seatsDatabase(async prisma => {
@@ -34,11 +39,12 @@ before(async () => {
   ({ loadNeedsYou } = load('src/lib/dashboard/needs-you.ts', {
     'server-only': {}, '@/lib/prisma': { prisma }, '@/lib/permissions': permissions,
     '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
-    '@/lib/forge/reader': { readForgeBindings: async () => [] },
+    '@/lib/forge/reader': { readForgeBindings: async () => forgeBindings },
   }, { URL, Date }));
 });
 
 beforeEach(async () => {
+  forgeBindings = [];
   await raw.issueActivity.deleteMany();
   await raw.issue.deleteMany();
   await raw.gitConnection.deleteMany();
@@ -178,6 +184,59 @@ test('a due issue of a dormant project is not listed', async () => {
   assert.deepEqual((await read()).items.map(item => item.issue.id), ['dormant-question']);
   await issue('visible-change', { projectId: 'dormant', assigneeId: 'other', updatedAt: date(-30) });
   assert.deepEqual((await read({ scope: 'mine' })).items.map(item => item.issue.id), ['dormant-due']);
+});
+
+test('canAct follows the permissions the comment and clear routes check', async () => {
+  await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
+  const grant = permission => raw.rolePermission.create({ data: { workspaceId: 'work', role: 'VIEWER', permission } });
+  await grant('VIEW_TASKS');
+  await waiting('legacy-question');
+  await waiting('forge-question', { projectId: 'dormant', assigneeId: 'other-seat-user' });
+  await waiting('review', { pullRequest: 'team/repo#7' });
+  await failed('lost-run');
+  await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
+  forgeBindings = [{ workspaceId: 'work', projectId: 'dormant' }];
+
+  const panel = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx', {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': { useRouter: () => ({}) },
+  }).default;
+  // The browser comment route accepts issue readers on legacy projects. Clearing also needs ASSIGN_TASK.
+  for (const canAssign of [false, true]) {
+    if (canAssign) await grant('ASSIGN_TASK');
+    const data = await read({ actorId: 'other' });
+    assert.deepEqual(Object.fromEntries(data.items.map(row => [row.issue.id, row.canAct])), {
+      'legacy-question': true, 'forge-question': false, review: false, 'lost-run': canAssign, 'due-item': false,
+    });
+
+    const document = JSDOM.fragment(renderToStaticMarkup(React.createElement(panel, {
+      data, workspaceSlug: 'work', now: now.toISOString(), kindHrefs: { all: '/work/dashboard' },
+    })));
+    const controls = Object.fromEntries([...document.querySelectorAll('li')].map(row => [
+      row.querySelector('p').textContent,
+      [...row.querySelectorAll('button, a')].map(control => [control.localName, control.textContent]),
+    ]));
+    const openIssue = [['a', 'Open issue']];
+    assert.deepEqual(controls, {
+      'legacy-question': [['button', 'Answer']],
+      'forge-question': openIssue,
+      review: openIssue,
+      'lost-run': canAssign ? [['button', 'Session has stopped: clear run']] : openIssue,
+      'due-item': openIssue,
+    });
+  }
+  await raw.workspaceMember.update({
+    where: { userId_workspaceId: { userId: 'other', workspaceId: 'work' } }, data: { status: false },
+  });
+  assert.equal((await loadNeedsYou({ actorId: 'other', workspaceId: 'work', scope: 'all', now })).kind, 'denied');
+
+  const row = (await read()).items.find(item => item.issue.id === 'legacy-question');
+  assert.deepEqual(row, {
+    id: 'question:legacy-question', kind: 'question', since: date(-2).toISOString(),
+    issue: { id: 'legacy-question', issueKey: 'LEGACY-QUESTION', title: 'legacy-question',
+      project: { id: 'project', slug: 'release', name: 'Release', color: null } },
+    seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: null, canAct: true,
+  });
 });
 
 test('in My work a seat that waits for somebody else is still in waitingSeats', async () => {

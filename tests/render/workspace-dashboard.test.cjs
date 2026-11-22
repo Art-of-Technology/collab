@@ -7,6 +7,7 @@ const { JSDOM } = createRequire(require.resolve('isomorphic-dompurify'))('jsdom'
 
 const uiDependencies = {
   react: React, 'react/jsx-runtime': jsx,
+  'next/navigation': { useRouter: () => ({ refresh() {} }) },
   '@/lib/utils': load('src/lib/utils.ts', { clsx: require('clsx'), 'tailwind-merge': require('tailwind-merge') }),
 };
 const components = 'src/app/(main)/[workspaceId]/dashboard/components/';
@@ -19,7 +20,7 @@ function loadRefresh(navigation, globals) {
 const Overview = load(components + 'WorkspaceOverview.tsx', {
   ...uiDependencies,
   './RelativeTime': relativeTime,
-  './DashboardRefresh': loadRefresh({ useRouter: () => ({ refresh() {} }) }),
+  './DashboardRefresh': loadRefresh(uiDependencies['next/navigation']),
   './ProjectsPanel': load(components + 'ProjectsPanel.tsx', { ...uiDependencies, './RelativeTime': relativeTime }),
   ...Object.fromEntries(['NeedsYouPanel', 'AgentsNowPanel', 'ShippedPanel', 'DueSoonPanel'].map(name =>
     ['./' + name, load(components + name + '.tsx', uiDependencies)])),
