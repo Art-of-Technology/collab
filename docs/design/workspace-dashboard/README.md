@@ -125,7 +125,7 @@ Build the sentence from the panels that are ready: `N things need you. Oldest qu
 
 ## Contexts
 
-A finer cut, for this work, of the dashboard paths that [`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md) gives to `projects-and-views`. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
+[`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md) lists current ownership, and the table below records the original workspace dashboard epic plan. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
 
 | Context | Paths | Tests |
 | --- | --- | --- |
