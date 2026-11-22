@@ -91,7 +91,7 @@ table.props{width:100%;border-collapse:collapse;font-size:14px}table.props td{bo
 .bar{width:84px;height:7px;border-radius:999px;background:var(--hover);overflow:hidden;display:inline-block}.bar i{display:block;height:100%;border-radius:999px}
 .bar i.ok{background:var(--ok)}.bar i.warn{background:var(--warn)}.bar i.bad{background:var(--bad)}
 .sp{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:2px 7px;font-size:12px;color:var(--dim);margin:2px;white-space:nowrap}
-.sp.work{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}.sp.stuck,.sp.lost{border-color:var(--bad);background:var(--bad-soft);color:var(--ink)}
+.sp.work{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}.sp.stuck{border-color:var(--bad);background:var(--bad-soft);color:var(--ink)}.sp.lost{border:2px solid var(--bad);color:var(--ink)}
 .sp.wait{border-color:var(--warn);background:var(--warn-soft);color:var(--ink)}.sp.noroom{border-style:dashed;border-color:var(--bad)}
 .sp[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:1px}
 .mx{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}.mx th,.mx td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
@@ -106,7 +106,7 @@ table.props{width:100%;border-collapse:collapse;font-size:14px}table.props td{bo
 .rm-card{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:9px;min-width:0}.rm-card.sel{border-color:var(--accent)}
 .rm-card>button{background:transparent;border:0;padding:0;font-size:13px;font-weight:600;text-align:left;width:100%}
 .desk{width:18px;height:18px;border-radius:5px;border:1px solid var(--line);background:var(--bg);padding:0;margin:3px 3px 0 0}
-.desk.work{background:var(--accent);border-color:var(--accent)}.desk.stuck,.desk.lost{background:var(--bad);border-color:var(--bad)}.desk.wait{background:var(--warn);border-color:var(--warn)}.desk.noroom{border-color:var(--bad);border-style:dashed}
+.desk.work{background:var(--accent);border-color:var(--accent)}.desk.stuck{background:var(--bad);border-color:var(--bad)}.desk.lost{border:3px solid var(--bad)}.desk.wait{background:var(--warn);border-color:var(--warn)}.desk.noroom{border-color:var(--bad);border-style:dashed}
 .isow{overflow:hidden;padding:10px 0 30px}.iso{transform:perspective(1500px) rotateX(48deg) rotateZ(-24deg) scale(.82);transform-origin:50% 40%}
 .iso .rm-card{box-shadow:-7px 9px 0 rgba(255,255,255,.06)}.iso .desk{box-shadow:-2px 3px 0 rgba(0,0,0,.6)}
 .phonewrap{display:grid;grid-template-columns:390px minmax(0,1fr);gap:22px;align-items:start}
@@ -158,7 +158,7 @@ const five=[['developer'],['lead'],['release'],['reviewer'],['security']],four=[
 add('Arcade','de',5,'Claude Code',[['developer'],['lead'],['release',,'hand'],['reviewer'],['security']]);
 add('Sandbox','ce','hand','',[['developer'],['reviewer']]);
 add('Beacon','ce',9,'Codex',five);
-add('Collab','ce',9,'Codex',[['developer'],['developer','Collab Developer 2'],['lead'],['release',,'hand'],['reviewer'],['security']]);
+add('Harbor','ce',9,'Codex',[['developer'],['developer','Harbor Developer 2'],['lead'],['release',,'hand'],['reviewer'],['security']]);
 add('Pipeline','ce','hand','',[['developer']]);
 add('Pipeline','al','none','Codex',[...[1,2,3,4,5].map(n=>['developer','Pipeline Developer-A'+n]),['lead'],['release'],['reviewer'],['security']]);
 add('Gateway','as',45,'Codex',five);
@@ -173,8 +173,8 @@ add('Toolkit','bg',39,'Claude Code',[['developer','Toolkit Developer (Cy)'],['re
 add('Ledger','il',90,'Claude Code',five);
 add('Adboard','ce',9,'Codex',four);
 const seat=n=>SEATS.find(s=>s.name===n);
-seat('Collab Developer').work={key:'CLB-934',title:'Needs you: the list of what waits on a person'};
-seat('Collab Developer 2').work={key:'CLB-933',title:'Delete the unused dashboard code'};
+seat('Harbor Developer').work={key:'HAR-41',title:'Invoices: export a month as one file'};
+seat('Harbor Developer 2').work={key:'HAR-40',title:'Remove the unused report page'};
 seat('Archive Developer').work={key:'ARC-8',title:'Recover the whole archive'};
 seat('Beacon Developer').work={key:'BCN-368',title:'Prepare the console release',lost:true};
 const W=[['PIP-269','Import: runbooks','Pipeline Developer-A2','resume',190],['PIP-130','Import: fast reads of a record','Pipeline Developer-A3','resume',205],
@@ -184,7 +184,7 @@ const W=[['PIP-269','Import: runbooks','Pipeline Developer-A2','resume',190],['P
  ['SEN-30','Risk colours: every page reads the shared bands','Sentinel Developer','assigned',1500],['SEN-61','Risk filter and dashboard count use the shared bands','Sentinel Developer','assigned',1440],['SEN-70','Help: one tab bar for docs and changelog','Sentinel Developer','assigned',400],
  ['ARC-11','Day runner for the test harness','Archive Developer','assigned',2900,'High'],['ARC-10','Read the newly found functions','Archive Developer','assigned',2900],['ARC-12','Check the spec against the code','Archive Developer','assigned',2880]
 ].map(([key,title,seat,reason,age,prio])=>({key,title,seat,reason,age,prio}));
-const YOU=[{key:'CLB-938',title:'Answer a seat\'s question from Home',seat:'Collab Developer',age:40}];
+const YOU=[{key:'HAR-44',title:'Which bank format comes first?',seat:'Harbor Developer',age:40}];
 const RE={resume:'To resume',assigned:'Assigned'};
 const age=m=>m<60?m+' min':m<1440?Math.round(m/60)+' h':Math.round(m/1440)+' d';
 const waitN=s=>W.filter(i=>i.seat===s.name).length;
@@ -218,7 +218,7 @@ function frame(d,inner){const header=`<h3>Agents</h3>${tabsHTML(d.tab)}<div clas
   return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="App menu (mock)">
   <div class="it on">Agents</div>${TABS.map(t=>`<div class="it sub ${t[0]===d.tab?'on':''}">${t[1]}${t[0]==='now'?`<span class="badge">${W.length}</span>`:''}</div>`).join('')}
   ${['Home','Timeline','Context','Docs','Projects'].map(n=>`<div class="it">${n}</div>`).join('')}</nav><div class="main">${header}${inner}</div></div></div>`}
-function render(){const d=SCREENS[S.scr];
+function render(){const d=SCREENS[S.scr],pin=$('.phone .pin'),top=pin&&d.id==='phone'&&S.phoneTab===S.phoneWas?pin.scrollTop:0;S.phoneWas=S.phoneTab;
   document.querySelectorAll('.screen').forEach((el,i)=>el.hidden=i!==S.scr);
   document.querySelectorAll('#nav button').forEach((b,i)=>b.setAttribute('aria-selected',i===S.scr));
   /* a hidden screen keeps no stale copy, so no id or control exists twice */
@@ -227,6 +227,7 @@ function render(){const d=SCREENS[S.scr];
   const dyn=$(`[data-dyn="${d.id}"]`);
   if(!d.once||!dyn.innerHTML)dyn.innerHTML=R[d.id](d);
   if(AFTER[d.id])AFTER[d.id]();
+  if(top)$('.phone .pin').scrollTop=top;
 }
 const R={},ACT={},AFTER={},INP={},CHG={};
 const goId=id=>{if(previewPhone())S.phoneTab=id;else S.scr=SCREENS.findIndex(d=>d.id===id);render();window.scrollTo(0,0)};
@@ -256,7 +257,7 @@ ACT['h-step']=b=>{H.step=+b.dataset.v>0?(H.step+1)%STEPS.length:Math.max(0,H.ste
 
 /* ---------- screen 2 (and the phone): Now ---------- */
 const N={q:'',proj:'',exactSeat:'',moving:null,msg:'',idle:false};
-const autoMove='On an eligible inbox read, unstarted requests can move after 10 minutes without room. Started work needs 30 minutes, a last run that pushed its work, and an inbox that offers it again. The lead normally moves its stories. Collab can move an eligible story if the lead also lacks room for 10 minutes.';
+const autoMove='Collab already moves some waiting work off a seat without room by itself, and the lead moves stories. Check that first.';
 const G={lost:['Lost run','bad','A run stopped answering. Check that the session has stopped before clearing it. The seat can then take the issue again.'],
  noroom:['Runner has no room','bad',autoMove],
  you:['Waits for you','acc','A seat asked a person. The answer is given on Home, under Needs you.'],
@@ -312,17 +313,17 @@ function seatDetail(){const s=SEATS.find(x=>x.id===Z.sel);if(!s)return `<div cla
    <div class="small" style="margin-top:8px"><span class="chip ${({work:'acc',lost:'bad',stuck:'bad',wait:'warn'})[sstate(s)]||''}">${STATE[sstate(s)]}</span></div>
    <div class="small" style="margin-top:8px"><span class="muted">Owner</span> ${OWN[s.own]}</div><div style="margin-top:4px">${roomHTML(s.room,s.prog)}</div>
    <div class="small" style="margin-top:8px"><span class="muted">Works on now</span> ${s.work?`<span class="key">${s.work.key}</span>${esc(s.work.title)}`:'nothing'}</div>
-   <div class="row" style="margin-top:8px"><span class="small"><span class="muted">Waiting</span> ${waitN(s)}</span>${waitN(s)?`<button class="btn sm" data-act="z-now" data-id="${s.id}">Show in Now</button>`:''}</div></div>`}
-const NOSEATS=['Arcade','Gateway','Campaigns','Ledger'];
-function setup(){return `<div class="card" style="margin-bottom:12px"><div class="row between"><span><b>Set up</b> <span class="muted small">add your own seats to a project · ${NOSEATS.filter(p=>!Z.mine[p]).length} projects without your seats</span></span><button class="btn sm" data-act="z-setup" aria-expanded="${Z.setup}">${Z.setup?'Hide':'Show'}</button></div>
-  ${Z.setup?NOSEATS.map(p=>`<div class="row between" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><span><b>${p}</b> <span class="muted small">${Z.mine[p]?'Your seats: Developer, Reviewer, Security (sample)':'You have no seats here'}</span></span>
+   <div class="row" style="margin-top:8px"><span class="small"><span class="muted">Waiting</span> ${waitN(s)}</span>${waitN(s)||s.work||YOU.some(y=>y.seat===s.name)?`<button class="btn sm" data-act="z-now" data-id="${s.id}">Show in Now</button>`:''}</div></div>`}
+const noSeats=()=>[...new Set(SEATS.map(s=>s.proj))].filter(p=>Z.mine[p]||!SEATS.some(s=>s.proj===p&&s.own==='ce'));
+function setup(){return `<div class="card" style="margin-bottom:12px"><div class="row between"><span><b>Set up</b> <span class="muted small">add your own seats to a project · ${noSeats().filter(p=>!Z.mine[p]).length} projects without your seats</span></span><button class="btn sm" data-act="z-setup" aria-expanded="${Z.setup}">${Z.setup?'Hide':'Show'}</button></div>
+  ${Z.setup?noSeats().map(p=>`<div class="row between" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><span><b>${p}</b> <span class="muted small">${Z.mine[p]?'Your seats: Developer, Reviewer, Security (sample)':'You have no seats here'}</span></span>
     <span class="row"><button class="sw" role="switch" data-act="z-sw" data-p="${p}" aria-checked="${Z.sw[p]!==false}" aria-label="Members may add their own seats to ${p}"></button><span class="small muted">Members may add seats</span>
     <button class="btn sm pri" data-act="z-add" data-p="${p}" ${Z.mine[p]||Z.sw[p]===false?'disabled':''}>${Z.mine[p]?'Added':'Add my seats'}</button></span></div>`).join(''):''}</div>`}
 R.seats=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))];
-  const legend=`<div class="row small muted" style="margin-bottom:10px">${['work','stuck','wait','noroom','idle'].map(k=>`<span><span class="sp ${k}" style="pointer-events:none">&nbsp;&nbsp;</span>${STATE[k]}</span>`).join('')}</div>`;
+  const legend=`<div class="row small muted" style="margin-bottom:10px">${['work','lost','stuck','wait','noroom','idle'].map(k=>`<span><span class="sp ${k}" style="pointer-events:none">&nbsp;&nbsp;</span>${STATE[k]}</span>`).join('')}</div>`;
   const A=()=>`<div class="scroll"><table class="mx"><thead><tr><th>Project</th>${ROLES.map(r=>`<th>${cap(r)}</th>`).join('')}</tr></thead><tbody>${projs.map(p=>`<tr><th scope="row">${esc(p)}</th>${ROLES.map(r=>{const l=SEATS.filter(s=>s.proj===p&&s.role===r);return `<td>${l.length?l.map(s=>pill(s,first(s)+(suffix(s)?' · '+suffix(s):''))).join(''):'<span class="muted">–</span>'}</td>`}).join('')}</tr>`).join('')}</tbody></table></div>`;
-  const B=()=>Object.keys(OWN).map(o=>{const l=SEATS.filter(s=>s.own===o),num=l.find(s=>typeof s.room==='number');
-    return `<div class="card" style="margin-bottom:10px"><div class="row between"><b>${OWN[o]}</b>${num?roomHTML(num.room,num.prog):roomHTML(l[0].room,'')}</div>
+  const B=()=>Object.keys(OWN).map(o=>{const l=SEATS.filter(s=>s.own===o),same=new Set(l.map(s=>roomTxt(s)+s.prog)).size===1;
+    return `<div class="card" style="margin-bottom:10px"><div class="row between"><b>${OWN[o]}</b>${same?roomHTML(l[0].room,l[0].prog):'<span class="small muted">These seats do not have the same room: press one to see its own.</span>'}</div>
     ${[...new Set(l.map(s=>s.proj))].map(p=>`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}</span> ${l.filter(s=>s.proj===p).map(s=>pill(s,cap(s.role).slice(0,3)+(suffix(s)?' '+suffix(s):''))).join('')}</div>`).join('')}</div>`}).join('');
   return frame(d,`${setup()}${legend}<div class="cols"><div style="min-width:0">${!phoneLayout()&&S.lay.seats==='A'?A():B()}</div>${seatDetail()}</div>
    <p class="small muted" style="margin-top:10px">${SEATS.length} seats. A dash is a role the project has no seat for.</p>`)};
@@ -350,12 +351,11 @@ R.runners=d=>frame(d,`${U.msg?`<div class="banner" role="status">${esc(U.msg)}</
   <p class="small muted">Waiting is what sits on that runner's seats right now. A red number with "no room" beside it is where the work is stuck.</p>`);
 ACT['u-add']=()=>{U.adding=!U.adding;render()};
 INP['u-code']=el=>{cur().querySelector('[data-act="u-connect"]').disabled=el.value.replace(/[^a-z0-9]/gi,'').length<8};
-ACT['u-connect']=()=>{const who=cur().querySelector('[data-who]').value,old=RUN.findIndex(r=>r.owner===who);if(old>=0)RUN.splice(old,1);
-  RUN.unshift({id:'n'+(U.n++),own:Object.keys(OWN).find(k=>OWN[k]===who)||'x',owner:who,name:'seat-runner on new-machine',since:'today',progs:[],asked:'just now'});U.adding=false;
-  U.msg=`seat-runner on new-machine is connected for ${who}. ${old>=0?'It replaces the runner before, whose tokens were revoked. ':''}Sample.`;render()};
+ACT['u-connect']=()=>{const who=cur().querySelector('[data-who]').value,old=RUN.some(r=>r.owner===who);U.adding=false;
+  U.msg=`Sample: a runner would be connected for ${who}.${old?' It would replace the runner before and revoke its tokens.':''} The list below does not change in this mockup.`;render()};
 ACT['u-ask']=b=>{U.confirm=b.dataset.id?{id:b.dataset.id,kind:b.dataset.kind}:null;render()};
-ACT['u-do']=()=>{const i=RUN.findIndex(r=>r.id===U.confirm.id),r=RUN[i];if(U.confirm.kind==='remove')RUN.splice(i,1);
-  U.msg=U.confirm.kind==='renew'?`${r.owner}'s runner renews its tokens. Sample.`:`${r.owner}'s runner is removed. Sample: no token was revoked.`;U.confirm=null;render()};
+ACT['u-do']=()=>{const r=RUN.find(x=>x.id===U.confirm.id);
+  U.msg=U.confirm.kind==='renew'?`${r.owner}'s runner renews its tokens. Sample.`:`Sample: ${r.owner}'s runner would be removed and its seats would wait. The list below does not change in this mockup.`;U.confirm=null;render()};
 
 /* ---------- screen 5: Floor ---------- */
 const F={sel:'Pipeline'};
@@ -363,7 +363,7 @@ R.floor=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))],l=SEATS.filter(s=>s.p
   const rooms=`<div class="rooms ${iso?'iso':''}">${projs.map(p=>{const ss=SEATS.filter(s=>s.proj===p),w=W.filter(i=>seat(i.seat).proj===p).length;
     return `<div class="rm-card ${p===F.sel?'sel':''}"><button data-act="f-sel" data-p="${esc(p)}" aria-pressed="${p===F.sel}">${esc(p)}<div class="meta" style="font-weight:400">${ss.length} seats${w?` · <span style="${ss.some(s=>sstate(s)==='stuck')?'color:var(--bad)':''}">${w} waiting</span>`:''}</div></button>
       <div>${ss.map(s=>`<button class="desk ${sstate(s)}" data-act="f-sel" data-p="${esc(p)}" title="${esc(s.name)}: ${STATE[sstate(s)]}" aria-label="${esc(s.name)}: ${STATE[sstate(s)]}"></button>`).join('')}</div></div>`}).join('')}</div>`;
-  return frame(d,`<div class="row small muted" style="margin-bottom:10px">${['work','stuck','wait','noroom','idle'].map(k=>`<span><span class="desk ${k}" style="display:inline-block;vertical-align:-4px;pointer-events:none"></span> ${STATE[k]}</span>`).join('')}</div>
+  return frame(d,`<div class="row small muted" style="margin-bottom:10px">${['work','lost','stuck','wait','noroom','idle'].map(k=>`<span><span class="desk ${k}" style="display:inline-block;vertical-align:-4px;pointer-events:none"></span> ${STATE[k]}</span>`).join('')}</div>
   <div class="cols"><div class="${iso?'isow':''}" style="min-width:0">${rooms}</div>
   <div class="card" data-room><b>${esc(F.sel)}</b><div class="small muted">${l.length} seats</div>${l.map(s=>`<div class="small" style="margin-top:6px;display:flex;gap:6px;align-items:center"><span class="desk ${sstate(s)}" style="flex:none;margin:0"></span><span style="min-width:0">${esc(s.name)}<span class="muted"> · ${STATE[sstate(s)]}${waitN(s)?' ('+waitN(s)+')':''}</span></span></div>`).join('')}
     <button class="btn sm" style="margin-top:10px" data-act="f-now">Show this project in Now</button></div></div>`)};

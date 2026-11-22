@@ -54,7 +54,7 @@ Approved layout: **grouped by why it waits**.
 
 A group with nothing in it is not shown. Above the groups: five counts, a project filter, a search over issue and seat. Below them: what each seat works on now, and one line for the idle seats ("61 idle seats · Show").
 
-**Move** hands a waiting issue to another seat of the same project and role. It is a manual override. On an eligible inbox read, Collab can move an unstarted request after 10 minutes without room. Started work needs 30 minutes without room, a last run that pushed its work, and an inbox that offers the issue again. The lead normally moves its stories. Collab can move an eligible lead-assigned story when the lead has also had no room for 10 minutes (see `../seats-by-room/README.md`). A seat with no room cannot be chosen. When no other seat of the role can take it, the row says so and offers nothing.
+**Move** hands a waiting issue to another seat of the same project and role. It is a manual override: Collab already moves some waiting work off a seat without room by itself, and the lead moves stories (the rules are in `../seats-by-room/README.md`). A seat with no room cannot be chosen. When no other seat of the role can take the issue, the row says so and shows no Move button.
 
 ![Move opens under its row](03-now-move.png)
 
@@ -70,7 +70,7 @@ Approved layout: **projects × roles grid**. It replaces the per-person cards ap
 
 ![Seats as a grid of projects and roles](04-seats.png)
 
-- One pill per seat, labelled with its owner. Its colour is its state; a dash is a role the project has no seat for.
+- One pill per seat, labelled with its owner. Its colour is its state, with a key above the grid; a lost run has its own. A dash is a role the project has no seat for.
 - Pressing a seat shows its owner, room, current work and waiting count, with "Show in Now".
 - "Set up" holds the owner's switch and "Add my seats" per project, folded away by default.
 
