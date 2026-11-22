@@ -13,6 +13,7 @@ import { NotificationService, NotificationType } from "@/lib/notification-servic
 import { emitIssueCreated } from "@/lib/event-bus";
 import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
 import { assertAssignable, HandoffError } from "@/lib/issue-assignee";
+import { withoutRequests } from "@/lib/issue-requests";
 
 const RELATED_ISSUE_SELECT = {
   id: true,
@@ -115,7 +116,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build query with filters
-    const whereClause: any = {
+    const where = {
       workspaceId,
       ...(milestoneId && { milestoneId }),
       ...(projectIds && projectIds.length > 0 && {
@@ -123,9 +124,11 @@ export async function GET(request: NextRequest) {
       }),
     };
 
+    const query = searchParams.get('requests') === '1'
+      ? { where, include: LIST_INCLUDE }
+      : withoutRequests(where, LIST_INCLUDE);
     const issues = await prisma.issue.findMany({
-      where: whereClause,
-      include: LIST_INCLUDE,
+      ...query,
       orderBy: { updatedAt: 'desc' }
     });
 
