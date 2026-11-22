@@ -26,7 +26,7 @@ before(() => {
   const url = `postgresql://${encodeURIComponent(user)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
   const schema = execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff',
     '--from-empty', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'],
-  { env: { ...process.env, DATABASE_URL: url } });
+    { env: { ...process.env, DATABASE_URL: url } });
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', user, '-d', 'postgres'],
     { input: schema, stdio: ['pipe', 'pipe', 'pipe'] });
   db = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
@@ -45,25 +45,22 @@ async function fixture(access = 'member', options = {}) {
   const foreign = { id: 'foreign', ownerId: 'mallory', members: [] };
   const revoked = { id: 'revoked', ownerId: 'mallory', members: [{ userId: 'alice', status: false }] };
   const makeProject = (id, extra = {}) => ({ id, slug: id, name: id === 'p0' ? 'Alpha' : id === 'p1' ? 'Beta' : `Project ${id}`,
-    color: null, workspaceId: workspace.id, workspace, isArchived: false, updatedAt: date(20), ...extra });
+    color: null, workspaceId: workspace.id, issuePrefix: id, isArchived: false, updatedAt: date(20), ...extra });
   const projects = [
     ...Array.from({ length: 12 }, (_, i) => makeProject(`p${i}`, { isArchived: i === 1 ? null : false })),
     makeProject('archived', { isArchived: true }),
-    makeProject('foreign-project', { workspace: foreign, workspaceId: foreign.id }),
-    makeProject('revoked-project', { workspace: revoked, workspaceId: revoked.id }),
+    makeProject('foreign-project', { workspaceId: foreign.id }),
+    makeProject('revoked-project', { workspaceId: revoked.id }),
   ];
-  const status = (id, projectId, isFinal, extra = {}) => ({ id, projectId, project: projects.find(p => p.id === projectId),
+  const status = (id, projectId, isFinal, extra = {}) => ({ id, name: id, projectId,
     isFinal, isActive: true, displayName: id, ...extra });
   const statuses = [status('custom-final', 'p1', true, { isActive: false, displayName: 'Released' }),
     status('nonfinal-done', 'p1', false, { displayName: 'Done' }), status('foreign-status', 'foreign-project', false)];
-  const issue = (id, extra = {}) => {
-    const value = { id, issueKey: `CLB-${id}`, title: id, workspaceId: workspace.id, workspace,
-      projectId: 'p0', assigneeId: 'alice', statusId: null, status: 'open', statusValue: null,
-      dueDate: date(-1), updatedAt: date(-2), deletedAt: null, ...extra };
-    value.project = projects.find(p => p.id === value.projectId);
-    value.projectStatus = statuses.find(s => s.id === value.statusId) || null;
-    return value;
-  };
+  const issue = (id, extra = {}) => ({
+    id, issueKey: `CLB-${id}`, title: id, workspaceId: workspace.id,
+    projectId: 'p0', assigneeId: 'alice', statusId: null, status: 'open', statusValue: null,
+    dueDate: date(-1), updatedAt: date(-2), deletedAt: null, ...extra,
+  });
   const issues = [
     ...Array.from({ length: 12 }, (_, i) => issue(`overdue-${i.toString().padStart(2, '0')}`, { dueDate: date(-20 + i), assigneeId: i % 2 ? 'bob' : 'alice' })),
     issue('due-now', { dueDate: now }), issue('due-boundary', { projectId: 'p1', dueDate: date(7) }),
@@ -77,7 +74,7 @@ async function fixture(access = 'member', options = {}) {
     issue('trashed', { deletedAt: now, updatedAt: date(1) }),
     issue('archived', { projectId: 'archived' }), issue('foreign-project', { projectId: 'foreign-project' }),
     issue('revoked-project', { projectId: 'revoked-project' }),
-    issue('foreign-workspace', { workspaceId: foreign.id, workspace: foreign }),
+    issue('foreign-workspace', { workspaceId: foreign.id }),
     issue('foreign-status', { statusId: 'foreign-status', updatedAt: date(1) }),
     issue('cross-project-status', { statusId: 'custom-final', updatedAt: date(1) }),
   ];
@@ -90,9 +87,9 @@ async function fixture(access = 'member', options = {}) {
     await db.rolePermission.create({ data: { workspaceId: workspace.id, role: 'MEMBER', permission: 'VIEW_TASKS' } });
   }
   if (!options.empty) {
-    await db.project.createMany({ data: projects.map(({ workspace: _workspace, ...row }) => ({ ...row, issuePrefix: row.id })) });
-    await db.projectStatus.createMany({ data: statuses.map(({ project: _project, ...row }) => ({ ...row, name: row.id })) });
-    await db.issue.createMany({ data: issues.map(({ workspace: _workspace, project: _project, projectStatus: _status, ...row }) => row) });
+    await db.project.createMany({ data: projects });
+    await db.projectStatus.createMany({ data: statuses });
+    await db.issue.createMany({ data: issues });
   }
   const database = db.$extends(visibility).$extends({
     query: {
@@ -103,6 +100,13 @@ async function fixture(access = 'member', options = {}) {
       user: { async findUnique({ args, query }) {
         if (options.permissionFailure) throw new Error('private permission lookup failure');
         return access === 'deleted' ? null : query(args);
+      } },
+      project: { async findMany({ args, query }) {
+        const rows = await query(args);
+        if (options.revokeAfterProjectRead) {
+          await db.workspaceMember.updateMany({ where: { workspaceId: workspace.id, userId: 'alice' }, data: { status: false } });
+        }
+        return rows;
       } },
       issue: { $allOperations({ args, query }) {
         if (options.failure) throw new Error('private database query failure');
@@ -200,10 +204,20 @@ test('workspace and permission lookup errors are unavailable, never disguised as
   }
 });
 
+test('issue reads recheck membership after the project list was fetched', async () => {
+  const f = await fixture('member', { revokeAfterProjectRead: true });
+  const result = await f.invoke();
+  assert.equal(result.kind, 'ready');
+  assert.equal(result.summary.openIssues, 0);
+  assert.equal(result.summary.overdueIssues, 0);
+  assert.deepEqual(plain(result.attention), []);
+  assert.deepEqual(plain(result.recent), []);
+});
+
 test('Prisma sends the same Home statements after adding projects with new statuses and issues', async () => {
   const f = await fixture();
   assert.equal((await f.invoke()).summary.visibleProjects, 12);
-  const before = [...sent];
+  const before = payloadSql();
   assert.ok(before.some(sql => sql.includes('"Issue"')));
 
   for (const id of ['extra-1', 'extra-2']) {
@@ -215,7 +229,7 @@ test('Prisma sends the same Home statements after adding projects with new statu
   const result = await f.invoke();
   assert.equal(result.summary.visibleProjects, 14);
   assert.equal(result.summary.openIssues, 19);
-  const after = [...sent];
+  const after = payloadSql();
   assert.equal(after.length, before.length, 'the query count stays fixed');
   assert.deepEqual(after.map(sql => sql.length).sort(), before.map(sql => sql.length).sort(), 'statement sizes stay fixed');
   assert.deepEqual(after.sort(), before.sort(), 'statement text stays fixed');
