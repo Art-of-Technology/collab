@@ -32,13 +32,14 @@ import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
 import { NewIssueModal } from '@/components/issue';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useActionFilteredIssues } from '@/hooks/useActionFilteredIssues';
 
 // ─── New filter system ──────────────────────────────────
 import { useViewFilterState } from '@/hooks/useViewFilterState';
 import type { ActionFilter } from '@/hooks/useViewFilterState';
 import ViewTopBar from './shared/ViewTopBar';
+import { AGENT_REQUESTS_FIELD, showAgentRequests } from './agent-request-display';
 
 
 interface ViewRendererProps {
@@ -75,6 +76,7 @@ interface ViewRendererProps {
     updatedAt: Date;
   };
   issues: any[];
+  initialIncludesRequests: boolean;
   workspace: any;
   currentUser: any;
 }
@@ -95,12 +97,17 @@ const VIEW_TYPE_ICONS = {
 export default function ViewRenderer({
   view,
   issues: initialIssues,
+  initialIncludesRequests,
   workspace,
   currentUser
 }: ViewRendererProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const savedIncludesRequests = showAgentRequests(view.fields);
+  const includeAgentRequests = showAgentRequests(view.fields, searchParams.get('requests'));
 
   // ─── UI state ──────────────────────────────────────────
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -113,7 +120,10 @@ export default function ViewRenderer({
   const commitColumnOrderRef = useRef<any>(null);
 
   // ─── New unified filter/config state (URL-persisted) ───
-  const filterState = useViewFilterState({ view });
+  const fields = useMemo(() => Array.isArray(view.fields)
+    ? view.fields.filter(field => field !== AGENT_REQUESTS_FIELD)
+    : undefined, [view.fields]);
+  const filterState = useViewFilterState({ view: { ...view, fields } });
   const {
     scope,
     search,
@@ -131,9 +141,7 @@ export default function ViewRenderer({
     resetAll,
     activeFilterCount,
     hasChanges,
-    getConfigForSave,
-    getFiltersForSave,
-    savedConfig,
+    getConfigForSave: getDisplayConfigForSave,
   } = filterState;
 
   // Derived config fields
@@ -141,6 +149,25 @@ export default function ViewRenderer({
   const groupBy = activeConfig.groupBy;
   const displayProperties = activeConfig.displayProperties;
   const projectIds = activeConfig.projectIds;
+
+  const setIncludeAgentRequests = (include: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (include === savedIncludesRequests) {
+      params.delete('requests');
+    } else {
+      params.set('requests', include ? '1' : '0');
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const getConfigForSave = () => {
+    const config = getDisplayConfigForSave();
+    return {
+      ...config,
+      fields: includeAgentRequests ? [...config.fields, AGENT_REQUESTS_FIELD] : config.fields,
+    };
+  };
 
   // ─── Data fetching (preserved from original) ───────────
 
@@ -256,20 +283,23 @@ export default function ViewRenderer({
     return false;
   }, [activeFilters, view.filters]);
 
-  const shouldFetchLiveData = !hasActiveDbFilters || hasFilterOverrides || recentIssueCreated;
+  const useLiveData = !hasActiveDbFilters || hasFilterOverrides || recentIssueCreated;
+  const shouldFetchLiveData = useLiveData || includeAgentRequests || initialIncludesRequests !== includeAgentRequests;
 
   const { data: liveIssuesData } = useIssuesByWorkspace(
     shouldFetchLiveData ? workspace.id : '',
-    shouldFetchLiveData ? (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id)) : undefined
+    shouldFetchLiveData ? (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id)) : undefined,
+    { requests: includeAgentRequests }
   );
 
   const { data: additionalIssuesData, isLoading: isLoadingAdditionalIssues } = useQuery({
-    queryKey: ['additional-issues', workspace.id, additionalProjectIds.sort().join(',')],
+    queryKey: ['additional-issues', workspace.id, additionalProjectIds.sort().join(','), includeAgentRequests],
     queryFn: async () => {
       if (additionalProjectIds.length === 0) return { issues: [] };
       const params = new URLSearchParams({
         workspaceId: workspace.id,
-        projectIds: additionalProjectIds.join(',')
+        projectIds: additionalProjectIds.join(','),
+        ...(includeAgentRequests && { requests: '1' })
       });
       const response = await fetch(`/api/issues?${params}`);
       if (!response.ok) throw new Error('Failed to fetch additional issues');
@@ -280,14 +310,14 @@ export default function ViewRenderer({
   });
 
   const allIssues = useMemo(() => {
-    const baseIssues = (hasActiveDbFilters && !hasFilterOverrides && !recentIssueCreated)
-      ? initialIssues
-      : (liveIssuesData?.issues || initialIssues);
+    // A previous server response can still contain requests while the switch turns off.
+    const serverIssues = includeAgentRequests || !initialIncludesRequests ? initialIssues : [];
+    const baseIssues = useLiveData ? (liveIssuesData?.issues || serverIssues) : serverIssues;
     const additional = additionalIssuesData?.issues || [];
     const issueMap = new Map();
     [...baseIssues, ...additional].forEach(issue => issueMap.set(issue.id, issue));
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveDbFilters, hasFilterOverrides, recentIssueCreated]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, useLiveData, includeAgentRequests, initialIncludesRequests]);
 
   // ─── 3-Layer Filter Pipeline ───────────────────────────
   // Layer 1: Action filters (async)
@@ -691,6 +721,7 @@ export default function ViewRenderer({
         }
         return (
           <KanbanViewRenderer
+            key={includeAgentRequests ? 'with-requests' : 'work-only'}
             {...sharedProps}
             searchQuery={search}
             onOrderingChange={() => {}}
@@ -740,6 +771,8 @@ export default function ViewRenderer({
         onSortByChange={setSortBy}
         displayProperties={displayProperties}
         onDisplayPropertiesChange={setDisplayProperties}
+        includeAgentRequests={includeAgentRequests}
+        onIncludeAgentRequestsChange={setIncludeAgentRequests}
         onProjectIdsChange={setProjectIds}
         isDefaultView={view.isDefault}
         hasChanges={hasChanges}

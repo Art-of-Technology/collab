@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import type { Scope, FilterKey, ViewFilters, ActionFilter } from '@/hooks/useViewFilterState';
 import {
   resolveFilterValues,
@@ -263,6 +264,8 @@ interface ViewTopBarProps {
   onSortByChange: (sortBy: string) => void;
   displayProperties: string[];
   onDisplayPropertiesChange: (props: string[]) => void;
+  includeAgentRequests: boolean;
+  onIncludeAgentRequestsChange: (include: boolean) => void;
   onProjectIdsChange: (ids: string[]) => void;
 
   // View actions
@@ -313,6 +316,8 @@ export default function ViewTopBar({
   onSortByChange,
   displayProperties,
   onDisplayPropertiesChange,
+  includeAgentRequests,
+  onIncludeAgentRequestsChange,
   onProjectIdsChange,
   isDefaultView,
   hasChanges,
@@ -909,6 +914,23 @@ export default function ViewTopBar({
                     })}
                   </div>
                 </div>
+
+                <DropdownMenuSeparator className={cn(DM_SEP, "mx-3")} />
+                <label className="flex items-center justify-between px-3 py-2 text-[13px] text-collab-300">
+                  Agent requests
+                  <DropdownMenuItem
+                    asChild
+                    className="cursor-pointer rounded-full p-0 focus:bg-transparent"
+                    onSelect={event => event.preventDefault()}
+                  >
+                    <Switch
+                      role="switch"
+                      aria-label="Agent requests"
+                      checked={includeAgentRequests}
+                      onCheckedChange={onIncludeAgentRequestsChange}
+                    />
+                  </DropdownMenuItem>
+                </label>
 
                 {/* Projects (non-default views with multiple projects) */}
                 {!isDefaultView && allProjects.length > 1 && (
