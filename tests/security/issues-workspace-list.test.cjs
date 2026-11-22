@@ -47,6 +47,7 @@ test('workspace and multi-project lists return every visible row and field in on
     { id: 'deleted', projectId: 'p', parentId: 'parent', deletedAt: new Date('2026-11-20') },
     { id: 'retained-child', projectId: 'q', parentId: 'deleted' },
     { id: 'foreign', projectId: 'r', workspaceId: 'other' },
+    { id: 'foreign-child', projectId: 'r', workspaceId: 'other', parentId: 'child' },
   ].map((row, index) => ({
     workspaceId: 'workspace', title: row.id, issueKey: `ISS-${index + 1}`,
     updatedAt: new Date(Date.UTC(2026, 10, 22, 12, 0, 10 - index)), ...row,
@@ -91,7 +92,7 @@ test('workspace and multi-project lists return every visible row and field in on
     return issues;
   };
   const statements = [];
-  raw.$on('query', event => statements.push(event.query));
+  raw.$on('query', event => statements.push(event));
 
   for (const requests of ['', '&requests=1']) {
     const expected = [];
@@ -132,24 +133,99 @@ test('workspace and multi-project lists return every visible row and field in on
     await t.test(`relation visibility with the ${scope} filter follows current workspace access`, async () => {
       const readRelations = async () => {
         const rows = await readRows(await list('workspaceId=workspace' + filter));
-        const { blocks, duplicated_by } = rows.find(row => row.id === 'child').issueRelations;
-        return [blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id)];
+        const { children, _count, issueRelations: { blocks, duplicated_by } } = rows.find(row => row.id === 'child');
+        assert.equal(_count.children, children.length);
+        return [blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id), children.map(issue => issue.id)];
       };
       const key = { userId_workspaceId: { userId: 'member', workspaceId: 'other' } };
       const membership = await raw.workspaceMember.create({ data: { ...key.userId_workspaceId, status: false } });
       try {
-        assert.deepEqual(await readRelations(), [[], []]);
+        assert.deepEqual(await readRelations(), [[], [], []]);
         await raw.workspaceMember.update({ where: key, data: { status: true } });
-        assert.deepEqual(await readRelations(), [['foreign'], ['foreign']]);
+        assert.deepEqual(await readRelations(), [['foreign'], ['foreign'], ['foreign-child']]);
         await raw.workspaceMember.update({ where: key, data: { status: false } });
-        assert.deepEqual(await readRelations(), [[], []]);
+        assert.deepEqual(await readRelations(), [[], [], []]);
         userId = 'owner';
-        assert.deepEqual(await readRelations(), [['foreign'], ['foreign']]);
+        assert.deepEqual(await readRelations(), [['foreign'], ['foreign'], ['foreign-child']]);
       } finally {
         userId = 'member';
         await raw.workspaceMember.delete({ where: { id: membership.id } });
       }
-      assert.deepEqual(await readRelations(), [[], []]);
+      assert.deepEqual(await readRelations(), [[], [], []]);
     });
   }
+
+  await t.test('a broad list bounds database work to the workspace and its related issues', async t => {
+    await raw.$executeRaw`
+      INSERT INTO "Issue" (id, title, description, "projectId", "workspaceId", "updatedAt", "issueKey", "parentId")
+      SELECT 'local-' || n, 'Local issue', repeat('Full description. ', 180),
+        'p', 'workspace', timestamp '2026-12-01' - n * interval '1 second', 'PP-' || n,
+        CASE WHEN n > 1000 AND n <= 3600 THEN 'local-' || (1 + n % 600) END
+      FROM generate_series(1, 5152) n
+      UNION ALL
+      SELECT 'unrelated-' || n, 'Unrelated issue', NULL, 'r', 'other', now(), 'RR-' || n,
+        CASE WHEN n > 200 THEN 'unrelated-' || (1 + n % 150) END
+      FROM generate_series(1, 30000) n
+    `;
+    await raw.$executeRaw`
+      INSERT INTO "IssueComment" (id, "issueId", "authorId", content, "updatedAt")
+      SELECT 'local-comment-' || n, 'local-' || n, 'owner', 'Local comment', now()
+      FROM generate_series(1, 5152) n
+      UNION ALL
+      SELECT 'unrelated-comment-' || n, 'unrelated-' || n, 'owner', 'Unrelated comment', now()
+      FROM generate_series(1, 30000) n
+    `;
+    await raw.$executeRaw`
+      INSERT INTO issue_relations (id, "sourceIssueId", "targetIssueId", "relationType", "updatedAt")
+      SELECT 'unrelated-relation-' || n, 'unrelated-' || n, 'unrelated-' || (n + 1),
+        'BLOCKS'::"IssueRelationType", now()
+      FROM generate_series(1, 29999) n
+    `;
+
+    await raw.taskLabel.create({ data: { id: 'unrelated-label', name: 'Unrelated', workspaceId: 'other' } });
+    await raw.$executeRaw`
+      INSERT INTO "_IssueToLabel" ("A", "B")
+      SELECT 'unrelated-' || n, 'unrelated-label' FROM generate_series(1, 30000) n
+    `;
+    await raw.$executeRaw`ANALYZE`;
+
+    const expected = [];
+    for (const project of ['p', 'q']) {
+      expected.push(...await readRows(await list('workspaceId=workspace&projectIds=' + project)));
+    }
+    expected.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    statements.length = 0;
+    assert.deepEqual(await readRows(await list('workspaceId=workspace')), expected);
+    assert.equal(expected.length, 5156);
+    assert.equal(statements.length, 2);
+
+    function largestRead(plan) {
+      const rows = ['Issue', 'IssueComment', 'issue_relations', '_IssueToLabel'].includes(plan['Relation Name'])
+        ? plan['Actual Loops'] * (plan['Actual Rows'] + (plan['Rows Removed by Filter'] ?? 0))
+        : 0;
+      return Math.max(rows, ...(plan.Plans ?? []).map(largestRead));
+    }
+
+    async function assertReadBound() {
+      const { query, params } = statements.at(-1);
+      const [explain] = await raw.$queryRawUnsafe(
+        'EXPLAIN (ANALYZE, FORMAT JSON) ' + query, ...JSON.parse(params),
+      );
+      const { Plan, JIT } = explain['QUERY PLAN'][0];
+      const rowsRead = largestRead(Plan);
+      t.diagnostic(`Largest issue or relation scan as ${userId}: ${rowsRead} rows`);
+      assert.ok(rowsRead < 12000, `Scanned ${rowsRead} rows for 5,156 listed issues as ${userId}`);
+      assert.equal(JIT, undefined, `Unexpected query compilation for ${userId}`);
+    }
+
+    await assertReadBound();
+    userId = 'owner';
+    try {
+      const rows = await readRows(await list('workspaceId=workspace'));
+      assert.deepEqual(rows.map(issue => issue.id), expected.map(issue => issue.id));
+      await assertReadBound();
+    } finally {
+      userId = 'member';
+    }
+  });
 });
