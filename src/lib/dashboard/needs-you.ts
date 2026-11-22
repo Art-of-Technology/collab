@@ -15,6 +15,8 @@ const kindOrder = { question: 0, review: 1, failed: 2, due: 3 };
 
 type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null };
 type Repository = { provider: string; baseUrl: string; repositoryPath: string };
+// The issue route identifies the current assignee by account ID, while the dashboard seat uses a seat ID.
+export type NeedsYouPanelItem = NeedsYouItem & { answerRecipientId?: string };
 
 function readFinish(details: string | null) {
   try {
@@ -133,7 +135,7 @@ export async function loadNeedsYou({
         } },
       },
     });
-    const rows: NeedsYouItem[] = [];
+    const rows: NeedsYouPanelItem[] = [];
     const waiting = new Map<string, {
       issue: NeedsYouItem['issue'];
       seat: { id: string; name: string; ownerId: string | null; userId: string };
@@ -246,7 +248,10 @@ export async function loadNeedsYou({
       baseUrl: 'https://github.com', repositoryPath: row.fullName })), ...connections];
     const forgeProjects = new Set(forgeBindings.map(binding => binding.projectId));
     for (const item of items) {
-      if (item.kind === 'question') item.canAct = !forgeProjects.has(item.issue.project.id);
+      if (item.kind === 'question' && !forgeProjects.has(item.issue.project.id)) {
+        item.canAct = true;
+        item.answerRecipientId = waiting.get(item.issue.id)?.seat.userId;
+      }
       if (item.kind === 'failed') item.canAct = assign?.hasPermission ?? false;
       const reference = factsByIssue.get(item.issue.id)?.pullRequest;
       if (item.kind === 'review' && reference) {

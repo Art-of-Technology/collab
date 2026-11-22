@@ -7,6 +7,7 @@ const now = new Date('2026-11-21T12:00:00Z');
 const date = days => new Date(now.getTime() + days * 86400000);
 const plain = value => JSON.parse(JSON.stringify(value));
 let db, raw, loadNeedsYou;
+let forgeBindings = [];
 
 before(async () => {
   db = await seatsDatabase(async prisma => {
@@ -34,11 +35,12 @@ before(async () => {
   ({ loadNeedsYou } = load('src/lib/dashboard/needs-you.ts', {
     'server-only': {}, '@/lib/prisma': { prisma }, '@/lib/permissions': permissions,
     '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
-    '@/lib/forge/reader': { readForgeBindings: async () => [] },
+    '@/lib/forge/reader': { readForgeBindings: async () => forgeBindings },
   }, { URL, Date }));
 });
 
 beforeEach(async () => {
+  forgeBindings = [];
   await raw.issueActivity.deleteMany();
   await raw.issue.deleteMany();
   await raw.gitConnection.deleteMany();
@@ -178,6 +180,34 @@ test('a due issue of a dormant project is not listed', async () => {
   assert.deepEqual((await read()).items.map(item => item.issue.id), ['dormant-question']);
   await issue('visible-change', { projectId: 'dormant', assigneeId: 'other', updatedAt: date(-30) });
   assert.deepEqual((await read({ scope: 'mine' })).items.map(item => item.issue.id), ['dormant-due']);
+});
+
+test('canAct follows the permissions the comment and clear routes check', async () => {
+  await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
+  const grant = permission => raw.rolePermission.create({ data: { workspaceId: 'work', role: 'VIEWER', permission } });
+  await grant('VIEW_TASKS');
+  await waiting('legacy-question');
+  await waiting('forge-question', { projectId: 'dormant', assigneeId: 'other-seat-user' });
+  await waiting('review', { pullRequest: 'team/repo#7' });
+  await failed('lost-run');
+  await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
+  forgeBindings = [{ workspaceId: 'work', projectId: 'dormant' }];
+
+  const actions = async () => Object.fromEntries((await read({ actorId: 'other' })).items
+    .map(row => [row.issue.id, row.canAct]));
+  // The browser comment route accepts issue readers on legacy projects. Clearing also needs ASSIGN_TASK.
+  const expected = { 'legacy-question': true, 'forge-question': false, review: false, 'lost-run': false, 'due-item': false };
+  assert.deepEqual(await actions(), expected);
+  await grant('ASSIGN_TASK');
+  assert.deepEqual(await actions(), { ...expected, 'lost-run': true });
+  await raw.workspaceMember.update({
+    where: { userId_workspaceId: { userId: 'other', workspaceId: 'work' } }, data: { status: false },
+  });
+  assert.equal((await loadNeedsYou({ actorId: 'other', workspaceId: 'work', scope: 'all', now })).kind, 'denied');
+
+  const rows = (await read()).items;
+  assert.deepEqual(rows.filter(row => row.answerRecipientId).map(row => [row.kind, row.answerRecipientId]),
+    [['question', 'seat-user']]);
 });
 
 test('in My work a seat that waits for somebody else is still in waitingSeats', async () => {
