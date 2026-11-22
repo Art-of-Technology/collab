@@ -1,4 +1,8 @@
-import type { NeedsYouKind, NeedsYouOverview } from '@/types/workspace-dashboard';
+'use client';
+
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import type { NeedsYouItem, NeedsYouKind, NeedsYouOverview } from '@/types/workspace-dashboard';
 
 const chips = [
   ['all', 'All'], ['question', 'Questions'], ['review', 'Reviews'], ['failed', 'Failed runs'], ['due', 'Due'],
@@ -10,6 +14,10 @@ const labels = {
   due: { text: 'Due', color: 'text-amber-300' },
 };
 const focus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400';
+const actionStyle = `w-fit rounded-md border border-collab-600 px-3 py-1.5 text-xs text-blue-300 hover:bg-collab-700 disabled:opacity-50 ${focus}`;
+const rowActionStyle = `col-start-2 sm:col-start-auto ${actionStyle}`;
+const primaryStyle = `w-fit rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-50 ${focus}`;
+const formStyle = 'col-span-full min-w-0 space-y-2 rounded-md border border-collab-600 bg-collab-900 p-3 sm:col-start-2 sm:col-end-4';
 const format = (count: number) => count.toLocaleString('en-GB');
 const minute = 60_000;
 const hour = 60 * minute;
@@ -31,6 +39,138 @@ function rowAge(timestamp: number, reference: number, due: boolean) {
   return difference > 0 ? `${due ? 'due ' : ''}in ${duration}` : `${duration} ago`;
 }
 
+async function answerStatus(url: string, item: NeedsYouItem, workspaceSlug: string, response: Response) {
+  const sent = 'Answer sent.';
+  if (!item.seat) return sent;
+  try {
+    const { authorId } = await response.json();
+    if (!authorId) return sent;
+    const [current, activity] = await Promise.all([
+      fetch(url, { cache: 'no-store' }),
+      fetch(`${url}/activities?action=AGENT_RUN_FINISHED&limit=1`, { cache: 'no-store' }),
+    ]);
+    if (!current.ok || !activity.ok) return sent;
+
+    const { issue } = await current.json();
+    const [finish] = await activity.json();
+    // The finish records the seat ID and its account. The issue read gives the current assignee.
+    if (issue?.id === item.issue.id && issue.projectId === item.issue.project.id
+      && (issue.workspace?.slug || issue.workspaceId) === workspaceSlug
+      && finish?.details?.seatId === item.seat.id && finish.user?.id
+      && finish.user.id === issue.assigneeId && finish.user.id !== authorId) {
+      return `${sent} ${item.seat.name} will pick it up.`;
+    }
+  } catch {
+    // The comment has already been saved, even if assignment verification fails.
+  }
+  return sent;
+}
+
+function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplete }: {
+  item: NeedsYouItem;
+  workspaceSlug: string;
+  reference: number;
+  open: boolean;
+  onToggle: () => void;
+  onComplete: (message: string) => void;
+}) {
+  const { issue, seat, pullRequestUrl } = item;
+  const issueHref = `/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(issue.issueKey || issue.id)}`;
+  const issueApi = `/api/issues/${encodeURIComponent(issue.id)}`;
+  const review = item.kind === 'review' && pullRequestUrl;
+  const label = labels[item.kind];
+  const timestamp = new Date(item.since);
+  const utc = Number.isNaN(timestamp.getTime()) ? null : timestamp.toISOString();
+
+  const actionId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const submitting = useRef(false);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const answer = item.kind === 'question';
+  const runId = item.kind === 'failed' ? item.runId : null;
+  const action = answer ? 'comments' : runId ? `runs/${encodeURIComponent(runId)}/clear` : null;
+  const actionable = item.canAct && action && !submitted;
+  useEffect(() => {
+    if (open) input.current?.focus();
+  }, [open]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!actionable || !open || submitting.current) return;
+    const content = draft.trim();
+    if (answer && !content) {
+      setError('Type an answer first.');
+      return;
+    }
+    const fallback = answer ? 'The answer could not be sent. Try again.' : 'The run could not be cleared. Try again.';
+    submitting.current = true;
+    setPending(true);
+    setError('');
+    const response = await fetch(`${issueApi}/${action}`, answer
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }
+      : { method: 'POST' }).catch(() => null);
+    if (!response?.ok) {
+      const details = await response?.json().catch(() => null);
+      const message = details?.error_description || details?.error;
+      setError(typeof message === 'string' && message ? message : fallback);
+      submitting.current = false;
+      setPending(false);
+      return;
+    }
+    setSubmitted(true);
+    onComplete(answer ? await answerStatus(issueApi, item, workspaceSlug, response) : 'Run cleared.');
+  }
+
+  return <li className={`grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center ${actionable && open ? 'bg-blue-950/20' : ''}`}>
+    <span className={`text-xs font-medium ${label.color}`}>{label.text}</span>
+    <div className="min-w-0">
+      <p className="break-words text-sm font-medium text-collab-50">{issue.title}</p>
+      <p className="mt-1 break-words text-xs text-collab-400">
+        {issue.issueKey && <>{issue.issueKey} · </>}{issue.project.name}{seat && <> · from {seat.name}</>}
+        {' · '}{utc
+          ? <time dateTime={utc} title={utc}>{rowAge(timestamp.getTime(), reference, item.kind === 'due')}</time>
+          : <span>Not recorded</span>}
+      </p>
+    </div>
+    {actionable
+      ? <button type="button" ref={trigger} aria-expanded={open} aria-controls={open ? actionId : undefined}
+        className={answer ? `col-start-2 sm:col-start-auto ${primaryStyle}` : rowActionStyle} onClick={onToggle}>
+        {answer ? (open ? 'Close' : 'Answer') : 'Session has stopped: clear run'}
+      </button>
+      : <a href={review || issueHref} target={review ? '_blank' : undefined} rel={review ? 'noopener noreferrer' : undefined} className={rowActionStyle}>
+        {review ? 'Open pull request' : 'Open issue'}
+      </a>}
+    {actionable && open && <form id={actionId} className={formStyle} onSubmit={submit}>
+      {answer ? <>
+        {item.text && <p className="whitespace-pre-wrap break-words text-sm text-collab-50">
+          {seat && <strong className="block">From {seat.name}</strong>}{item.text}
+        </p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={input} type="text" name="answer" aria-label="Your answer" placeholder="Type your answer"
+            className={`min-w-0 flex-1 basis-36 rounded-md border border-collab-600 bg-collab-800 px-3 py-1.5 text-sm text-collab-50 ${focus}`}
+            value={draft} onChange={event => setDraft(event.target.value)} disabled={pending} />
+          <button type="submit" className={primaryStyle} disabled={pending}>{pending ? 'Sending…' : 'Send answer'}</button>
+        </div>
+      </> : <>
+        <p className="text-sm text-collab-50">Confirm that you checked that the old session has stopped.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" className={actionStyle} disabled={pending}>{pending ? 'Clearing…' : 'Confirm clear run'}</button>
+          <button type="button" className={actionStyle} disabled={pending} onClick={() => {
+            setError('');
+            onToggle();
+            trigger.current?.focus();
+          }}>Cancel</button>
+        </div>
+      </>}
+      {error && <p role="alert" className="break-words text-xs text-red-300">{error}</p>}
+    </form>}
+  </li>;
+}
+
 export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, now }: {
   data: NeedsYouOverview;
   kind?: NeedsYouKind;
@@ -38,6 +178,9 @@ export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, no
   workspaceSlug: string;
   now: string;
 }) {
+  const router = useRouter();
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
   const total = data.kind === 'ready' ? Object.values(data.counts).reduce((sum, count) => sum + count, 0) : null;
   const selected = kind ?? 'all';
   const visibleTotal = data.kind === 'ready' && kind ? data.counts[kind] : total;
@@ -49,6 +192,7 @@ export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, no
         Needs you{total !== null && <> <span className="ml-1 tabular-nums text-collab-400">{format(total)}</span></>}
       </h2>
     </header>
+    <div role="status">{status && <p className="border-b border-collab-600 px-5 py-3 text-sm text-emerald-300">{status}</p>}</div>
     {data.kind === 'ready' ? <>
       <nav aria-label="Needs you filters" className="flex flex-wrap gap-2 px-5 py-3">
         {chips.map(([value, label]) => <a
@@ -60,28 +204,14 @@ export default function NeedsYouPanel({ data, kind, kindHrefs, workspaceSlug, no
       {data.items.length === 0 ? <p className="border-t border-collab-600 px-5 py-6 text-sm text-collab-400">Nothing is waiting on you.</p> :
         <ul className="divide-y divide-collab-600 border-t border-collab-600">
           {data.items.map(item => {
-            const { issue, seat, pullRequestUrl } = item;
-            const issueHref = `/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(issue.issueKey || issue.id)}`;
-            const review = item.kind === 'review' && pullRequestUrl;
-            const label = labels[item.kind];
-            const timestamp = new Date(item.since);
-            const utc = Number.isNaN(timestamp.getTime()) ? null : timestamp.toISOString();
-            return <li key={item.id} className="grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center">
-              <span className={`text-xs font-medium ${label.color}`}>{label.text}</span>
-              <div className="min-w-0">
-                <p className="break-words text-sm font-medium text-collab-50">{issue.title}</p>
-                <p className="mt-1 break-words text-xs text-collab-400">
-                  {issue.issueKey && <>{issue.issueKey} · </>}{issue.project.name}{seat && <> · from {seat.name}</>}
-                  {' · '}{utc
-                    ? <time dateTime={utc} title={utc}>{rowAge(timestamp.getTime(), reference, item.kind === 'due')}</time>
-                    : <span>Not recorded</span>}
-                </p>
-              </div>
-              <a href={review || issueHref} target={review ? '_blank' : undefined} rel={review ? 'noopener noreferrer' : undefined}
-                className={`col-start-2 w-fit rounded-md border border-collab-600 px-3 py-1.5 text-xs text-blue-300 hover:bg-collab-700 sm:col-start-auto ${focus}`}>
-                {review ? 'Open pull request' : 'Open issue'}
-              </a>
-            </li>;
+            const rowKey = `${item.id}:${item.runId ?? item.since}`;
+            return <NeedsYouRow key={rowKey} item={item} workspaceSlug={workspaceSlug} reference={reference} open={openRow === rowKey}
+              onToggle={() => setOpenRow(current => current === rowKey ? null : rowKey)}
+              onComplete={message => {
+                setOpenRow(current => current === rowKey ? null : current);
+                setStatus(message);
+                router.refresh();
+              }} />;
           })}
         </ul>}
       {visibleTotal !== null && visibleTotal > data.items.length &&
