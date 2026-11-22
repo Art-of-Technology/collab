@@ -1,7 +1,11 @@
 const { before, beforeEach, after } = require('node:test');
+const { createRequire } = require('node:module');
 const { Prisma } = require('@prisma/client');
+const React = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
 const { assert, test, load } = require('./helpers.cjs');
 const { seatsDatabase } = require('../agents/seats-db.cjs');
+const { JSDOM } = createRequire(require.resolve('isomorphic-dompurify'))('jsdom');
 
 const now = new Date('2026-11-21T12:00:00Z');
 const date = days => new Date(now.getTime() + days * 86400000);
@@ -193,13 +197,34 @@ test('canAct follows the permissions the comment and clear routes check', async 
   await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
   forgeBindings = [{ workspaceId: 'work', projectId: 'dormant' }];
 
-  const actions = async () => Object.fromEntries((await read({ actorId: 'other' })).items
-    .map(row => [row.issue.id, row.canAct]));
+  const panel = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx', {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': { useRouter: () => ({}) },
+  }).default;
   // The browser comment route accepts issue readers on legacy projects. Clearing also needs ASSIGN_TASK.
-  const expected = { 'legacy-question': true, 'forge-question': false, review: false, 'lost-run': false, 'due-item': false };
-  assert.deepEqual(await actions(), expected);
-  await grant('ASSIGN_TASK');
-  assert.deepEqual(await actions(), { ...expected, 'lost-run': true });
+  for (const canAssign of [false, true]) {
+    if (canAssign) await grant('ASSIGN_TASK');
+    const data = await read({ actorId: 'other' });
+    assert.deepEqual(Object.fromEntries(data.items.map(row => [row.issue.id, row.canAct])), {
+      'legacy-question': true, 'forge-question': false, review: false, 'lost-run': canAssign, 'due-item': false,
+    });
+
+    const document = JSDOM.fragment(renderToStaticMarkup(React.createElement(panel, {
+      data, workspaceSlug: 'work', now: now.toISOString(), kindHrefs: { all: '/work/dashboard' },
+    })));
+    const controls = Object.fromEntries([...document.querySelectorAll('li')].map(row => [
+      row.querySelector('p').textContent,
+      [...row.querySelectorAll('button, a')].map(control => [control.localName, control.textContent]),
+    ]));
+    const openIssue = [['a', 'Open issue']];
+    assert.deepEqual(controls, {
+      'legacy-question': [['button', 'Answer']],
+      'forge-question': openIssue,
+      review: openIssue,
+      'lost-run': canAssign ? [['button', 'Session has stopped: clear run']] : openIssue,
+      'due-item': openIssue,
+    });
+  }
   await raw.workspaceMember.update({
     where: { userId_workspaceId: { userId: 'other', workspaceId: 'work' } }, data: { status: false },
   });
