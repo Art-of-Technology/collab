@@ -393,7 +393,8 @@ test('Project Home counts legacy finishes in Overview, Burn and Plan and maps Wo
  assert.equal(overview.milestones[0].completed, 1);
  const plan = overview.plan.milestones[0];
  assert.equal(plan.completed, 1);
- assert.equal(plan.forecast, plan.start + 21);
+ assert.equal(plan.forecast, null);
+ assert.equal(plan.deliveryForecast.noHistory, true);
  assert.equal(burn.remaining, 8);
  assert.equal(burn.forecast.remaining, 8);
  assert.equal(burn.points.at(-1).closed, 3);

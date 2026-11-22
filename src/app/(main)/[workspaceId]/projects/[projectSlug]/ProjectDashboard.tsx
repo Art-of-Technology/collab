@@ -10,7 +10,7 @@ import NewIssueModal from '@/components/issue/NewIssueModal';
 import { useProjectSummary, type ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
 import { BurnOverviewCard, ProjectBurn } from './ProjectBurn';
-import { BaselineControl, ProjectPlan, ProjectPlanPreview } from './ProjectPlan';
+import { BaselineControl, MilestoneForecast, ProjectPlan, ProjectPlanPreview } from './ProjectPlan';
 import { ProjectWork } from './ProjectWork';
 
 interface ProjectDashboardProps {
@@ -72,6 +72,10 @@ function ProjectOverview({
     return milestone?.forecastDate && milestone.driftDays !== null
       ? [{ ...milestone, forecastDate: milestone.forecastDate, driftDays: milestone.driftDays }] : [];
   });
+  const missingSafe = (overview.missingSafeMilestoneIds ?? []).flatMap(id => {
+    const milestone = byId.get(id);
+    return milestone ? [milestone] : [];
+  });
   const verdict = overview.verdict ? verdictStyle[overview.verdict] : null;
   const planLink = (milestone: Milestone) => `${base}?tab=plan&milestone=${encodeURIComponent(milestone.id)}`;
   const workLink = `${base}?tab=work&group=no-milestone`;
@@ -123,11 +127,18 @@ function ProjectOverview({
               {verdict?.label ?? (overview.hasBaseline ? 'Forecast unavailable' : 'Awaiting baseline')}
             </h2>
             <div className="mt-1.5 text-sm text-collab-400">
-              {late.length ? (
+              {late.length || missingSafe.length ? (
                 <ul>
                   {late.slice(0, 2).map(milestone => (
                     <li key={milestone.id}>
-                      {milestone.issueKey ?? milestone.title} is forecast for {dateLabel.format(new Date(milestone.forecastDate))}, {days(milestone.driftDays)} after its baseline
+                      {milestone.issueKey ?? milestone.title} has a safe forecast of {dateLabel.format(new Date(milestone.forecastDate))}, {days(milestone.driftDays)} after its baseline
+                    </li>
+                  ))}
+                  {missingSafe.slice(0, 2).map(milestone => (
+                    <li key={milestone.id}>
+                      {milestone.issueKey ?? milestone.title} · {milestone.deliveryForecast?.noHistory
+                        ? 'No developer history to tell whether the queue is not converging'
+                        : 'not converging'}
                     </li>
                   ))}
                 </ul>
@@ -135,8 +146,6 @@ function ProjectOverview({
                 <p>{milestones.every(milestone => milestone.finished)
                   ? 'All milestones are finished'
                   : 'Every open milestone with a baseline is forecast within 2 days of it'}</p>
-              ) : overview.hasBaseline ? (
-                <p>Issue closures in the last three weeks are needed for a forecast.</p>
               ) : overview.baselineAt ? (
                 <p>Add milestone due dates and ask the workspace owner to update the baseline.</p>
               ) : (
@@ -160,6 +169,7 @@ function ProjectOverview({
                   : 'No due date'}
                 {' · '}{next.completed} of {next.total} done
               </span>
+              <MilestoneForecast forecast={next.deliveryForecast} />
             </Link>
           )}
         </Card>
