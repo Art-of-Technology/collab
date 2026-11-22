@@ -59,6 +59,9 @@ export async function loadWorkspaceIssueOverview({
     const projects = await prisma.project.findMany({ where: activeProjects, select: projectSelect });
     const projectIds = projects.map(project => project.id);
     const soon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // Prisma stores DateTime columns as UTC timestamps without a time zone.
+    const nowUtc = Prisma.sql`(${now}::timestamptz AT TIME ZONE 'UTC')`;
+    const soonUtc = Prisma.sql`(${soon}::timestamptz AT TIME ZONE 'UTC')`;
     // Raw reads must apply workspace access and Trash visibility themselves.
     // The status join also verifies that a linked status belongs to the issue's project.
     const scopedIssues = Prisma.sql`
@@ -90,8 +93,8 @@ export async function loadWorkspaceIssueOverview({
       prisma.$queryRaw<IssueTotals[]>`
         ${scopedIssues}
         SELECT "projectId", COUNT(*) FILTER (WHERE "isOpen") AS "openIssues",
-          COUNT(*) FILTER (WHERE "isOpen" AND "dueDate" < ${now}) AS "overdueIssues",
-          COUNT(*) FILTER (WHERE "isOpen" AND "dueDate" BETWEEN ${now} AND ${soon}) AS "dueSoonIssues",
+          COUNT(*) FILTER (WHERE "isOpen" AND "dueDate" < ${nowUtc}) AS "overdueIssues",
+          COUNT(*) FILTER (WHERE "isOpen" AND "dueDate" BETWEEN ${nowUtc} AND ${soonUtc}) AS "dueSoonIssues",
           MAX("updatedAt") AS "lastIssueUpdatedAt"
         FROM scoped_issues
         GROUP BY "projectId"
@@ -99,7 +102,7 @@ export async function loadWorkspaceIssueOverview({
       prisma.$queryRaw<PreviewIssue[]>`
         ${scopedIssues}
         SELECT ${previewFields} FROM scoped_issues
-        WHERE "isOpen" AND "dueDate" <= ${soon}
+        WHERE "isOpen" AND "dueDate" <= ${soonUtc}
         ORDER BY "dueDate" ASC, id ASC
         LIMIT 8
       `,
