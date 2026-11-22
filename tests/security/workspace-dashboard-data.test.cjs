@@ -1,7 +1,7 @@
 const { assert, test, load } = require('./helpers.cjs');
 const { after, before } = require('node:test');
 const { execFileSync } = require('node:child_process');
-const { mkdtempSync, rmSync } = require('node:fs');
+const { mkdtempSync, readFileSync, rmSync, statSync } = require('node:fs');
 const { tmpdir, userInfo } = require('node:os');
 const { join } = require('node:path');
 const { Prisma, PrismaClient } = require('@prisma/client');
@@ -10,18 +10,19 @@ const now = new Date('2026-10-23T12:00:00.000Z');
 const date = days => new Date(now.getTime() + days * 86400000);
 const plain = value => JSON.parse(JSON.stringify(value));
 const visibility = load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models);
-let directory, pgCtl, started, db;
-const sent = [];
+let directory, pgCtl, serverLog, logOffset, started, db;
 
 before(() => {
   const bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
   pgCtl = join(bindir, 'pg_ctl');
   directory = mkdtempSync(join(tmpdir(), 'collab-home-pg-'));
   const data = join(directory, 'data');
+  serverLog = join(directory, 'server.log');
   execFileSync(join(bindir, 'initdb'), ['-D', data, '-A', 'trust', '--no-locale', '-E', 'UTF8'], { stdio: 'pipe' });
   // Compare due dates against UTC even when the database session uses a local time zone.
-  execFileSync(pgCtl, ['-D', data, '-l', join(directory, 'server.log'), '-o',
-    `-k ${directory} -c listen_addresses='' -c fsync=off -c TimeZone=America/Los_Angeles`, '-w', 'start'], { stdio: 'pipe' });
+  execFileSync(pgCtl, ['-D', data, '-l', serverLog, '-o',
+    `-k ${directory} -c listen_addresses='' -c fsync=off -c TimeZone=America/Los_Angeles -c log_line_prefix=pg:%p: -c log_statement=all -c log_parameter_max_length=0`,
+    '-w', 'start'], { stdio: 'pipe' });
   started = true;
   const user = userInfo().username;
   const url = `postgresql://${encodeURIComponent(user)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
@@ -30,8 +31,7 @@ before(() => {
     { env: { ...process.env, DATABASE_URL: url } });
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', user, '-d', 'postgres'],
     { input: schema, stdio: ['pipe', 'pipe', 'pipe'] });
-  db = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
-  db.$on('query', event => sent.push(event.query));
+  db = new PrismaClient({ datasources: { db: { url } } });
 });
 
 after(async () => {
@@ -125,12 +125,20 @@ async function fixture(access = 'member', options = {}) {
   };
   const loader = load('src/lib/dashboard/workspace-overview.ts', deps).loadWorkspaceIssueOverview;
   return { issues, invoke: async input => {
-    sent.length = 0;
+    logOffset = statSync(serverLog).size;
     return loader({ actorId: 'alice', workspaceId: 'workspace', scope: 'all', projectSearch: '', projectPage: 1, now, ...input });
   } };
 }
 
-const payloadSql = () => sent.filter(sql => /"Project"|"Issue"/.test(sql));
+function payloadSql() {
+  // PostgreSQL logs statements before execution. Prisma query events can arrive after the loader resolves.
+  return readFileSync(serverLog).subarray(logOffset).toString('utf8')
+    .split(/^pg:\d+:/m)
+    .flatMap(entry => {
+      const match = /^LOG:\s+(?:execute [^:]*|statement): ([\s\S]*)$/.exec(entry);
+      return match && /"Project"|"Issue"/.test(match[1]) ? [match[1].trim()] : [];
+    });
+}
 
 test('exact workspace totals exceed bounded attention rows and exclude terminal, archived, foreign and trashed work', async () => {
   const f = await fixture();
@@ -194,7 +202,7 @@ test('query failures are unavailable without raw errors; an empty workspace rema
   assert.equal(result.summary.openIssues, 0);
   assert.deepEqual(plain(result.attention), []);
   assert.equal(result.projectPages, 1);
-  assert.equal(sent.some(sql => sql.includes('"Issue"')), false);
+  assert.equal(payloadSql().some(sql => sql.includes('"Issue"')), false);
 });
 
 test('workspace and permission lookup errors are unavailable, never disguised as access denial', async () => {
@@ -234,4 +242,5 @@ test('Prisma sends the same Home statements after adding projects with new statu
   assert.equal(after.length, before.length, 'the query count stays fixed');
   assert.deepEqual(after.map(sql => sql.length).sort(), before.map(sql => sql.length).sort(), 'statement sizes stay fixed');
   assert.deepEqual(after.sort(), before.sort(), 'statement text stays fixed');
+  assert.equal(before.filter(sql => sql.includes('"Issue"')).length, 3);
 });
