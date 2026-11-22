@@ -19,8 +19,9 @@ before(() => {
   directory = mkdtempSync(join(tmpdir(), 'collab-home-pg-'));
   const data = join(directory, 'data');
   execFileSync(join(bindir, 'initdb'), ['-D', data, '-A', 'trust', '--no-locale', '-E', 'UTF8'], { stdio: 'pipe' });
+  // Compare due dates against UTC even when the database session uses a local time zone.
   execFileSync(pgCtl, ['-D', data, '-l', join(directory, 'server.log'), '-o',
-    `-k ${directory} -c listen_addresses='' -c fsync=off`, '-w', 'start'], { stdio: 'pipe' });
+    `-k ${directory} -c listen_addresses='' -c fsync=off -c TimeZone=America/Los_Angeles`, '-w', 'start'], { stdio: 'pipe' });
   started = true;
   const user = userInfo().username;
   const url = `postgresql://${encodeURIComponent(user)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
