@@ -319,10 +319,10 @@ test('the script queue includes earlier and undated running milestones and appli
     ),
     queueItem('epic', 'M1', { type: 'EPIC', createdAt: date(19) }),
     queueItem('cancelled-work', 'M1', { statusValue: 'CANCELED', createdAt: date(19) }),
-    ...Array.from({ length: 2 }, (_, i) => closed(`developer-${i}`, { assignee: developer })),
+    closed('developer-finish', { assignee: developer }),
     ...Array.from({ length: 6 }, (_, i) => closed(`reviewer-${i}`, { assignee: { name: 'Demo Reviewer' } })),
   ]);
-  // Four eligible open items, two developer finishes per sampled day, zero eligible arrivals.
-  assert.equal(item.deliveryForecast.likelyDate, date(22).toISOString());
-  assert.equal(item.deliveryForecast.safeDate, date(22).toISOString());
+  // Four eligible open items, one developer finish per sampled day, zero eligible arrivals.
+  assert.equal(item.deliveryForecast.likelyDate, date(24).toISOString());
+  assert.equal(item.deliveryForecast.safeDate, date(24).toISOString());
 });
