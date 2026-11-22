@@ -4,7 +4,7 @@ The screens the repository's owner approved on 22 November 2026 for the four tab
 
 All names, projects, issues and numbers in the pictures are sample data. `mockup.html` in this folder is the clickable page the pictures were taken from; open it in a browser to try each control. Its layout switches, its "Your pick" forms and its last tab ("Open points") are left from the review; what was picked is written on this page.
 
-![Runners report room, Collab knows every seat's state, Now shows what is stuck](01-how-it-works.png)
+![Runners report room, Collab knows every seat's state, Now groups waiting work by why it waits](01-how-it-works.png)
 
 ## The three lines
 
