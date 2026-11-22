@@ -304,7 +304,7 @@ CHG['n-proj']=el=>{N.proj=el.value;N.moving=null;render()};
 INP['n-q']=el=>{const pos=el.selectionStart;N.q=el.value;N.exactSeat='';N.moving=null;render();const input=$('[data-inp="n-q"]',cur());input.focus();input.setSelectionRange(pos,pos)};
 
 /* ---------- screen 3: Seats ---------- */
-const Z={sel:null,setup:false,sw:{},mine:{}};
+const Z={sel:null,setup:false,sw:{}};
 const first=s=>OWN[s.own].split(' ')[0];
 const suffix=s=>s.name.toLowerCase().startsWith(s.proj.toLowerCase())?s.name.slice(s.proj.length).replace(new RegExp(s.role,'i'),'').replace(/^[\s-]+/,'').trim():'';
 const pill=(s,label)=>`<button class="sp ${sstate(s)}" data-act="z-sel" data-id="${s.id}" aria-pressed="${Z.sel===s.id}" title="${esc(s.name)}: ${STATE[sstate(s)]}">${esc(label)}</button>`;
@@ -314,24 +314,25 @@ function seatDetail(){const s=SEATS.find(x=>x.id===Z.sel);if(!s)return `<div cla
    <div class="small" style="margin-top:8px"><span class="muted">Owner</span> ${OWN[s.own]}</div><div style="margin-top:4px">${roomHTML(s.room,s.prog)}</div>
    <div class="small" style="margin-top:8px"><span class="muted">Works on now</span> ${s.work?`<span class="key">${s.work.key}</span>${esc(s.work.title)}`:'nothing'}</div>
    <div class="row" style="margin-top:8px"><span class="small"><span class="muted">Waiting</span> ${waitN(s)}</span>${waitN(s)||s.work||YOU.some(y=>y.seat===s.name)?`<button class="btn sm" data-act="z-now" data-id="${s.id}">Show in Now</button>`:''}</div></div>`}
-const noSeats=()=>[...new Set(SEATS.map(s=>s.proj))].filter(p=>Z.mine[p]||!SEATS.some(s=>s.proj===p&&s.own==='ce'));
-function setup(){return `<div class="card" style="margin-bottom:12px"><div class="row between"><span><b>Set up</b> <span class="muted small">add your own seats to a project · ${noSeats().filter(p=>!Z.mine[p]).length} projects without your seats</span></span><button class="btn sm" data-act="z-setup" aria-expanded="${Z.setup}">${Z.setup?'Hide':'Show'}</button></div>
-  ${Z.setup?noSeats().map(p=>`<div class="row between" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><span><b>${p}</b> <span class="muted small">${Z.mine[p]?'Your seats: Developer, Reviewer, Security (sample)':'You have no seats here'}</span></span>
+const ownRoles=p=>[...new Set(SEATS.filter(s=>s.proj===p&&s.own==='ce').map(s=>s.role))];
+const missingRoles=owned=>['developer','reviewer','security'].filter(role=>!owned.includes(role));
+function setup(projs){return `<div class="card" style="margin-bottom:12px"><div class="row between"><span><b>Set up</b> <span class="muted small">add your own seats to a project · ${projs.filter(p=>!ownRoles(p).length).length} projects without your seats</span></span><button class="btn sm" data-act="z-setup" aria-expanded="${Z.setup}">${Z.setup?'Hide':'Show'}</button></div>
+  ${Z.setup?projs.map(p=>{const owned=ownRoles(p),complete=!missingRoles(owned).length;return `<div class="row between" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><span><b>${p}</b> <span class="muted small">${owned.length?'Your seats: '+owned.map(cap).join(', '):'You have no seats here'}</span></span>
     <span class="row"><button class="sw" role="switch" data-act="z-sw" data-p="${p}" aria-checked="${Z.sw[p]!==false}" aria-label="Members may add their own seats to ${p}"></button><span class="small muted">Members may add seats</span>
-    <button class="btn sm pri" data-act="z-add" data-p="${p}" ${Z.mine[p]||Z.sw[p]===false?'disabled':''}>${Z.mine[p]?'Added':'Add my seats'}</button></span></div>`).join(''):''}</div>`}
+    <button class="btn sm pri" data-act="z-add" data-p="${p}" ${complete||Z.sw[p]===false?'disabled':''}>${complete?'Added':'Add my seats'}</button></span></div>`}).join(''):''}</div>`}
 R.seats=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))];
   const legend=`<div class="row small muted" style="margin-bottom:10px">${['work','lost','stuck','wait','noroom','idle'].map(k=>`<span><span class="sp ${k}" style="pointer-events:none">&nbsp;&nbsp;</span>${STATE[k]}</span>`).join('')}</div>`;
   const A=()=>`<div class="scroll"><table class="mx"><thead><tr><th>Project</th>${ROLES.map(r=>`<th>${cap(r)}</th>`).join('')}</tr></thead><tbody>${projs.map(p=>`<tr><th scope="row">${esc(p)}</th>${ROLES.map(r=>{const l=SEATS.filter(s=>s.proj===p&&s.role===r);return `<td>${l.length?l.map(s=>pill(s,first(s)+(suffix(s)?' · '+suffix(s):''))).join(''):'<span class="muted">–</span>'}</td>`}).join('')}</tr>`).join('')}</tbody></table></div>`;
   const B=()=>Object.keys(OWN).map(o=>{const l=SEATS.filter(s=>s.own===o),same=new Set(l.map(s=>roomTxt(s)+s.prog)).size===1;
     return `<div class="card" style="margin-bottom:10px"><div class="row between"><b>${OWN[o]}</b>${same?roomHTML(l[0].room,l[0].prog):'<span class="small muted">These seats do not have the same room: press one to see its own.</span>'}</div>
     ${[...new Set(l.map(s=>s.proj))].map(p=>`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}</span> ${l.filter(s=>s.proj===p).map(s=>pill(s,cap(s.role).slice(0,3)+(suffix(s)?' '+suffix(s):''))).join('')}</div>`).join('')}</div>`}).join('');
-  return frame(d,`${setup()}${legend}<div class="cols"><div style="min-width:0">${!phoneLayout()&&S.lay.seats==='A'?A():B()}</div>${seatDetail()}</div>
+  return frame(d,`${setup(projs)}${legend}<div class="cols"><div style="min-width:0">${!phoneLayout()&&S.lay.seats==='A'?A():B()}</div>${seatDetail()}</div>
    <p class="small muted" style="margin-top:10px">${SEATS.length} seats. A dash is a role the project has no seat for.</p>`)};
 ACT['z-sel']=b=>{Z.sel=Z.sel===b.dataset.id?null:b.dataset.id;render()};
 ACT['z-now']=b=>{N.exactSeat=b.dataset.id;N.q=SEATS.find(s=>s.id===N.exactSeat).name;N.proj='';N.moving=null;goId('now')};
 ACT['z-setup']=()=>{Z.setup=!Z.setup;render()};
 ACT['z-sw']=b=>{Z.sw[b.dataset.p]=b.getAttribute('aria-checked')!=='true';render()};
-ACT['z-add']=b=>{const p=b.dataset.p;Z.mine[p]=true;add(p,'ce',9,'Codex',['developer','reviewer','security'].map(r=>[r,`${cap(p)} ${cap(r)} (Dana)`]));render()};
+ACT['z-add']=b=>{const p=b.dataset.p;add(p,'ce',9,'Codex',missingRoles(ownRoles(p)).map(r=>[r,`${cap(p)} ${cap(r)} (Dana)`]));render()};
 
 /* ---------- screen 4: Runners ---------- */
 const RUN=[['ce','17 Nov',[['Codex',9],['Claude Code','none']]],['al','20 Nov',[['Claude Code',19],['Codex','none']]],['as','20 Nov',[['Codex',45]]],['bg','19 Nov',[['Claude Code',39]]],['de','19 Nov',[['Claude Code',5]]],['er','19 Nov',[]],['il','20 Nov',[['Claude Code',90]]]]
@@ -382,8 +383,8 @@ const PROPS=[
  ['P3','"Move" is a manual override',autoMove+' The button offers only seats of the same project and role, and says so when none can take the issue.'],
  ['P4','How long it has waited','Each row shows its wait. Collab reads no "waiting since" for the page today, so this needs a small read change. The ages in this mockup are sample.'],
  ['P5','When room comes back','Not shown in the first version: a runner reports how much room is left, not when it resets.'],
- ['P6','Room stays private','As today: you and the lead see every figure, a member sees their own. For someone else\'s seat a member sees "no room" without a number.'],
- ['P7','"Waits for you" rows','They appear once Needs you on Home is live (PR #784 is not merged). Until then that group is not shown.'],
+ ['P6','Room stays private','The owner and lead see every figure. Members see their own figures and "Room private" for other people\'s seats. Showing "no room" on someone else\'s seat without a number is a proposed change that needs a security review in the implementation story.'],
+ ['P7','"Waits for you" rows','They appear once Needs you on Home is live. Until then that group is not shown.'],
  ['P8','Floor drops the old agents','The registered-agents list and the handoff counts leave Floor. "Handoffs (old)" stays as it is, untouched.'],
  ['P9','No timer anywhere','Now, Seats, Runners and Floor show "Updated 19:11 · Refresh" and reload when you come back to the browser tab. Floor\'s 20-second timer goes.'],
  ['P10','Build order','One tab at a time: Now, then Runners, then Seats, then Floor. The next starts only when the one before is live and you have used it.'],
