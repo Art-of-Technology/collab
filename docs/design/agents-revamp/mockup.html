@@ -42,7 +42,7 @@ button{cursor:pointer}
 .fbar .url{margin-left:8px;background:var(--card);border-radius:6px;padding:2px 10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app{display:grid;grid-template-columns:150px minmax(0,1fr);min-height:420px}
 .side{background:var(--bg-deep);border-right:1px solid var(--line);padding:12px 8px;font-size:13px}
-.side .it{padding:6px 8px;border-radius:7px;color:var(--dim)}.side .it.on{background:var(--hover);color:var(--ink)}.side .sub{padding-left:20px}
+.side .it{padding:6px 8px;border-radius:7px;color:var(--dim)}.side button.it{display:block;width:100%;text-align:left;background:transparent;border:0;font-size:13px}.side .it.on{background:var(--hover);color:var(--ink)}.side .sub{padding-left:20px}
 .badge{font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:0 6px;margin-left:4px}
 .main{padding:16px;min-width:0;font-size:14px}.main h3{font-size:20px;font-weight:600}
 .muted{color:var(--dim)}.small{font-size:13px}
@@ -83,7 +83,7 @@ table.props{width:100%;border-collapse:collapse;font-size:14px}table.props td{bo
 .dotc{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;background:var(--dim)}
 .dotc.bad{background:var(--bad)}.dotc.warn{background:var(--warn)}.dotc.ok{background:var(--ok)}.dotc.acc{background:var(--accent)}
 .irow{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
-.ik{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}.key{color:#93c5fd;font-weight:600;margin-right:4px}.meta{font-size:12px;color:var(--dim)}.hi{color:var(--warn)}
+.ik{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}.key{color:#93c5fd;font-weight:600;margin-right:4px}button.key{background:transparent;border:0;padding:0;font-size:inherit}.meta{font-size:12px;color:var(--dim)}.hi{color:var(--warn)}
 .age{font-size:12px;color:var(--dim);min-width:44px;text-align:right}
 .mover{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 12px;background:var(--accent-soft);border-top:1px solid var(--line)}
 .mover select{width:auto;max-width:100%;flex:0 1 320px;font-size:13px;padding:4px 8px}
@@ -192,7 +192,7 @@ const sstate=s=>s.work?(s.work.lost?'lost':'work'):waitN(s)?(s.room==='none'?'st
 const STATE={work:'Working',lost:'Lost run',stuck:'Stuck: work waits, no room',wait:'Work waits',noroom:'No room, nothing waits',idle:'Idle'};
 const roomTxt=s=>typeof s.room==='number'?s.room+'% room':s.room==='none'?'no room':s.room==='hand'?'run by hand':'room unknown';
 function roomHTML(room,prog){if(typeof room!=='number')return `<span class="room"><span class="chip ${room==='none'?'bad':''}">${room==='none'?'no room':'unknown'}</span><span class="muted small">${room==='none'?'its runner reports no room':room==='hand'?'the seat is run by hand':'no figure was reported'}${room==='none'&&prog?' on '+prog:''}</span></span>`;
-  return `<span class="room" role="img" aria-label="${room} percent room"><span class="bar"><i class="${room>=30?'ok':room>=10?'warn':'bad'}" style="width:${room}%"></i></span>${room}% room${prog?` <span class="muted small">next run on ${prog}</span>`:''}</span>`}
+  return `<span class="room" role="img" aria-label="${room} percent room${prog?', next run on '+prog:''}"><span class="bar"><i class="${room>=30?'ok':room>=10?'warn':'bad'}" style="width:${room}%"></i></span>${room}% room${prog?` <span class="muted small">next run on ${prog}</span>`:''}</span>`}
 
 /* ---------- shell ---------- */
 function shell(){
@@ -216,7 +216,7 @@ const updated=Object.fromEntries(TABS.map(([id])=>[id,'19:11']));
 function frame(d,inner){const header=`<h3>Agents</h3>${tabsHTML(d.tab)}<div class="row updated"><span class="small muted" role="status">Updated ${updated[d.tab]}</span><button class="btn sm" data-act="refresh" data-id="${d.tab}">Refresh</button></div>`;
   if(previewPhone())return header+inner;
   return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="App menu (mock)">
-  <div class="it on">Agents</div>${TABS.map(t=>`<div class="it sub ${t[0]===d.tab?'on':''}">${t[1]}${t[0]==='now'?`<span class="badge">${W.length}</span>`:''}</div>`).join('')}
+  <div class="it on">Agents</div>${TABS.map(t=>`<button class="it sub ${t[0]===d.tab?'on':''}" data-act="tab" data-id="${t[0]}">${t[1]}${t[0]==='now'?`<span class="badge">${W.length}</span>`:''}</button>`).join('')}
   ${['Home','Timeline','Context','Docs','Projects'].map(n=>`<div class="it">${n}</div>`).join('')}</nav><div class="main">${header}${inner}</div></div></div>`}
 function render(){const d=SCREENS[S.scr],pin=$('.phone .pin'),top=pin&&d.id==='phone'&&S.phoneTab===S.phoneWas?pin.scrollTop:0;S.phoneWas=S.phoneTab;
   document.querySelectorAll('.screen').forEach((el,i)=>el.hidden=i!==S.scr);
@@ -274,7 +274,7 @@ function mover(e,targets){return `<div class="mover"><label class="small" for="m
 function erow(e,chip){const g=G[e.g],s=seat(e.seat),targets=SEATS.filter(t=>t!==s&&t.proj===s.proj&&t.role===s.role),canMove=targets.some(t=>t.room!=='none'),mv=canMove&&N.moving===e.key;
   const meta=e.g==='lost'?`${esc(e.seat)} · the run stopped answering`:e.g==='you'?`${esc(e.seat)} asked a question`:`${esc(e.seat)} · ${RE[e.reason]}${e.prio?' · <span class="hi">'+e.prio+'</span>':''}`;
   const act=e.g==='lost'?`<button class="btn sm" data-act="n-clear" data-k="${e.key}">Session has stopped · Clear lost run</button>`:e.g==='you'?`<button class="btn sm" data-act="n-you" data-k="${e.key}">Open in Needs you</button>`:canMove?`<button class="btn sm" data-act="n-move" data-k="${e.key}" aria-expanded="${mv}">Move</button>`:`<span class="small muted">No other ${s.role} seat can take this issue.</span>`;
-  return `<div class="irow"><div class="ik"><span class="key">${e.key}</span>${esc(e.title)}<div class="meta">${meta}</div></div>${chip?`<span class="chip ${g[1]}">${g[0]}</span>`:''}<span class="age">${age(e.age)}</span>${act}</div>${mv?mover(e,targets):''}`}
+  return `<div class="irow"><div class="ik"><button class="key" data-act="n-issue" data-k="${e.key}">${e.key}</button>${esc(e.title)}<div class="meta">${meta}</div></div>${chip?`<span class="chip ${g[1]}">${g[0]}</span>`:''}<span class="age">${age(e.age)}</span>${act}</div>${mv?mover(e,targets):''}`}
 const grp=(dot,title,n,why,body)=>`<section class="grp"><header><h4><span class="dotc ${dot}"></span>${title}<span class="cnt">${n}</span></h4>${why?`<p class="small muted" style="margin-top:3px">${why}</p>`:''}</header>${body}</section>`;
 function nowList(es){const lay=S.lay.now;
   if(!es.length)return `<p class="card muted">Nothing waits${N.q||N.proj?' for this filter':''}.</p>`;
@@ -290,7 +290,7 @@ function nowBody(){const es=entries(),c=k=>es.filter(e=>e.g===k).length,working=
   <div class="stats"><div class="stat bad"><b>${c('noroom')+c('hand')}</b>stuck</div><div class="stat bad"><b>${c('lost')}</b>lost run</div><div class="stat acc"><b>${c('you')}</b>waits for you</div><div class="stat"><b>${c('queue')+c('next')}</b>queued</div><div class="stat"><b>${working.length}</b>working</div></div>
   <div class="row filters"><select data-chg="n-proj" aria-label="Project"><option value="">All projects</option>${projs.map(p=>`<option ${p===N.proj?'selected':''}>${esc(p)}</option>`).join('')}</select><input type="text" data-inp="n-q" aria-label="Search" placeholder="Search issue or seat" value="${esc(N.q)}">${N.q||N.proj?'<button class="btn sm ghost" data-act="n-reset">Clear filter</button>':''}</div>
   ${nowList(es)}
-  ${working.length?grp('acc','Working now',working.length,'',working.map(s=>`<div class="irow"><div class="ik"><span class="key">${s.work.key}</span>${esc(s.work.title)}<div class="meta">${esc(s.name)}</div></div>${roomHTML(s.room,s.prog)}</div>`).join('')):''}
+  ${working.length?grp('acc','Working now',working.length,'',working.map(s=>`<div class="irow"><div class="ik"><button class="key" data-act="n-issue" data-k="${s.work.key}">${s.work.key}</button>${esc(s.work.title)}<div class="meta">${esc(s.name)}</div></div>${roomHTML(s.room,s.prog)}</div>`).join('')):''}
   <div class="card row between"><span><b>${idle.length} idle seats</b> <span class="muted small">nothing waits, nothing runs</span></span><button class="btn sm" data-act="n-idle" aria-expanded="${N.idle}">${N.idle?'Hide':'Show'}</button>
     ${N.idle?`<div style="flex-basis:100%">${projs.map(p=>{const l=idle.filter(s=>s.proj===p);return l.length?`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}:</span> ${l.map(s=>`<span class="chip">${esc(s.name.replace(cap(p)+' ',''))}</span>`).join(' ')}</div>`:''}).join('')}</div>`:''}</div>`}
 R.now=d=>frame(d,nowBody());
@@ -298,6 +298,7 @@ ACT['n-move']=b=>{N.moving=b.dataset.k&&N.moving!==b.dataset.k?b.dataset.k:null;
 ACT['n-do']=b=>{const it=W.find(i=>i.key===b.dataset.k),t=SEATS.find(s=>s.id===cur().querySelector('[data-mv]').value);it.seat=t.name;it.reason='assigned';N.moving=null;N.msg=`Moved ${it.key} to ${t.name}. Sample: nothing was changed.`;render()};
 ACT['n-clear']=b=>{const s=SEATS.find(x=>x.work&&x.work.key===b.dataset.k);W.push({key:s.work.key,title:s.work.title,seat:s.name,reason:'resume',age:0});s.work=null;N.msg=`Lost run on ${b.dataset.k} cleared. It is offered to ${s.name} again. Sample.`;render()};
 ACT['n-you']=b=>{N.msg=`Sample: this opens ${b.dataset.k} under Needs you on Home.`;render()};
+ACT['n-issue']=b=>{N.msg=`Sample: this opens the issue ${b.dataset.k}.`;render()};
 ACT['n-idle']=()=>{N.idle=!N.idle;render()};
 ACT['n-reset']=()=>{N.q='';N.proj='';N.exactSeat='';N.moving=null;render()};
 CHG['n-proj']=el=>{N.proj=el.value;N.moving=null;render()};
