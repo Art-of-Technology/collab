@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { allocateIssueKey } from '@/lib/issue-key-allocation';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
@@ -13,6 +14,7 @@ import { NotificationService, NotificationType } from "@/lib/notification-servic
 import { emitIssueCreated } from "@/lib/event-bus";
 import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
 import { assertAssignable, HandoffError } from "@/lib/issue-assignee";
+import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
 import { withoutRequests } from "@/lib/issue-requests";
 
 const RELATED_ISSUE_SELECT = {
@@ -80,6 +82,119 @@ const LIST_INCLUDE = {
   }
 } as const;
 
+type IssueListRow = Prisma.IssueGetPayload<{ include: typeof LIST_INCLUDE }>;
+
+function scopedIssueInclude(userId: string, readableIssue: Prisma.IssueWhereInput) {
+  const relationAccess = { sourceIssue: readableIssue, targetIssue: readableIssue };
+  return {
+    ...LIST_INCLUDE,
+    labels: { ...LIST_INCLUDE.labels, where: issueAccessWhere(userId) },
+    parent: { ...LIST_INCLUDE.parent, where: readableIssue },
+    children: { ...LIST_INCLUDE.children, where: readableIssue },
+    _count: { select: { children: { where: readableIssue }, comments: true } },
+    sourceRelations: { ...LIST_INCLUDE.sourceRelations, where: relationAccess },
+    targetRelations: { ...LIST_INCLUDE.targetRelations, where: relationAccess },
+  } as const satisfies Prisma.IssueInclude;
+}
+
+// One statement keeps relation reads set-based and avoids sending the full issue
+// ID list back to PostgreSQL for each include. Match the projections in LIST_INCLUDE.
+function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
+  const projects = projectIds.length
+    ? Prisma.sql`AND "projectId" IN (${Prisma.join(projectIds)})`
+    : Prisma.empty;
+  // Mirror issueReadAccessWhere and the active-issue extension before projecting issue data.
+  return prisma.$queryRaw<IssueListRow[]>`
+    WITH readable_workspaces AS MATERIALIZED (
+      SELECT id FROM "Workspace" w
+      WHERE w."ownerId" = ${userId} OR EXISTS (
+        SELECT 1 FROM "WorkspaceMember" m
+        WHERE m."workspaceId" = w.id AND m."userId" = ${userId} AND m.status
+      )
+    ),
+    readable_issues AS NOT MATERIALIZED (
+      SELECT i.*
+      FROM "Issue" i
+      JOIN "Project" p ON p.id = i."projectId"
+      LEFT JOIN "ProjectStatus" s ON s.id = i."statusId"
+      LEFT JOIN "Project" sp ON sp.id = s."projectId"
+      WHERE i."deletedAt" IS NULL
+        AND i."workspaceId" IN (SELECT id FROM readable_workspaces)
+        AND p."workspaceId" IN (SELECT id FROM readable_workspaces)
+        AND (i."statusId" IS NULL OR sp."workspaceId" IN (SELECT id FROM readable_workspaces))
+    ),
+    listed AS MATERIALIZED (
+      SELECT id FROM readable_issues
+      WHERE "workspaceId" = ${workspaceId}
+        AND (${includeRequests} OR "agentRequestRole" IS NULL)
+        ${projects}
+    ),
+    hierarchy AS (
+      SELECT i.id, i."parentId",
+        json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type, 'status', i.status,
+           'projectStatus', CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'name', s.name, 'displayName', s."displayName", 'color', s.color) END) AS row
+      FROM readable_issues i
+      LEFT JOIN "ProjectStatus" s ON s.id = i."statusId"
+      WHERE (${includeRequests} OR i."agentRequestRole" IS NULL)
+        AND (i."parentId" IN (SELECT id FROM listed)
+          OR i.id IN (SELECT child."parentId" FROM "Issue" child JOIN listed ON listed.id = child.id))
+    ),
+    children AS (
+      SELECT "parentId", json_agg(row) AS rows, count(*)::int AS total
+      FROM hierarchy GROUP BY "parentId"
+    ),
+    labels AS (
+      SELECT l."A" AS "issueId", json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) AS rows
+      FROM "_IssueToLabel" l JOIN listed ON listed.id = l."A" JOIN "TaskLabel" t ON t.id = l."B"
+      WHERE t."workspaceId" IN (SELECT id FROM readable_workspaces)
+      GROUP BY l."A"
+    ),
+    comments AS (
+      SELECT c."issueId", count(*)::int AS total FROM "IssueComment" c JOIN listed ON listed.id = c."issueId" GROUP BY c."issueId"
+    ),
+    source_relations AS (
+      SELECT r."sourceIssueId", json_agg(json_build_object('id', r.id, 'relationType', r."relationType",
+        'targetIssue', json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type))) AS rows
+      FROM issue_relations r JOIN listed ON listed.id = r."sourceIssueId" JOIN readable_issues i ON i.id = r."targetIssueId"
+      GROUP BY r."sourceIssueId"
+    ),
+    target_relations AS (
+      SELECT r."targetIssueId", json_agg(json_build_object('id', r.id, 'relationType', r."relationType",
+        'sourceIssue', json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type))) AS rows
+      FROM issue_relations r JOIN listed ON listed.id = r."targetIssueId" JOIN readable_issues i ON i.id = r."sourceIssueId"
+      GROUP BY r."targetIssueId"
+    )
+    SELECT i.id, i.title, i.description, i.type, i."statusId", i."statusValue", i.priority, i."storyPoints",
+      i."parentId", i."milestoneId", i."assigneeId", i."reporterId", i."projectId", i."workspaceId",
+      i."dueDate", i."startDate", i."createdAt", i."updatedAt", i."deletedAt", i."deletedById",
+      i."baselineStartDate", i."baselineDueDate", i."finishedAt", i."firstStartedAt", i."lastProgressAt",
+      i."daysInProgress", i."issueKey", i.position, i.progress, i.color, i."postId", i.status,
+      i."timeEstimateMinutes", i."timeSpentMinutes", i."agentRequestRole",
+      json_build_object('id', p.id, 'name', p.name, 'slug', p.slug, 'issuePrefix', p."issuePrefix", 'description', p.description, 'color', p.color) AS project,
+      CASE WHEN a.id IS NOT NULL THEN json_build_object('id', a.id, 'name', a.name, 'email', a.email, 'image', a.image) END AS assignee,
+      CASE WHEN r.id IS NOT NULL THEN json_build_object('id', r.id, 'name', r.name, 'email', r.email, 'image', r.image) END AS reporter,
+      COALESCE(l.rows, '[]') AS labels,
+      parent.row AS parent,
+      COALESCE(c.rows, '[]') AS children,
+      CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'name', s.name, 'displayName', s."displayName", 'color', s.color, 'order', s."order", 'isDefault', s."isDefault") END AS "projectStatus",
+      json_build_object('children', COALESCE(c.total, 0), 'comments', COALESCE(cm.total, 0)) AS _count,
+      COALESCE(sr.rows, '[]') AS "sourceRelations",
+      COALESCE(tr.rows, '[]') AS "targetRelations"
+    FROM listed JOIN "Issue" i ON i.id = listed.id
+    JOIN "Project" p ON p.id = i."projectId"
+    LEFT JOIN "User" a ON a.id = i."assigneeId"
+    LEFT JOIN "User" r ON r.id = i."reporterId"
+    LEFT JOIN "ProjectStatus" s ON s.id = i."statusId"
+    LEFT JOIN hierarchy parent ON parent.id = i."parentId"
+    LEFT JOIN children c ON c."parentId" = i.id
+    LEFT JOIN labels l ON l."issueId" = i.id
+    LEFT JOIN comments cm ON cm."issueId" = i.id
+    LEFT JOIN source_relations sr ON sr."sourceIssueId" = i.id
+    LEFT JOIN target_relations tr ON tr."targetIssueId" = i.id
+    ORDER BY i."updatedAt" DESC
+  `;
+}
+
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
   try {
@@ -91,7 +206,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
     const milestoneId = searchParams.get('milestoneId');
-    const projectIds = searchParams.get('projectIds')?.split(',').filter(Boolean);
+    const projectIds = searchParams.get('projectIds')?.split(',').filter(Boolean) ?? [];
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -115,30 +230,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Build query with filters
-    const where = {
-      workspaceId,
-      ...(milestoneId && { milestoneId }),
-      ...(projectIds && projectIds.length > 0 && {
-        projectId: { in: projectIds }
-      }),
-    };
-
-    const query = searchParams.get('requests') === '1'
-      ? { where, include: LIST_INCLUDE }
-      : withoutRequests(where, LIST_INCLUDE);
-    const issues = await prisma.issue.findMany({
-      ...query,
-      orderBy: { updatedAt: 'desc' }
-    });
-
-    const issuesWithRelations = issues.map((issue: any) => {
-      const { sourceRelations, targetRelations, ...rest } = issue;
-      const issueRelations: RelationMap = buildIssueRelations({
-        ...issue,
-        sourceRelations,
-        targetRelations,
+    const includeRequests = searchParams.get('requests') === '1';
+    let issues: IssueListRow[];
+    if (milestoneId || projectIds.length === 1) {
+      const readableIssue = issueReadAccessWhere(session.user.id);
+      const where = {
+        ...readableIssue,
+        workspaceId,
+        ...(milestoneId && { milestoneId }),
+        ...(projectIds.length > 0 && { projectId: { in: projectIds } }),
+      };
+      const include = scopedIssueInclude(session.user.id, readableIssue);
+      const query = includeRequests ? { where, include } : withoutRequests(where, include);
+      issues = await prisma.issue.findMany({
+        ...query,
+        include: query.include as typeof include,
+        orderBy: { updatedAt: 'desc' },
       });
+    } else {
+      issues = await listWorkspaceIssues(session.user.id, workspaceId, projectIds, includeRequests);
+    }
+
+    const issuesWithRelations = issues.map(issue => {
+      const { sourceRelations, targetRelations, ...rest } = issue;
+      const issueRelations: RelationMap = buildIssueRelations(issue);
 
       return {
         ...rest,

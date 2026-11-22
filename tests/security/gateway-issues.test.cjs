@@ -20,7 +20,7 @@ function fixture([path, method]) {
   const repository = { id: 'repo', fullName: 'fixture/repo', owner: 'fixture', name: 'repo', aiReviewEnabled: false };
   const project = () => ({ id: 'project', workspaceId: 'workspace', workspace: workspace(), repository });
   const issue = () => ({ id: 'issue', issueKey: 'FIX-1', title: 'Fixture', type: 'TASK',
-    agentRequestRole: null,
+    agentRequestRole: null, statusId: null,
     workspaceId: 'workspace', projectId: 'project', project: project(), workspace: workspace(),
     sourceRelations: [], targetRelations: [], children: [], labels: [] });
   const prisma = {

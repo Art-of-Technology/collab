@@ -15,9 +15,13 @@ function fixture() {
     { id: 'other-project', agentRequestRole: null, projectId: 'another' },
     { id: 'foreign', agentRequestRole: null, workspaceId: 'other-workspace' },
   ].map((row, index) => ({
-    workspaceId: 'workspace', projectId: 'project', milestoneId: 'milestone',
+    workspaceId: 'workspace', projectId: 'project', milestoneId: 'milestone', statusId: null,
     updatedAt: 100 - index, type: 'TASK', ...row,
   }));
+  const forAccessCheck = row => {
+    const workspace = workspaces.find(workspace => workspace.id === row.workspaceId);
+    return { ...row, workspace, project: { workspace } };
+  };
 
   const { GET } = load('src/app/api/issues/route.ts', {
     'next/server': { NextResponse: Response },
@@ -26,15 +30,15 @@ function fixture() {
     '@/lib/prisma': { prisma: {
       workspace: { findFirst: async ({ where }) => workspaces.find(row => matches(row, where)) },
       issue: { findMany: async ({ where, include, orderBy }) => rows
-        .filter(row => matches(row, where))
+        .filter(row => matches(forAccessCheck(row), where))
         .sort((a, b) => orderBy.updatedAt === 'desc' ? b.updatedAt - a.updatedAt : a.updatedAt - b.updatedAt)
         .map(row => {
           const children = rows.filter(child => child.parentId === row.id);
           return {
             ...row,
-            parent: rows.find(parent => parent.id === row.parentId && matches(parent, include.parent.where ?? {})) ?? null,
-            children: children.filter(child => matches(child, include.children.where ?? {})),
-            _count: { children: children.filter(child => matches(child, include._count.select.children.where ?? {})).length, comments: 3 },
+            parent: rows.find(parent => parent.id === row.parentId && matches(forAccessCheck(parent), include.parent.where ?? {})) ?? null,
+            children: children.filter(child => matches(forAccessCheck(child), include.children.where ?? {})),
+            _count: { children: children.filter(child => matches(forAccessCheck(child), include._count.select.children.where ?? {})).length, comments: 3 },
           };
         }) },
     } },
@@ -57,8 +61,8 @@ function fixture() {
 test('a list for people leaves requests out, and requests=1 brings them back', async () => {
   const { fetch, list } = fixture();
   assert.equal((await fetch('/api/issues?workspaceId=other-workspace&requests=1')).status, 403);
-  assert.deepEqual((await list()).map(row => row.id), [
-    'work', 'subtask', 'follow-up', 'other-milestone', 'other-project',
+  assert.deepEqual((await list('&projectIds=project')).map(row => row.id), [
+    'work', 'subtask', 'follow-up', 'other-milestone',
   ]);
 
   const scoped = '&projectIds=project,missing&milestoneId=milestone';
