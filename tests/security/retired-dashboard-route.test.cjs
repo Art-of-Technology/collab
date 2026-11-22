@@ -49,10 +49,16 @@ test('the retired AI dashboard endpoint answers 404', { timeout: 120_000 }, asyn
     server.once('error', reject);
     server.once('exit', () => reject(new Error(logs)));
   });
-  const response = await fetch(new URL('/api/ai/dashboard', origin), {
-    redirect: 'manual',
-    signal: t.signal,
-  });
-  await response.arrayBuffer();
-  assert.equal(response.status, 404, logs);
+  const status = async pathname => {
+    const response = await fetch(new URL(pathname, origin), {
+      redirect: 'manual',
+      signal: t.signal,
+    });
+    await response.arrayBuffer();
+    return response.status;
+  };
+
+  // An existing AI endpoint must reach its handler before the 404 counts.
+  assert.equal(await status('/api/ai/issues/related'), 401, logs);
+  assert.equal(await status('/api/ai/dashboard'), 404, logs);
 });
