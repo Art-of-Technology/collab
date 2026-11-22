@@ -125,7 +125,7 @@ Build the sentence from the panels that are ready: `N things need you. Oldest qu
 
 ## Contexts
 
-The `dashboard-*` rows of [`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md), cut for this work. The map is where they are kept; this table also shows the test files each issue adds. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
+[`CONTEXT-MAP.md`](../../../CONTEXT-MAP.md) lists current ownership, and the table below records the original workspace dashboard epic plan. Each issue holds one context. The last issue removes the fallbacks from the shell together with the old loaders they read.
 
 | Context | Paths | Tests |
 | --- | --- | --- |
