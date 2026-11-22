@@ -209,17 +209,22 @@ function workspaceIssueResponse(issues: IssueListRow[]) {
   let prefix = '{"issues":[';
   const body = new ReadableStream<Uint8Array>({
     pull(controller) {
-      const batch = [];
-      for (let index = 0; index < 64; index++) {
-        const issue = issues.pop();
-        if (!issue) break;
-        batch.push(presentIssue(issue));
+      try {
+        const batch = [];
+        for (let index = 0; index < 64; index++) {
+          const issue = issues.pop();
+          if (!issue) break;
+          batch.push(presentIssue(issue));
+        }
+        const done = issues.length === 0;
+        const rows = JSON.stringify(batch).slice(1, -1);
+        controller.enqueue(encoder.encode(prefix + rows + (done ? ']}' : '')));
+        if (done) controller.close();
+        prefix = ',';
+      } catch (error) {
+        console.error('[ISSUES_GET]', error);
+        controller.error(error);
       }
-      const done = issues.length === 0;
-      const rows = JSON.stringify(batch).slice(1, -1);
-      controller.enqueue(encoder.encode(prefix + rows + (done ? ']}' : '')));
-      if (done) controller.close();
-      prefix = ',';
     },
   });
   return new Response(body, { headers: { 'content-type': 'application/json' } });

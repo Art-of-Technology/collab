@@ -68,6 +68,15 @@ test('workspace and multi-project lists return every visible row and field in on
   await raw.$executeRaw`ALTER TABLE "Issue" ADD COLUMN "stagedField" text DEFAULT 'fixture'`;
 
   let userId = 'member';
+  let failEncoding = false;
+  const streamError = new Error('Could not encode the next issue batch');
+  const errors = [];
+  class IssueEncoder extends TextEncoder {
+    encode(input) {
+      if (failEncoding && input.startsWith(',')) throw streamError;
+      return super.encode(input);
+    }
+  }
   const { GET } = load('src/app/api/issues/route.ts', {
     'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: userId } }) },
@@ -79,7 +88,10 @@ test('workspace and multi-project lists return every visible row and field in on
     '@/lib/notification-service': {},
     '@/lib/event-bus': {},
     '@/utils/issueRelations': load('src/utils/issueRelations.ts'),
-  }, { URL, console, Response, ReadableStream, TextEncoder });
+  }, {
+    URL, Response, ReadableStream, TextEncoder: IssueEncoder,
+    console: { ...console, error: (...args) => errors.push(args) },
+  });
   const list = query => GET(new Request(`https://example.test/api/issues?${query}`));
   const readRows = async response => {
     assert.equal(response.status, 200);
@@ -243,5 +255,11 @@ test('workspace and multi-project lists return every visible row and field in on
     } finally {
       userId = 'member';
     }
+
+    failEncoding = true;
+    const interrupted = await list('workspaceId=workspace');
+    assert.equal(interrupted.status, 200);
+    await assert.rejects(interrupted.arrayBuffer(), streamError);
+    assert.deepEqual(errors, [['[ISSUES_GET]', streamError]]);
   });
 });
