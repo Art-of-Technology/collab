@@ -97,8 +97,7 @@ function scopedIssueInclude(userId: string, readableIssue: Prisma.IssueWhereInpu
   } as const satisfies Prisma.IssueInclude;
 }
 
-// One statement keeps relation reads set-based and avoids sending the full issue
-// ID list back to PostgreSQL for each include. Match the projections in LIST_INCLUDE.
+// Keep issue IDs in PostgreSQL for relation lookups. Match the projections in LIST_INCLUDE.
 function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
   const projects = projectIds.length
     ? Prisma.sql`AND "projectId" IN (${Prisma.join(projectIds)})`
@@ -124,45 +123,36 @@ function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: st
         AND (i."statusId" IS NULL OR sp."workspaceId" IN (SELECT id FROM readable_workspaces))
     ),
     listed AS MATERIALIZED (
-      SELECT id FROM readable_issues
+      SELECT id, "parentId" FROM readable_issues
       WHERE "workspaceId" = ${workspaceId}
         AND (${includeRequests} OR "agentRequestRole" IS NULL)
         ${projects}
+    ),
+    hierarchy_ids AS (
+      SELECT "parentId" AS id FROM listed WHERE "parentId" IS NOT NULL
+      UNION
+      SELECT child.id FROM listed
+      CROSS JOIN LATERAL (
+        -- Keep the lookup on Issue_parentId_idx when the rest of the database is large.
+        SELECT id FROM "Issue" WHERE "parentId" = listed.id OFFSET 0
+      ) child
     ),
     hierarchy AS (
       SELECT i.id, i."parentId",
         json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type, 'status', i.status,
            'projectStatus', CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'name', s.name, 'displayName', s."displayName", 'color', s.color) END) AS row
-      FROM readable_issues i
+      FROM hierarchy_ids
+      CROSS JOIN LATERAL (
+        SELECT id, "parentId", "issueKey", title, type, status, "statusId"
+        FROM readable_issues WHERE id = hierarchy_ids.id
+          AND (${includeRequests} OR "agentRequestRole" IS NULL)
+        LIMIT 1
+      ) i
       LEFT JOIN "ProjectStatus" s ON s.id = i."statusId"
-      WHERE (${includeRequests} OR i."agentRequestRole" IS NULL)
-        AND (i."parentId" IN (SELECT id FROM listed)
-          OR i.id IN (SELECT child."parentId" FROM "Issue" child JOIN listed ON listed.id = child.id))
     ),
     children AS (
       SELECT "parentId", json_agg(row) AS rows, count(*)::int AS total
       FROM hierarchy GROUP BY "parentId"
-    ),
-    labels AS (
-      SELECT l."A" AS "issueId", json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) AS rows
-      FROM "_IssueToLabel" l JOIN listed ON listed.id = l."A" JOIN "TaskLabel" t ON t.id = l."B"
-      WHERE t."workspaceId" IN (SELECT id FROM readable_workspaces)
-      GROUP BY l."A"
-    ),
-    comments AS (
-      SELECT c."issueId", count(*)::int AS total FROM "IssueComment" c JOIN listed ON listed.id = c."issueId" GROUP BY c."issueId"
-    ),
-    source_relations AS (
-      SELECT r."sourceIssueId", json_agg(json_build_object('id', r.id, 'relationType', r."relationType",
-        'targetIssue', json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type))) AS rows
-      FROM issue_relations r JOIN listed ON listed.id = r."sourceIssueId" JOIN readable_issues i ON i.id = r."targetIssueId"
-      GROUP BY r."sourceIssueId"
-    ),
-    target_relations AS (
-      SELECT r."targetIssueId", json_agg(json_build_object('id', r.id, 'relationType', r."relationType",
-        'sourceIssue', json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type))) AS rows
-      FROM issue_relations r JOIN listed ON listed.id = r."targetIssueId" JOIN readable_issues i ON i.id = r."sourceIssueId"
-      GROUP BY r."targetIssueId"
     )
     SELECT i.id, i.title, i.description, i.type, i."statusId", i."statusValue", i.priority, i."storyPoints",
       i."parentId", i."milestoneId", i."assigneeId", i."reporterId", i."projectId", i."workspaceId",
@@ -177,20 +167,38 @@ function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: st
       parent.row AS parent,
       COALESCE(c.rows, '[]') AS children,
       CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'name', s.name, 'displayName', s."displayName", 'color', s.color, 'order', s."order", 'isDefault', s."isDefault") END AS "projectStatus",
-      json_build_object('children', COALESCE(c.total, 0), 'comments', COALESCE(cm.total, 0)) AS _count,
+      json_build_object('children', COALESCE(c.total, 0), 'comments', cm.total) AS _count,
       COALESCE(sr.rows, '[]') AS "sourceRelations",
       COALESCE(tr.rows, '[]') AS "targetRelations"
-    FROM listed JOIN "Issue" i ON i.id = listed.id
+    FROM listed JOIN "Issue" i ON i.id = listed.id AND i."workspaceId" = ${workspaceId}
     JOIN "Project" p ON p.id = i."projectId"
     LEFT JOIN "User" a ON a.id = i."assigneeId"
     LEFT JOIN "User" r ON r.id = i."reporterId"
     LEFT JOIN "ProjectStatus" s ON s.id = i."statusId"
     LEFT JOIN hierarchy parent ON parent.id = i."parentId"
     LEFT JOIN children c ON c."parentId" = i.id
-    LEFT JOIN labels l ON l."issueId" = i.id
-    LEFT JOIN comments cm ON cm."issueId" = i.id
-    LEFT JOIN source_relations sr ON sr."sourceIssueId" = i.id
-    LEFT JOIN target_relations tr ON tr."targetIssueId" = i.id
+    -- The correlation keeps these aggregates on the indexed issue IDs even
+    -- when most related rows in the database belong to other workspaces.
+    CROSS JOIN LATERAL (
+      SELECT json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) AS rows
+      FROM "_IssueToLabel" l JOIN "TaskLabel" t ON t.id = l."B"
+      WHERE l."A" = i.id AND t."workspaceId" IN (SELECT id FROM readable_workspaces)
+    ) l
+    CROSS JOIN LATERAL (
+      SELECT count(*)::int AS total FROM "IssueComment" WHERE "issueId" = i.id
+    ) cm
+    CROSS JOIN LATERAL (
+      SELECT json_agg(json_build_object('id', r.id, 'relationType', r."relationType",
+        'targetIssue', json_build_object('id', related.id, 'issueKey', related."issueKey", 'title', related.title, 'type', related.type))) AS rows
+      FROM issue_relations r JOIN readable_issues related ON related.id = r."targetIssueId"
+      WHERE r."sourceIssueId" = i.id
+    ) sr
+    CROSS JOIN LATERAL (
+      SELECT json_agg(json_build_object('id', r.id, 'relationType', r."relationType",
+        'sourceIssue', json_build_object('id', related.id, 'issueKey', related."issueKey", 'title', related.title, 'type', related.type))) AS rows
+      FROM issue_relations r JOIN readable_issues related ON related.id = r."sourceIssueId"
+      WHERE r."targetIssueId" = i.id
+    ) tr
     ORDER BY i."updatedAt" DESC
   `;
 }
@@ -255,10 +263,7 @@ export async function GET(request: NextRequest) {
       const { sourceRelations, targetRelations, ...rest } = issue;
       const issueRelations: RelationMap = buildIssueRelations(issue);
 
-      return {
-        ...rest,
-        issueRelations,
-      };
+      return Object.assign(rest, { issueRelations });
     });
 
     return NextResponse.json({ issues: issuesWithRelations }, { status: 200 });
