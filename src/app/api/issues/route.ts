@@ -192,8 +192,37 @@ function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: st
       FROM issue_relations r JOIN readable_issues related ON related.id = r."sourceIssueId"
       WHERE r."targetIssueId" = i.id
     ) tr
-    ORDER BY i."updatedAt" DESC
   `;
+}
+
+function presentIssue(issue: IssueListRow) {
+  const { sourceRelations, targetRelations, ...fields } = issue;
+  const issueRelations: RelationMap = buildIssueRelations(issue);
+  return Object.assign(fields, { issueRelations });
+}
+
+function workspaceIssueResponse(issues: IssueListRow[]) {
+  // Sort in memory by timestamp to avoid a PostgreSQL sort of the full projected rows.
+  // Pop from the end so the stream can release each batch as it sends it, newest first.
+  issues.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+  const encoder = new TextEncoder();
+  let prefix = '{"issues":[';
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const batch = [];
+      for (let index = 0; index < 64; index++) {
+        const issue = issues.pop();
+        if (!issue) break;
+        batch.push(presentIssue(issue));
+      }
+      const done = issues.length === 0;
+      const rows = JSON.stringify(batch).slice(1, -1);
+      controller.enqueue(encoder.encode(prefix + rows + (done ? ']}' : '')));
+      if (done) controller.close();
+      prefix = ',';
+    },
+  });
+  return new Response(body, { headers: { 'content-type': 'application/json' } });
 }
 
 // GET /api/issues - Get issues by workspace/project
@@ -232,34 +261,27 @@ export async function GET(request: NextRequest) {
     }
 
     const includeRequests = searchParams.get('requests') === '1';
-    let issues: IssueListRow[];
-    if (milestoneId || projectIds.length === 1) {
-      const readableIssue = issueReadAccessWhere(session.user.id);
-      const where = {
-        ...readableIssue,
-        workspaceId,
-        ...(milestoneId && { milestoneId }),
-        ...(projectIds.length > 0 && { projectId: { in: projectIds } }),
-      };
-      const include = scopedIssueInclude(session.user.id, readableIssue);
-      const query = includeRequests ? { where, include } : withoutRequests(where, include);
-      issues = await prisma.issue.findMany({
-        ...query,
-        include: query.include as typeof include,
-        orderBy: { updatedAt: 'desc' },
-      });
-    } else {
-      issues = await listWorkspaceIssues(session.user.id, workspaceId, projectIds, includeRequests);
+    if (!milestoneId && projectIds.length !== 1) {
+      const issues = await listWorkspaceIssues(session.user.id, workspaceId, projectIds, includeRequests);
+      return workspaceIssueResponse(issues);
     }
 
-    const issuesWithRelations = issues.map(issue => {
-      const { sourceRelations, targetRelations, ...rest } = issue;
-      const issueRelations: RelationMap = buildIssueRelations(issue);
-
-      return Object.assign(rest, { issueRelations });
+    const readableIssue = issueReadAccessWhere(session.user.id);
+    const where = {
+      ...readableIssue,
+      workspaceId,
+      ...(milestoneId && { milestoneId }),
+      ...(projectIds.length > 0 && { projectId: { in: projectIds } }),
+    };
+    const include = scopedIssueInclude(session.user.id, readableIssue);
+    const query = includeRequests ? { where, include } : withoutRequests(where, include);
+    const issues = await prisma.issue.findMany({
+      ...query,
+      include: query.include as typeof include,
+      orderBy: { updatedAt: 'desc' },
     });
 
-    return NextResponse.json({ issues: issuesWithRelations }, { status: 200 });
+    return NextResponse.json({ issues: issues.map(presentIssue) }, { status: 200 });
   } catch (error) {
     console.error('[ISSUES_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
