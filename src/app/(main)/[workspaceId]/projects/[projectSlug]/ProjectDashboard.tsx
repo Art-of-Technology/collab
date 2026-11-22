@@ -135,15 +135,17 @@ function ProjectOverview({
                     </li>
                   ))}
                   {missingSafe.slice(0, 2).map(milestone => (
-                    <li key={milestone.id}>{milestone.issueKey ?? milestone.title} · not converging</li>
+                    <li key={milestone.id}>
+                      {milestone.issueKey ?? milestone.title} · {milestone.deliveryForecast?.noHistory
+                        ? 'No developer history to tell whether the queue is not converging'
+                        : 'not converging'}
+                    </li>
                   ))}
                 </ul>
               ) : verdict ? (
                 <p>{milestones.every(milestone => milestone.finished)
                   ? 'All milestones are finished'
                   : 'Every open milestone with a baseline is forecast within 2 days of it'}</p>
-              ) : overview.hasBaseline ? (
-                <p>Developer finishes on whole UTC days are needed for a forecast.</p>
               ) : overview.baselineAt ? (
                 <p>Add milestone due dates and ask the workspace owner to update the baseline.</p>
               ) : (

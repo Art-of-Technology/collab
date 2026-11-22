@@ -84,6 +84,19 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
     assert.equal(document.querySelector('h2').textContent, 'At risk');
     assert.match(nextCard.textContent, /Likely 23 Nov.*Safe not converging.*Low confidence/i);
 
+    assert.match(nextCard.parentElement.querySelector('ul').textContent, /M-0 · not converging/);
+
+    await render([{
+      ...next, deliveryForecast: { likelyDate: null, safeDate: null, noHistory: true, notConverging: false, lowConfidence: true },
+    }], [], [], [], [], [], {
+      nextMilestoneId: next.id, verdict: 'at_risk', missingSafeMilestoneIds: [next.id],
+    });
+    const noHistoryCard = document.querySelector('a[href*="milestone=M-0"]');
+    assert.equal(document.querySelector('h2').textContent, 'At risk');
+    assert.match(noHistoryCard.parentElement.querySelector('ul').textContent,
+      /No developer history to tell whether the queue is not converging/);
+    assert.match(noHistoryCard.textContent, /No finished developer work in the forecast window/);
+
     const milestones = [3, 8, 5].map(forecast);
     const blockedIssues = [20, 30, 19, 23, 27, 17, 22, 24, 26, 21, 18, 28, 29, 16, 25].map(blocked);
     const late = [8, 5, 3].map(days => `M-${days} is forecast ${days} days after its baseline`);

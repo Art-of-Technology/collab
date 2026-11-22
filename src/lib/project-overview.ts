@@ -101,6 +101,7 @@ function forecastMilestones(issues: ForecastIssue[], milestones: OverviewIssue[]
   for (const issue of issues) {
     if (issue.type === 'MILESTONE' || issue.type === 'EPIC' || forecastCancelled(issue) ||
         parentIds.has(issue.id) || requestTitle.test(issue.title)) continue;
+    // forecast.py defaults --seats to a case-insensitive "developer" match on the CLI assignee name.
     if (issue.finishedAt && /developer/i.test(issue.assignee?.name ?? '')) {
       const finished = day(issue.finishedAt);
       firstFinish = Math.min(firstFinish, finished);
