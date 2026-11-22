@@ -112,6 +112,7 @@ table.props{width:100%;border-collapse:collapse;font-size:14px}table.props td{bo
 .phonewrap{display:grid;grid-template-columns:390px minmax(0,1fr);gap:22px;align-items:start}
 .phone{border:8px solid #2a2a2e;border-radius:34px;background:var(--bg);overflow:hidden;max-width:100%}
 .phone .pbar{display:flex;justify-content:space-between;padding:6px 18px;font-size:12px;color:var(--dim);background:var(--bg-deep)}
+.updated{justify-content:flex-end;margin-bottom:10px}.phone .cols{grid-template-columns:minmax(0,1fr)}
 .phone .pin{padding:12px;max-height:640px;overflow-y:auto;font-size:14px}.phone .stat b{font-size:17px}.phone .stat{padding:5px 9px}
 @media (max-width:860px){.app,.stepper,.cols,.phonewrap{grid-template-columns:minmax(0,1fr)}.side{display:none}}
 </style>
@@ -119,7 +120,7 @@ table.props{width:100%;border-collapse:collapse;font-size:14px}table.props td{bo
 <body>
 <header class="top"><div class="in">
   <h1>Agents pages revamp: click-through mockup</h1>
-  <p class="note">Sample data. Nothing here is saved or sent anywhere. Click everything; pick an option under screens 2, 3 and 5; then press <b>Send to Agent</b>.</p>
+  <p class="note">Workspace actions use sample data and last only until reload. In Lavish, queuing an answer adds your choices and notes to the review queue. Press <b>Send to Agent</b> to send them.</p>
   <div class="nav" role="tablist" id="nav"></div>
 </div></header>
 <div class="wrap" id="screens"></div>
@@ -146,7 +147,7 @@ const SCREENS=[
  {id:'phone',part:'All tabs',title:'On a phone',sub:'Now at phone width: rows stack, nothing is a table, Move opens under its row.',tab:'now'},
  {id:'open',part:'Before anything is filed',title:'Open points',sub:'Things I assumed that you have not ruled on. Say OK or what to change, then send.',once:true}
 ];
-const S={scr:0,lay:Object.fromEntries(SCREENS.filter(d=>d.opts).map(d=>[d.id,d.rec]))};
+const S={scr:0,phoneTab:'now',lay:Object.fromEntries(SCREENS.filter(d=>d.opts).map(d=>[d.id,d.rec]))};
 
 /* ---------- sample data: the seats, as on the live page ---------- */
 const OWN={al:'Ada Lind',as:'Ben Ortiz',bg:'Cy Park',ce:'Dana Reyes',de:'Eli Novak',er:'Fay Chen',il:'Gus Meyer'};
@@ -159,9 +160,10 @@ add('Sandbox','ce','hand','',[['developer'],['reviewer']]);
 add('Beacon','ce',9,'Codex',five);
 add('Collab','ce',9,'Codex',[['developer'],['developer','Collab Developer 2'],['lead'],['release',,'hand'],['reviewer'],['security']]);
 add('Pipeline','ce','hand','',[['developer']]);
-add('Pipeline','al','none','Claude Code',[...[1,2,3,4,5].map(n=>['developer','Pipeline Developer-A'+n]),['lead'],['release'],['reviewer'],['security']]);
+add('Pipeline','al','none','Codex',[...[1,2,3,4,5].map(n=>['developer','Pipeline Developer-A'+n]),['lead'],['release'],['reviewer'],['security']]);
 add('Gateway','as',45,'Codex',five);
-add('Sentinel','ce',9,'Codex',[['developer',,'none'],['lead'],['release'],['reviewer'],['security',,'none']]);
+add('Sentinel','ce','none','Claude Code',[['developer'],['security']]);
+add('Sentinel','ce',9,'Codex',[['lead'],['release'],['reviewer']]);
 add('Campaigns','al',19,'Claude Code',five);
 add('Archive','er','hand','',[['developer','Archive Developer']]);
 add('Frontdesk','ce',9,'Codex',four);
@@ -207,9 +209,15 @@ function pickForm(d){return `<form class="pick" data-lavish-question="layout-${d
   <div class="row"><button class="btn pri" type="submit">Queue this answer</button><span class="st" role="status" data-st="${d.id}"></span></div></form>`}
 const TABS=[['now','Now'],['seats','Seats'],['runners','Runners'],['floor','Floor']];
 const tabsHTML=on=>`<div class="tabs" role="tablist" aria-label="Agents (mock)">${TABS.map(t=>`<button role="tab" data-act="tab" data-id="${t[0]}" aria-selected="${t[0]===on}">${t[1]}</button>`).join('')}</div>`;
-function frame(d,inner){return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="App menu (mock)">
+const narrow=matchMedia('(max-width:860px)');
+const previewPhone=()=>SCREENS[S.scr].id==='phone';
+const phoneLayout=()=>previewPhone()||narrow.matches;
+const updated=Object.fromEntries(TABS.map(([id])=>[id,'19:11']));
+function frame(d,inner){const header=`<h3>Agents</h3>${tabsHTML(d.tab)}<div class="row updated"><span class="small muted" role="status">Updated ${updated[d.tab]}</span><button class="btn sm" data-act="refresh" data-id="${d.tab}">Refresh</button></div>`;
+  if(previewPhone())return header+inner;
+  return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="App menu (mock)">
   <div class="it on">Agents</div>${TABS.map(t=>`<div class="it sub ${t[0]===d.tab?'on':''}">${t[1]}${t[0]==='now'?`<span class="badge">${W.length}</span>`:''}</div>`).join('')}
-  ${['Home','Timeline','Context','Docs','Projects'].map(n=>`<div class="it">${n}</div>`).join('')}</nav><div class="main"><h3>Agents</h3>${tabsHTML(d.tab)}${inner}</div></div></div>`}
+  ${['Home','Timeline','Context','Docs','Projects'].map(n=>`<div class="it">${n}</div>`).join('')}</nav><div class="main">${header}${inner}</div></div></div>`}
 function render(){const d=SCREENS[S.scr];
   document.querySelectorAll('.screen').forEach((el,i)=>el.hidden=i!==S.scr);
   document.querySelectorAll('#nav button').forEach((b,i)=>b.setAttribute('aria-selected',i===S.scr));
@@ -221,10 +229,12 @@ function render(){const d=SCREENS[S.scr];
   if(AFTER[d.id])AFTER[d.id]();
 }
 const R={},ACT={},AFTER={},INP={},CHG={};
-const goId=id=>{S.scr=SCREENS.findIndex(d=>d.id===id);render();window.scrollTo(0,0)};
+const goId=id=>{if(previewPhone())S.phoneTab=id;else S.scr=SCREENS.findIndex(d=>d.id===id);render();window.scrollTo(0,0)};
 ACT.go=b=>{S.scr=+b.dataset.i;render();window.scrollTo(0,0)};
 ACT.lay=b=>{S.lay[b.dataset.k]=b.dataset.v;render()};
 ACT.tab=b=>goId(b.dataset.id);
+ACT.refresh=b=>{updated[b.dataset.id]=new Date().toLocaleTimeString('en-GB');render()};
+narrow.addEventListener('change',render);
 
 /* ---------- screen 1: how it works ---------- */
 const H={mode:'after',step:0};
@@ -245,26 +255,27 @@ ACT['h-mode']=b=>{H.mode=b.dataset.v;H.step=0;render()};
 ACT['h-step']=b=>{H.step=+b.dataset.v>0?(H.step+1)%STEPS.length:Math.max(0,H.step-1);render()};
 
 /* ---------- screen 2 (and the phone): Now ---------- */
-const N={q:'',proj:'',moving:null,msg:'',idle:false,tick:0};
-const G={lost:['Lost run','bad','A run stopped answering. Clear it and the issue is offered to its seat again.'],
- noroom:['Runner has no room','bad','The runner of these seats reports no allowance left. Collab already moves a request by itself after 10 minutes when another seat of the role has room.'],
+const N={q:'',proj:'',exactSeat:'',moving:null,msg:'',idle:false};
+const autoMove='On an eligible inbox read, unstarted requests can move after 10 minutes without room. Started work needs 30 minutes, a last run that pushed its work, and an inbox that offers it again. The lead normally moves its stories. Collab can move an eligible story if the lead also lacks room for 10 minutes.';
+const G={lost:['Lost run','bad','A run stopped answering. Check that the session has stopped before clearing it. The seat can then take the issue again.'],
+ noroom:['Runner has no room','bad',autoMove],
  you:['Waits for you','acc','A seat asked a person. The answer is given on Home, under Needs you.'],
  hand:['Seat is run by hand','warn','No runner starts these seats. They wait until their person starts a session.'],
  queue:['Queued behind current work','','The seat is working on another issue and takes these next.'],
  next:['Next in line','ok','The seat has room and takes these by itself.']};
 const cause=it=>{const s=seat(it.seat);return s.work&&!s.work.lost?'queue':s.room==='none'?'noroom':typeof s.room!=='number'?'hand':'next'};
-function entries(){const q=N.q.toLowerCase();
+function matches(s,issue){return (!N.proj||s.proj===N.proj)&&(!N.exactSeat||s.id===N.exactSeat)&&
+  [issue?.key,issue?.title,s.name].filter(Boolean).join(' ').toLowerCase().includes(N.q.toLowerCase())}
+function entries(){
   return [...W.map(it=>({...it,it,g:cause(it)})),...SEATS.filter(s=>s.work&&s.work.lost).map(s=>({key:s.work.key,title:s.work.title,seat:s.name,age:120,g:'lost'})),...YOU.map(y=>({...y,g:'you'}))]
-    .filter(e=>(!N.proj||seat(e.seat).proj===N.proj)&&(!q||(e.key+' '+e.title+' '+e.seat).toLowerCase().includes(q)))}
-function mover(e){const s=seat(e.seat),ts=SEATS.filter(t=>t.proj===s.proj&&t.role===s.role&&t!==s),ok=ts.filter(t=>t.room!=='none');
-  return `<div class="mover">${ok.length?`<label class="small" for="mv">Move ${e.key} to</label><select id="mv" data-mv="${e.key}">${ts.map(t=>`<option value="${t.id}" ${t.room==='none'?'disabled':t===ok[0]?'selected':''}>${esc(t.name)} · ${roomTxt(t)}</option>`).join('')}</select><button class="btn pri sm" data-act="n-do" data-k="${e.key}">Move here</button>`
-    :`<span class="small">No other ${s.role} seat of ${esc(s.proj)} has room. ${e.key} waits here until its runner has room again.</span>`}<button class="btn ghost sm" data-act="n-move" data-k="">Cancel</button></div>`}
-function erow(e,chip){const g=G[e.g],mv=N.moving===e.key;
+    .filter(e=>matches(seat(e.seat),e))}
+function mover(e,targets){return `<div class="mover"><label class="small" for="mv">Move ${e.key} to</label><select id="mv" data-mv="${e.key}">${targets.map(t=>`<option value="${t.id}" ${t.room==='none'?'disabled':''}>${esc(t.name)} · ${roomTxt(t)}</option>`).join('')}</select><button class="btn pri sm" data-act="n-do" data-k="${e.key}">Move here</button><button class="btn ghost sm" data-act="n-move" data-k="">Cancel</button></div>`}
+function erow(e,chip){const g=G[e.g],s=seat(e.seat),targets=SEATS.filter(t=>t!==s&&t.proj===s.proj&&t.role===s.role),canMove=targets.some(t=>t.room!=='none'),mv=canMove&&N.moving===e.key;
   const meta=e.g==='lost'?`${esc(e.seat)} · the run stopped answering`:e.g==='you'?`${esc(e.seat)} asked a question`:`${esc(e.seat)} · ${RE[e.reason]}${e.prio?' · <span class="hi">'+e.prio+'</span>':''}`;
-  const act=e.g==='lost'?`<button class="btn sm" data-act="n-clear" data-k="${e.key}">Clear lost run</button>`:e.g==='you'?`<button class="btn sm" data-act="n-you" data-k="${e.key}">Open in Needs you</button>`:`<button class="btn sm" data-act="n-move" data-k="${e.key}" aria-expanded="${mv}">Move</button>`;
-  return `<div class="irow"><div class="ik"><span class="key">${e.key}</span>${esc(e.title)}<div class="meta">${meta}</div></div>${chip?`<span class="chip ${g[1]}">${g[0]}</span>`:''}<span class="age">${age(e.age)}</span>${act}</div>${mv?mover(e):''}`}
+  const act=e.g==='lost'?`<button class="btn sm" data-act="n-clear" data-k="${e.key}">Session has stopped · Clear lost run</button>`:e.g==='you'?`<button class="btn sm" data-act="n-you" data-k="${e.key}">Open in Needs you</button>`:canMove?`<button class="btn sm" data-act="n-move" data-k="${e.key}" aria-expanded="${mv}">Move</button>`:`<span class="small muted">No other ${s.role} seat can take this issue.</span>`;
+  return `<div class="irow"><div class="ik"><span class="key">${e.key}</span>${esc(e.title)}<div class="meta">${meta}</div></div>${chip?`<span class="chip ${g[1]}">${g[0]}</span>`:''}<span class="age">${age(e.age)}</span>${act}</div>${mv?mover(e,targets):''}`}
 const grp=(dot,title,n,why,body)=>`<section class="grp"><header><h4><span class="dotc ${dot}"></span>${title}<span class="cnt">${n}</span></h4>${why?`<p class="small muted" style="margin-top:3px">${why}</p>`:''}</header>${body}</section>`;
-function nowList(){const es=entries(),lay=S.lay.now;
+function nowList(es){const lay=S.lay.now;
   if(!es.length)return `<p class="card muted">Nothing waits${N.q||N.proj?' for this filter':''}.</p>`;
   if(lay==='C')return grp('','Everything that waits, oldest first',es.length,'',[...es].sort((a,b)=>b.age-a.age).map(e=>erow(e,true)).join(''));
   if(lay==='B')return [...new Set(es.map(e=>seat(e.seat).proj))].map(p=>{const l=es.filter(e=>seat(e.seat).proj===p);return grp(l.some(e=>G[e.g][1]==='bad')?'bad':'warn',esc(p),l.length,'',l.map(e=>erow(e,true)).join(''))}).join('');
@@ -272,26 +283,24 @@ function nowList(){const es=entries(),lay=S.lay.now;
     const body=k!=='noroom'?l.map(e=>erow(e)).join(''):[...new Set(l.map(e=>seat(e.seat).own))].map(o=>{const m=l.filter(e=>seat(e.seat).own===o);
       return `<div class="subh"><span><b style="color:var(--ink)">${OWN[o]}'s runner</b> · ${m.length} ${m.length===1?'issue':'issues'} on ${new Set(m.map(e=>e.seat)).size} ${new Set(m.map(e=>e.seat)).size===1?'seat':'seats'}</span><button class="btn sm ghost" data-act="tab" data-id="runners">Open in Runners</button></div>`+m.map(e=>erow(e)).join('')}).join('');
     return grp(G[k][1],G[k][0],l.length,G[k][2],body)}).join('')}
-function nowBody(phone){const es=entries(),c=k=>es.filter(e=>e.g===k).length,working=SEATS.filter(s=>s.work&&!s.work.lost),idle=SEATS.filter(s=>!s.work&&!waitN(s));
+function nowBody(){const es=entries(),c=k=>es.filter(e=>e.g===k).length,working=SEATS.filter(s=>s.work&&!s.work.lost&&matches(s,s.work)),idle=SEATS.filter(s=>!s.work&&!waitN(s)&&matches(s));
   const projs=[...new Set(SEATS.map(s=>s.proj))];
   return `${N.msg?`<div class="banner" role="status">${esc(N.msg)}</div>`:''}
-  <div class="row between"><div class="stats"><div class="stat bad"><b>${c('noroom')+c('hand')}</b>stuck</div><div class="stat bad"><b>${c('lost')}</b>lost run</div><div class="stat acc"><b>${c('you')}</b>waits for you</div><div class="stat"><b>${c('queue')+c('next')}</b>queued</div><div class="stat"><b>${working.length}</b>working</div></div>
-    <div class="row"><span class="small muted">Updated 19:${11+N.tick}</span><button class="btn sm" data-act="n-refresh">Refresh</button></div></div>
-  <div class="row filters"><select data-chg="n-proj" aria-label="Project"><option value="">All projects</option>${projs.map(p=>`<option ${p===N.proj?'selected':''}>${esc(p)}</option>`).join('')}</select>${phone?'':`<input type="text" data-inp="n-q" aria-label="Search" placeholder="Search issue or seat" value="${esc(N.q)}">`}${N.q||N.proj?'<button class="btn sm ghost" data-act="n-reset">Clear filter</button>':''}</div>
-  <div data-list>${nowList()}</div>
-  ${grp('acc','Working now',working.length,'',working.map(s=>`<div class="irow"><div class="ik"><span class="key">${s.work.key}</span>${esc(s.work.title)}<div class="meta">${esc(s.name)}</div></div>${roomHTML(s.room,phone?'':s.prog)}</div>`).join(''))}
+  <div class="stats"><div class="stat bad"><b>${c('noroom')+c('hand')}</b>stuck</div><div class="stat bad"><b>${c('lost')}</b>lost run</div><div class="stat acc"><b>${c('you')}</b>waits for you</div><div class="stat"><b>${c('queue')+c('next')}</b>queued</div><div class="stat"><b>${working.length}</b>working</div></div>
+  <div class="row filters"><select data-chg="n-proj" aria-label="Project"><option value="">All projects</option>${projs.map(p=>`<option ${p===N.proj?'selected':''}>${esc(p)}</option>`).join('')}</select><input type="text" data-inp="n-q" aria-label="Search" placeholder="Search issue or seat" value="${esc(N.q)}">${N.q||N.proj?'<button class="btn sm ghost" data-act="n-reset">Clear filter</button>':''}</div>
+  ${nowList(es)}
+  ${working.length?grp('acc','Working now',working.length,'',working.map(s=>`<div class="irow"><div class="ik"><span class="key">${s.work.key}</span>${esc(s.work.title)}<div class="meta">${esc(s.name)}</div></div>${roomHTML(s.room,s.prog)}</div>`).join('')):''}
   <div class="card row between"><span><b>${idle.length} idle seats</b> <span class="muted small">nothing waits, nothing runs</span></span><button class="btn sm" data-act="n-idle" aria-expanded="${N.idle}">${N.idle?'Hide':'Show'}</button>
     ${N.idle?`<div style="flex-basis:100%">${projs.map(p=>{const l=idle.filter(s=>s.proj===p);return l.length?`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}:</span> ${l.map(s=>`<span class="chip">${esc(s.name.replace(cap(p)+' ',''))}</span>`).join(' ')}</div>`:''}).join('')}</div>`:''}</div>`}
-R.now=d=>frame(d,nowBody(false));
+R.now=d=>frame(d,nowBody());
 ACT['n-move']=b=>{N.moving=b.dataset.k&&N.moving!==b.dataset.k?b.dataset.k:null;render()};
 ACT['n-do']=b=>{const it=W.find(i=>i.key===b.dataset.k),t=SEATS.find(s=>s.id===cur().querySelector('[data-mv]').value);it.seat=t.name;it.reason='assigned';N.moving=null;N.msg=`Moved ${it.key} to ${t.name}. Sample: nothing was changed.`;render()};
 ACT['n-clear']=b=>{const s=SEATS.find(x=>x.work&&x.work.key===b.dataset.k);W.push({key:s.work.key,title:s.work.title,seat:s.name,reason:'resume',age:0});s.work=null;N.msg=`Lost run on ${b.dataset.k} cleared. It is offered to ${s.name} again. Sample.`;render()};
 ACT['n-you']=b=>{N.msg=`Sample: this opens ${b.dataset.k} under Needs you on Home.`;render()};
-ACT['n-refresh']=()=>{N.tick++;N.msg='Refreshed. No timer runs: the page also reloads when you come back to this browser tab.';render()};
 ACT['n-idle']=()=>{N.idle=!N.idle;render()};
-ACT['n-reset']=()=>{N.q='';N.proj='';render()};
+ACT['n-reset']=()=>{N.q='';N.proj='';N.exactSeat='';N.moving=null;render()};
 CHG['n-proj']=el=>{N.proj=el.value;N.moving=null;render()};
-INP['n-q']=el=>{N.q=el.value;cur().querySelector('[data-list]').innerHTML=nowList()};
+INP['n-q']=el=>{const pos=el.selectionStart;N.q=el.value;N.exactSeat='';N.moving=null;render();const input=$('[data-inp="n-q"]',cur());input.focus();input.setSelectionRange(pos,pos)};
 
 /* ---------- screen 3: Seats ---------- */
 const Z={sel:null,setup:false,sw:{},mine:{}};
@@ -315,10 +324,10 @@ R.seats=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))];
   const B=()=>Object.keys(OWN).map(o=>{const l=SEATS.filter(s=>s.own===o),num=l.find(s=>typeof s.room==='number');
     return `<div class="card" style="margin-bottom:10px"><div class="row between"><b>${OWN[o]}</b>${num?roomHTML(num.room,num.prog):roomHTML(l[0].room,'')}</div>
     ${[...new Set(l.map(s=>s.proj))].map(p=>`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}</span> ${l.filter(s=>s.proj===p).map(s=>pill(s,cap(s.role).slice(0,3)+(suffix(s)?' '+suffix(s):''))).join('')}</div>`).join('')}</div>`}).join('');
-  return frame(d,`${setup()}${legend}<div class="cols"><div style="min-width:0">${S.lay.seats==='A'?A():B()}</div>${seatDetail()}</div>
+  return frame(d,`${setup()}${legend}<div class="cols"><div style="min-width:0">${!phoneLayout()&&S.lay.seats==='A'?A():B()}</div>${seatDetail()}</div>
    <p class="small muted" style="margin-top:10px">${SEATS.length} seats. A dash is a role the project has no seat for.</p>`)};
 ACT['z-sel']=b=>{Z.sel=Z.sel===b.dataset.id?null:b.dataset.id;render()};
-ACT['z-now']=b=>{N.q=SEATS.find(s=>s.id===b.dataset.id).name;N.proj='';goId('now')};
+ACT['z-now']=b=>{N.exactSeat=b.dataset.id;N.q=SEATS.find(s=>s.id===N.exactSeat).name;N.proj='';N.moving=null;goId('now')};
 ACT['z-setup']=()=>{Z.setup=!Z.setup;render()};
 ACT['z-sw']=b=>{Z.sw[b.dataset.p]=b.getAttribute('aria-checked')!=='true';render()};
 ACT['z-add']=b=>{const p=b.dataset.p;Z.mine[p]=true;add(p,'ce',9,'Codex',['developer','reviewer','security'].map(r=>[r,`${cap(p)} ${cap(r)} (Dana)`]));render()};
@@ -332,10 +341,10 @@ R.runners=d=>frame(d,`${U.msg?`<div class="banner" role="status">${esc(U.msg)}</
   ${U.adding?`<div class="card" style="margin-bottom:12px"><b>Connect a runner</b><ol class="small muted" style="margin:6px 0 10px;padding-left:18px"><li>Start the pairing on the runner's machine. It shows a code such as K7QF-M2XD.</li><li>Type the code here within 15 minutes.</li></ol>
     <div class="row"><input type="text" data-inp="u-code" aria-label="Code" placeholder="K7QF-M2XD" maxlength="32" style="width:150px;font-family:monospace;text-transform:uppercase"><select data-who aria-label="Whose runner" style="width:auto">${Object.values(OWN).map(n=>`<option ${n==='Dana Reyes'?'selected':''}>${n}</option>`).join('')}<option>Hana Kim</option></select><button class="btn pri" data-act="u-connect" disabled>Connect</button></div>
     <p class="small muted" style="margin-top:8px">A person has one runner per workspace. Connecting another removes the one before.</p></div>`:''}
-  <section class="grp">${RUN.map(r=>{const seats=SEATS.filter(s=>s.own===r.own&&s.room!=='hand'),wait=W.filter(i=>seat(i.seat).own===r.own).length,c=U.confirm&&U.confirm.id===r.id?U.confirm.kind:null;
+  <section class="grp">${RUN.map(r=>{const seats=SEATS.filter(s=>s.own===r.own&&s.room!=='hand'),waiting=W.filter(i=>seats.includes(seat(i.seat))),c=U.confirm&&U.confirm.id===r.id?U.confirm.kind:null;
     return `<div class="rrow" style="${r===RUN[0]?'border-top:0':''}"><div class="who"><span class="dotc ok" title="online"></span> <b>${esc(r.owner)}</b>${r.own==='ce'?' <span class="muted small">(me)</span>':''}<div class="meta">${esc(r.name)} · asked ${r.asked} · connected ${r.since}</div></div>
       <div class="rm">${r.progs.length?r.progs.map(p=>roomHTML(p[1],p[0])).join(''):'<span class="small muted">no figure: its seats are run by hand</span>'}</div>
-      <div class="num"><b>${seats.length}</b>seats</div><div class="num"><b style="${W.some(i=>seat(i.seat).own===r.own&&cause(i)==='noroom')?'color:var(--bad)':''}">${wait}</b>waiting</div>
+      <div class="num"><b>${seats.length}</b>seats</div><div class="num"><b style="${waiting.some(i=>cause(i)==='noroom')?'color:var(--bad)':''}">${waiting.length}</b>waiting</div>
       <div class="row"><button class="btn sm" data-act="u-ask" data-id="${r.id}" data-kind="renew">Renew tokens</button><button class="btn sm" data-act="u-ask" data-id="${r.id}" data-kind="remove">Remove</button></div></div>
       ${c?`<div class="mover"><span class="small">${c==='renew'?`Renew the tokens of ${esc(r.owner)}'s runner? What it fetched is revoked; it fetches new ones the next time it asks.`:`Remove ${esc(r.owner)}'s runner? Its ${seats.length} seats wait until another runner is connected.`}</span><button class="btn pri sm" data-act="u-do">${c==='renew'?'Renew':'Remove'}</button><button class="btn ghost sm" data-act="u-ask" data-id="">Cancel</button></div>`:''}`}).join('')}</section>
   <p class="small muted">Waiting is what sits on that runner's seats right now. A red number with "no room" beside it is where the work is stuck.</p>`);
@@ -350,27 +359,27 @@ ACT['u-do']=()=>{const i=RUN.findIndex(r=>r.id===U.confirm.id),r=RUN[i];if(U.con
 
 /* ---------- screen 5: Floor ---------- */
 const F={sel:'Pipeline'};
-R.floor=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))],l=SEATS.filter(s=>s.proj===F.sel),iso=S.lay.floor==='B';
+R.floor=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))],l=SEATS.filter(s=>s.proj===F.sel),iso=!phoneLayout()&&S.lay.floor==='B';
   const rooms=`<div class="rooms ${iso?'iso':''}">${projs.map(p=>{const ss=SEATS.filter(s=>s.proj===p),w=W.filter(i=>seat(i.seat).proj===p).length;
     return `<div class="rm-card ${p===F.sel?'sel':''}"><button data-act="f-sel" data-p="${esc(p)}" aria-pressed="${p===F.sel}">${esc(p)}<div class="meta" style="font-weight:400">${ss.length} seats${w?` · <span style="${ss.some(s=>sstate(s)==='stuck')?'color:var(--bad)':''}">${w} waiting</span>`:''}</div></button>
       <div>${ss.map(s=>`<button class="desk ${sstate(s)}" data-act="f-sel" data-p="${esc(p)}" title="${esc(s.name)}: ${STATE[sstate(s)]}" aria-label="${esc(s.name)}: ${STATE[sstate(s)]}"></button>`).join('')}</div></div>`}).join('')}</div>`;
-  return frame(d,`<div class="row small muted" style="margin-bottom:10px">${['work','stuck','wait','noroom','idle'].map(k=>`<span><span class="desk ${k}" style="display:inline-block;vertical-align:-4px;pointer-events:none"></span> ${STATE[k]}</span>`).join('')}<span>· Updated 19:11, no timer</span></div>
+  return frame(d,`<div class="row small muted" style="margin-bottom:10px">${['work','stuck','wait','noroom','idle'].map(k=>`<span><span class="desk ${k}" style="display:inline-block;vertical-align:-4px;pointer-events:none"></span> ${STATE[k]}</span>`).join('')}</div>
   <div class="cols"><div class="${iso?'isow':''}" style="min-width:0">${rooms}</div>
   <div class="card" data-room><b>${esc(F.sel)}</b><div class="small muted">${l.length} seats</div>${l.map(s=>`<div class="small" style="margin-top:6px;display:flex;gap:6px;align-items:center"><span class="desk ${sstate(s)}" style="flex:none;margin:0"></span><span style="min-width:0">${esc(s.name)}<span class="muted"> · ${STATE[sstate(s)]}${waitN(s)?' ('+waitN(s)+')':''}</span></span></div>`).join('')}
     <button class="btn sm" style="margin-top:10px" data-act="f-now">Show this project in Now</button></div></div>`)};
 ACT['f-sel']=b=>{F.sel=b.dataset.p;render()};
-ACT['f-now']=()=>{N.proj=F.sel;N.q='';goId('now')};
+ACT['f-now']=()=>{N.proj=F.sel;N.q='';N.exactSeat='';N.moving=null;goId('now')};
 
 /* ---------- screen 6: phone ---------- */
-R.phone=()=>`<div class="phonewrap"><div class="phone"><div class="pbar"><span>9:41</span><span>collab.example</span></div><div class="pin"><h3 style="font-size:18px">Agents</h3>${tabsHTML('now')}${nowBody(true)}</div></div>
+R.phone=()=>`<div class="phonewrap"><div class="phone"><div class="pbar"><span>9:41</span><span>collab.example</span></div><div class="pin">${R[S.phoneTab](SCREENS.find(d=>d.id===S.phoneTab))}</div></div>
   <div class="card"><b>What changes at phone width</b><ul class="small" style="margin:8px 0 0;padding-left:18px;display:grid;gap:6px"><li>The four tabs scroll sideways; the menu's Agents group opens the same four.</li><li>Every row stacks: title, then seat and reason, then age and the one action.</li><li>Move opens under its row, not in a pop-up.</li><li>Seats uses the per-person cards on a phone, whichever layout you pick for the desktop: a five-column grid does not fit.</li><li>Floor uses the flat map on a phone.</li></ul>
-  <p class="small muted" style="margin-top:10px">The phone on the left is live: the same sample data and the same buttons as screen 2, in the layout picked there.</p></div></div>`;
+  <p class="small muted" style="margin-top:10px">Try all four tabs here with the same sample seats and issues as on desktop.</p></div></div>`;
 
 /* ---------- last screen: open points ---------- */
 const PROPS=[
  ['P1','Tab names and order','Now · Seats · Runners · Floor, the same four in the left menu (Runners is missing there today). The name "Seat inbox" goes; the purple count moves to Now. Old links to /agents/inbox keep working.'],
  ['P2','Idle seats are one line','Seats with nothing waiting and nothing running collapse to "N idle seats · Show". Today they are 64 of the 72 cards.'],
- ['P3','"Move" is a manual override','Collab already moves a request by itself after 10 minutes without room, and the lead moves stories. The button offers only seats of the same project and role, and says so when none has room.'],
+ ['P3','"Move" is a manual override',autoMove+' The button offers only seats of the same project and role, and says so when none can take the issue.'],
  ['P4','How long it has waited','Each row shows its wait. Collab reads no "waiting since" for the page today, so this needs a small read change. The ages in this mockup are sample.'],
  ['P5','When room comes back','Not shown in the first version: a runner reports how much room is left, not when it resets.'],
  ['P6','Room stays private','As today: you and the lead see every figure, a member sees their own. For someone else\'s seat a member sees "no room" without a number.'],

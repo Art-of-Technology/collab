@@ -45,7 +45,7 @@ Approved layout: **grouped by why it waits**.
 
 | Group | When | Action on the row |
 | --- | --- | --- |
-| Lost run | A run stopped answering | Clear lost run |
+| Lost run | A run stopped answering | Confirm the session has stopped and clear the lost run |
 | Runner has no room | The seat's runner reports no room; one sub-heading per runner | Move |
 | Waits for you | A seat asked a person | Open in Needs you |
 | Seat is run by hand | No runner starts the seat | Move |
@@ -54,11 +54,11 @@ Approved layout: **grouped by why it waits**.
 
 A group with nothing in it is not shown. Above the groups: five counts, a project filter, a search over issue and seat. Below them: what each seat works on now, and one line for the idle seats ("61 idle seats · Show").
 
-**Move** hands a waiting issue to another seat of the same project and role. It is a manual override: Collab already moves a request by itself after 10 minutes without room, and the lead moves stories (see `../seats-by-room/README.md`). A seat with no room cannot be chosen. When no other seat of the role can take it, the row says so and offers nothing.
+**Move** hands a waiting issue to another seat of the same project and role. It is a manual override. On an eligible inbox read, Collab can move an unstarted request after 10 minutes without room. Started work needs 30 minutes without room, a last run that pushed its work, and an inbox that offers the issue again. The lead normally moves its stories. Collab can move an eligible lead-assigned story when the lead has also had no room for 10 minutes (see `../seats-by-room/README.md`). A seat with no room cannot be chosen. When no other seat of the role can take it, the row says so and offers nothing.
 
 ![Move opens under its row](03-now-move.png)
 
-**Clear lost run** is what the issue's Activity tab does today (`POST /api/issues/:issueId/runs/:runId/clear`), for a person who may assign issues.
+**Clear lost run** is what the issue's Activity tab does today (`POST /api/issues/:issueId/runs/:runId/clear`), for a person who may assign issues. Check that the session has stopped before clearing the run. Clearing it offers the issue to the seat again.
 
 **How long it has waited** is on every row. The inbox item carries the last run's time and no "waiting since" (`InboxItem` in `src/lib/agent-runs.ts`), so this needs a small change to the read. The ages in the pictures are sample.
 
