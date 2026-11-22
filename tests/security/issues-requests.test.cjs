@@ -57,8 +57,8 @@ function fixture() {
 test('a list for people leaves requests out, and requests=1 brings them back', async () => {
   const { fetch, list } = fixture();
   assert.equal((await fetch('/api/issues?workspaceId=other-workspace&requests=1')).status, 403);
-  assert.deepEqual((await list()).map(row => row.id), [
-    'work', 'subtask', 'follow-up', 'other-milestone', 'other-project',
+  assert.deepEqual((await list('&projectIds=project')).map(row => row.id), [
+    'work', 'subtask', 'follow-up', 'other-milestone',
   ]);
 
   const scoped = '&projectIds=project,missing&milestoneId=milestone';
