@@ -49,13 +49,18 @@ export const issueKeys = {
 };
 
 // Hook for fetching issues by workspace (used by views)
-export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[]) {
+export function useIssuesByWorkspace(
+  workspaceId: string,
+  projectIds?: string[],
+  { requests = false }: { requests?: boolean } = {},
+) {
   return useQuery({
-    queryKey: [...issueKeys.byWorkspace(workspaceId), ...(projectIds || []).sort()],
+    queryKey: [...issueKeys.byWorkspace(workspaceId), ...[...(projectIds ?? [])].sort(), ...(requests ? [{ requests }] : [])],
     queryFn: async () => {
       const params = new URLSearchParams({
         workspaceId,
-        ...(projectIds && projectIds.length > 0 && { projectIds: projectIds.join(',') })
+        ...(projectIds && projectIds.length > 0 && { projectIds: projectIds.join(',') }),
+        ...(requests && { requests: '1' })
       });
       
       const response = await fetch(`/api/issues?${params}`,
