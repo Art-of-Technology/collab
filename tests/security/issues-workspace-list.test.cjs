@@ -60,13 +60,16 @@ test('workspace and multi-project lists return every visible row and field in on
     { sourceIssueId: 'parent', targetIssueId: 'child', relationType: 'BLOCKS' },
     { sourceIssueId: 'parent', targetIssueId: 'deleted', relationType: 'RELATES_TO' },
     { sourceIssueId: 'parent', targetIssueId: 'request', relationType: 'DUPLICATES' },
+    { sourceIssueId: 'child', targetIssueId: 'foreign', relationType: 'BLOCKS' },
+    { sourceIssueId: 'foreign', targetIssueId: 'child', relationType: 'DUPLICATES' },
   ] });
   // A database migration can be live before its Prisma schema reaches the app.
   await raw.$executeRaw`ALTER TABLE "Issue" ADD COLUMN "stagedField" text DEFAULT 'fixture'`;
 
+  let userId = 'member';
   const { GET } = load('src/app/api/issues/route.ts', {
     'next/server': { NextResponse: Response },
-    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'member' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: userId } }) },
     '@/lib/auth-options': {},
     '@/lib/prisma': { prisma },
     '@/lib/board-item-activity-service': {},
@@ -119,4 +122,34 @@ test('workspace and multi-project lists return every visible row and field in on
   statements.length = 0;
   assert.equal((await list('workspaceId=other')).status, 403);
   assert.equal(statements.length, 1);
+
+  for (const [scope, filter] of [
+    ['workspace', ''],
+    ['multiple projects', '&projectIds=p,q'],
+    ['single project', '&projectIds=q'],
+    ['milestone', '&milestoneId=parent'],
+  ]) {
+    await t.test(`relation visibility with the ${scope} filter follows current workspace access`, async () => {
+      const readRelations = async () => {
+        const rows = await readRows(await list('workspaceId=workspace' + filter));
+        const { blocks, duplicated_by } = rows.find(row => row.id === 'child').issueRelations;
+        return [blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id)];
+      };
+      const key = { userId_workspaceId: { userId: 'member', workspaceId: 'other' } };
+      const membership = await raw.workspaceMember.create({ data: { ...key.userId_workspaceId, status: false } });
+      try {
+        assert.deepEqual(await readRelations(), [[], []]);
+        await raw.workspaceMember.update({ where: key, data: { status: true } });
+        assert.deepEqual(await readRelations(), [['foreign'], ['foreign']]);
+        await raw.workspaceMember.update({ where: key, data: { status: false } });
+        assert.deepEqual(await readRelations(), [[], []]);
+        userId = 'owner';
+        assert.deepEqual(await readRelations(), [['foreign'], ['foreign']]);
+      } finally {
+        userId = 'member';
+        await raw.workspaceMember.delete({ where: { id: membership.id } });
+      }
+      assert.deepEqual(await readRelations(), [[], []]);
+    });
+  }
 });
