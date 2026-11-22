@@ -205,9 +205,13 @@ test('canAct follows the permissions the comment and clear routes check', async 
   });
   assert.equal((await loadNeedsYou({ actorId: 'other', workspaceId: 'work', scope: 'all', now })).kind, 'denied');
 
-  const rows = (await read()).items;
-  assert.deepEqual(rows.filter(row => row.answerRecipientId).map(row => [row.kind, row.answerRecipientId]),
-    [['question', 'seat-user']]);
+  const row = (await read()).items.find(item => item.issue.id === 'legacy-question');
+  assert.deepEqual(row, {
+    id: 'question:legacy-question', kind: 'question', since: date(-2).toISOString(),
+    issue: { id: 'legacy-question', issueKey: 'LEGACY-QUESTION', title: 'legacy-question',
+      project: { id: 'project', slug: 'release', name: 'Release', color: null } },
+    seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: null, canAct: true,
+  });
 });
 
 test('in My work a seat that waits for somebody else is still in waitingSeats', async () => {

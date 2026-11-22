@@ -2,8 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import type { NeedsYouPanelItem } from '@/lib/dashboard/needs-you';
-import type { NeedsYouKind, NeedsYouOverview } from '@/types/workspace-dashboard';
+import type { NeedsYouItem, NeedsYouKind, NeedsYouOverview } from '@/types/workspace-dashboard';
 
 const chips = [
   ['all', 'All'], ['question', 'Questions'], ['review', 'Reviews'], ['failed', 'Failed runs'], ['due', 'Due'],
@@ -40,30 +39,35 @@ function rowAge(timestamp: number, reference: number, due: boolean) {
   return difference > 0 ? `${due ? 'due ' : ''}in ${duration}` : `${duration} ago`;
 }
 
-async function answerStatus(url: string, item: NeedsYouPanelItem, workspaceSlug: string, response: Response) {
-  if (item.seat && item.answerRecipientId) {
-    try {
-      const { authorId } = await response.json();
-      if (authorId && authorId !== item.answerRecipientId) {
-        const current = await fetch(url, { cache: 'no-store' });
-        if (current.ok) {
-          const { issue } = await current.json();
-          if (issue?.id === item.issue.id && issue.projectId === item.issue.project.id
-            && (issue.workspace?.slug || issue.workspaceId) === workspaceSlug
-            && issue.assigneeId === item.answerRecipientId) {
-            return `Answer sent. ${item.seat.name} will pick it up.`;
-          }
-        }
-      }
-    } catch {
-      // The comment has already been saved, even if the current assignment cannot be read.
+async function answerStatus(url: string, item: NeedsYouItem, workspaceSlug: string, response: Response) {
+  const sent = 'Answer sent.';
+  if (!item.seat) return sent;
+  try {
+    const { authorId } = await response.json();
+    if (!authorId) return sent;
+    const [current, activity] = await Promise.all([
+      fetch(url, { cache: 'no-store' }),
+      fetch(`${url}/activities?action=AGENT_RUN_FINISHED&limit=1`, { cache: 'no-store' }),
+    ]);
+    if (!current.ok || !activity.ok) return sent;
+
+    const { issue } = await current.json();
+    const [finish] = await activity.json();
+    // The finish records the seat ID and its account. The issue read gives the current assignee.
+    if (issue?.id === item.issue.id && issue.projectId === item.issue.project.id
+      && (issue.workspace?.slug || issue.workspaceId) === workspaceSlug
+      && finish?.details?.seatId === item.seat.id && finish.user?.id
+      && finish.user.id === issue.assigneeId && finish.user.id !== authorId) {
+      return `${sent} ${item.seat.name} will pick it up.`;
     }
+  } catch {
+    // The comment has already been saved, even if assignment verification fails.
   }
-  return 'Answer sent.';
+  return sent;
 }
 
 function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplete }: {
-  item: NeedsYouPanelItem;
+  item: NeedsYouItem;
   workspaceSlug: string;
   reference: number;
   open: boolean;

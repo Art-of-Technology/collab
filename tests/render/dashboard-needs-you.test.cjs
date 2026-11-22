@@ -83,7 +83,6 @@ const makeItem = (kind, id, extra = {}) => ({
   id: `${kind}:${id}`, kind, canAct: true, since: now,
   issue: { id, issueKey: id.toUpperCase(), title: id, project: { id: 'project', name: 'Release' } },
   seat: { id: 'seat', name: 'Developer' }, text: 'Check the result and tell me whether to continue.',
-  answerRecipientId: kind === 'question' ? 'seat-user' : undefined,
   runId: kind === 'failed' ? 'old-run' : null,
   ...extra,
 });
@@ -130,7 +129,12 @@ async function interact(items, exercise, respond = async () => Response.json({ a
 }
 
 test('sending an answer posts one comment and reloads the rows', async () => {
-  for (const assigneeId of ['seat-user', 'different-assignee']) {
+  for (const { assigneeId, authorId, finishSeatId, namesSeat } of [
+    { assigneeId: 'seat-user', authorId: 'viewer', finishSeatId: 'seat', namesSeat: true },
+    { assigneeId: 'different-assignee', authorId: 'viewer', finishSeatId: 'seat', namesSeat: false },
+    { assigneeId: 'seat-user', authorId: 'viewer', finishSeatId: 'different-seat', namesSeat: false },
+    { assigneeId: 'seat-user', authorId: 'seat-user', finishSeatId: 'seat', namesSeat: false },
+  ]) {
     await interact([makeItem('question', 'q1')], async ({ container, row, click, type, calls, refreshes, refreshWith }) => {
       await click('Answer');
       assert.match(row(0).textContent, /Check the result and tell me whether to continue/);
@@ -145,11 +149,15 @@ test('sending an answer posts one comment and reloads the rows', async () => {
       assert.equal(row(0), undefined);
       assert.match(container.querySelector('nav').textContent, /Questions 0/);
       assert.match(container.querySelector('[role="status"]').textContent, /Answer sent/);
-      assert.equal(container.querySelector('[role="status"]').textContent.includes('Developer'), assigneeId === 'seat-user');
+      assert.equal(container.querySelector('[role="status"]').textContent.includes('Developer'), namesSeat);
     }, async (url, options) => {
-      if (options?.method === 'POST') return Response.json({ authorId: 'viewer' }, { status: 201 });
+      if (options?.method === 'POST') return Response.json({ authorId }, { status: 201 });
+      if (url === '/api/issues/q1/activities?action=AGENT_RUN_FINISHED&limit=1') {
+        return Response.json([{ details: { seatId: finishSeatId }, user: { id: 'seat-user' } }]);
+      }
       assert.equal(url, '/api/issues/q1');
-      return Response.json({ issue: { id: 'q1', projectId: 'project', workspace: { slug: 'work' }, assigneeId } });
+      return Response.json({ issue: { id: 'q1', projectId: 'project', workspace: { slug: 'work' }, assigneeId,
+        assignee: { id: assigneeId, name: 'Developer' } } });
     });
   }
 });
