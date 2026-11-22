@@ -249,3 +249,43 @@ test('single position rejects malformed scalars before issue lookup or writes', 
     assert.deepEqual(f.state.writes, []); assert.ok(!f.state.effects.some(([name]) => name === 'issue'));
   }
 });
+
+test('the first list of a view page leaves requests out', async t => {
+  const workspace = { id: 'workspace' };
+  const project = { id: 'project' };
+  const work = { id: 'work', workspaceId: workspace.id, projectId: project.id, agentRequestRole: null };
+  const request = { ...work, id: 'request', agentRequestRole: 'review' };
+  const rows = [work, request];
+  for (const page of ['[viewId]', 'dynamic']) await t.test(page, async () => {
+    let fields = [];
+    const { default: render } = load(`src/app/(main)/[workspaceId]/views/${page}/page.tsx`, {
+      'react/jsx-runtime': require('react/jsx-runtime'),
+      'next/navigation': { notFound() { assert.fail('Expected an accessible view'); } },
+      '@/lib/request-session': { getServerSession: async () => ({ user: { email: 'member@example.test' } }) },
+      '@/lib/auth': {},
+      '@/lib/prisma': { prisma: {
+        user: { findUnique: async () => ({ id: 'member' }) },
+        workspace: { findFirst: async () => workspace },
+        project: { findMany: async () => [project] },
+        view: { findFirst: async () => ({
+          id: 'view', slug: 'view', displayType: 'LIST', visibility: 'WORKSPACE', projectIds: [project.id], fields,
+        }) },
+        issue: { findMany: async ({ where }) => rows.filter(row => matches(row, where)) },
+      } },
+      '@/components/views/ViewRenderer': { default: () => null },
+      '@/components/views/agent-request-display': load('src/components/views/agent-request-display.ts'),
+    });
+    const list = async searchParams => (await render({
+      params: Promise.resolve({ workspaceId: workspace.id, viewId: 'view' }),
+      searchParams: Promise.resolve(searchParams),
+    })).props.issues.map(issue => issue.id);
+
+    assert.deepEqual(await list({}), ['work']);
+    if (page === '[viewId]') {
+      fields = ['Agent requests'];
+      assert.deepEqual(await list({}), ['work', 'request']);
+    }
+    assert.deepEqual(await list({ requests: '1' }), ['work', 'request']);
+    assert.deepEqual(await list({ requests: '0' }), ['work']);
+  });
+});

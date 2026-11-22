@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withoutRequests } from '@/lib/issue-requests';
+import { showAgentRequests } from '@/components/views/agent-request-display';
 import ViewRenderer from '@/components/views/ViewRenderer';
 
 interface DynamicViewPageProps {
@@ -15,6 +17,7 @@ interface DynamicViewPageProps {
     grouping?: string;
     sorting?: string;
     projects?: string;
+    requests?: string | string[];
   }>;
 }
 
@@ -336,7 +339,10 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
     }
   }
 
-  const issues = await prisma.issue.findMany(issuesQuery);
+  const initialIncludesRequests = showAgentRequests(undefined, resolvedSearchParams.requests);
+  const issues = await prisma.issue.findMany(
+    initialIncludesRequests ? issuesQuery : withoutRequests(issuesQuery.where, issuesQuery.include)
+  );
 
   // Build virtual view data (not from DB)
   const viewData = {
@@ -381,6 +387,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
     <ViewRenderer
       view={viewData}
       issues={issues}
+      initialIncludesRequests={initialIncludesRequests}
       workspace={workspace}
       currentUser={user}
     />
