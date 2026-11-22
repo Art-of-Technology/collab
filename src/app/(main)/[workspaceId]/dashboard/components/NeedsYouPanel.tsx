@@ -142,7 +142,7 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
       </a>}
     {actionable && open && <form id={actionId} className={formStyle} onSubmit={submit}>
       {answer ? <>
-        {item.text && <p className="whitespace-pre-wrap break-words text-sm text-collab-200">
+        {item.text && <p className="whitespace-pre-wrap break-words text-sm text-collab-50">
           {seat && <strong className="block">From {seat.name}</strong>}{item.text}
         </p>}
         <div className="flex flex-wrap items-center gap-2">
@@ -152,7 +152,7 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
           <button type="submit" className={primaryStyle} disabled={pending}>{pending ? 'Sending…' : 'Send answer'}</button>
         </div>
       </> : <>
-        <p className="text-sm text-collab-200">Confirm that you checked that the old session has stopped.</p>
+        <p className="text-sm text-collab-50">Confirm that you checked that the old session has stopped.</p>
         <div className="flex flex-wrap gap-2">
           <button type="submit" className={actionStyle} disabled={pending}>{pending ? 'Clearing…' : 'Confirm clear run'}</button>
           <button type="button" className={actionStyle} disabled={pending} onClick={() => {
