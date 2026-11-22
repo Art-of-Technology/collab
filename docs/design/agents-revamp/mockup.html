@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agents revamp mockup</title>
+<style>
+/* Collab's own dark tokens, from src/app/globals.css (.dark). */
+:root{--bg:#101011;--bg-deep:#070708;--card:#171719;--hover:#1f1f22;--dim:#9c9ca1;--ink:#fafafa;
+  --accent:#3b82f6;--accent-soft:rgba(59,130,246,.16);--ok:#34d399;--ok-soft:rgba(52,211,153,.14);--warn:#fbbf24;--warn-soft:rgba(251,191,36,.13);--bad:#f87171;--bad-soft:rgba(248,113,113,.13);
+  --glass:rgba(255,255,255,.03);--line:rgba(255,255,255,.09);--r:10px;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2,h3,h4,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .in{max-width:1180px;margin:0 auto;padding:12px 20px 10px}
+.top h1{font-size:17px;font-weight:600}.top .note{font-size:13px;color:var(--dim)}
+.nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nav button{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--dim)}
+.nav button[aria-selected="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.nav .n{opacity:.6;margin-right:5px}
+.screen[hidden]{display:none}
+.lead{padding:26px 0 14px}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.lead h2{font-size:26px;font-weight:600;margin:2px 0 4px}.lead .sub{color:var(--dim);max-width:70ch}
+.terms{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.term{border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--glass)}.term span{color:var(--dim)}
+.optbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 6px}
+.optbar .lbl{font-size:13px;color:var(--dim)}
+.optbar button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 12px;font-size:14px}
+.optbar button[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.rec{font-size:11px;background:var(--ok-soft);color:var(--ok);border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+.why{font-size:14px;color:var(--dim);margin-bottom:12px}.why b{color:var(--ok)}
+.frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.fbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-deep);border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+.fbar i{width:9px;height:9px;border-radius:50%;background:var(--hover);display:inline-block}
+.fbar .url{margin-left:8px;background:var(--card);border-radius:6px;padding:2px 10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app{display:grid;grid-template-columns:150px minmax(0,1fr);min-height:420px}
+.side{background:var(--bg-deep);border-right:1px solid var(--line);padding:12px 8px;font-size:13px}
+.side .it{padding:6px 8px;border-radius:7px;color:var(--dim)}.side button.it{display:block;width:100%;text-align:left;background:transparent;border:0;font-size:13px}.side .it.on{background:var(--hover);color:var(--ink)}.side .sub{padding-left:20px}
+.badge{font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:0 6px;margin-left:4px}
+.main{padding:16px;min-width:0;font-size:14px}.main h3{font-size:20px;font-weight:600}
+.muted{color:var(--dim)}.small{font-size:13px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.btn.sm{padding:3px 10px;font-size:12px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.ghost{background:transparent}.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.between{justify-content:space-between}
+.chip{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.chip.bad{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}.chip.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.chip.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}.chip.acc{color:#93c5fd;border-color:var(--accent);background:var(--accent-soft)}
+.card{border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:12px}
+.banner{border-radius:8px;padding:8px 12px;font-size:13px;margin:8px 0;background:var(--accent-soft)}
+input[type=text],select,textarea{background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px;width:100%;max-width:100%}
+.f{display:grid;gap:4px;font-size:13px;color:var(--dim);margin-bottom:10px}
+.seg{display:inline-flex;justify-self:start;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:7px 14px;font-size:13px;color:var(--dim)}.seg button[aria-checked="true"]{background:var(--accent);color:#fff}
+.fig{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px}.fig svg{width:100%;height:auto;display:block}
+.fig text{font-size:14px;fill:var(--ink)}.fig text.s{font-size:12px;fill:var(--dim)}.fig .box{fill:var(--bg);stroke:var(--line)}.fig .edge line{stroke:var(--dim);stroke-width:1.5}.fig .edge polygon{fill:var(--dim)}
+.fig .on .box{stroke:var(--accent);fill:var(--accent-soft);stroke-width:2}.fig .edge.on line{stroke:var(--accent);stroke-width:2.5}.fig .edge.on polygon{fill:var(--accent)}
+.fig .old .box{stroke:var(--bad);stroke-dasharray:5 4}
+.stepper{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:12px}.stepper .txt{font-size:16px}
+.pick{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--card)}
+.pick h3{font-size:15px;margin-bottom:8px}.pick label.o{display:flex;gap:8px;padding:5px 0;font-size:14px}.pick .st{font-size:13px;color:var(--ok);margin-left:8px}
+.next{display:flex;justify-content:flex-end;margin-top:18px}
+table.props{width:100%;border-collapse:collapse;font-size:14px}table.props td{border-top:1px solid var(--line);padding:9px 8px;vertical-align:top}
+/* the mocked Agents pages */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:10px 0 14px;overflow-x:auto}
+.tabs button{background:transparent;border:0;border-bottom:2px solid transparent;padding:7px 12px;font-size:14px;color:var(--dim);white-space:nowrap}
+.tabs button[aria-selected="true"]{border-color:var(--accent);color:var(--ink);font-weight:600}
+.stats{display:flex;flex-wrap:wrap;gap:8px}
+.stat{border:1px solid var(--line);border-radius:9px;padding:6px 12px;background:var(--card);font-size:12px;color:var(--dim)}.stat b{display:block;font-size:20px;line-height:1.2;color:var(--ink)}
+.stat.bad b{color:var(--bad)}.stat.acc b{color:#93c5fd}
+.filters{margin:12px 0}.filters select,.filters input{width:auto;min-width:0;flex:0 1 220px;font-size:13px;padding:5px 10px}
+.grp{border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+.grp>header{padding:10px 12px;background:var(--card)}.grp h4{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.cnt{font-size:12px;font-weight:400;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:0 8px}
+.subh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:7px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);background:var(--glass)}
+.dotc{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;background:var(--dim)}
+.dotc.bad{background:var(--bad)}.dotc.warn{background:var(--warn)}.dotc.ok{background:var(--ok)}.dotc.acc{background:var(--accent)}
+.irow{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
+.ik{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}.key{color:#93c5fd;font-weight:600;margin-right:4px}button.key{background:transparent;border:0;padding:0;font-size:inherit}.meta{font-size:12px;color:var(--dim)}.hi{color:var(--warn)}
+.age{font-size:12px;color:var(--dim);min-width:44px;text-align:right}
+.mover{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 12px;background:var(--accent-soft);border-top:1px solid var(--line)}
+.mover select{width:auto;max-width:100%;flex:0 1 320px;font-size:13px;padding:4px 8px}
+.room{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+.bar{width:84px;height:7px;border-radius:999px;background:var(--hover);overflow:hidden;display:inline-block}.bar i{display:block;height:100%;border-radius:999px}
+.bar i.ok{background:var(--ok)}.bar i.warn{background:var(--warn)}.bar i.bad{background:var(--bad)}
+.sp{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:2px 7px;font-size:12px;color:var(--dim);margin:2px;white-space:nowrap}
+.sp.work{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}.sp.stuck{border-color:var(--bad);background:var(--bad-soft);color:var(--ink)}.sp.lost{border:2px solid var(--bad);color:var(--ink)}
+.sp.wait{border-color:var(--warn);background:var(--warn-soft);color:var(--ink)}.sp.noroom{border-style:dashed;border-color:var(--bad)}
+.sp[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:1px}
+.mx{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}.mx th,.mx td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.mx thead th{border-top:0;color:var(--dim);font-weight:500;font-size:12px}.scroll{overflow-x:auto}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:14px;align-items:start}
+.sw{width:34px;height:20px;border-radius:999px;border:1px solid var(--line);background:var(--hover);position:relative;padding:0;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--dim)}
+.sw[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}.sw[aria-checked="true"]::after{left:16px;background:#fff}
+.rrow{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:11px 12px;border-top:1px solid var(--line)}
+.rrow .who{flex:1 1 200px;min-width:0}.rrow .rm{flex:1 1 230px;min-width:0;display:grid;gap:3px}.rrow .num{flex:0 0 76px;font-size:12px;color:var(--dim)}.rrow .num b{display:block;font-size:15px;color:var(--ink)}
+.rooms{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.rm-card{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:9px;min-width:0}.rm-card.sel{border-color:var(--accent)}
+.rm-card>button{background:transparent;border:0;padding:0;font-size:13px;font-weight:600;text-align:left;width:100%}
+.desk{width:18px;height:18px;border-radius:5px;border:1px solid var(--line);background:var(--bg);padding:0;margin:3px 3px 0 0}
+.desk.work{background:var(--accent);border-color:var(--accent)}.desk.stuck{background:var(--bad);border-color:var(--bad)}.desk.lost{border:3px solid var(--bad)}.desk.wait{background:var(--warn);border-color:var(--warn)}.desk.noroom{border-color:var(--bad);border-style:dashed}
+.isow{overflow:hidden;padding:10px 0 30px}.iso{transform:perspective(1500px) rotateX(48deg) rotateZ(-24deg) scale(.82);transform-origin:50% 40%}
+.iso .rm-card{box-shadow:-7px 9px 0 rgba(255,255,255,.06)}.iso .desk{box-shadow:-2px 3px 0 rgba(0,0,0,.6)}
+.phonewrap{display:grid;grid-template-columns:390px minmax(0,1fr);gap:22px;align-items:start}
+.phone{border:8px solid #2a2a2e;border-radius:34px;background:var(--bg);overflow:hidden;max-width:100%}
+.phone .pbar{display:flex;justify-content:space-between;padding:6px 18px;font-size:12px;color:var(--dim);background:var(--bg-deep)}
+.updated{justify-content:flex-end;margin-bottom:10px}.phone .cols{grid-template-columns:minmax(0,1fr)}
+.phone .pin{padding:12px;max-height:640px;overflow-y:auto;font-size:14px}.phone .stat b{font-size:17px}.phone .stat{padding:5px 9px}
+@media (max-width:860px){.app,.stepper,.cols,.phonewrap{grid-template-columns:minmax(0,1fr)}.side{display:none}}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <h1>Agents pages revamp: click-through mockup</h1>
+  <p class="note">Workspace actions use sample data and last only until reload. In Lavish, queuing an answer adds your choices and notes to the review queue. Press <b>Send to Agent</b> to send them.</p>
+  <div class="nav" role="tablist" id="nav"></div>
+</div></header>
+<div class="wrap" id="screens"></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const cur=()=>$('.screen:not([hidden])');
+
+const SCREENS=[
+ {id:'how',part:'Overview',title:'How it works',sub:'Agents opens on what is stuck and why. The other three tabs read the same seats.',terms:[['Seat','an agent that works one project in one role'],['Runner','the program that runs one person\'s seats on one machine'],['Room','how much allowance a seat has left']]},
+ {id:'now',part:'Tab 1 · replaces Inbox',title:'Now',sub:'The page Agents opens on: what waits, why, and for how long. Idle seats are one line.',terms:[['Stuck','waits on a seat that cannot start it'],['Lost run','a run that stopped answering'],['Queued','waits behind the seat\'s current issue']],
+  opts:[['A','Grouped by why it waits'],['B','Grouped by project'],['C','One list, oldest first']],rec:'A',why:'13 of the 16 waiting issues have one cause, so one group says it once. B costs you reading the cause on every row; C is best for "what is oldest" but hides that one runner explains most of it.',
+  tab:'now',url:'collab.example/acme/agents',ask:'How should Now group the work?'},
+ {id:'seats',part:'Tab 2',title:'Seats',sub:'Who works where. All 72 seats on one screen, with setup folded away.',terms:[['Default seat','the seat of a role that gets new work first']],
+  opts:[['A','Projects × roles grid'],['B','One card per person']],rec:'A',why:'Every seat fits one screen and a missing role shows as a gap. It costs the per-person view you approved on 19 Nov; B keeps that view, tightened to chips, but still scrolls.',
+  tab:'seats',url:'collab.example/acme/agents/seats',ask:'How should Seats be laid out?'},
+ {id:'runners',part:'Tab 3',title:'Runners',sub:'Is each runner alive, how much room has it, and how much waits on it. The person comes first, because six runners share one name.',terms:[['Online','asked Collab in the last 5 minutes'],['Renew tokens','revoke what the runner fetched; it fetches new ones']],
+  tab:'runners',url:'collab.example/acme/agents/runners'},
+ {id:'floor',part:'Tab 4',title:'Floor',sub:'The picture: one room per project, one desk per seat. It now shows seats, not the old handoff agents.',terms:[['Desk','one seat; its colour is its state']],
+  opts:[['A','Flat map'],['B','3D floor kept']],rec:'A',why:'Readable at a glance and on a phone, and cheap to build. B keeps the scene you have today; it costs the 3D code and its upkeep. (B here is an approximation of the live 3D scene.)',
+  tab:'floor',url:'collab.example/acme/agents/floor',ask:'Which Floor?'},
+ {id:'phone',part:'All tabs',title:'On a phone',sub:'Now at phone width: rows stack, nothing is a table, Move opens under its row.',tab:'now'},
+ {id:'open',part:'Before anything is filed',title:'Open points',sub:'Things I assumed that you have not ruled on. Say OK or what to change, then send.',once:true}
+];
+const S={scr:0,phoneTab:'now',lay:Object.fromEntries(SCREENS.filter(d=>d.opts).map(d=>[d.id,d.rec]))};
+
+/* ---------- sample data: the seats, as on the live page ---------- */
+const OWN={al:'Ada Lind',as:'Ben Ortiz',bg:'Cy Park',ce:'Dana Reyes',de:'Eli Novak',er:'Fay Chen',il:'Gus Meyer'};
+const ROLES=['developer','lead','reviewer','security','release'];
+const SEATS=[];
+function add(proj,own,room,prog,list){list.forEach(([role,name,over])=>SEATS.push({id:'s'+SEATS.length,proj,role,name:name||cap(proj)+' '+cap(role),own,room:over!==undefined?over:(role==='release'?'unk':room),prog,work:null}))}
+const five=[['developer'],['lead'],['release'],['reviewer'],['security']],four=[['developer'],['release'],['reviewer'],['security']];
+add('Arcade','de',5,'Claude Code',[['developer'],['lead'],['release',,'hand'],['reviewer'],['security']]);
+add('Sandbox','ce','hand','',[['developer'],['reviewer']]);
+add('Beacon','ce',9,'Codex',five);
+add('Harbor','ce',9,'Codex',[['developer'],['developer','Harbor Developer 2'],['lead'],['release',,'hand'],['reviewer'],['security']]);
+add('Pipeline','ce','hand','',[['developer']]);
+add('Pipeline','al','none','Codex',[...[1,2,3,4,5].map(n=>['developer','Pipeline Developer-A'+n]),['lead'],['release'],['reviewer'],['security']]);
+add('Gateway','as',45,'Codex',five);
+add('Sentinel','ce','none','Claude Code',[['developer'],['security']]);
+add('Sentinel','ce',9,'Codex',[['lead'],['release'],['reviewer']]);
+add('Campaigns','al',19,'Claude Code',five);
+add('Archive','er','hand','',[['developer','Archive Developer']]);
+add('Frontdesk','ce',9,'Codex',four);
+add('Lens','ce',9,'Codex',five);
+add('Toolkit','ce',9,'Codex',[['developer'],...[2,3,4,5].map(n=>['developer','Toolkit Developer '+n]),['lead'],['reviewer'],['security']]);
+add('Toolkit','bg',39,'Claude Code',[['developer','Toolkit Developer (Cy)'],['reviewer','Toolkit Reviewer (Cy)']]);
+add('Ledger','il',90,'Claude Code',five);
+add('Adboard','ce',9,'Codex',four);
+const seat=n=>SEATS.find(s=>s.name===n);
+seat('Harbor Developer').work={key:'HAR-41',title:'Invoices: export a month as one file'};
+seat('Harbor Developer 2').work={key:'HAR-40',title:'Remove the unused report page'};
+seat('Archive Developer').work={key:'ARC-8',title:'Recover the whole archive'};
+seat('Beacon Developer').work={key:'BCN-368',title:'Prepare the console release',lost:true};
+const W=[['PIP-269','Import: runbooks','Pipeline Developer-A2','resume',190],['PIP-130','Import: fast reads of a record','Pipeline Developer-A3','resume',205],
+ ['PIP-270','Import: the acceptance list, row by row','Pipeline Developer-A4','resume',150],['PIP-19','Import: replay and getting ready to run it','Pipeline Lead','resume',240],
+ ['PIP-286','Review PIP-261 replay history','Pipeline Reviewer','resume',170],['PIP-288','Review the import CLI','Pipeline Reviewer','assigned',95],['PIP-290','Review PIP-270 acceptance evidence','Pipeline Reviewer','assigned',60],
+ ['PIP-287','Security review PIP-261 replay history','Pipeline Security','resume',170],['PIP-289','Security review: the import CLI','Pipeline Security','assigned',95],['PIP-291','Security review PIP-270 acceptance evidence','Pipeline Security','assigned',60],
+ ['SEN-30','Risk colours: every page reads the shared bands','Sentinel Developer','assigned',1500],['SEN-61','Risk filter and dashboard count use the shared bands','Sentinel Developer','assigned',1440],['SEN-70','Help: one tab bar for docs and changelog','Sentinel Developer','assigned',400],
+ ['ARC-11','Day runner for the test harness','Archive Developer','assigned',2900,'High'],['ARC-10','Read the newly found functions','Archive Developer','assigned',2900],['ARC-12','Check the spec against the code','Archive Developer','assigned',2880]
+].map(([key,title,seat,reason,age,prio])=>({key,title,seat,reason,age,prio}));
+const YOU=[{key:'HAR-44',title:'Which bank format comes first?',seat:'Harbor Developer',age:40}];
+const RE={resume:'To resume',assigned:'Assigned'};
+const age=m=>m<60?m+' min':m<1440?Math.round(m/60)+' h':Math.round(m/1440)+' d';
+const waitN=s=>W.filter(i=>i.seat===s.name).length;
+const sstate=s=>s.work?(s.work.lost?'lost':'work'):waitN(s)?(s.room==='none'?'stuck':'wait'):s.room==='none'?'noroom':'idle';
+const STATE={work:'Working',lost:'Lost run',stuck:'Stuck: work waits, no room',wait:'Work waits',noroom:'No room, nothing waits',idle:'Idle'};
+const roomTxt=s=>typeof s.room==='number'?s.room+'% room':s.room==='none'?'no room':s.room==='hand'?'run by hand':'room unknown';
+function roomHTML(room,prog){if(typeof room!=='number')return `<span class="room"><span class="chip ${room==='none'?'bad':''}">${room==='none'?'no room':'unknown'}</span><span class="muted small">${room==='none'?'its runner reports no room':room==='hand'?'the seat is run by hand':'no figure was reported'}${room==='none'&&prog?' on '+prog:''}</span></span>`;
+  return `<span class="room" role="img" aria-label="${room} percent room${prog?', next run on '+prog:''}"><span class="bar"><i class="${room>=30?'ok':room>=10?'warn':'bad'}" style="width:${room}%"></i></span>${room}% room${prog?` <span class="muted small">next run on ${prog}</span>`:''}</span>`}
+
+/* ---------- shell ---------- */
+function shell(){
+  $('#nav').innerHTML=SCREENS.map((d,i)=>`<button role="tab" data-act="go" data-i="${i}" aria-selected="${i===S.scr}"><span class="n">${i+1}</span>${d.title}</button>`).join('');
+  $('#screens').innerHTML=SCREENS.map((d,i)=>`<section class="screen" id="scr-${d.id}" ${i===S.scr?'':'hidden'}>
+    <div class="lead"><p class="kicker">${d.part} · screen ${i+1} of ${SCREENS.length}</p><h2>${d.title}</h2><p class="sub">${d.sub}</p>
+      ${d.terms?`<div class="terms">${d.terms.map(t=>`<span class="term"><b>${t[0]}</b> <span>= ${t[1]}</span></span>`).join('')}</div>`:''}</div>
+    <div data-opt="${d.id}"></div><div data-dyn="${d.id}"></div>${d.opts?pickForm(d):''}
+    <div class="next">${i<SCREENS.length-1?`<button class="btn pri" data-act="go" data-i="${i+1}">Next: ${SCREENS[i+1].title} →</button>`:''}</div></section>`).join('');
+}
+function pickForm(d){return `<form class="pick" data-lavish-question="layout-${d.id}" data-pick="${d.id}"><h3>Your pick: ${d.ask}</h3>
+  ${d.opts.map(o=>`<label class="o"><input type="radio" name="pick-${d.id}" value="${o[0]}: ${o[1]}"> <span><b>${o[0]}</b> ${o[1]}${o[0]===d.rec?'<span class="rec">my pick</span>':''}</span></label>`).join('')}
+  <label class="f" style="margin-top:8px">Anything to change on this screen? (optional)<input type="text" name="note"></label>
+  <div class="row"><button class="btn pri" type="submit">Queue this answer</button><span class="st" role="status" data-st="${d.id}"></span></div></form>`}
+const TABS=[['now','Now'],['seats','Seats'],['runners','Runners'],['floor','Floor']];
+const tabsHTML=on=>`<div class="tabs" role="tablist" aria-label="Agents (mock)">${TABS.map(t=>`<button role="tab" data-act="tab" data-id="${t[0]}" aria-selected="${t[0]===on}">${t[1]}</button>`).join('')}</div>`;
+const narrow=matchMedia('(max-width:860px)');
+const previewPhone=()=>SCREENS[S.scr].id==='phone';
+const phoneLayout=()=>previewPhone()||narrow.matches;
+const updated=Object.fromEntries(TABS.map(([id])=>[id,'19:11']));
+function frame(d,inner){const header=`<h3>Agents</h3>${tabsHTML(d.tab)}<div class="row updated"><span class="small muted" role="status">Updated ${updated[d.tab]}</span><button class="btn sm" data-act="refresh" data-id="${d.tab}">Refresh</button></div>`;
+  if(previewPhone())return header+inner;
+  return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="App menu (mock)">
+  <div class="it on">Agents</div>${TABS.map(t=>`<button class="it sub ${t[0]===d.tab?'on':''}" data-act="tab" data-id="${t[0]}">${t[1]}${t[0]==='now'?`<span class="badge">${W.length}</span>`:''}</button>`).join('')}
+  ${['Home','Timeline','Context','Docs','Projects'].map(n=>`<div class="it">${n}</div>`).join('')}</nav><div class="main">${header}${inner}</div></div></div>`}
+function render(){const d=SCREENS[S.scr],pin=$('.phone .pin'),top=pin&&d.id==='phone'&&S.phoneTab===S.phoneWas?pin.scrollTop:0;S.phoneWas=S.phoneTab;
+  document.querySelectorAll('.screen').forEach((el,i)=>el.hidden=i!==S.scr);
+  document.querySelectorAll('#nav button').forEach((b,i)=>b.setAttribute('aria-selected',i===S.scr));
+  /* a hidden screen keeps no stale copy, so no id or control exists twice */
+  document.querySelectorAll('[data-dyn]').forEach(el=>{const o=SCREENS.find(x=>x.id===el.dataset.dyn);if(o!==d&&!o.once)el.innerHTML=''});
+  $(`[data-opt="${d.id}"]`).innerHTML=d.opts?`<div class="optbar" role="tablist" aria-label="Layout options"><span class="lbl">Layout:</span>${d.opts.map(x=>`<button role="tab" data-act="lay" data-k="${d.id}" data-v="${x[0]}" aria-selected="${S.lay[d.id]===x[0]}"><b>${x[0]}</b> ${x[1]}${x[0]===d.rec?'<span class="rec">my pick</span>':''}</button>`).join('')}</div><p class="why"><b>Why ${d.rec}:</b> ${d.why}</p>`:'';
+  const dyn=$(`[data-dyn="${d.id}"]`);
+  if(!d.once||!dyn.innerHTML)dyn.innerHTML=R[d.id](d);
+  if(AFTER[d.id])AFTER[d.id]();
+  if(top)$('.phone .pin').scrollTop=top;
+}
+const R={},ACT={},AFTER={},INP={},CHG={};
+const goId=id=>{if(previewPhone())S.phoneTab=id;else S.scr=SCREENS.findIndex(d=>d.id===id);render();window.scrollTo(0,0)};
+ACT.go=b=>{S.scr=+b.dataset.i;render();window.scrollTo(0,0)};
+ACT.lay=b=>{S.lay[b.dataset.k]=b.dataset.v;render()};
+ACT.tab=b=>goId(b.dataset.id);
+ACT.refresh=b=>{updated[b.dataset.id]=new Date().toLocaleTimeString('en-GB');render()};
+narrow.addEventListener('change',render);
+
+/* ---------- screen 1: how it works ---------- */
+const H={mode:'after',step:0};
+const STEPS=[[['n-run','e-1'],'Each runner reports how much room its seats have.'],[['n-collab'],'Collab knows every seat\'s state: working, waiting, no room, lost.'],[['n-now','e-2'],'Now groups waiting work by why it waits.'],[['n-you','e-3'],'You act from the row: move an issue, clear a lost run, renew tokens.'],[['n-seats','n-runners','n-floor','e-4'],'Seats, Runners and Floor read the same seats: three ways to look closer.']];
+const box=(id,x,y,t,s,cls='')=>`<g id="${id}" class="${cls}"><title>${t}</title><rect class="box" x="${x}" y="${y}" width="200" height="62" rx="10"/><text x="${x+14}" y="${y+27}">${t}</text><text class="s" x="${x+14}" y="${y+46}">${s}</text></g>`;
+const edge=(id,x1,x2,y)=>`<g id="${id}" class="edge"><title>then</title><line x1="${x1}" y1="${y}" x2="${x2-12}" y2="${y}"/><polygon points="${x2},${y} ${x2-12},${y-6} ${x2-12},${y+6}"/></g>`;
+R.how=()=>{const today=H.mode==='today',st=STEPS[H.step];
+  return `<div class="row" style="margin-bottom:10px"><div class="seg" role="radiogroup" aria-label="Today or after"><button role="radio" data-act="h-mode" data-v="today" aria-checked="${today}">Today</button><button role="radio" data-act="h-mode" data-v="after" aria-checked="${!today}">After</button></div></div>
+  <div class="fig">${today?`<svg viewBox="0 0 920 110" role="img" aria-label="The four tabs today">
+    ${box('t-seats',10,24,'Seats','72 table rows, setup on top','old')}${box('t-inbox',240,24,'Inbox','72 cards, 64 of them empty','old')}${box('t-floor',470,24,'Floor','old handoff agents, no seats','old')}${box('t-runners',700,24,'Runners','no health, no room','old')}</svg>`
+  :`<svg viewBox="0 0 920 250" role="img" aria-label="How the Agents pages work after the revamp">
+    ${box('n-run',10,20,'Runners','report room')}${edge('e-1',210,240,51)}${box('n-collab',240,20,'Collab','every seat\'s state')}${edge('e-2',440,470,51)}${box('n-now',470,20,'Now','what waits, and why')}${edge('e-3',670,700,51)}${box('n-you',700,20,'You','move · clear · renew')}
+    <g id="e-4" class="edge"><title>the same seats</title><line x1="340" y1="82" x2="340" y2="130"/><line x1="110" y1="130" x2="800" y2="130"/><line x1="110" y1="130" x2="110" y2="166"/><line x1="455" y1="130" x2="455" y2="166"/><line x1="800" y1="130" x2="800" y2="166"/></g>
+    ${box('n-seats',10,166,'Seats','who works where')}${box('n-runners',355,166,'Runners','alive, room, load')}${box('n-floor',700,166,'Floor','the picture')}</svg>`}</div>
+  ${today?'<div class="banner"><b>Today:</b> to learn why PIP-286 waits you read Inbox (it waits), then Seats (no room), then Runners (whose runner). Floor shows none of it. 13 of the 16 waiting issues have that one cause.</div>':`<div class="stepper"><p class="txt"><b>Step ${H.step+1} of ${STEPS.length}.</b> ${st[1]}</p><div class="row"><button class="btn" data-act="h-step" data-v="-1" ${H.step===0?'disabled':''}>← Back</button><button class="btn pri" data-act="h-step" data-v="1">${H.step===STEPS.length-1?'Start again':'Next step →'}</button></div></div>`}`};
+AFTER.how=()=>{if(H.mode==='after')STEPS[H.step][0].forEach(id=>document.getElementById(id).classList.add('on'))};
+ACT['h-mode']=b=>{H.mode=b.dataset.v;H.step=0;render()};
+ACT['h-step']=b=>{H.step=+b.dataset.v>0?(H.step+1)%STEPS.length:Math.max(0,H.step-1);render()};
+
+/* ---------- screen 2 (and the phone): Now ---------- */
+const N={q:'',proj:'',exactSeat:'',moving:null,msg:'',idle:false};
+const autoMove='Collab already moves some waiting work off a seat without room by itself, and the lead moves stories. Check that first.';
+const G={lost:['Lost run','bad','A run stopped answering. Check that the session has stopped before clearing it. The seat can then take the issue again.'],
+ noroom:['Runner has no room','bad',autoMove],
+ you:['Waits for you','acc','A seat asked a person. The answer is given on Home, under Needs you.'],
+ hand:['Seat is run by hand','warn','No runner starts these seats. They wait until their person starts a session.'],
+ queue:['Queued behind current work','','The seat is working on another issue and takes these next.'],
+ next:['Next in line','ok','The seat has room and takes these by itself.']};
+const cause=it=>{const s=seat(it.seat);return s.work&&!s.work.lost?'queue':s.room==='none'?'noroom':typeof s.room!=='number'?'hand':'next'};
+function matches(s,issue){return (!N.proj||s.proj===N.proj)&&(!N.exactSeat||s.id===N.exactSeat)&&
+  [issue?.key,issue?.title,s.name].filter(Boolean).join(' ').toLowerCase().includes(N.q.toLowerCase())}
+function entries(){
+  return [...W.map(it=>({...it,it,g:cause(it)})),...SEATS.filter(s=>s.work&&s.work.lost).map(s=>({key:s.work.key,title:s.work.title,seat:s.name,age:120,g:'lost'})),...YOU.map(y=>({...y,g:'you'}))]
+    .filter(e=>matches(seat(e.seat),e))}
+function mover(e,targets){return `<div class="mover"><label class="small" for="mv">Move ${e.key} to</label><select id="mv" data-mv="${e.key}">${targets.map(t=>`<option value="${t.id}" ${t.room==='none'?'disabled':''}>${esc(t.name)} · ${roomTxt(t)}</option>`).join('')}</select><button class="btn pri sm" data-act="n-do" data-k="${e.key}">Move here</button><button class="btn ghost sm" data-act="n-move" data-k="">Cancel</button></div>`}
+function erow(e,chip){const g=G[e.g],s=seat(e.seat),targets=SEATS.filter(t=>t!==s&&t.proj===s.proj&&t.role===s.role),canMove=targets.some(t=>t.room!=='none'),mv=canMove&&N.moving===e.key;
+  const meta=e.g==='lost'?`${esc(e.seat)} · the run stopped answering`:e.g==='you'?`${esc(e.seat)} asked a question`:`${esc(e.seat)} · ${RE[e.reason]}${e.prio?' · <span class="hi">'+e.prio+'</span>':''}`;
+  const act=e.g==='lost'?`<button class="btn sm" data-act="n-clear" data-k="${e.key}">Session has stopped · Clear lost run</button>`:e.g==='you'?`<button class="btn sm" data-act="n-you" data-k="${e.key}">Open in Needs you</button>`:canMove?`<button class="btn sm" data-act="n-move" data-k="${e.key}" aria-expanded="${mv}">Move</button>`:`<span class="small muted">No other ${s.role} seat can take this issue.</span>`;
+  return `<div class="irow"><div class="ik"><button class="key" data-act="n-issue" data-k="${e.key}">${e.key}</button>${esc(e.title)}<div class="meta">${meta}</div></div>${chip?`<span class="chip ${g[1]}">${g[0]}</span>`:''}<span class="age">${age(e.age)}</span>${act}</div>${mv?mover(e,targets):''}`}
+const grp=(dot,title,n,why,body)=>`<section class="grp"><header><h4><span class="dotc ${dot}"></span>${title}<span class="cnt">${n}</span></h4>${why?`<p class="small muted" style="margin-top:3px">${why}</p>`:''}</header>${body}</section>`;
+function nowList(es){const lay=S.lay.now;
+  if(!es.length)return `<p class="card muted">Nothing waits${N.q||N.proj?' for this filter':''}.</p>`;
+  if(lay==='C')return grp('','Everything that waits, oldest first',es.length,'',[...es].sort((a,b)=>b.age-a.age).map(e=>erow(e,true)).join(''));
+  if(lay==='B')return [...new Set(es.map(e=>seat(e.seat).proj))].map(p=>{const l=es.filter(e=>seat(e.seat).proj===p);return grp(l.some(e=>G[e.g][1]==='bad')?'bad':'warn',esc(p),l.length,'',l.map(e=>erow(e,true)).join(''))}).join('');
+  return Object.keys(G).map(k=>{const l=es.filter(e=>e.g===k);if(!l.length)return '';
+    const body=k!=='noroom'?l.map(e=>erow(e)).join(''):[...new Set(l.map(e=>seat(e.seat).own))].map(o=>{const m=l.filter(e=>seat(e.seat).own===o);
+      return `<div class="subh"><span><b style="color:var(--ink)">${OWN[o]}'s runner</b> · ${m.length} ${m.length===1?'issue':'issues'} on ${new Set(m.map(e=>e.seat)).size} ${new Set(m.map(e=>e.seat)).size===1?'seat':'seats'}</span><button class="btn sm ghost" data-act="tab" data-id="runners">Open in Runners</button></div>`+m.map(e=>erow(e)).join('')}).join('');
+    return grp(G[k][1],G[k][0],l.length,G[k][2],body)}).join('')}
+function nowBody(){const es=entries(),c=k=>es.filter(e=>e.g===k).length,working=SEATS.filter(s=>s.work&&!s.work.lost&&matches(s,s.work)),idle=SEATS.filter(s=>!s.work&&!waitN(s)&&matches(s));
+  const projs=[...new Set(SEATS.map(s=>s.proj))];
+  return `${N.msg?`<div class="banner" role="status">${esc(N.msg)}</div>`:''}
+  <div class="stats"><div class="stat bad"><b>${c('noroom')+c('hand')}</b>stuck</div><div class="stat bad"><b>${c('lost')}</b>lost run</div><div class="stat acc"><b>${c('you')}</b>waits for you</div><div class="stat"><b>${c('queue')+c('next')}</b>queued</div><div class="stat"><b>${working.length}</b>working</div></div>
+  <div class="row filters"><select data-chg="n-proj" aria-label="Project"><option value="">All projects</option>${projs.map(p=>`<option ${p===N.proj?'selected':''}>${esc(p)}</option>`).join('')}</select><input type="text" data-inp="n-q" aria-label="Search" placeholder="Search issue or seat" value="${esc(N.q)}">${N.q||N.proj?'<button class="btn sm ghost" data-act="n-reset">Clear filter</button>':''}</div>
+  ${nowList(es)}
+  ${working.length?grp('acc','Working now',working.length,'',working.map(s=>`<div class="irow"><div class="ik"><button class="key" data-act="n-issue" data-k="${s.work.key}">${s.work.key}</button>${esc(s.work.title)}<div class="meta">${esc(s.name)}</div></div>${roomHTML(s.room,s.prog)}</div>`).join('')):''}
+  <div class="card row between"><span><b>${idle.length} idle seats</b> <span class="muted small">nothing waits, nothing runs</span></span><button class="btn sm" data-act="n-idle" aria-expanded="${N.idle}">${N.idle?'Hide':'Show'}</button>
+    ${N.idle?`<div style="flex-basis:100%">${projs.map(p=>{const l=idle.filter(s=>s.proj===p);return l.length?`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}:</span> ${l.map(s=>`<span class="chip">${esc(s.name.replace(cap(p)+' ',''))}</span>`).join(' ')}</div>`:''}).join('')}</div>`:''}</div>`}
+R.now=d=>frame(d,nowBody());
+ACT['n-move']=b=>{N.moving=b.dataset.k&&N.moving!==b.dataset.k?b.dataset.k:null;render()};
+ACT['n-do']=b=>{const it=W.find(i=>i.key===b.dataset.k),t=SEATS.find(s=>s.id===cur().querySelector('[data-mv]').value);it.seat=t.name;it.reason='assigned';N.moving=null;N.msg=`Moved ${it.key} to ${t.name}. Sample: nothing was changed.`;render()};
+ACT['n-clear']=b=>{const s=SEATS.find(x=>x.work&&x.work.key===b.dataset.k);W.push({key:s.work.key,title:s.work.title,seat:s.name,reason:'resume',age:0});s.work=null;N.msg=`Lost run on ${b.dataset.k} cleared. It is offered to ${s.name} again. Sample.`;render()};
+ACT['n-you']=b=>{N.msg=`Sample: this opens ${b.dataset.k} under Needs you on Home.`;render()};
+ACT['n-issue']=b=>{N.msg=`Sample: this opens the issue ${b.dataset.k}.`;render()};
+ACT['n-idle']=()=>{N.idle=!N.idle;render()};
+ACT['n-reset']=()=>{N.q='';N.proj='';N.exactSeat='';N.moving=null;render()};
+CHG['n-proj']=el=>{N.proj=el.value;N.moving=null;render()};
+INP['n-q']=el=>{const pos=el.selectionStart;N.q=el.value;N.exactSeat='';N.moving=null;render();const input=$('[data-inp="n-q"]',cur());input.focus();input.setSelectionRange(pos,pos)};
+
+/* ---------- screen 3: Seats ---------- */
+const Z={sel:null,setup:false,sw:{}};
+const first=s=>OWN[s.own].split(' ')[0];
+const suffix=s=>s.name.toLowerCase().startsWith(s.proj.toLowerCase())?s.name.slice(s.proj.length).replace(new RegExp(s.role,'i'),'').replace(/^[\s-]+/,'').trim():'';
+const pill=(s,label)=>`<button class="sp ${sstate(s)}" data-act="z-sel" data-id="${s.id}" aria-pressed="${Z.sel===s.id}" title="${esc(s.name)}: ${STATE[sstate(s)]}">${esc(label)}</button>`;
+function seatDetail(){const s=SEATS.find(x=>x.id===Z.sel);if(!s)return `<div class="card muted small">Press a seat to see its owner, room and work.</div>`;
+  return `<div class="card" data-detail><b>${esc(s.name)}</b><div class="small muted">${cap(s.role)} seat of ${esc(s.proj)}</div>
+   <div class="small" style="margin-top:8px"><span class="chip ${({work:'acc',lost:'bad',stuck:'bad',wait:'warn'})[sstate(s)]||''}">${STATE[sstate(s)]}</span></div>
+   <div class="small" style="margin-top:8px"><span class="muted">Owner</span> ${OWN[s.own]}</div><div style="margin-top:4px">${roomHTML(s.room,s.prog)}</div>
+   <div class="small" style="margin-top:8px"><span class="muted">Works on now</span> ${s.work?`<span class="key">${s.work.key}</span>${esc(s.work.title)}`:'nothing'}</div>
+   <div class="row" style="margin-top:8px"><span class="small"><span class="muted">Waiting</span> ${waitN(s)}</span>${waitN(s)||s.work||YOU.some(y=>y.seat===s.name)?`<button class="btn sm" data-act="z-now" data-id="${s.id}">Show in Now</button>`:''}</div></div>`}
+const ownRoles=p=>[...new Set(SEATS.filter(s=>s.proj===p&&s.own==='ce').map(s=>s.role))];
+const missingRoles=owned=>['developer','reviewer','security'].filter(role=>!owned.includes(role));
+function setup(projs){return `<div class="card" style="margin-bottom:12px"><div class="row between"><span><b>Set up</b> <span class="muted small">add your own seats to a project · ${projs.filter(p=>!ownRoles(p).length).length} projects without your seats</span></span><button class="btn sm" data-act="z-setup" aria-expanded="${Z.setup}">${Z.setup?'Hide':'Show'}</button></div>
+  ${Z.setup?projs.map(p=>{const owned=ownRoles(p),complete=!missingRoles(owned).length;return `<div class="row between" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><span><b>${p}</b> <span class="muted small">${owned.length?'Your seats: '+owned.map(cap).join(', '):'You have no seats here'}</span></span>
+    <span class="row"><button class="sw" role="switch" data-act="z-sw" data-p="${p}" aria-checked="${Z.sw[p]!==false}" aria-label="Members may add their own seats to ${p}"></button><span class="small muted">Members may add seats</span>
+    <button class="btn sm pri" data-act="z-add" data-p="${p}" ${complete||Z.sw[p]===false?'disabled':''}>${complete?'Added':'Add my seats'}</button></span></div>`}).join(''):''}</div>`}
+R.seats=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))];
+  const legend=`<div class="row small muted" style="margin-bottom:10px">${['work','lost','stuck','wait','noroom','idle'].map(k=>`<span><span class="sp ${k}" style="pointer-events:none">&nbsp;&nbsp;</span>${STATE[k]}</span>`).join('')}</div>`;
+  const A=()=>`<div class="scroll"><table class="mx"><thead><tr><th>Project</th>${ROLES.map(r=>`<th>${cap(r)}</th>`).join('')}</tr></thead><tbody>${projs.map(p=>`<tr><th scope="row">${esc(p)}</th>${ROLES.map(r=>{const l=SEATS.filter(s=>s.proj===p&&s.role===r);return `<td>${l.length?l.map(s=>pill(s,first(s)+(suffix(s)?' · '+suffix(s):''))).join(''):'<span class="muted">–</span>'}</td>`}).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const B=()=>Object.keys(OWN).map(o=>{const l=SEATS.filter(s=>s.own===o),same=new Set(l.map(s=>roomTxt(s)+s.prog)).size===1;
+    return `<div class="card" style="margin-bottom:10px"><div class="row between"><b>${OWN[o]}</b>${same?roomHTML(l[0].room,l[0].prog):'<span class="small muted">These seats do not have the same room: press one to see its own.</span>'}</div>
+    ${[...new Set(l.map(s=>s.proj))].map(p=>`<div class="small" style="margin-top:6px"><span class="muted">${esc(p)}</span> ${l.filter(s=>s.proj===p).map(s=>pill(s,cap(s.role).slice(0,3)+(suffix(s)?' '+suffix(s):''))).join('')}</div>`).join('')}</div>`}).join('');
+  return frame(d,`${setup(projs)}${legend}<div class="cols"><div style="min-width:0">${!phoneLayout()&&S.lay.seats==='A'?A():B()}</div>${seatDetail()}</div>
+   <p class="small muted" style="margin-top:10px">${SEATS.length} seats. A dash is a role the project has no seat for.</p>`)};
+ACT['z-sel']=b=>{Z.sel=Z.sel===b.dataset.id?null:b.dataset.id;render()};
+ACT['z-now']=b=>{N.exactSeat=b.dataset.id;N.q=SEATS.find(s=>s.id===N.exactSeat).name;N.proj='';N.moving=null;goId('now')};
+ACT['z-setup']=()=>{Z.setup=!Z.setup;render()};
+ACT['z-sw']=b=>{Z.sw[b.dataset.p]=b.getAttribute('aria-checked')!=='true';render()};
+ACT['z-add']=b=>{const p=b.dataset.p;add(p,'ce',9,'Codex',missingRoles(ownRoles(p)).map(r=>[r,`${cap(p)} ${cap(r)} (Dana)`]));render()};
+
+/* ---------- screen 4: Runners ---------- */
+const RUN=[['ce','17 Nov',[['Codex',9],['Claude Code','none']]],['al','20 Nov',[['Claude Code',19],['Codex','none']]],['as','20 Nov',[['Codex',45]]],['bg','19 Nov',[['Claude Code',39]]],['de','19 Nov',[['Claude Code',5]]],['er','19 Nov',[]],['il','20 Nov',[['Claude Code',90]]]]
+  .map(([own,since,progs],i)=>({id:'r'+i,own,owner:OWN[own],name:own==='er'?'seat-runner on a1b2c3d4e5f6':'seat-runner on runner-0',since,progs,asked:20+i*7+' s ago'}));
+const U={confirm:null,adding:false,msg:'',n:0};
+R.runners=d=>frame(d,`${U.msg?`<div class="banner" role="status">${esc(U.msg)}</div>`:''}
+  <div class="row between" style="margin-bottom:10px"><span class="small muted">${RUN.length} runners · all online · programs and figures are sample</span><button class="btn pri sm" data-act="u-add" aria-expanded="${U.adding}">${U.adding?'Close':'+ Connect a runner'}</button></div>
+  ${U.adding?`<div class="card" style="margin-bottom:12px"><b>Connect a runner</b><ol class="small muted" style="margin:6px 0 10px;padding-left:18px"><li>Start the pairing on the runner's machine. It shows a code such as K7QF-M2XD.</li><li>Type the code here within 15 minutes.</li></ol>
+    <div class="row"><input type="text" data-inp="u-code" aria-label="Code" placeholder="K7QF-M2XD" maxlength="32" style="width:150px;font-family:monospace;text-transform:uppercase"><select data-who aria-label="Whose runner" style="width:auto">${Object.values(OWN).map(n=>`<option ${n==='Dana Reyes'?'selected':''}>${n}</option>`).join('')}<option>Hana Kim</option></select><button class="btn pri" data-act="u-connect" disabled>Connect</button></div>
+    <p class="small muted" style="margin-top:8px">A person has one runner per workspace. Connecting another removes the one before.</p></div>`:''}
+  <section class="grp">${RUN.map(r=>{const seats=SEATS.filter(s=>s.own===r.own&&s.room!=='hand'),waiting=W.filter(i=>seats.includes(seat(i.seat))),c=U.confirm&&U.confirm.id===r.id?U.confirm.kind:null;
+    return `<div class="rrow" style="${r===RUN[0]?'border-top:0':''}"><div class="who"><span class="dotc ok" title="online"></span> <b>${esc(r.owner)}</b>${r.own==='ce'?' <span class="muted small">(me)</span>':''}<div class="meta">${esc(r.name)} · asked ${r.asked} · connected ${r.since}</div></div>
+      <div class="rm">${r.progs.length?r.progs.map(p=>roomHTML(p[1],p[0])).join(''):'<span class="small muted">no figure: its seats are run by hand</span>'}</div>
+      <div class="num"><b>${seats.length}</b>seats</div><div class="num"><b style="${waiting.some(i=>cause(i)==='noroom')?'color:var(--bad)':''}">${waiting.length}</b>waiting</div>
+      <div class="row"><button class="btn sm" data-act="u-ask" data-id="${r.id}" data-kind="renew">Renew tokens</button><button class="btn sm" data-act="u-ask" data-id="${r.id}" data-kind="remove">Remove</button></div></div>
+      ${c?`<div class="mover"><span class="small">${c==='renew'?`Renew the tokens of ${esc(r.owner)}'s runner? What it fetched is revoked; it fetches new ones the next time it asks.`:`Remove ${esc(r.owner)}'s runner? Its ${seats.length} seats wait until another runner is connected.`}</span><button class="btn pri sm" data-act="u-do">${c==='renew'?'Renew':'Remove'}</button><button class="btn ghost sm" data-act="u-ask" data-id="">Cancel</button></div>`:''}`}).join('')}</section>
+  <p class="small muted">Waiting is what sits on that runner's seats right now. A red number with "no room" beside it is where the work is stuck.</p>`);
+ACT['u-add']=()=>{U.adding=!U.adding;render()};
+INP['u-code']=el=>{cur().querySelector('[data-act="u-connect"]').disabled=el.value.replace(/[^a-z0-9]/gi,'').length<8};
+ACT['u-connect']=()=>{const who=cur().querySelector('[data-who]').value,old=RUN.some(r=>r.owner===who);U.adding=false;
+  U.msg=`Sample: a runner would be connected for ${who}.${old?' It would replace the runner before and revoke its tokens.':''} The list below does not change in this mockup.`;render()};
+ACT['u-ask']=b=>{U.confirm=b.dataset.id?{id:b.dataset.id,kind:b.dataset.kind}:null;render()};
+ACT['u-do']=()=>{const r=RUN.find(x=>x.id===U.confirm.id);
+  U.msg=U.confirm.kind==='renew'?`${r.owner}'s runner renews its tokens. Sample.`:`Sample: ${r.owner}'s runner would be removed and its seats would wait. The list below does not change in this mockup.`;U.confirm=null;render()};
+
+/* ---------- screen 5: Floor ---------- */
+const F={sel:'Pipeline'};
+R.floor=d=>{const projs=[...new Set(SEATS.map(s=>s.proj))],l=SEATS.filter(s=>s.proj===F.sel),iso=!phoneLayout()&&S.lay.floor==='B';
+  const rooms=`<div class="rooms ${iso?'iso':''}">${projs.map(p=>{const ss=SEATS.filter(s=>s.proj===p),w=W.filter(i=>seat(i.seat).proj===p).length;
+    return `<div class="rm-card ${p===F.sel?'sel':''}"><button data-act="f-sel" data-p="${esc(p)}" aria-pressed="${p===F.sel}">${esc(p)}<div class="meta" style="font-weight:400">${ss.length} seats${w?` · <span style="${ss.some(s=>sstate(s)==='stuck')?'color:var(--bad)':''}">${w} waiting</span>`:''}</div></button>
+      <div>${ss.map(s=>`<button class="desk ${sstate(s)}" data-act="f-sel" data-p="${esc(p)}" title="${esc(s.name)}: ${STATE[sstate(s)]}" aria-label="${esc(s.name)}: ${STATE[sstate(s)]}"></button>`).join('')}</div></div>`}).join('')}</div>`;
+  return frame(d,`<div class="row small muted" style="margin-bottom:10px">${['work','lost','stuck','wait','noroom','idle'].map(k=>`<span><span class="desk ${k}" style="display:inline-block;vertical-align:-4px;pointer-events:none"></span> ${STATE[k]}</span>`).join('')}</div>
+  <div class="cols"><div class="${iso?'isow':''}" style="min-width:0">${rooms}</div>
+  <div class="card" data-room><b>${esc(F.sel)}</b><div class="small muted">${l.length} seats</div>${l.map(s=>`<div class="small" style="margin-top:6px;display:flex;gap:6px;align-items:center"><span class="desk ${sstate(s)}" style="flex:none;margin:0"></span><span style="min-width:0">${esc(s.name)}<span class="muted"> · ${STATE[sstate(s)]}${waitN(s)?' ('+waitN(s)+')':''}</span></span></div>`).join('')}
+    <button class="btn sm" style="margin-top:10px" data-act="f-now">Show this project in Now</button></div></div>`)};
+ACT['f-sel']=b=>{F.sel=b.dataset.p;render()};
+ACT['f-now']=()=>{N.proj=F.sel;N.q='';N.exactSeat='';N.moving=null;goId('now')};
+
+/* ---------- screen 6: phone ---------- */
+R.phone=()=>`<div class="phonewrap"><div class="phone"><div class="pbar"><span>9:41</span><span>collab.example</span></div><div class="pin">${R[S.phoneTab](SCREENS.find(d=>d.id===S.phoneTab))}</div></div>
+  <div class="card"><b>What changes at phone width</b><ul class="small" style="margin:8px 0 0;padding-left:18px;display:grid;gap:6px"><li>The four tabs scroll sideways; the menu's Agents group opens the same four.</li><li>Every row stacks: title, then seat and reason, then age and the one action.</li><li>Move opens under its row, not in a pop-up.</li><li>Seats uses the per-person cards on a phone, whichever layout you pick for the desktop: a five-column grid does not fit.</li><li>Floor uses the flat map on a phone.</li></ul>
+  <p class="small muted" style="margin-top:10px">Try all four tabs here with the same sample seats and issues as on desktop.</p></div></div>`;
+
+/* ---------- last screen: open points ---------- */
+const PROPS=[
+ ['P1','Tab names and order','Now · Seats · Runners · Floor, the same four in the left menu (Runners is missing there today). The name "Seat inbox" goes; the purple count moves to Now. Old links to /agents/inbox keep working.'],
+ ['P2','Idle seats are one line','Seats with nothing waiting and nothing running collapse to "N idle seats · Show". Today 64 of the 72 inbox cards have nothing waiting. A seat with an empty inbox can still be working.'],
+ ['P3','"Move" is a manual override',autoMove+' The button offers only seats of the same project and role, and says so when none can take the issue.'],
+ ['P4','How long it has waited','Each row shows its wait. Collab reads no "waiting since" for the page today, so this needs a small read change. The ages in this mockup are sample.'],
+ ['P5','When room comes back','Not shown in the first version: a runner reports how much room is left, not when it resets.'],
+ ['P6','Room stays private','The owner and lead see every figure. Members see their own figures and "Room private" for other people\'s seats. Showing "no room" on someone else\'s seat without a number is a proposed change that needs a security review in the implementation story.'],
+ ['P7','"Waits for you" rows','They appear once Needs you on Home is live. Until then that group is not shown.'],
+ ['P8','Floor drops the old agents','The registered-agents list and the handoff counts leave Floor. "Handoffs (old)" stays as it is, untouched.'],
+ ['P9','No timer anywhere','Now, Seats, Runners and Floor show "Updated 19:11 · Refresh" and reload when you come back to the browser tab. Floor\'s 20-second timer goes.'],
+ ['P10','Build order','One tab at a time: Now, then Runners, then Seats, then Floor. The next starts only when the one before is live and you have used it.'],
+ ['P11','Runner names','The person is shown first because six runners are called "seat-runner on runner-0". Renaming runners is not part of this.']];
+R.open=()=>`<form class="pick" style="margin-top:0" data-lavish-question="open-points" data-props="1"><table class="props">${PROPS.map(p=>`<tr><td><b>${p[0]}</b></td><td><b>${p[1]}</b><br><span class="muted">${p[2]}</span></td><td style="min-width:150px"><select name="${p[0]}" aria-label="${p[0]} decision"><option value="OK">OK as proposed</option><option value="Change">Change it</option></select><input type="text" name="${p[0]}-note" placeholder="What to change" aria-label="${p[0]} what to change" style="margin-top:6px"></td></tr>`).join('')}</table>
+  <div class="row" style="margin-top:12px"><button class="btn pri" type="submit">Queue these answers</button><span class="st" role="status" data-st="open"></span></div></form>
+  <div class="banner" style="margin-top:16px"><b>When you are done:</b> press <b>Send to Agent</b> in the Lavish bar. Nothing is filed or built before that.</div>`;
+
+/* ---------- events and sending answers back ---------- */
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const fn=ACT[b.dataset.act];if(fn)fn(b)});
+document.addEventListener('input',e=>{const fn=INP[e.target.dataset.inp];if(fn)fn(e.target)});
+document.addEventListener('change',e=>{const fn=CHG[e.target.dataset.chg];if(fn)fn(e.target)});
+function queue(prompt,opts,st){const ok=!!(window.lavish&&window.lavish.queuePrompt);if(ok)window.lavish.queuePrompt(prompt,opts);st.textContent=ok?'Queued. Press “Send to Agent” when you are done.':'Selected. Open this page through Lavish to send it.'}
+document.addEventListener('submit',e=>{const f=e.target;e.preventDefault();
+  if(f.dataset.pick){const id=f.dataset.pick,d=SCREENS.find(s=>s.id===id),fd=new FormData(f),v=fd.get('pick-'+id),note=(fd.get('note')||'').trim(),st=$(`[data-st="${id}"]`);
+    if(!v&&!note){st.textContent='Pick an option first.';return}
+    queue(`${d.title}: ${v?'use layout '+v:'no layout picked'}${note?'. Change: '+note:''}`,{tag:'choice',text:`${d.title}: ${v||'note only'}`,element:f,queueKey:'layout-'+id,data:{screen:id,answer:v,note}},st)}
+  if(f.dataset.props){const fd=new FormData(f),items=PROPS.map(p=>({id:p[0],label:p[1],decision:fd.get(p[0]),note:(fd.get(p[0]+'-note')||'').trim()}));
+    queue('Open points: '+items.map(i=>`${i.id} ${i.decision}${i.note?' ('+i.note+')':''}`).join('; ')+'. Account for every one of them.',{tag:'tracked-batch',text:'Open points',element:f,queueKey:'open-points',data:{items}},$('[data-st="open"]'))}});
+shell();render();
+</script>
+</body>
+</html>
