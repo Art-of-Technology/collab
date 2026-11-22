@@ -35,6 +35,21 @@ function planLink(base: string, id: string) {
   return `${base}?tab=plan&milestone=${encodeURIComponent(id)}`;
 }
 
+export function MilestoneForecast({ forecast }: { forecast: Milestone['deliveryForecast'] }) {
+  if (!forecast) return null;
+  if (forecast.noHistory) return <span>No finished developer work in the forecast window</span>;
+  const format = (value: string) => baselineDateLabel.format(new Date(value));
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
+      {forecast.likelyDate && <span>Likely <time dateTime={forecast.likelyDate}>{format(forecast.likelyDate)}</time></span>}
+      <span>Safe {forecast.safeDate
+        ? <time dateTime={forecast.safeDate}>{format(forecast.safeDate)}</time>
+        : <span className="text-amber-400">not converging</span>}</span>
+      {forecast.lowConfidence && <span className="text-amber-400">Low confidence</span>}
+    </span>
+  );
+}
+
 export function BaselineControl({ overview, projectId, refetch, showHistory = true }: {
   overview: Overview;
   projectId: string;
@@ -313,6 +328,7 @@ function MilestoneDetail({ milestone, workspaceId, workspaceSlug, base, canEdit,
           </Button>
         )}
       </form>
+      <MilestoneForecast forecast={milestone.deliveryForecast} />
       <p className="text-[13px] text-collab-400">Agents can change these dates through the CLI and MCP. The baseline moves only when you freeze it.</p>
       <ul className="divide-y divide-white/[.09] border-b-white/[.09] [&:not(:empty)]:border-b">
         {milestone.issues.map(issue => (
@@ -336,7 +352,7 @@ const legend = [
   ['done', 'bg-emerald-400'],
   ['in progress', 'bg-blue-400'],
   ['baseline', 'border border-dashed border-collab-400'],
-  ['forecast past due', 'border border-dashed border-amber-400 bg-amber-400/35'],
+  ['safe forecast past due', 'border border-dashed border-amber-400 bg-amber-400/35'],
   ['decision point', 'bg-violet-400'],
 ];
 

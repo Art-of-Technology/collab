@@ -5,6 +5,7 @@ const { calculateProjectOverview } = load('src/lib/project-overview.ts', {
 });
 const date = day => new Date(`2026-11-${String(day).padStart(2, '0')}T00:00:00.000Z`);
 const now = date(20);
+const developer = { name: 'Demo Developer' };
 const issue = (id, fields = {}) => ({
   id, issueKey: id, title: id, type: 'TASK', milestoneId: null, createdAt: date(1),
   firstStartedAt: null, finishedAt: null, dueDate: null, startDate: null,
@@ -16,11 +17,13 @@ const closed = (id, fields) => issue(id, { projectStatus: { isFinal: true }, fin
 for (const [baseline, verdict, drift] of [
   [25, 'on_track', 2], [24, 'at_risk', 3], [20, 'at_risk', 7], [19, 'behind', 8], [null, null, null],
 ]) {
-  test(`seven open issues at seven closures per week give ${verdict ?? 'no verdict'} with baseline ${baseline}`, () => {
+  test(`a safe forecast seven days out gives ${verdict ?? 'no verdict'} with baseline ${baseline}`, () => {
     const issues = [
       milestone('M1', { dueDate: date(26), baselineDueDate: baseline ? date(baseline) : null }),
       ...Array.from({ length: 7 }, (_, i) => issue(`open-${i}`, { milestoneId: 'M1' })),
-      ...Array.from({ length: 21 }, (_, i) => closed(`done-${i}`, { milestoneId: 'M1' })),
+      ...Array.from({ length: 21 }, (_, i) => closed(`done-${i}`, {
+        milestoneId: 'M1', assignee: developer, finishedAt: new Date(now.getTime() - (i + 1) * 86_400_000),
+      })),
       milestone('finished', { projectStatus: { isFinal: true }, finishedAt: date(15), baselineDueDate: date(1) }),
     ];
     const result = calculateProjectOverview(issues, baseline ? date(1) : null, now);
@@ -53,14 +56,16 @@ test('completed milestone uses actual work dates and the next milestone inherits
   assert.equal(result.unplanned[0].id, 'unplanned');
 });
 
-test('an open milestone with outstanding work and no recent closures has no forecast', () => {
+test('an open milestone with no developer history has no forecast and is at risk', () => {
   const result = calculateProjectOverview([
     milestone('M1', { baselineDueDate: date(25) }),
     issue('unfinished', { milestoneId: 'M1' }),
   ], date(1), now);
   assert.equal(result.hasBaseline, true);
-  assert.equal(result.verdict, null);
+  assert.equal(result.verdict, 'at_risk');
   assert.equal(result.milestones[0].forecastDate, null);
+  assert.equal(result.milestones[0].deliveryForecast.noHistory, true);
+  assert.equal(result.milestones[0].deliveryForecast.notConverging, false);
 });
 
 test('Burn forecasts the current scope using the mean and extremes of three weeks', () => {
@@ -139,8 +144,10 @@ test('Burn keeps a reopened closure in its week, the pace and the done line unti
 test('Plan moves the scheduled bar and its drift while keeping the saved outline fixed until re-baseline', () => {
   const earlier = milestone('M1', { startDate: date(20), dueDate: date(22), baselineStartDate: date(20), baselineDueDate: date(22) });
   const changed = milestone('M2', { dueDate: date(25), baselineDueDate: date(25) });
-  const linked = Array.from({ length: 6 }, (_, i) => issue(`open-${i}`, { milestoneId: changed.id }));
-  const closures = Array.from({ length: 21 }, (_, i) => closed(`done-${i}`));
+  const linked = Array.from({ length: 9 }, (_, i) => issue(`open-${i}`, { milestoneId: changed.id }));
+  const closures = Array.from({ length: 14 }, (_, i) => closed(`done-${i}`, {
+    assignee: developer, finishedAt: date(19 - i),
+  }));
   const plan = (previous, current) => calculateProjectOverview(
     [previous, current, ...linked, ...closures], date(20), now,
   ).plan.milestones.find(row => row.id === changed.id);
@@ -152,12 +159,13 @@ test('Plan moves the scheduled bar and its drift while keeping the saved outline
   );
   assert.equal(before.start, before.baselineStart);
   assert.equal(before.end, before.baselineDue);
-  assert.equal(before.driftDays, 3);
+  assert.equal(before.driftDays, 4);
   assert.equal(moved.start, before.start + 1);
   assert.equal(moved.end, before.end + 2);
   assert.equal(moved.baselineStart, before.baselineStart);
   assert.equal(moved.baselineDue, before.baselineDue);
   assert.equal(moved.driftDays, 4);
+  assert.equal(moved.forecast, before.forecast);
   assert.equal(rebaselined.baselineStart, moved.start);
   assert.equal(rebaselined.baselineDue, moved.end);
   assert.equal(rebaselined.driftDays, rebaselined.forecast - rebaselined.end);
@@ -223,4 +231,98 @@ test('Plan preserves reversed dates for repair without charting them or chaining
   assert.equal(reversed.dueDate, date(24).toISOString());
   assert.equal(next.start, valid.end);
   assert.equal(next.baselineStart, valid.baselineDue);
+});
+
+const forecastFor = (issues, clock = now, target = 'M1') => {
+  const result = calculateProjectOverview(issues, date(1), clock);
+  return [result, result.milestones.find(row => row.id === target), result.plan.milestones.find(row => row.id === target)];
+};
+const utc = value => new Date(value).toISOString().slice(0, 10);
+
+test('an idle milestone with 20 open items uses 70 developer finishes elsewhere and forecasts 23 November', () => {
+  const clock = new Date('2026-11-21T15:00:00Z');
+  const [result, overview, plan] = forecastFor([
+    milestone('M1', { dueDate: new Date('2026-12-04'), baselineDueDate: new Date('2026-12-04') }),
+    ...Array.from({ length: 20 }, (_, i) => issue(`open-${i}`, { milestoneId: 'M1' })),
+    ...Array.from({ length: 70 }, (_, i) => closed(`done-${i}`, { assignee: developer, finishedAt: date(14 + Math.floor(i / 10)) })),
+  ], clock);
+  assert.equal(result.verdict, 'on_track');
+  assert.equal(overview.completed, 0);
+  assert.equal(overview.total, 20);
+  assert.equal(utc(overview.deliveryForecast.likelyDate), '2026-11-23');
+  assert.equal(utc(overview.deliveryForecast.safeDate), '2026-11-23');
+  assert.equal(overview.deliveryForecast.lowConfidence, false);
+  assert.deepEqual(plan.deliveryForecast, overview.deliveryForecast);
+});
+
+test('paired days produce distinct likely and safe dates and flag fewer than five days', () => {
+  const [, item] = forecastFor([
+    milestone('M1', { dueDate: date(25) }),
+    ...Array.from({ length: 35 }, (_, i) => issue(`open-${i}`, { milestoneId: 'M1' })),
+    ...Array.from({ length: 30 }, (_, i) => closed(`done-${i}`, { assignee: developer, finishedAt: date(i < 10 ? 18 : 19) })),
+  ]);
+  assert.equal(utc(item.deliveryForecast.likelyDate), '2026-11-23');
+  assert.equal(utc(item.deliveryForecast.safeDate), '2026-11-24');
+  assert.equal(item.deliveryForecast.lowConfidence, true);
+});
+
+test('whole UTC days keep idle days and exclude today and finishes older than fourteen days', () => {
+  const [, item] = forecastFor([
+    milestone('M1', { dueDate: date(25) }),
+    issue('open', { milestoneId: 'M1' }),
+    closed('old', { finishedAt: date(5), assignee: developer }),
+    closed('boundary', { finishedAt: date(6), assignee: developer }),
+    ...Array.from({ length: 50 }, (_, i) => closed(`today-${i}`, {
+      finishedAt: new Date('2026-11-20T02:00:00Z'), assignee: developer,
+    })),
+  ], new Date('2026-11-20T15:00:00Z'));
+  // One productive day in fourteen has a much later safe date than likely date.
+  assert.ok(new Date(item.deliveryForecast.likelyDate) > date(25));
+  assert.ok(new Date(item.deliveryForecast.safeDate) > new Date(item.deliveryForecast.likelyDate));
+  assert.equal(item.deliveryForecast.lowConfidence, true);
+});
+
+test('a likely date survives when the safe percentile falls outside the one-year cap', () => {
+  const [result, item, plan] = forecastFor([
+    milestone('M1', { dueDate: date(30), baselineDueDate: date(30) }),
+    ...Array.from({ length: 10 }, (_, i) => closed(`finish-${i}`, {
+      assignee: developer, finishedAt: date(18),
+    })),
+    closed('other-arrival', { createdAt: date(19), milestoneId: 'M1' }),
+    ...Array.from({ length: 10 }, (_, i) => issue(`arrive-${i}`, { createdAt: date(19), milestoneId: 'M1' })),
+  ]);
+  assert.ok(item.deliveryForecast.likelyDate);
+  assert.equal(item.deliveryForecast.safeDate, null);
+  assert.equal(item.deliveryForecast.notConverging, true);
+  assert.equal(item.deliveryForecast.lowConfidence, true);
+  assert.equal(plan.driftDays, null);
+  assert.equal(result.verdict, 'at_risk');
+});
+
+test('the script queue includes earlier and undated running milestones and applies its exclusions', () => {
+  const queueItem = (id, milestoneId, fields) => issue(id, { milestoneId, ...fields });
+  const [, item] = forecastFor([
+    milestone('M1', { dueDate: date(25), startDate: date(24) }),
+    milestone('earlier', { dueDate: date(24) }),
+    milestone('equal', { dueDate: date(25) }),
+    milestone('later', { dueDate: date(26) }),
+    milestone('running', { status: 'In_Progress' }),
+    milestone('undated', { status: 'planned' }),
+    milestone('cancelled', { dueDate: date(23), status: 'Cancelled' }),
+    milestone('finished', { dueDate: date(23), finishedAt: date(22) }),
+    ...['earlier', 'equal', 'later', 'running', 'undated', 'cancelled', 'finished'].map(id => queueItem(`work-${id}`, id)),
+    queueItem('release', 'M1', { title: 'Release request: deploy', agentRequestRole: 'release' }),
+    queueItem('parent', 'M1'),
+    queueItem('leaf', 'M1', { parentId: 'parent' }),
+    ...['Review request', ' re-review pass', 'Security re-review', 'Security request', 'Relay: task'].map(
+      (title, index) => queueItem(`request-${index}`, 'M1', { title, createdAt: date(19) }),
+    ),
+    queueItem('epic', 'M1', { type: 'EPIC', createdAt: date(19) }),
+    queueItem('cancelled-work', 'M1', { statusValue: 'CANCELED', createdAt: date(19) }),
+    ...Array.from({ length: 2 }, (_, i) => closed(`developer-${i}`, { assignee: developer })),
+    ...Array.from({ length: 6 }, (_, i) => closed(`reviewer-${i}`, { assignee: { name: 'Demo Reviewer' } })),
+  ]);
+  // Four eligible open items, two developer finishes per sampled day, zero eligible arrivals.
+  assert.equal(item.deliveryForecast.likelyDate, date(22).toISOString());
+  assert.equal(item.deliveryForecast.safeDate, date(22).toISOString());
 });

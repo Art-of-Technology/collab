@@ -159,3 +159,23 @@ test('Plan enables Set baseline only for valid saved dates', async () => {
     await React.act(async () => root.unmount());
   }
 });
+
+test('Plan shows both forecast labels with low confidence and keeps a likely date when the safe date is missing', async () => {
+  const ProjectPlan = loadProjectPlan([]);
+  const root = createRoot(document.getElementById('root'));
+  const render = (safeDate, notConverging) => React.act(async () => root.render(React.createElement(ProjectPlan, {
+    summary: { project: { id: 'project' }, overview: { plan: { today: start, milestones: [{
+      ...milestone, deliveryForecast: { likelyDate: '2026-11-23', safeDate, notConverging, lowConfidence: true },
+    }] } } },
+    workspaceId: 'workspace', workspaceSlug: 'demo', base: '/demo/projects/example', milestoneId: 'launch',
+    refetch: async () => {},
+  })));
+  try {
+    await render('2026-11-26', false);
+    assert.match(document.getElementById('p-detail').textContent, /Likely 23 Nov.*Safe 26 Nov.*Low confidence/);
+    await render(null, true);
+    assert.match(document.getElementById('p-detail').textContent, /Likely 23 Nov.*Safe not converging.*Low confidence/i);
+  } finally {
+    await React.act(async () => root.unmount());
+  }
+});

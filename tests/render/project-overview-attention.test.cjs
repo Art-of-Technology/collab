@@ -11,6 +11,18 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
 
   let summary;
   let search = new URLSearchParams();
+  const { MilestoneForecast } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectPlan.tsx', {
+    react: React,
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/link': {},
+    '@/components/ui/button': {},
+    '@/components/ui/card': {},
+    '@/hooks/queries/useIssues': {},
+    '@/hooks/use-permissions': {},
+    '@/hooks/use-chart-width': {},
+    '@/lib/permission-types': {},
+    '@/lib/utils': {},
+  });
   const { ProjectDashboard } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectDashboard.tsx', {
     react: React,
     'react/jsx-runtime': require('react/jsx-runtime'),
@@ -23,7 +35,7 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
     '@/hooks/queries/useProjects': { useProjectSummary: () => ({ data: summary }) },
     '@/lib/utils': { cn: () => '' },
     './ProjectBurn': { BurnOverviewCard: () => null },
-    './ProjectPlan': { ProjectPlanPreview: () => null },
+    './ProjectPlan': { MilestoneForecast, ProjectPlanPreview: () => null },
     './ProjectWork': { ProjectWork: ({ waitingIssueIds }) => React.createElement('output', null, waitingIssueIds?.join(',')) },
   });
   const root = createRoot(document.getElementById('root'));
@@ -34,11 +46,11 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
   const renderDashboard = () => React.act(async () => root.render(React.createElement(ProjectDashboard, {
     projectId: 'project', projectName: 'Demo', projectSlug: 'demo', workspaceSlug: 'demo',
   })));
-  const render = (milestones, lateMilestoneIds, blocked, unplanned = [], waiting = [], waitingOnCycle = []) => {
+  const render = (milestones, lateMilestoneIds, blocked, unplanned = [], waiting = [], waitingOnCycle = [], forecastState = {}) => {
     summary = {
       project: { id: 'project' },
       repositories: { connections: [], activities: [] }, notes: [], featureRequests: [],
-      overview: { stats: {}, milestones, lateMilestoneIds, unplanned, blocked, waiting, waitingOnCycle, hasBaseline: true },
+      overview: { stats: {}, milestones, lateMilestoneIds, unplanned, blocked, waiting, waitingOnCycle, hasBaseline: true, ...forecastState },
     };
     return renderDashboard();
   };
@@ -60,6 +72,17 @@ test('Overview shows five ordered attention lines and keeps the no-milestone lin
     assert.equal(heading().textContent, 'Needs attention · 5');
     assert.deepEqual(lines(), [...[5, 4, 3, 2].map(blockedLabel), noMilestone]);
     assert.equal(control(), null);
+
+    const next = {
+      ...forecast(0), title: 'Demo milestone', completed: 0, total: 20,
+      deliveryForecast: { likelyDate: '2026-11-23', safeDate: null, notConverging: true, lowConfidence: true },
+    };
+    await render([next], [], [], [], [], [], {
+      nextMilestoneId: next.id, verdict: 'at_risk', missingSafeMilestoneIds: [next.id],
+    });
+    const nextCard = document.querySelector('a[href*="milestone=M-0"]');
+    assert.equal(document.querySelector('h2').textContent, 'At risk');
+    assert.match(nextCard.textContent, /Likely 23 Nov.*Safe not converging.*Low confidence/i);
 
     const milestones = [3, 8, 5].map(forecast);
     const blockedIssues = [20, 30, 19, 23, 27, 17, 22, 24, 26, 21, 18, 28, 29, 16, 25].map(blocked);
