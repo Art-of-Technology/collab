@@ -31,6 +31,7 @@ async function withView(run, viewOverrides = {}) {
   let renderKey = 'view';
   let initialIssues = [work];
   let initialIncludesRequests = false;
+  let retainBoardRows = false;
   const listRequests = [];
   const saves = [];
   const fetch = async (url, options) => {
@@ -61,6 +62,13 @@ async function withView(run, viewOverrides = {}) {
   const DropdownMenuContent = ({ children }) => React.useContext(DropdownContext).open ? children : null;
   const Pass = ({ children }) => children;
   const Rows = ({ issues }) => create('output', { id: 'rows' }, issues.map(issue => issue.title).join(', '));
+  const BoardRows = ({ issues }) => {
+    const [rows, setRows] = React.useState(issues);
+    React.useEffect(() => {
+      if (!retainBoardRows) setRows(issues);
+    }, [issues]);
+    return create(Rows, { issues: rows });
+  };
   const noop = () => {};
   const router = {
     replace(url) {
@@ -111,7 +119,7 @@ async function withView(run, viewOverrides = {}) {
     '@/hooks/useViewFilterState': load('src/hooks/useViewFilterState.ts', { ...deps, 'next/navigation': navigation }, { URLSearchParams }),
     './shared/ViewTopBar': { default: ViewTopBar },
     './agent-request-display': load('src/components/views/agent-request-display.ts'),
-    './renderers/KanbanViewRenderer': { default: Rows },
+    './renderers/KanbanViewRenderer': { default: BoardRows },
     './renderers/ListViewRenderer': { default: Rows },
     './renderers/TableViewRenderer': {},
     './renderers/TimelineViewRenderer': {},
@@ -155,7 +163,10 @@ async function withView(run, viewOverrides = {}) {
     await React.act(async () => render());
     await settle();
     await click('Display');
-    await run({ control, toggle, rows, listRequests, saves, click, settle, reload });
+    await run({
+      control, toggle, rows, listRequests, saves, click, settle, reload,
+      retainBoardRows: () => { retainBoardRows = true; },
+    });
   } finally {
     await React.act(async () => root.unmount());
     client.clear();
@@ -175,7 +186,7 @@ test('the Display menu has an Agent requests switch, off by default', async () =
 });
 
 test('switched on, the view asks for requests too', async () => {
-  await withView(async ({ control, toggle, rows, listRequests, saves, click, settle, reload }) => {
+  await withView(async ({ control, toggle, rows, listRequests, saves, click, settle, reload, retainBoardRows }) => {
     // A saved request-label filter still cannot show requests by itself.
     assert.equal(rows(), '');
     await click('Added');
@@ -196,6 +207,8 @@ test('switched on, the view asks for requests too', async () => {
     assert.equal(control().getAttribute('aria-checked'), 'true');
     assert.equal(rows(), 'Review request');
 
+    // Kanban keeps optimistic rows during an in-flight drag save.
+    retainBoardRows();
     await toggle();
     assert.equal(control().getAttribute('aria-checked'), 'false');
     assert.equal(rows(), '');

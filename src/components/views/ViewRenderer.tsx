@@ -721,6 +721,7 @@ export default function ViewRenderer({
         }
         return (
           <KanbanViewRenderer
+            key={includeAgentRequests ? 'with-requests' : 'work-only'}
             {...sharedProps}
             searchQuery={search}
             onOrderingChange={() => {}}
