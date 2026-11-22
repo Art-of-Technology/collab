@@ -129,26 +129,19 @@ function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: st
         ${projects}
     ),
     hierarchy_ids AS (
+      -- Resolve these keys together so skewed child counts don't inflate a per-issue plan.
       SELECT "parentId" AS id FROM listed WHERE "parentId" IS NOT NULL
       UNION
-      SELECT child.id FROM listed
-      CROSS JOIN LATERAL (
-        -- Keep the lookup on Issue_parentId_idx when the rest of the database is large.
-        SELECT id FROM "Issue" WHERE "parentId" = listed.id OFFSET 0
-      ) child
+      SELECT id FROM "Issue" WHERE "parentId" = ANY (ARRAY(SELECT id FROM listed))
     ),
     hierarchy AS (
       SELECT i.id, i."parentId",
         json_build_object('id', i.id, 'issueKey', i."issueKey", 'title', i.title, 'type', i.type, 'status', i.status,
            'projectStatus', CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'name', s.name, 'displayName', s."displayName", 'color', s.color) END) AS row
-      FROM hierarchy_ids
-      CROSS JOIN LATERAL (
-        SELECT id, "parentId", "issueKey", title, type, status, "statusId"
-        FROM readable_issues WHERE id = hierarchy_ids.id
-          AND (${includeRequests} OR "agentRequestRole" IS NULL)
-        LIMIT 1
-      ) i
+      FROM readable_issues i
       LEFT JOIN "ProjectStatus" s ON s.id = i."statusId"
+      WHERE (${includeRequests} OR i."agentRequestRole" IS NULL)
+        AND i.id = ANY (ARRAY(SELECT id FROM hierarchy_ids))
     ),
     children AS (
       SELECT "parentId", json_agg(row) AS rows, count(*)::int AS total

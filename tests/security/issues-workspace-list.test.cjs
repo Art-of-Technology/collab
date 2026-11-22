@@ -157,12 +157,14 @@ test('workspace and multi-project lists return every visible row and field in on
 
   await t.test('a broad list bounds database work to the workspace and its related issues', async t => {
     await raw.$executeRaw`
-      INSERT INTO "Issue" (id, title, description, "projectId", "workspaceId", "updatedAt", "issueKey")
+      INSERT INTO "Issue" (id, title, description, "projectId", "workspaceId", "updatedAt", "issueKey", "parentId")
       SELECT 'local-' || n, 'Local issue', repeat('Full description. ', 180),
-        'p', 'workspace', timestamp '2026-12-01' - n * interval '1 second', 'PP-' || n
+        'p', 'workspace', timestamp '2026-12-01' - n * interval '1 second', 'PP-' || n,
+        CASE WHEN n > 1000 AND n <= 3600 THEN 'local-' || (1 + n % 600) END
       FROM generate_series(1, 5152) n
       UNION ALL
-      SELECT 'unrelated-' || n, 'Unrelated issue', NULL, 'r', 'other', now(), 'RR-' || n
+      SELECT 'unrelated-' || n, 'Unrelated issue', NULL, 'r', 'other', now(), 'RR-' || n,
+        CASE WHEN n > 200 THEN 'unrelated-' || (1 + n % 150) END
       FROM generate_series(1, 30000) n
     `;
     await raw.$executeRaw`
@@ -209,9 +211,11 @@ test('workspace and multi-project lists return every visible row and field in on
       const [explain] = await raw.$queryRawUnsafe(
         'EXPLAIN (ANALYZE, FORMAT JSON) ' + query, ...JSON.parse(params),
       );
-      const rowsRead = largestRead(explain['QUERY PLAN'][0].Plan);
+      const { Plan, JIT } = explain['QUERY PLAN'][0];
+      const rowsRead = largestRead(Plan);
       t.diagnostic(`Largest issue or relation scan as ${userId}: ${rowsRead} rows`);
       assert.ok(rowsRead < 12000, `Scanned ${rowsRead} rows for 5,156 listed issues as ${userId}`);
+      assert.equal(JIT, undefined, `Unexpected query compilation for ${userId}`);
     }
 
     await assertReadBound();
