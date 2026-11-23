@@ -50,7 +50,7 @@ function fixture(options={}){
  if (options.role) target.workspace.members.find(m => m.userId === actor.id).role = options.role;
  const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,category:null,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
- const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],sourceRelations:[],createdAt:date(-60),...overrides});
+ const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],sourceRelations:[],agentRequestRole:null,createdAt:date(-60),...overrides});
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
  const visibleParent=issue('visible-parent',{projectId:sibling.id,project:sibling});
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus}),visibleParent];
@@ -443,7 +443,7 @@ test('Burn attributes the finish transition and recorded merge actor independent
  assert.doesNotMatch(JSON.stringify(burn), /External merger/);
 });
 
-test('Burn and Overview count ten work closures and report the six seat requests in their own table column', async () => {
+test('the Overview counts work alone and Burn keeps its requests handled', async () => {
  const result = await fixture({ overviewHistory: true, requests: true }).call();
  assert.equal(result.status, 200);
  const { burn, overview } = result.body;
@@ -456,7 +456,11 @@ test('Burn and Overview count ten work closures and report the six seat requests
  assert.equal(burn.contributors.find(row => row.agent).requestsHandled, 6);
  assert.equal(overview.closedByAgents, 10);
  assert.equal(overview.closedByAgentsPercent, 100);
- assert.equal(overview.stats.done, 16);
+ assert.equal(overview.stats.done, 10);
+ assert.equal(overview.stats.total, overview.stats.done + overview.stats.open);
+ assert.equal(overview.work.filter(item => item.done).length, 10);
+ assert.deepEqual(plain(overview.work.filter(item => /^closed-(9|1[0-4])$|^open-request$/.test(item.id))), []);
+ assert.equal(result.body.stats.completedIssues, 10);
 });
 
 test('Burn uses the readable linked issue assignee at merge time before the GitHub merge account', async () => {
