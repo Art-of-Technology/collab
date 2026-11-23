@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
-import { instructionLayers } from '@/lib/agent-role-catalogue';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -716,7 +716,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
     repository,
-    instructions: instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null }),
+    instructions: ROLE_CATALOGUE.instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null }),
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     movedFrom: last && last.userId !== issue.assigneeId ? { seat: last.seat?.name ?? null, pullRequest: pushed?.pullRequest ?? null, headCommit: pushed?.headCommit ?? null, branch,
