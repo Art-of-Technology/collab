@@ -472,3 +472,18 @@ test('the create-seat form offers a new catalogue entry', async () => {
     assert.ok(options.some(option => option.value === extraRole.id && option.textContent === extraRole.name));
   } finally { await React.act(async () => root.unmount()); }
 });
+
+test('a Planner seat is created from the form and reads its project\'s repository', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'plan');
+    await choose(0, 'p1');
+    await choose(1, 'planner');
+    await shows('From the project acme/app. Nothing to pick, nothing to type.');
+    answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'plan', token: 'collab_at_seat' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'plan', projectId: 'p1', role: 'planner', ownerId: null, expiresInDays: 90 }]);
+    await React.act(async () => buttons('Done')[0].click());
+  } finally { await React.act(async () => root.unmount()); }
+});
