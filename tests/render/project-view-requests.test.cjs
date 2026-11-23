@@ -165,6 +165,7 @@ async function withView(run, viewOverrides = {}) {
     await click('Display');
     await run({
       control, toggle, rows, listRequests, saves, click, settle, reload,
+      savedView: () => ({ ...view, ...saves.at(-1) }),
       retainBoardRows: () => { retainBoardRows = true; },
     });
   } finally {
@@ -218,3 +219,23 @@ test('switched on, the view asks for requests too', async () => {
     assert.deepEqual(saves.at(-1).fields, ['Priority']);
   }, { filters: { labels: ['reviews'] }, displayType: 'KANBAN' });
 });
+
+for (const sorting of [{ field: 'position', direction: 'asc' }, { field: 'manual', direction: 'desc' }]) {
+  test(`Set default keeps a saved ${sorting.field} ordering`, async () => {
+    await withView(async ({ toggle, click, settle, reload, saves, savedView }) => {
+      await toggle();
+      await settle();
+      await click('Set default');
+      assert.equal(saves.length, 1);
+      assert.deepEqual(savedView().sorting, sorting);
+
+      await reload();
+      await click('Display');
+      await toggle();
+      await settle();
+      await click('Set default');
+      assert.equal(saves.length, 2);
+      assert.deepEqual(savedView().sorting, sorting);
+    }, { sorting, displayType: 'KANBAN' });
+  });
+}
