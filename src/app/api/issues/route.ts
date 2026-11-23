@@ -97,14 +97,10 @@ function scopedIssueInclude(userId: string, readableIssue: Prisma.IssueWhereInpu
   } as const satisfies Prisma.IssueInclude;
 }
 
-// Keep issue IDs in PostgreSQL for relation lookups. Match the projections in LIST_INCLUDE.
-function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
-  const projects = projectIds.length
-    ? Prisma.sql`AND "projectId" IN (${Prisma.join(projectIds)})`
-    : Prisma.empty;
-  // Mirror issueReadAccessWhere and the active-issue extension before projecting issue data.
-  return prisma.$queryRaw<IssueListRow[]>`
-    WITH readable_workspaces AS MATERIALIZED (
+// Mirror issueReadAccessWhere and the active-issue extension in both reads.
+function readableIssues(userId: string) {
+  return Prisma.sql`
+    readable_workspaces AS MATERIALIZED (
       SELECT id FROM "Workspace" w
       WHERE w."ownerId" = ${userId} OR EXISTS (
         SELECT 1 FROM "WorkspaceMember" m
@@ -121,12 +117,30 @@ function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: st
         AND i."workspaceId" IN (SELECT id FROM readable_workspaces)
         AND p."workspaceId" IN (SELECT id FROM readable_workspaces)
         AND (i."statusId" IS NULL OR sp."workspaceId" IN (SELECT id FROM readable_workspaces))
-    ),
-    listed AS MATERIALIZED (
-      SELECT id, "parentId" FROM readable_issues
-      WHERE "workspaceId" = ${workspaceId}
-        AND (${includeRequests} OR "agentRequestRole" IS NULL)
-        ${projects}
+    )
+  `;
+}
+
+function workspaceIssueKeys(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
+  const projects = projectIds.length
+    ? Prisma.sql`AND "projectId" IN (${Prisma.join(projectIds)})`
+    : Prisma.empty;
+  return Prisma.sql`
+    WITH ${readableIssues(userId)}
+    SELECT id FROM readable_issues
+    WHERE "workspaceId" = ${workspaceId}
+      AND (${includeRequests} OR "agentRequestRole" IS NULL)
+      ${projects}
+    ORDER BY "updatedAt" DESC
+  `;
+}
+
+// Keep the relation projections in sync with LIST_INCLUDE.
+function workspaceIssueBatch(userId: string, ids: string[], includeRequests: boolean) {
+  return Prisma.sql`
+    WITH ${readableIssues(userId)}, listed AS MATERIALIZED (
+      -- These IDs passed the visibility predicate in this transaction's snapshot.
+      SELECT * FROM "Issue" WHERE id = ANY(${ids}::text[])
     ),
     hierarchy_ids AS (
       -- Resolve these keys together so skewed child counts don't inflate a per-issue plan.
@@ -163,7 +177,7 @@ function listWorkspaceIssues(userId: string, workspaceId: string, projectIds: st
       json_build_object('children', COALESCE(c.total, 0), 'comments', cm.total) AS _count,
       COALESCE(sr.rows, '[]') AS "sourceRelations",
       COALESCE(tr.rows, '[]') AS "targetRelations"
-    FROM listed JOIN "Issue" i ON i.id = listed.id AND i."workspaceId" = ${workspaceId}
+    FROM listed i
     JOIN "Project" p ON p.id = i."projectId"
     LEFT JOIN "User" a ON a.id = i."assigneeId"
     LEFT JOIN "User" r ON r.id = i."reporterId"
@@ -201,32 +215,56 @@ function presentIssue(issue: IssueListRow) {
   return Object.assign(fields, { issueRelations });
 }
 
-function workspaceIssueResponse(issues: IssueListRow[]) {
-  // Sort in memory by timestamp to avoid a PostgreSQL sort of the full projected rows.
-  // Pop from the end so the stream can release each batch as it sends it, newest first.
-  issues.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+async function workspaceIssueResponse(userId: string, keysQuery: Prisma.Sql, includeRequests: boolean) {
+  const batchSize = 512;
   const encoder = new TextEncoder();
+  const ready = Promise.withResolvers<void>();
+  let cancelled = false;
+  let started = false;
   let prefix = '{"issues":[';
   const body = new ReadableStream<Uint8Array>({
-    pull(controller) {
-      try {
-        const batch = [];
-        for (let index = 0; index < 64; index++) {
-          const issue = issues.pop();
-          if (!issue) break;
-          batch.push(presentIssue(issue));
+    start(controller) {
+      // The key list and body rows share a snapshot. Drain each batch into
+      // encoded chunks without waiting for the browser to read them.
+      void prisma.$transaction(async tx => {
+        const keys = await tx.$queryRaw<{ id: string }[]>(keysQuery);
+        for (let offset = 0; offset < keys.length && !cancelled; offset += batchSize) {
+          const ids = keys.slice(offset, offset + batchSize).map(key => key.id);
+          const rows = await tx.$queryRaw<IssueListRow[]>(workspaceIssueBatch(userId, ids, includeRequests));
+          if (cancelled) return;
+          rows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+          for (let index = 0; index < rows.length; index += 64) {
+            const batch = rows.slice(index, index + 64).map(presentIssue);
+            controller.enqueue(encoder.encode(prefix + JSON.stringify(batch).slice(1, -1)));
+            prefix = ',';
+            if (!started) {
+              started = true;
+              ready.resolve();
+            }
+          }
         }
-        const done = issues.length === 0;
-        const rows = JSON.stringify(batch).slice(1, -1);
-        controller.enqueue(encoder.encode(prefix + rows + (done ? ']}' : '')));
-        if (done) controller.close();
-        prefix = ',';
-      } catch (error) {
-        console.error('[ISSUES_GET]', error);
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        // Match the default pool wait for a regular Prisma query.
+        maxWait: 10_000,
+        timeout: 30_000,
+      }).then(() => {
+        if (cancelled) return;
+        controller.enqueue(encoder.encode(started ? ']}' : '{"issues":[]}'));
+        controller.close();
+        ready.resolve();
+      }).catch(error => {
+        if (cancelled) return;
         controller.error(error);
-      }
+        if (started) console.error('[ISSUES_GET]', error);
+        else ready.reject(error);
+      });
+    },
+    cancel() {
+      cancelled = true;
     },
   });
+  await ready.promise;
   return new Response(body, { headers: { 'content-type': 'application/json' } });
 }
 
@@ -267,8 +305,8 @@ export async function GET(request: NextRequest) {
 
     const includeRequests = searchParams.get('requests') === '1';
     if (!milestoneId && projectIds.length !== 1) {
-      const issues = await listWorkspaceIssues(session.user.id, workspaceId, projectIds, includeRequests);
-      return workspaceIssueResponse(issues);
+      const keys = workspaceIssueKeys(session.user.id, workspaceId, projectIds, includeRequests);
+      return await workspaceIssueResponse(session.user.id, keys, includeRequests);
     }
 
     const readableIssue = issueReadAccessWhere(session.user.id);
