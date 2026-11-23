@@ -243,7 +243,12 @@ async function workspaceIssueResponse(userId: string, keysQuery: Prisma.Sql, inc
             }
           }
         }
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30_000 }).then(() => {
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        // Match the default pool wait for a regular Prisma query.
+        maxWait: 10_000,
+        timeout: 30_000,
+      }).then(() => {
         if (cancelled) return;
         controller.enqueue(encoder.encode(started ? ']}' : '{"issues":[]}'));
         controller.close();
