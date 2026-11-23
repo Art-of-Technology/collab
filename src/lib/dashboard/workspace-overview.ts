@@ -1,26 +1,32 @@
 import 'server-only';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
 import { prisma } from '@/lib/prisma';
-import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import type { DashboardScope, WorkspaceIssueOverview } from '@/types/workspace-dashboard';
 
 const projectSelect = { id: true, slug: true, name: true, color: true } as const;
-const issueSelect = {
-  id: true, issueKey: true, title: true, status: true, statusValue: true,
-  dueDate: true, updatedAt: true, project: { select: projectSelect },
-  projectStatus: { select: { displayName: true } },
-} as const satisfies Prisma.IssueSelect;
-const statusFields = ['projectId', 'statusId', 'status', 'statusValue'] as const;
+// ECMAScript trim() whitespace, including non-breaking spaces in legacy status values.
+const statusWhitespace = '\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004'
+  + '\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
 
-type StatusGroup = {
+type IssueTotals = {
   projectId: string;
-  statusId: string | null;
-  status: string | null;
-  statusValue: string | null;
-  _count: { id: number };
+  openIssues: bigint;
+  overdueIssues: bigint;
+  dueSoonIssues: bigint;
+  lastIssueUpdatedAt: Date;
+};
+
+type PreviewIssue = {
+  id: string;
+  issueKey: string | null;
+  title: string;
+  projectId: string;
+  status: string;
+  dueDate: Date | null;
+  updatedAt: Date;
 };
 
 export async function loadWorkspaceIssueOverview({
@@ -52,72 +58,83 @@ export async function loadWorkspaceIssueOverview({
     } satisfies Prisma.ProjectWhereInput;
     const projects = await prisma.project.findMany({ where: activeProjects, select: projectSelect });
     const projectIds = projects.map(project => project.id);
-    const statuses = projectIds.length ? await prisma.projectStatus.findMany({
-      where: { projectId: { in: projectIds }, project: activeProjects },
-      select: { id: true, projectId: true, isFinal: true },
-    }) : [];
-    const statusIdsByProject = new Map<string, string[]>();
-    for (const status of statuses) statusIdsByProject.set(status.projectId, [...statusIdsByProject.get(status.projectId) ?? [], status.id]);
-    const scopedIssues = {
-      workspaceId,
-      projectId: { in: projectIds },
-      project: activeProjects,
-      ...(scope === 'mine' ? { assigneeId: actorId } : {}),
-      // A linked status must belong to the issue's own project. Plain columns, not a relation filter per
-      // project: each relation filter is one more join, and 75 of them took PostgreSQL seconds to plan.
-      AND: [issueReadAccessWhere(actorId), {
-        OR: [{ statusId: null }, ...projects.flatMap(project => {
-          const statusIds = statusIdsByProject.get(project.id);
-          return statusIds ? [{ projectId: project.id, statusId: { in: statusIds } }] : [];
-        })],
-      }],
-    } satisfies Prisma.IssueWhereInput;
     const soon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const finalIds = new Set(statuses.filter(status => status.isFinal).map(status => status.id));
-    // A linked project status is authoritative; legacy strings apply only without a statusId.
-    const isOpen = (group: StatusGroup) => group.statusId !== null
-      ? !finalIds.has(group.statusId)
-      : !LEGACY_FINAL_STATUSES.has((group.statusValue?.trim() || group.status?.trim() || '').toLowerCase());
+    // Prisma stores DateTime columns as UTC timestamps without a time zone.
+    const nowUtc = Prisma.sql`(${now}::timestamptz AT TIME ZONE 'UTC')`;
+    const soonUtc = Prisma.sql`(${soon}::timestamptz AT TIME ZONE 'UTC')`;
+    // Raw reads must apply workspace access and Trash visibility themselves.
+    // The status join also verifies that a linked status belongs to the issue's project.
+    const scopedIssues = Prisma.sql`
+      WITH scoped_issues AS (
+        SELECT i.id, i."issueKey", i.title, i."projectId", i."dueDate", i."updatedAt",
+          COALESCE(NULLIF(s."displayName", ''), NULLIF(i."statusValue", ''), NULLIF(i.status, ''), 'Unknown') AS status,
+          CASE WHEN i."statusId" IS NOT NULL THEN NOT s."isFinal"
+            ELSE lower(COALESCE(NULLIF(btrim(i."statusValue", ${statusWhitespace}), ''),
+              btrim(i.status, ${statusWhitespace}), '') COLLATE "C") NOT IN (${Prisma.join([...LEGACY_FINAL_STATUSES])})
+          END AS "isOpen"
+        FROM "Issue" i
+        JOIN "Project" p ON p.id = i."projectId" AND p."workspaceId" = i."workspaceId"
+        JOIN "Workspace" w ON w.id = p."workspaceId"
+        LEFT JOIN "ProjectStatus" s ON s.id = i."statusId" AND s."projectId" = p.id
+        WHERE w.id = ${workspaceId}
+          AND (w."ownerId" = ${actorId} OR EXISTS (
+            SELECT 1 FROM "WorkspaceMember" m
+            WHERE m."workspaceId" = w.id AND m."userId" = ${actorId} AND m.status
+          ))
+          AND p.id = ANY(${projectIds}::text[])
+          AND p."isArchived" IS NOT TRUE
+          AND i."deletedAt" IS NULL
+          AND (i."statusId" IS NULL OR s.id IS NOT NULL)
+          AND (${scope !== 'mine'} OR i."assigneeId" = ${actorId})
+      )
+    `;
+    const previewFields = Prisma.sql`id, "issueKey", title, "projectId", status, "dueDate", "updatedAt"`;
+    const [totals, attentionIssues, recentIssues] = projects.length ? await Promise.all([
+      prisma.$queryRaw<IssueTotals[]>`
+        ${scopedIssues}
+        SELECT "projectId", COUNT(*) FILTER (WHERE "isOpen") AS "openIssues",
+          COUNT(*) FILTER (WHERE "isOpen" AND "dueDate" < ${nowUtc}) AS "overdueIssues",
+          COUNT(*) FILTER (WHERE "isOpen" AND "dueDate" BETWEEN ${nowUtc} AND ${soonUtc}) AS "dueSoonIssues",
+          MAX("updatedAt") AS "lastIssueUpdatedAt"
+        FROM scoped_issues
+        GROUP BY "projectId"
+      `,
+      prisma.$queryRaw<PreviewIssue[]>`
+        ${scopedIssues}
+        SELECT ${previewFields} FROM scoped_issues
+        WHERE "isOpen" AND "dueDate" <= ${soonUtc}
+        ORDER BY "dueDate" ASC, id ASC
+        LIMIT 8
+      `,
+      prisma.$queryRaw<PreviewIssue[]>`
+        ${scopedIssues}
+        SELECT ${previewFields} FROM scoped_issues
+        ORDER BY "updatedAt" DESC, id ASC
+        LIMIT 6
+      `,
+    ]) : [[], [], []];
 
-    const [allGroups, overdueGroups, soonGroups, recentIssues] = projectIds.length ? await Promise.all([
-      prisma.issue.groupBy({ by: [...statusFields], where: scopedIssues, _count: { id: true }, _max: { updatedAt: true } }),
-      prisma.issue.groupBy({ by: [...statusFields], where: { ...scopedIssues, dueDate: { lt: now } }, _count: { id: true } }),
-      prisma.issue.groupBy({ by: [...statusFields], where: { ...scopedIssues, dueDate: { gte: now, lte: soon } }, _count: { id: true } }),
-      prisma.issue.findMany({ where: scopedIssues, select: issueSelect, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 6 }),
-    ]) : [[], [], [], []];
-    const openGroups = allGroups.filter(isOpen);
-    const attentionIssues = openGroups.length ? await prisma.issue.findMany({
-      where: {
-        AND: [scopedIssues, { OR: openGroups.map(({ projectId, statusId, status, statusValue }) => ({ projectId, statusId, status, statusValue })) }],
-        dueDate: { lte: soon },
-      },
-      select: issueSelect,
-      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
-      take: 8,
-    }) : [];
-
-    const rows = new Map(projects.map(project => [project.id, {
-      ...project, openIssues: 0, overdueIssues: 0, dueSoonIssues: 0, lastIssueUpdatedAt: null as string | null,
-    }]));
-    for (const group of allGroups) {
-      const row = rows.get(group.projectId)!;
-      if (isOpen(group)) row.openIssues += group._count.id;
-      const updatedAt = group._max.updatedAt?.toISOString();
-      if (updatedAt && (!row.lastIssueUpdatedAt || updatedAt > row.lastIssueUpdatedAt)) row.lastIssueUpdatedAt = updatedAt;
-    }
-    for (const group of overdueGroups) if (isOpen(group)) rows.get(group.projectId)!.overdueIssues += group._count.id;
-    for (const group of soonGroups) if (isOpen(group)) rows.get(group.projectId)!.dueSoonIssues += group._count.id;
-
-    const allRows = [...rows.values()];
+    const projectsById = new Map(projects.map(project => [project.id, project]));
+    const totalsByProject = new Map(totals.map(row => [row.projectId, row]));
+    const allRows = projects.map(project => {
+      const row = totalsByProject.get(project.id);
+      return {
+        ...project,
+        openIssues: Number(row?.openIssues ?? 0),
+        overdueIssues: Number(row?.overdueIssues ?? 0),
+        dueSoonIssues: Number(row?.dueSoonIssues ?? 0),
+        lastIssueUpdatedAt: row?.lastIssueUpdatedAt.toISOString() ?? null,
+      };
+    });
     const search = projectSearch.trim().slice(0, 120);
     const matchingRows = allRows.filter(project => `${project.name} ${project.slug}`.toLowerCase().includes(search.toLowerCase()));
     matchingRows.sort((a, b) => b.overdueIssues - a.overdueIssues || b.dueSoonIssues - a.dueSoonIssues
       || (b.lastIssueUpdatedAt || '').localeCompare(a.lastIssueUpdatedAt || '') || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     const projectPages = Math.max(1, Math.ceil(matchingRows.length / 10));
     const page = Math.max(1, Math.min(projectPages, Number.isFinite(projectPage) ? Math.floor(projectPage) : 1));
-    const serialize = (issue: Prisma.IssueGetPayload<{ select: typeof issueSelect }>) => ({
-      id: issue.id, issueKey: issue.issueKey, title: issue.title, project: issue.project,
-      status: issue.projectStatus?.displayName || issue.statusValue || issue.status || 'Unknown',
+    const serialize = (issue: PreviewIssue) => ({
+      id: issue.id, issueKey: issue.issueKey, title: issue.title, project: projectsById.get(issue.projectId)!,
+      status: issue.status,
       dueDate: issue.dueDate?.toISOString() || null, updatedAt: issue.updatedAt.toISOString(),
     });
     return {
