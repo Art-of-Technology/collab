@@ -164,6 +164,8 @@ test('the reply word the seat marked as recommended or suggested is the suggeste
   await waiting('listed');
   await waiting('inline');
   await waiting('none');
+  await waiting('bare-list');
+  await seatComment('bare-list', 'Please choose.\n1. `wait`\n\n2. `go` (suggested)');
   await seatComment('listed', [
     'Please choose how to resolve the contract gap.',
     '',
@@ -176,7 +178,10 @@ test('the reply word the seat marked as recommended or suggested is the suggeste
   await seatComment('none', 'Expected reply after the check: `CLB-938 used`.');
   const rows = Object.fromEntries((await read()).items.map(row => [row.issue.id, [row.options, row.suggested]]));
   assert.deepEqual(rows, {
-    listed: [['classify', 'revise'], 'classify'], inline: [['revise', 'classify'], 'classify'], none: [['CLB-938 used'], null],
+    listed: [['classify', 'revise'], 'classify'],
+    inline: [['revise', 'classify'], 'classify'],
+    none: [['CLB-938 used'], null],
+    'bare-list': [['wait', 'go'], 'go'],
   });
 });
 
