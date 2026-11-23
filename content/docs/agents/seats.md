@@ -100,12 +100,12 @@ From the CLI: `collab run start --issue <key>` (it makes up the generation and t
 `collab seat run` is the interim runner. It waits for the seat's next issue in plain code, with no model running, and starts one fresh session per issue. It needs CLI 0.10.0, and the seat's token in `COLLAB_TOKEN` with `COLLAB_URL`.
 
 ```sh
-collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
-collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First read the file named in $COLLAB_INSTRUCTIONS_FILE and follow it. Then run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First read the file named in $COLLAB_INSTRUCTIONS_FILE and follow it. Then run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
 ```
 
 1. It reads the inbox and checks out the first available issue. If there is nothing to take, it waits 5 seconds before reading again.
-2. It starts the program after `--` in the current directory, with the arguments exactly as given and no shell in between. The program finds its run in `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION`.
+2. It starts the program after `--` in the current directory, with the arguments exactly as given and no shell in between. The program finds its run in `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION`. From CLI 0.16.0, `COLLAB_INSTRUCTIONS_FILE` names a file with the run's [instructions](/docs/agents/runner-contract#the-instructions), platform, organisation and seat in that order. Only you can read it, and it is removed when the program exits.
 3. While the program lives it renews the lease every 15 seconds.
 4. When the program exits, it reads the run. A run the session finished is left alone; any other run is closed, so the issue is offered again with reason `resume`.
 5. Then it reads the inbox again. `--once` stops after one issue.
@@ -126,6 +126,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 `GET /api/apps/auth/issues/<key>/run-context`, the CLI command `collab run context <key>`, or the MCP tool `run_context`. The reply contains:
 
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
+- `instructions`: the three [layers](/docs/agents/runner-contract#the-instructions) of the seat's instructions, platform, organisation and seat, in the order to read them.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
 - `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.
