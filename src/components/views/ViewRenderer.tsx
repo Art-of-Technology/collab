@@ -29,6 +29,7 @@ import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/
 import { useProjects } from '@/hooks/queries/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
+import { readIssueList } from '@/lib/issue-list-snapshot';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
 import { NewIssueModal } from '@/components/issue';
@@ -303,7 +304,7 @@ export default function ViewRenderer({
       });
       const response = await fetch(`/api/issues?${params}`);
       if (!response.ok) throw new Error('Failed to fetch additional issues');
-      return response.json();
+      return readIssueList(await response.json());
     },
     enabled: additionalProjectIds.length > 0,
     staleTime: 5000,

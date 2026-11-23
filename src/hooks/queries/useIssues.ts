@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { readIssueList } from '@/lib/issue-list-snapshot';
 
 export interface CreateIssueData {
   title: string;
@@ -75,7 +76,7 @@ export function useIssuesByWorkspace(
       if (!response.ok) {
         throw new Error('Failed to fetch issues');
       }
-      return response.json();
+      return readIssueList(await response.json());
     },
     enabled: !!workspaceId,
     // More reasonable caching with proper invalidation

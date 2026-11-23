@@ -90,6 +90,10 @@ test('workspace and multi-project lists return every visible row and field', asy
       return super.encode(input);
     }
   }
+  // The browser reads every list through this.
+  const snapshots = load('src/lib/issue-list-snapshot.ts', {
+    '@/utils/issueRelations': load('src/utils/issueRelations.ts'),
+  });
   const { GET } = load('src/app/api/issues/route.ts', {
     'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: userId } }) },
@@ -101,14 +105,17 @@ test('workspace and multi-project lists return every visible row and field', asy
     '@/lib/notification-service': {},
     '@/lib/event-bus': {},
     '@/utils/issueRelations': load('src/utils/issueRelations.ts'),
+    '@/lib/issue-list-snapshot': snapshots,
   }, {
     URL, Response, ReadableStream, TextEncoder: IssueEncoder,
     console: { ...console, error: (...args) => errors.push(args) },
   });
   const list = query => GET(new Request(`https://example.test/api/issues?${query}`));
+  const { readIssueList } = snapshots;
   const readRows = async response => {
     assert.equal(response.status, 200);
-    const { issues } = await response.json();
+    // structuredClone keeps undefined fields and moves the rows out of the module's realm.
+    const { issues } = structuredClone(readIssueList(await response.json()));
     for (const issue of issues) {
       // SQL does not promise an order inside these arrays.
       issue.children.sort((a, b) => a.id.localeCompare(b.id));
@@ -126,6 +133,10 @@ test('workspace and multi-project lists return every visible row and field', asy
     const ids = requests ? ['parent', 'child', 'request', 'follow-up', 'retained-child']
       : ['parent', 'child', 'follow-up', 'retained-child'];
     for (const projects of ['', '&projectIds=p,q,r', '&projectIds=q,missing']) {
+      const body = await (await list('workspaceId=workspace' + requests + projects)).text();
+      const { snapshot } = JSON.parse(body);
+      assert.deepEqual(snapshot.projects.map(project => project.id).sort(), projects === '&projectIds=q,missing' ? ['q'] : ['p', 'q']);
+      assert.equal(body.split('"Project Q"').length - 1, 1, 'a shared record is sent once');
       issueQueries.length = 0;
       const issues = await readRows(await list('workspaceId=workspace' + requests + projects));
       if (projects === '&projectIds=q,missing') {
@@ -233,6 +244,10 @@ test('workspace and multi-project lists return every visible row and field', asy
     assert.equal(expected.length, 5156);
     assert.equal(issueQueries.length, 1, 'a broad list reads every issue in one database statement');
     assert.equal(statements.length, 2, 'the workspace access check and the snapshot read are the only statements');
+    const text = await (await list('workspaceId=workspace')).text();
+    assert.equal(text.split('"Project P"').length - 1, 1, 'the project is sent once, not on each row');
+    assert.ok(text.length < JSON.stringify({ issues: expected }).length * 0.9,
+      `the snapshot (${text.length} bytes) is smaller than the expanded rows`);
 
     function largestRead(plan) {
       const rows = ['Issue', 'IssueComment', 'issue_relations', '_IssueToLabel'].includes(plan['Relation Name'])
@@ -284,7 +299,7 @@ test('workspace and multi-project lists return every visible row and field', asy
       }
     });
 
-    failEncoding = '{"issues":[';
+    failEncoding = '{"snapshot":';
     assert.equal((await list('workspaceId=workspace')).status, 500);
     failEncoding = ',';
     const interrupted = await list('workspaceId=workspace');
