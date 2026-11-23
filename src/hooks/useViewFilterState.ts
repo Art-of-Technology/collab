@@ -348,11 +348,14 @@ export function useViewFilterState({ view }: UseViewFilterStateOptions) {
   const getConfigForSave = useCallback(() => ({
     displayType: activeConfig.layout,
     grouping: { field: activeConfig.groupBy },
-    sorting: { field: activeConfig.sortBy, direction: 'desc' },
+    // Keep the saved ordering unless the person chose another one.
+    sorting: activeConfig.sortBy === savedConfig.sortBy && view.sorting
+      ? view.sorting
+      : { field: activeConfig.sortBy, direction: 'desc' },
     fields: activeConfig.displayProperties,
     projectIds: activeConfig.projectIds,
     filters: getFiltersForSave(),
-  }), [activeConfig, getFiltersForSave]);
+  }), [activeConfig, savedConfig.sortBy, view.sorting, getFiltersForSave]);
 
   // ─── Reset URL on view change ────────────────────────
 
