@@ -130,6 +130,8 @@ test('a reply that belongs on another issue names that issue, and only one the v
     ['missing', 'Comment `yes` on CLB-12.\nExpected reply: `yes`.'],
     ['ambiguous', 'Reply on ADS-52 or CLB-933 with `yes`.'],
     ['own', 'Reply on CLB-20 with `yes`.'],
+    ['aside', 'I left a comment on ADS-52 about the schema.\nReply `yes` to merge this pull request, or `wait`.'],
+    ['in-reply', 'Please decide.\nReply with `yes` or `wait` in a comment on ADS-52.'],
   ];
   for (const [id, content] of destinations) {
     await waiting(id, { issueKey: id === 'own' ? 'CLB-20' : id.toUpperCase() });
@@ -140,6 +142,10 @@ test('a reply that belongs on another issue names that issue, and only one the v
   assert.equal(rows.get('visible').canAct, false);
   assert.deepEqual(rows.get('visible').replyOn, { id: 'visible-target', issueKey: 'ADS-52' });
   assert.equal(rows.get('own').ask, 'here');
+  assert.equal(rows.get('aside').ask, 'here');
+  assert.equal(rows.get('aside').replyOn, null);
+  assert.deepEqual(rows.get('aside').options, ['yes', 'wait']);
+  assert.deepEqual(rows.get('in-reply').replyOn, { id: 'visible-target', issueKey: 'ADS-52' });
   for (const [id, key] of [['hidden', 'CLB-933'], ['foreign', 'FOR-5'], ['trashed', 'CLB-15'], ['missing', 'CLB-12'],
     ['ambiguous', 'CLB-933']]) {
     const row = rows.get(id);

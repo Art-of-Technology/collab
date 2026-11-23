@@ -18,7 +18,11 @@ const listItem = /^[ \t]*(?:\d+[.)]|[-*+])[ \t]+/;
 const replyListItem = /^[ \t]*(?:\d+[.)]|[-*+])[ \t]+`([^`]+)`/;
 const replyMarker = /\brepl(?:y|ies)\b|\bas a comment on\b|\b(?:reply|comment)\s+`[^`]+`\s+on\b/i;
 const recommendation = /\b(?:recommend(?:ed)?|suggest\w*)\b/i;
-const destinationLead = /\b(?:repl(?:y|ies)(?:\s+belongs?)?|(?:as a )?comment)(?:\s+`[^`]+`)?\s+on\s+/gi;
+const replyLead = '(?:repl(?:y|ies)(?:\\s+belongs?)?|(?:as a )?comment)';
+// "Reply on", "as a comment on" and "comment `word` on" name a destination anywhere in the comment;
+// a bare "comment on" does so only in the reply part, so a remark like "I left a comment on X" is not one.
+const destinationLead = new RegExp(`\\b(?:${replyLead}\\s+\`[^\`]+\`|repl(?:y|ies)(?:\\s+belongs?)?|as a comment)\\s+on\\s+`, 'gi');
+const replyPartLead = new RegExp(`\\b${replyLead}(?:\\s+\`[^\`]+\`)?\\s+on\\s+`, 'gi');
 const destinationKey = new RegExp(
   `^(?:\`?(${issueKeyPattern})\\b|\\[[^\\]\\r\\n]*\\]\\([^\\s)]*/(${issueKeyPattern})\\b[^\\s)]*\\))`, 'i',
 );
@@ -60,7 +64,8 @@ function replyDetails(content: string) {
 
   const options: string[] = [];
   let suggested: string | null = null;
-  for (const item of start < 0 ? [] : lines.slice(start).join('\n').split(/\n(?=\s*(?:\d+[.)]|[-*+])\s+)/)) {
+  const replyPart = start < 0 ? '' : lines.slice(start).join('\n');
+  for (const item of start < 0 ? [] : replyPart.split(/\n(?=\s*(?:\d+[.)]|[-*+])\s+)/)) {
     const matches = [...item.matchAll(/(?<!`)`([^`\r\n]+)`(?!`)/g)];
     for (const [index, match] of matches.entries()) {
       const word = match[1].trim();
@@ -82,8 +87,11 @@ function replyDetails(content: string) {
   }
 
   const destinations = new Set<string>();
-  for (const lead of content.matchAll(destinationLead)) {
-    let rest = content.slice(lead.index + lead[0].length);
+  const leads = [
+    ...[...content.matchAll(destinationLead)].map(lead => content.slice(lead.index + lead[0].length)),
+    ...[...replyPart.matchAll(replyPartLead)].map(lead => replyPart.slice(lead.index + lead[0].length)),
+  ];
+  for (let rest of leads) {
     for (let match = destinationKey.exec(rest); match; match = destinationKey.exec(rest)) {
       destinations.add((match[1] || match[2]).toUpperCase());
       rest = rest.slice(match[0].length).replace(/^`/, '');
