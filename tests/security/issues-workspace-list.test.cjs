@@ -5,7 +5,7 @@ const { tmpdir, userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
 const { Prisma, PrismaClient } = require('@prisma/client');
 
-test('workspace and multi-project lists return every visible row and field in one issue statement', async t => {
+test('workspace and multi-project lists return every visible row and field', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'collab-issues-list-'));
   const bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
   const data = join(directory, 'data');
@@ -28,7 +28,22 @@ test('workspace and multi-project lists return every visible row and field in on
   const url = `postgresql://${encodeURIComponent(username)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
   raw = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
   const { issueVisibilityExtension } = load('src/lib/issue-visibility.ts');
-  const prisma = raw.$extends(issueVisibilityExtension(Prisma.dmmf.datamodel.models));
+  const statements = [];
+  const batchQueries = [];
+  raw.$on('query', event => statements.push(event));
+  let beforeIssueRows;
+  const prisma = raw.$extends(issueVisibilityExtension(Prisma.dmmf.datamodel.models)).$extends({
+    query: {
+      async $queryRaw({ args, query }) {
+        const rows = await query(args);
+        if (typeof rows[0]?.title === 'string') {
+          batchQueries.push({ ...statements.at(-1), rowCount: rows.length });
+          await beforeIssueRows?.(rows.length);
+        }
+        return rows;
+      },
+    },
+  });
 
   await raw.user.createMany({ data: [{ id: 'owner', name: 'Owner', email: 'owner@example.test' }, { id: 'member' }] });
   await raw.workspace.createMany({ data: ['workspace', 'other'].map(id => ({ id, name: id, slug: id, ownerId: 'owner' })) });
@@ -103,9 +118,6 @@ test('workspace and multi-project lists return every visible row and field in on
     }
     return issues;
   };
-  const statements = [];
-  raw.$on('query', event => statements.push(event));
-
   for (const requests of ['', '&requests=1']) {
     const expected = [];
     for (const project of ['p', 'q']) {
@@ -116,7 +128,7 @@ test('workspace and multi-project lists return every visible row and field in on
     const ids = requests ? ['parent', 'child', 'request', 'follow-up', 'retained-child']
       : ['parent', 'child', 'follow-up', 'retained-child'];
     for (const projects of ['', '&projectIds=p,q,r', '&projectIds=q,missing']) {
-      statements.length = 0;
+      batchQueries.length = 0;
       const issues = await readRows(await list('workspaceId=workspace' + requests + projects));
       if (projects === '&projectIds=q,missing') {
         assert.deepEqual(issues, expected.filter(issue => issue.projectId === 'q'));
@@ -128,7 +140,7 @@ test('workspace and multi-project lists return every visible row and field in on
         assert.deepEqual(issues[0].issueRelations.relates_to, []);
       }
       assert.equal(issues.at(-1).parent, null);
-      assert.equal(statements.length, 2, 'one membership statement and one issue statement');
+      assert.equal(batchQueries.length, 1, 'one batch for a small list');
     }
   }
 
@@ -208,7 +220,7 @@ test('workspace and multi-project lists return every visible row and field in on
       expected.push(...await readRows(await list('workspaceId=workspace&projectIds=' + project)));
     }
     expected.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    statements.length = 0;
+    batchQueries.length = 0;
     const response = await list('workspaceId=workspace');
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /^application\/json\b/);
@@ -220,7 +232,8 @@ test('workspace and multi-project lists return every visible row and field in on
     await cancel;
     assert.ok(first.value.byteLength < 1024 * 1024, 'the response sends a small first chunk');
     assert.equal(expected.length, 5156);
-    assert.equal(statements.length, 2);
+    assert.equal(batchQueries.reduce((total, batch) => total + batch.rowCount, 0), expected.length);
+    assert.ok(batchQueries.every(batch => batch.rowCount <= 512));
 
     function largestRead(plan) {
       const rows = ['Issue', 'IssueComment', 'issue_relations', '_IssueToLabel'].includes(plan['Relation Name'])
@@ -234,27 +247,71 @@ test('workspace and multi-project lists return every visible row and field in on
     }
 
     async function assertReadBound() {
-      const { query, params } = statements.at(-1);
-      const [explain] = await raw.$queryRawUnsafe(
-        'EXPLAIN (ANALYZE, FORMAT JSON) ' + query, ...JSON.parse(params),
-      );
-      const { Plan, JIT } = explain['QUERY PLAN'][0];
-      const rowsRead = largestRead(Plan);
-      t.diagnostic(`Largest issue or relation scan as ${userId}: ${rowsRead} rows`);
-      assert.ok(rowsRead < 12000, `Scanned ${rowsRead} rows for 5,156 listed issues as ${userId}`);
-      assert.equal(JIT, undefined, `Unexpected query compilation for ${userId}`);
-      assert.equal(sortSpills(Plan), false, `Broad issue ordering spilled to disk for ${userId}`);
+      let maxRead = 0;
+      for (const { query, params } of batchQueries) {
+        const [explain] = await raw.$queryRawUnsafe(
+          'EXPLAIN (ANALYZE, FORMAT JSON) ' + query, ...JSON.parse(params),
+        );
+        const { Plan, JIT } = explain['QUERY PLAN'][0];
+        maxRead = Math.max(maxRead, largestRead(Plan));
+        assert.equal(JIT, undefined, `Unexpected query compilation for ${userId}`);
+        assert.equal(sortSpills(Plan), false, `Issue batch spilled to disk for ${userId}`);
+      }
+      t.diagnostic(`Largest issue or relation scan as ${userId}: ${maxRead} rows`);
+      assert.ok(maxRead < 12000, `Scanned ${maxRead} rows for one batch as ${userId}`);
     }
 
     await assertReadBound();
     userId = 'owner';
     try {
+      batchQueries.length = 0;
       const rows = await readRows(await list('workspaceId=workspace'));
       assert.deepEqual(rows.map(issue => issue.id), expected.map(issue => issue.id));
       await assertReadBound();
     } finally {
       userId = 'member';
     }
+
+    await t.test('the body starts before later batches finish and retains the original snapshot', async () => {
+      const heldRows = Promise.withResolvers();
+      const releaseRows = Promise.withResolvers();
+      let totalRows = 0;
+      beforeIssueRows = async rowCount => {
+        totalRows += rowCount;
+        if (totalRows > 512) {
+          heldRows.resolve();
+          await releaseRows.promise;
+        }
+      };
+      const response = list('workspaceId=workspace');
+      let reader;
+      try {
+        const firstChunk = response.then(async reply => {
+          assert.equal(reply.status, 200);
+          reader = reply.body.getReader();
+          return (await reader.read()).value;
+        });
+        const chunk = await Promise.race([
+          firstChunk,
+          heldRows.promise.then(() => assert.fail('The response waited for more than the first 512 rows')),
+        ]);
+        await heldRows.promise;
+        const last = expected.at(-1);
+        await raw.issue.update({ where: { id: last.id }, data: { title: 'Changed after the first batch' } });
+        releaseRows.resolve();
+        const chunks = [chunk];
+        for (;;) {
+          const next = await reader.read();
+          if (next.done) break;
+          chunks.push(next.value);
+        }
+        assert.deepEqual(await readRows(new Response(Buffer.concat(chunks))), expected);
+      } finally {
+        releaseRows.resolve();
+        beforeIssueRows = undefined;
+        await reader?.cancel();
+      }
+    });
 
     failEncoding = true;
     const interrupted = await list('workspaceId=workspace');
