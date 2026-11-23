@@ -29,17 +29,15 @@ test('workspace and multi-project lists return every visible row and field', asy
   raw = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
   const { issueVisibilityExtension } = load('src/lib/issue-visibility.ts');
   const statements = [];
-  const batchQueries = [];
+  const issueQueries = [];
+  let afterIssueRead;
   raw.$on('query', event => statements.push(event));
-  let beforeIssueRows;
   const prisma = raw.$extends(issueVisibilityExtension(Prisma.dmmf.datamodel.models)).$extends({
     query: {
       async $queryRaw({ args, query }) {
         const rows = await query(args);
-        if (typeof rows[0]?.title === 'string') {
-          batchQueries.push({ ...statements.at(-1), rowCount: rows.length });
-          await beforeIssueRows?.(rows.length);
-        }
+        issueQueries.push(statements.at(-1));
+        await afterIssueRead?.();
         return rows;
       },
     },
@@ -55,7 +53,7 @@ test('workspace and multi-project lists return every visible row and field', asy
   ] });
   await raw.projectStatus.create({ data: { id: 'status', projectId: 'p', name: 'done', displayName: 'Done', order: 4 } });
   await raw.issue.createMany({ data: [
-    { id: 'parent', projectId: 'p', description: 'Full description saved in the view', dueDate: new Date('2026-11-18'), statusId: 'status', assigneeId: 'member', reporterId: 'owner' },
+    { id: 'parent', projectId: 'p', description: 'Full description with "quotes" and a tab\t— saved in the view', dueDate: new Date('2026-11-18T07:09:11.012Z'), statusId: 'status', assigneeId: 'member', reporterId: 'owner' },
     { id: 'child', projectId: 'q', parentId: 'parent', milestoneId: 'parent' },
     { id: 'request', projectId: 'p', parentId: 'parent', agentRequestRole: 'review' },
     { id: 'follow-up', projectId: 'q', parentId: 'request' },
@@ -83,12 +81,12 @@ test('workspace and multi-project lists return every visible row and field', asy
   await raw.$executeRaw`ALTER TABLE "Issue" ADD COLUMN "stagedField" text DEFAULT 'fixture'`;
 
   let userId = 'member';
-  let failEncoding = false;
+  let failEncoding;
   const streamError = new Error('Could not encode the next issue batch');
   const errors = [];
   class IssueEncoder extends TextEncoder {
     encode(input) {
-      if (failEncoding && input.startsWith(',')) throw streamError;
+      if (failEncoding && input.startsWith(failEncoding)) throw streamError;
       return super.encode(input);
     }
   }
@@ -128,7 +126,7 @@ test('workspace and multi-project lists return every visible row and field', asy
     const ids = requests ? ['parent', 'child', 'request', 'follow-up', 'retained-child']
       : ['parent', 'child', 'follow-up', 'retained-child'];
     for (const projects of ['', '&projectIds=p,q,r', '&projectIds=q,missing']) {
-      batchQueries.length = 0;
+      issueQueries.length = 0;
       const issues = await readRows(await list('workspaceId=workspace' + requests + projects));
       if (projects === '&projectIds=q,missing') {
         assert.deepEqual(issues, expected.filter(issue => issue.projectId === 'q'));
@@ -140,7 +138,7 @@ test('workspace and multi-project lists return every visible row and field', asy
         assert.deepEqual(issues[0].issueRelations.relates_to, []);
       }
       assert.equal(issues.at(-1).parent, null);
-      assert.equal(batchQueries.length, 1, 'one batch for a small list');
+      assert.equal(issueQueries.length, 1, 'one statement reads the complete list');
     }
   }
 
@@ -220,7 +218,8 @@ test('workspace and multi-project lists return every visible row and field', asy
       expected.push(...await readRows(await list('workspaceId=workspace&projectIds=' + project)));
     }
     expected.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    batchQueries.length = 0;
+    issueQueries.length = 0;
+    statements.length = 0;
     const response = await list('workspaceId=workspace');
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /^application\/json\b/);
@@ -232,8 +231,8 @@ test('workspace and multi-project lists return every visible row and field', asy
     await cancel;
     assert.ok(first.value.byteLength < 1024 * 1024, 'the response sends a small first chunk');
     assert.equal(expected.length, 5156);
-    assert.equal(batchQueries.reduce((total, batch) => total + batch.rowCount, 0), expected.length);
-    assert.ok(batchQueries.every(batch => batch.rowCount <= 512));
+    assert.equal(issueQueries.length, 1, 'a broad list reads every issue in one database statement');
+    assert.equal(statements.length, 2, 'the workspace access check and the snapshot read are the only statements');
 
     function largestRead(plan) {
       const rows = ['Issue', 'IssueComment', 'issue_relations', '_IssueToLabel'].includes(plan['Relation Name'])
@@ -248,23 +247,23 @@ test('workspace and multi-project lists return every visible row and field', asy
 
     async function assertReadBound() {
       let maxRead = 0;
-      for (const { query, params } of batchQueries) {
+      for (const { query, params } of issueQueries) {
         const [explain] = await raw.$queryRawUnsafe(
           'EXPLAIN (ANALYZE, FORMAT JSON) ' + query, ...JSON.parse(params),
         );
         const { Plan, JIT } = explain['QUERY PLAN'][0];
         maxRead = Math.max(maxRead, largestRead(Plan));
         assert.equal(JIT, undefined, `Unexpected query compilation for ${userId}`);
-        assert.equal(sortSpills(Plan), false, `Issue batch spilled to disk for ${userId}`);
+        assert.equal(sortSpills(Plan), false, `Issue list spilled to disk for ${userId}`);
       }
       t.diagnostic(`Largest issue or relation scan as ${userId}: ${maxRead} rows`);
-      assert.ok(maxRead < 12000, `Scanned ${maxRead} rows for one batch as ${userId}`);
+      assert.ok(maxRead < 12000, `Scanned ${maxRead} rows for the issue list as ${userId}`);
     }
 
     await assertReadBound();
     userId = 'owner';
     try {
-      batchQueries.length = 0;
+      issueQueries.length = 0;
       const rows = await readRows(await list('workspaceId=workspace'));
       assert.deepEqual(rows.map(issue => issue.id), expected.map(issue => issue.id));
       await assertReadBound();
@@ -272,51 +271,25 @@ test('workspace and multi-project lists return every visible row and field', asy
       userId = 'member';
     }
 
-    await t.test('the body starts before later batches finish and retains the original snapshot', async () => {
-      const heldRows = Promise.withResolvers();
-      const releaseRows = Promise.withResolvers();
-      let totalRows = 0;
-      beforeIssueRows = async rowCount => {
-        totalRows += rowCount;
-        if (totalRows > 512) {
-          heldRows.resolve();
-          await releaseRows.promise;
-        }
+    await t.test('the streamed body retains its snapshot after the database read finishes', async () => {
+      const last = expected.at(-1);
+      afterIssueRead = async () => {
+        await raw.issue.update({ where: { id: last.id }, data: { title: 'Changed after the read' } });
+        await raw.project.update({ where: { id: 'p' }, data: { name: 'Renamed after the read' } });
       };
-      const response = list('workspaceId=workspace');
-      let reader;
       try {
-        const firstChunk = response.then(async reply => {
-          assert.equal(reply.status, 200);
-          reader = reply.body.getReader();
-          return (await reader.read()).value;
-        });
-        const chunk = await Promise.race([
-          firstChunk,
-          heldRows.promise.then(() => assert.fail('The response waited for more than the first 512 rows')),
-        ]);
-        await heldRows.promise;
-        const last = expected.at(-1);
-        await raw.issue.update({ where: { id: last.id }, data: { title: 'Changed after the first batch' } });
-        releaseRows.resolve();
-        const chunks = [chunk];
-        for (;;) {
-          const next = await reader.read();
-          if (next.done) break;
-          chunks.push(next.value);
-        }
-        assert.deepEqual(await readRows(new Response(Buffer.concat(chunks))), expected);
+        assert.deepEqual(await readRows(await list('workspaceId=workspace')), expected);
       } finally {
-        releaseRows.resolve();
-        beforeIssueRows = undefined;
-        await reader?.cancel();
+        afterIssueRead = undefined;
       }
     });
 
-    failEncoding = true;
+    failEncoding = '{"issues":[';
+    assert.equal((await list('workspaceId=workspace')).status, 500);
+    failEncoding = ',';
     const interrupted = await list('workspaceId=workspace');
     assert.equal(interrupted.status, 200);
     await assert.rejects(interrupted.arrayBuffer(), streamError);
-    assert.deepEqual(errors, [['[ISSUES_GET]', streamError]]);
+    assert.deepEqual(errors, [['[ISSUES_GET]', streamError], ['[ISSUES_GET]', streamError]]);
   });
 });
