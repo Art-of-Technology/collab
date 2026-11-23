@@ -2445,7 +2445,7 @@ test('seat and run refusals keep their code and what is missing, and pass on not
 });
 
 // A stand-in for the seat routes that keeps state: an inbox, and runs that are checked out, renewed, finished and closed.
-async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], noDefaultRepository = [], fenceRenew = false, awayPolls = 0, throttled = 0 } = {}) {
+async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], noDefaultRepository = [], fenceRenew = false, awayPolls = 0, throttled = 0, instructions } = {}) {
   const runs = new Map(), log = []; let polls = 0;
   const f = await fixture(t, (req, res, body) => {
     const route = `${req.method} ${req.url.split('?')[0].replace('/api/apps/auth/', '')}`;
@@ -2454,6 +2454,12 @@ async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [],
       if (++polls <= awayPolls) return refuse(503, 'handoff_unavailable');
       log.push(`inbox ${polls}`);
       return res.end(JSON.stringify({ items: inbox(polls).map(key => ({ issueId: `id-${key}`, issueKey: key, title: key, priority: 'medium', category: 'todo', reason: 'assigned', lastRunAt: null })) }));
+    }
+    // The run context, when the test gives the instructions it carries; otherwise the route is unknown, as on an older server.
+    const contextOf = route.match(/^GET issues\/([^/]+)\/run-context$/);
+    if (contextOf && instructions) {
+      log.push(`context ${decodeURIComponent(contextOf[1])}`);
+      return typeof instructions === 'number' ? refuse(instructions, 'server_error') : res.end(JSON.stringify({ issue: { issueKey: contextOf[1] }, instructions }));
     }
     const input = body ? JSON.parse(body) : {};
     if (route === 'POST runs') {
@@ -2643,6 +2649,38 @@ test('collab seat run starts the program after -- with its arguments unchanged, 
   const none = await s.run(['seat', 'run', '--once']);
   assert.equal(none.code, 2); assert.equal(none.error.error, 'required_field');
   assert.equal(s.runs.size, 1);
+});
+
+test('seat run gives the program the run\'s instructions in a file, platform, organisation and seat in that order, and removes it after', async t => {
+  const instructions = [{ layer: 'platform', text: 'Our rules.' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: 'This seat\'s rules.' }];
+  const s = await seatServer(t, { inbox: () => ['APP-1'], instructions });
+  const seen = path.join(s.dir, 'seen.json');
+  const script = "const fs = require('node:fs'), file = process.env.COLLAB_INSTRUCTIONS_FILE; fs.writeFileSync(process.argv[1], JSON.stringify({ file, text: fs.readFileSync(file, 'utf8'), mode: fs.statSync(file).mode & 0o777 }))";
+  const result = await seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', script, seen], once: true });
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: 0 }]);
+  // Read after the checkout and before the program starts.
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'context APP-1', 'close run-1']);
+  const got = JSON.parse(readFileSync(seen, 'utf8'));
+  // Each layer that has text, in order; an empty layer adds nothing.
+  assert.equal(got.text, 'Our rules.\n\nThis seat\'s rules.\n');
+  if (!windows) assert.equal(got.mode, 0o600);
+  assert.equal(existsSync(got.file), false, 'the file is removed when the program has exited');
+});
+
+test('seat run starts the program without the instructions file when the run context cannot be read', async t => {
+  // One named in the runner's own environment is not passed on as this run's.
+  process.env.COLLAB_INSTRUCTIONS_FILE = '/elsewhere/instructions.md';
+  t.after(() => { delete process.env.COLLAB_INSTRUCTIONS_FILE; });
+  for (const instructions of [undefined, 403]) {
+    const events = [];
+    const s = await seatServer(t, { inbox: () => ['APP-1'], instructions });
+    const seen = path.join(s.dir, 'seen.json');
+    const script = "require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ file: process.env.COLLAB_INSTRUCTIONS_FILE ?? null }))";
+    const result = await seatRun({ ...fast, log: event => events.push(event), api: s.api, program: process.execPath, args: ['-e', script, seen], once: true });
+    assert.equal(result.runs[0].exitCode, 0);
+    assert.deepEqual(JSON.parse(readFileSync(seen, 'utf8')), { file: null });
+    assert.deepEqual(events.filter(event => event.event === 'no_instructions').map(event => event.issueKey), ['APP-1']);
+  }
 });
 
 test('seat run: a checkout refused for another reason than a conflict ends the runner with that refusal', async t => {
