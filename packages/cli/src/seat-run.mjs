@@ -25,8 +25,13 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
   // The run's instructions, platform, organisation and seat, as one file the program is pointed at. Without a run context
   // that carries them (an older server, or a refused read) the program starts as before, and that is said.
   async function instructionsFile(issueKey) {
+    // Tried again while the server is away, as the other reads are, but not past a request to stop.
     let layers;
-    try { layers = (await patient(() => api('GET', `issues/${encodeURIComponent(issueKey)}/run-context`)))?.instructions; } catch {}
+    while (!signal?.aborted) {
+      try { layers = (await api('GET', `issues/${encodeURIComponent(issueKey)}/run-context`))?.instructions; break; }
+      catch (error) { if (!serverAway(error)) break; await sleep(pollMs); }
+    }
+    if (signal?.aborted) return null;
     if (!Array.isArray(layers) || layers.some(layer => typeof layer?.text !== 'string')) { log({ event: 'no_instructions', issueKey }); return null; }
     const texts = layers.map(layer => layer.text.trim()).filter(Boolean);
     let dir = null;
@@ -50,11 +55,14 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
       dir = await instructionsFile(issueKey);
       // A file named by this runner's own environment is not this run's: the variable is set only for a file written here.
       const { COLLAB_INSTRUCTIONS_FILE: _inherited, ...env } = process.env;
-      try {
-        child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
-          env: { ...env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey,
-            ...(dir && { COLLAB_INSTRUCTIONS_FILE: join(dir, 'instructions.md') }) } });
-      } catch { failed = true; }
+      // Asked to stop while the instructions were read: the program is not started, and the run is closed below.
+      if (!signal?.aborted) {
+        try {
+          child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
+            env: { ...env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey,
+              ...(dir && { COLLAB_INSTRUCTIONS_FILE: join(dir, 'instructions.md') }) } });
+        } catch { failed = true; }
+      }
       if (child) {
         // A program that does not stop when asked is killed: a fenced session must not go on working.
         let killer, active = true;

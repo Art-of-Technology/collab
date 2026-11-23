@@ -2459,7 +2459,7 @@ async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [],
     const contextOf = route.match(/^GET issues\/([^/]+)\/run-context$/);
     if (contextOf && instructions) {
       log.push(`context ${decodeURIComponent(contextOf[1])}`);
-      return typeof instructions === 'number' ? refuse(instructions, 'server_error') : res.end(JSON.stringify({ issue: { issueKey: contextOf[1] }, instructions }));
+      return typeof instructions === 'number' ? refuse(instructions, 'server_error') : res.end(JSON.stringify({ instructions }));
     }
     const input = body ? JSON.parse(body) : {};
     if (route === 'POST runs') {
@@ -2665,6 +2665,22 @@ test('seat run gives the program the run\'s instructions in a file, platform, or
   assert.equal(got.text, 'Our rules.\n\nThis seat\'s rules.\n');
   if (!windows) assert.equal(got.mode, 0o600);
   assert.equal(existsSync(got.file), false, 'the file is removed when the program has exited');
+});
+
+test('seat run asked to stop while it reads the instructions does not start the program, and closes the run', async () => {
+  const controller = new AbortController(), calls = [];
+  const api = async (method, route) => {
+    calls.push(`${method} ${route}`);
+    if (route === 'seats/me/inbox') return { items: [{ issueId: 'id-one', issueKey: 'APP-1' }] };
+    if (route === 'runs') return { run: { id: 'run-one' } };
+    // The server is away when the stop comes; the read is not tried again after it.
+    if (route === 'issues/APP-1/run-context') { controller.abort(); throw new CliError('transport_failed', 'offline'); }
+    return { run: { state: method === 'GET' ? 'running' : 'stopped' } };
+  };
+  const result = await seatRun({ ...fast, api, signal: controller.signal, program: process.execPath, args: ['-e', 'process.exit(7)'] });
+  assert.equal(result.stopped, true);
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-one', state: 'stopped', exitCode: null }]);
+  assert.deepEqual(calls, ['GET seats/me/inbox', 'POST runs', 'GET issues/APP-1/run-context', 'GET runs/run-one', 'PATCH runs/run-one']);
 });
 
 test('seat run starts the program without the instructions file when the run context cannot be read', async t => {
