@@ -62,10 +62,9 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
 });
 
 test('a run\'s instructions are three layers in order, platform, organisation and seat, each with a stated maximum length', () => {
-  const catalogue = load('src/lib/agent-role-catalogue.ts');
-  const { ROLE_CATALOGUE, LAYER_LIMITS } = catalogue;
+  const { ROLE_CATALOGUE, LAYER_LIMITS } = load('src/lib/agent-role-catalogue.ts');
   // Plain values of this test's own realm, so they compare as such.
-  const instructionLayers = (...args) => JSON.parse(JSON.stringify(catalogue.instructionLayers(...args)));
+  const instructionLayers = (...args) => JSON.parse(JSON.stringify(ROLE_CATALOGUE.instructionLayers(...args)));
   assert.deepEqual({ ...LAYER_LIMITS }, { platform: 8000, organisation: 16000, seat: 16000 });
   for (const role of ROLE_CATALOGUE.roles) {
     const layers = instructionLayers(role.id, { ownerId: 'cowner00001' });
@@ -86,6 +85,9 @@ test('a run\'s instructions are three layers in order, platform, organisation an
   // An issue that no seat works has no role: every layer is present and empty.
   assert.deepEqual(instructionLayers(null, { ownerId: null }), [{ layer: 'platform', text: '' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: '' }]);
   assert.deepEqual(instructionLayers('no-such-role', { ownerId: null }).map(layer => layer.text), ['', '', '']);
+  // A role added as one entry has its layers with no other change.
+  const { extendedCatalogue } = require('./role-catalogue-fixture.cjs');
+  assert.equal(extendedCatalogue().ROLE_CATALOGUE.instructionLayers('mapper', { ownerId: null })[0].text, extendedCatalogue().ROLE_CATALOGUE.getRole('mapper').platformPrompt);
 });
 
 test('a layer longer than its maximum is refused when it is saved', () => {

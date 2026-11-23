@@ -89,21 +89,21 @@ export function createRoleCatalogue(entries: readonly RoleEntry[]) {
     requests: Object.freeze(requests),
     getRole: (id: string) => byRole.get(id),
     getRequest: (id: string) => byRequest.get(id),
+    /**
+     * A run's instructions: the platform layer (the role's prompt), then the organisation's and the seat's, in the order a
+     * session reads them. A layer with nothing in it is present and empty, and so is every layer of an issue no seat works.
+     * The owner's id stands where a prompt names the person to ask.
+     */
+    instructionLayers(roleId: string | null, { ownerId, organisation = '', seat = '' }: { ownerId: string | null; organisation?: string; seat?: string }) {
+      const prompt = roleId ? byRole.get(roleId)?.platformPrompt ?? '' : '';
+      return [
+        { layer: 'platform' as const, text: prompt.replaceAll('{{ownerId}}', ownerId ?? "a person's Collab user id") },
+        { layer: 'organisation' as const, text: organisation },
+        { layer: 'seat' as const, text: seat },
+      ];
+    },
   });
 }
 
 export const ROLE_CATALOGUE = createRoleCatalogue(ROLE_ENTRIES);
 
-/**
- * A run's instructions: the platform layer (the role's prompt), then the organisation's and the seat's, in the order a
- * session reads them. A layer with nothing in it is present and empty, and so is every layer of an issue no seat works.
- * The owner's id stands where a prompt names the person to ask.
- */
-export function instructionLayers(roleId: string | null, { ownerId, organisation = '', seat = '' }: { ownerId: string | null; organisation?: string; seat?: string }) {
-  const prompt = roleId ? ROLE_CATALOGUE.getRole(roleId)?.platformPrompt ?? '' : '';
-  return [
-    { layer: 'platform' as const, text: prompt.replaceAll('{{ownerId}}', ownerId ?? "a person's Collab user id") },
-    { layer: 'organisation' as const, text: organisation },
-    { layer: 'seat' as const, text: seat },
-  ];
-}
