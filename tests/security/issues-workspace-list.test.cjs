@@ -18,7 +18,7 @@ test('workspace and multi-project lists return every visible row and field in on
     rmSync(directory, { recursive: true, force: true });
   });
   pg('initdb', ['-D', data, '-A', 'trust', '--no-locale', '-E', 'UTF8']);
-  pg('pg_ctl', ['-D', data, '-l', join(directory, 'server.log'), '-o', `-k ${directory} -c listen_addresses='' -c fsync=off`, '-w', 'start']);
+  pg('pg_ctl', ['-D', data, '-l', join(directory, 'server.log'), '-o', `-k ${directory} -c listen_addresses='' -c fsync=off -c work_mem=4MB`, '-w', 'start']);
   started = true;
   const username = userInfo().username;
   const schema = execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-empty',
@@ -68,6 +68,15 @@ test('workspace and multi-project lists return every visible row and field in on
   await raw.$executeRaw`ALTER TABLE "Issue" ADD COLUMN "stagedField" text DEFAULT 'fixture'`;
 
   let userId = 'member';
+  let failEncoding = false;
+  const streamError = new Error('Could not encode the next issue batch');
+  const errors = [];
+  class IssueEncoder extends TextEncoder {
+    encode(input) {
+      if (failEncoding && input.startsWith(',')) throw streamError;
+      return super.encode(input);
+    }
+  }
   const { GET } = load('src/app/api/issues/route.ts', {
     'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: userId } }) },
@@ -79,7 +88,10 @@ test('workspace and multi-project lists return every visible row and field in on
     '@/lib/notification-service': {},
     '@/lib/event-bus': {},
     '@/utils/issueRelations': load('src/utils/issueRelations.ts'),
-  }, { URL, console });
+  }, {
+    URL, Response, ReadableStream, TextEncoder: IssueEncoder,
+    console: { ...console, error: (...args) => errors.push(args) },
+  });
   const list = query => GET(new Request(`https://example.test/api/issues?${query}`));
   const readRows = async response => {
     assert.equal(response.status, 200);
@@ -120,6 +132,8 @@ test('workspace and multi-project lists return every visible row and field in on
     }
   }
 
+  assert.deepEqual(await readRows(await list('workspaceId=workspace&projectIds=missing,also-missing')), []);
+
   statements.length = 0;
   assert.equal((await list('workspaceId=other')).status, 403);
   assert.equal(statements.length, 1);
@@ -158,7 +172,7 @@ test('workspace and multi-project lists return every visible row and field in on
   await t.test('a broad list bounds database work to the workspace and its related issues', async t => {
     await raw.$executeRaw`
       INSERT INTO "Issue" (id, title, description, "projectId", "workspaceId", "updatedAt", "issueKey", "parentId")
-      SELECT 'local-' || n, 'Local issue', repeat('Full description. ', 180),
+      SELECT 'local-' || n, 'Local issue', repeat('Full description. ', 90),
         'p', 'workspace', timestamp '2026-12-01' - n * interval '1 second', 'PP-' || n,
         CASE WHEN n > 1000 AND n <= 3600 THEN 'local-' || (1 + n % 600) END
       FROM generate_series(1, 5152) n
@@ -195,7 +209,16 @@ test('workspace and multi-project lists return every visible row and field in on
     }
     expected.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     statements.length = 0;
-    assert.deepEqual(await readRows(await list('workspaceId=workspace')), expected);
+    const response = await list('workspaceId=workspace');
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /^application\/json\b/);
+    const [sample, body] = response.body.tee();
+    const reader = sample.getReader();
+    const first = await reader.read();
+    const cancel = reader.cancel();
+    assert.deepEqual(await readRows(new Response(body)), expected);
+    await cancel;
+    assert.ok(first.value.byteLength < 1024 * 1024, 'the response sends a small first chunk');
     assert.equal(expected.length, 5156);
     assert.equal(statements.length, 2);
 
@@ -204,6 +227,10 @@ test('workspace and multi-project lists return every visible row and field in on
         ? plan['Actual Loops'] * (plan['Actual Rows'] + (plan['Rows Removed by Filter'] ?? 0))
         : 0;
       return Math.max(rows, ...(plan.Plans ?? []).map(largestRead));
+    }
+
+    function sortSpills(plan) {
+      return plan['Sort Space Type'] === 'Disk' || (plan.Plans ?? []).some(sortSpills);
     }
 
     async function assertReadBound() {
@@ -216,6 +243,7 @@ test('workspace and multi-project lists return every visible row and field in on
       t.diagnostic(`Largest issue or relation scan as ${userId}: ${rowsRead} rows`);
       assert.ok(rowsRead < 12000, `Scanned ${rowsRead} rows for 5,156 listed issues as ${userId}`);
       assert.equal(JIT, undefined, `Unexpected query compilation for ${userId}`);
+      assert.equal(sortSpills(Plan), false, `Broad issue ordering spilled to disk for ${userId}`);
     }
 
     await assertReadBound();
@@ -227,5 +255,11 @@ test('workspace and multi-project lists return every visible row and field in on
     } finally {
       userId = 'member';
     }
+
+    failEncoding = true;
+    const interrupted = await list('workspaceId=workspace');
+    assert.equal(interrupted.status, 200);
+    await assert.rejects(interrupted.arrayBuffer(), streamError);
+    assert.deepEqual(errors, [['[ISSUES_GET]', streamError]]);
   });
 });
