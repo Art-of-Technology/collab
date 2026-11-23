@@ -1,4 +1,4 @@
-import { buildIssueRelations } from '@/utils/issueRelations';
+import { buildIssueRelations, type RelationItem } from '@/utils/issueRelations';
 
 // A broad issue list sends each issue's own fields and every shared record once.
 // The browser expands it into the rows the list route returns for one project.
@@ -36,8 +36,8 @@ function group<T>(rows: Map<string, T[]>, key: string, value: T) {
 }
 
 // JSON leaves out undefined fields, so rows read from JSON never had them.
-function withoutUndefined(item: Record<string, unknown>) {
-  for (const key in item) if (item[key] === undefined) delete item[key];
+function withoutUndefined(item: RelationItem) {
+  for (const key of Object.keys(item) as (keyof RelationItem)[]) if (item[key] === undefined) delete item[key];
 }
 
 function relationsOf(issue: Parameters<typeof buildIssueRelations>[0]) {
