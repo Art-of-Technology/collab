@@ -42,6 +42,21 @@ const askingAPerson = `Asking a person. This applies whenever your result names 
 - End the ask with the one-line reply you expect, for example \`1 yes, 2 none yet\`.
 - Do not ask again for something that is already asked and still open; point to that ask.`;
 
+/**
+ * The longest text each instruction layer may hold, counted after trimming. The platform layer is the role's prompt with
+ * the "Asking a person" rule and is checked when the catalogue loads; the organisation's and the seat's are checked by
+ * `layerText` wherever they are saved.
+ */
+export const LAYER_LIMITS = Object.freeze({ platform: 8_000, organisation: 16_000, seat: 16_000 });
+export type InstructionLayer = keyof typeof LAYER_LIMITS;
+
+/** The text to save for a layer, trimmed; a RangeError when it is longer than the layer's limit. */
+export function layerText(layer: InstructionLayer, text: string) {
+  const trimmed = text.trim();
+  if (trimmed.length > LAYER_LIMITS[layer]) throw new RangeError(`The ${layer} instructions hold at most ${LAYER_LIMITS[layer]} characters`);
+  return trimmed;
+}
+
 export const ROLE_ENTRIES = [
   { id: 'developer', name: 'Developer', platformPrompt: branchWork, takesOrdinaryIssues: true,
     requests: [{ id: 'developer' }], repository: 'yes', maxPerProject: null },
@@ -68,6 +83,7 @@ export function createRoleCatalogue(entries: readonly RoleEntry[]) {
   const byRole = new Map(roles.map(role => [role.id, role]));
   const byRequest = new Map(requests.map(request => [request.id, request]));
   if (byRole.size !== roles.length || byRequest.size !== requests.length) throw new Error('Seat role and request IDs must be unique');
+  for (const role of roles) if (role.platformPrompt.length > LAYER_LIMITS.platform) throw new Error(`The platform prompt of ${role.id} is longer than ${LAYER_LIMITS.platform} characters`);
   return Object.freeze({
     roles: Object.freeze(roles),
     requests: Object.freeze(requests),
@@ -77,3 +93,17 @@ export function createRoleCatalogue(entries: readonly RoleEntry[]) {
 }
 
 export const ROLE_CATALOGUE = createRoleCatalogue(ROLE_ENTRIES);
+
+/**
+ * A run's instructions: the platform layer (the role's prompt), then the organisation's and the seat's, in the order a
+ * session reads them. A layer with nothing in it is present and empty, and so is every layer of an issue no seat works.
+ * The owner's id stands where a prompt names the person to ask.
+ */
+export function instructionLayers(roleId: string | null, { ownerId, organisation = '', seat = '' }: { ownerId: string | null; organisation?: string; seat?: string }) {
+  const prompt = roleId ? ROLE_CATALOGUE.getRole(roleId)?.platformPrompt ?? '' : '';
+  return [
+    { layer: 'platform' as const, text: prompt.replaceAll('{{ownerId}}', ownerId ?? "a person's Collab user id") },
+    { layer: 'organisation' as const, text: organisation },
+    { layer: 'seat' as const, text: seat },
+  ];
+}
