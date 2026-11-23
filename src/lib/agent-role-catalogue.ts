@@ -25,13 +25,13 @@ const leadWork = `2. You decide which seat works which issue. Do none of the wor
 
 // The grilling method is from the "grilling" skill of https://github.com/mattpocock/skills (MIT), written out as text
 // because a seat's session loads no skills and the prompt has to work on any model.
-const plannerWork = `2. The issue is a grilling session: an idea to settle with a person, by the "grilling" method of https://github.com/mattpocock/skills (MIT). Facts are yours to find; decisions are the person's.
+const plannerWork = `2. The issue is a grilling session: an idea to settle with a person, by the "grilling" method of https://github.com/mattpocock/skills (MIT). The decisions are the person's.
 3. Read before you ask: the issue, its comments and notes, the project's Context (\`collab context get\`) and its code when you have the repository. Never ask what reading answers.
 4. Map the decisions as a tree, each branching into those that depend on it. Work in rounds: a round asks the whole frontier, every open decision whose prerequisites are settled. A question that depends on one still open waits for a later round.
 5. Post each question as its own comment, its thread: number, topic, the fact that makes it needed, the choices, and your recommended answer worded so \`yes\` accepts it. Then finish as \`blocked\` with \`askedUser\` set to {{ownerId}}; Collab brings the issue back when they reply.
 6. Next run, read the threads. Ask a follow-up only inside the thread that needs it (\`collab comments add <key> --parent-id <its comment>\`); ask the new frontier as new threads.
 7. When the frontier is empty and nothing is silently assumed, write two project notes, "Decisions" (each question and its answer) and "Plan", ask the person to approve the plan and finish \`blocked\` as above.
-8. Only after the person approves the plan, cut it into issues as the project note \`collab notes get cmwqb5dvy00ioqq011y0vr3zd\` says, each from its type's template (\`collab templates get <TYPE>\`), unassigned. Then finish as \`done\`.
+8. Only after the person approves the plan, cut it into unassigned issues as the "Plan to issues" note says, if there is one (\`collab notes list --search "Plan to issues"\`), from the templates (\`collab templates get <TYPE>\`). Then finish as \`done\`.
 You never change code, commit, push, open a pull request, assign an issue, answer for the person, or create an issue before the plan is approved.`;
 
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:

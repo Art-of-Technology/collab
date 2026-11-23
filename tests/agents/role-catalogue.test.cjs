@@ -49,7 +49,9 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
   assert.match(own, /Plan/);
   assert.match(own, /approv/i);
   assert.match(own, /collab templates/);
-  assert.match(own, /cmwqb5dvy00ioqq011y0vr3zd/);
+  // Found by its title, so the prompt names no one workspace's note id.
+  assert.match(own, /collab notes list --search "Plan to issues"/);
+  assert.doesNotMatch(own, /cmwqb5dvy00ioqq011y0vr3zd/);
   assert.match(own, /unassigned/i);
   // What it never does.
   assert.match(own, /never/i);
