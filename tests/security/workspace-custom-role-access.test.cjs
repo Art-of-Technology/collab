@@ -3,11 +3,11 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const root = 'src/app/api/workspaces/[workspaceId]/';
 
 function fixture() {
-  const state = { active: true, manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
+  const state = { active: true, owner: false, role: 'OWNER', manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
     roles: [{ id: 'custom', workspaceId: 'workspace', name: 'Support' }, { id: 'foreign', workspaceId: 'foreign', name: 'Support' }],
     permissions: [{ workspaceId: 'workspace', role: 'Support', permission: 'VIEW_POSTS' }, { workspaceId: 'foreign', role: 'Support', permission: 'VIEW_POSTS' }],
     members: [{ id: 'member', userId: 'target', workspaceId: 'workspace', role: 'Support', status: true }, { id: 'foreign', userId: 'foreign', workspaceId: 'foreign', role: 'Support', status: true }] };
-  const actor = { id: 'actor', email: 'actor@weezboo.com', role: 'DEVELOPER', ownedWorkspaces: [], get workspaceMemberships() { return state.active ? [{ role: 'HR' }] : []; } };
+  const actor = { id: 'actor', email: 'actor@weezboo.com', role: 'DEVELOPER', get ownedWorkspaces() { return state.owner ? [{ id: 'workspace' }] : []; }, get workspaceMemberships() { return state.active ? [{ role: state.role }] : []; } };
   function match(row, where) {
     if (where.name?.equals !== undefined) { const { name, ...rest } = where; return row.name.toLowerCase() === name.equals.toLowerCase() && matches(row, rest); }
     return matches(row, where);
@@ -16,7 +16,7 @@ function fixture() {
   const prisma = {
     account: { findUnique: async () => state.mapping ? { user: { ...actor, accounts: [{ id: 'mapping' }] } } : null },
     user: { findUnique: async ({ where }) => where.id === actor.id ? { ...actor } : null },
-    workspace: { findUnique: async () => ({ ownerId: 'owner' }) },
+    workspace: { findUnique: async () => ({ ownerId: state.owner ? 'actor' : 'owner' }) },
     customRole: {
       findFirst: async ({ where }) => clone(state.roles.find(row => match(row, where)) || null),
       findMany: async ({ where }) => state.roles.filter(row => match(row, where)),
@@ -33,7 +33,7 @@ function fixture() {
       updateMany: async ({ where, data }) => update('permissions', where, data),
     },
     workspaceMember: {
-      findUnique: async ({ where }) => where.userId_workspaceId ? (state.active ? { userId: 'actor', role: 'HR' } : null) : state.members.find(row => match(row, where)) || null,
+      findUnique: async ({ where }) => where.userId_workspaceId ? (state.active ? { userId: 'actor', role: state.role } : null) : state.members.find(row => match(row, where)) || null,
       count: async ({ where }) => state.members.filter(row => match(row, where)).length,
       updateMany: async ({ where, data }) => update('members', where, data),
       update: async ({ where, data }) => { update('members', where, data); return state.members.find(row => match(row, where)); },
@@ -103,3 +103,26 @@ for (const [route, method, body] of [['list', 'GET'], ['list', 'POST', { name: '
     f.state.mapping = false; f.state.writes = []; assert.equal((await f.invoke(route, method, body)).status, 401); assert.equal(f.state.legacy, 0); assert.deepEqual(f.state.writes, []);
   });
 }
+
+test('creating, editing and deleting a custom role is for Owner and above; listing stays open to members and to the owner without a row', async () => {
+  const writes = [['list', 'POST', { name: 'New', permissions: ['VIEW_POSTS'] }], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE']];
+  for (const [why, setup] of [['primary owner without a row', state => { state.owner = true; state.active = false; }], ['OWNER', state => { state.role = 'OWNER'; }], ['owner', state => { state.role = 'owner'; }]]) {
+    for (const [route, method, body] of [['list', 'GET'], ...writes]) {
+      const f = fixture(); setup(f.state); f.state.members = [];
+      assert.equal((await f.invoke(route, method, body)).status, 200, `${why}: ${route} ${method}`);
+    }
+  }
+  for (const role of ['ADMIN', 'admin', 'HR', 'Support']) {
+    for (const [route, method, body] of writes) {
+      const f = fixture(); f.state.role = role; f.state.members = []; // every role here holds MANAGE_WORKSPACE_PERMISSIONS
+      const response = await f.invoke(route, method, body);
+      assert.equal(response.status, 403, `${role}: ${route} ${method}`);
+      assert.match((await response.json()).error, /^Only Owners [^.]*$/);
+      assert.deepEqual(f.state.writes, []);
+    }
+    const f = fixture(); f.state.role = role;
+    assert.equal((await f.invoke('list', 'GET')).status, 200, `${role} lists custom roles`);
+  }
+  const f = fixture(); f.state.active = false;
+  assert.equal((await f.invoke('list', 'GET')).status, 403, 'someone without an active membership who is not the owner');
+});

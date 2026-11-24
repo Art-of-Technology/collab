@@ -25,6 +25,8 @@ function fixture() {
       createMany: async args => { state.writes.push(['create', clone(args)]); if (state.failCreate) throw new Error('synthetic create failure'); state.rows.push(...clone(args.data)); return { count: args.data.length }; },
       upsert: async args => { state.writes.push(['upsert', clone(args)]); const row = state.rows.find(row => matches(row, args.where.workspaceId_role_permission)); if (!row) state.rows.push(clone(args.create)); return row || args.create; },
     },
+    workspace: { findUnique: async () => ({ ownerId: state.owner ? 'actor' : 'owner' }) },
+    customRole: { findFirst: async ({ where }) => where.workspaceId === 'workspace' && where.name === 'Support' ? { id: 'custom', name: 'Support' } : null },
     $transaction: async callback => { state.transactions++; const saved = clone(state.rows); try { return await callback(prisma); } catch (error) { state.rows = saved; throw error; } },
   };
   const options = {}, env = { env: { COLLAB_AUTH_MODE: 'nextauth', COLLAB_GATEWAY_ISSUER: 'https://identity.example.test' } };
@@ -151,4 +153,42 @@ test('a platform admin and a deactivated member get the answers they got before'
   }
   assert.deepEqual(await ask(state => { state.memberRole = 'DEVELOPER'; }, 'DELETE_ANY_POST'), { hasPermission: true, userRole: 'DEVELOPER' });
   assert.deepEqual(await list(state => { state.memberRole = 'DEVELOPER'; }), ['DELETE_ANY_POST']);
+});
+
+test('the permission routes are for Owner and above', async () => {
+  for (const [method, body] of [['GET'], ['PUT', { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: true }], ['POST', { role: 'DEVELOPER' }]]) {
+    for (const [why, setup] of [['primary owner without a row', state => { state.owner = true; state.member = false; }], ['OWNER', state => { state.memberRole = 'OWNER'; }], ['owner', state => { state.memberRole = 'owner'; }]]) {
+      const f = fixture(); setup(f.state);
+      assert.equal((await f.invoke(method, body)).status, 200, `${method}: ${why}`);
+    }
+    for (const memberRole of ['ADMIN', 'admin', 'HR']) {
+      const f = fixture(); f.state.memberRole = memberRole;
+      f.state.rows.push({ workspaceId: 'workspace', role: memberRole, permission: 'MANAGE_WORKSPACE_PERMISSIONS' });
+      const response = await f.invoke(method, body);
+      assert.equal(response.status, 403, `${method}: ${memberRole} holding the permission`);
+      assert.match((await response.json()).error, /^Only Owners [^.]*$/);
+      assert.deepEqual(f.state.writes, []);
+    }
+  }
+});
+
+test("the Owner role's permissions cannot be changed or reset, and an unknown role name is refused", async () => {
+  for (const [why, setup] of [['primary owner', state => { state.owner = true; }], ['Owner', state => { state.memberRole = 'OWNER'; }]]) {
+    for (const [method, body, status] of [
+      ['PUT', { role: 'OWNER', permission: 'VIEW_POSTS', enabled: false }, 403],
+      ['PUT', { role: 'owner', permission: 'VIEW_POSTS', enabled: true }, 403],
+      ['POST', { role: 'OWNER' }, 403],
+      ['PUT', { role: 'Nope', permission: 'VIEW_POSTS', enabled: true }, 400],
+      ['PUT', { role: 'support', permission: 'VIEW_POSTS', enabled: true }, 400],
+    ]) {
+      const f = fixture(); setup(f.state);
+      const response = await f.invoke(method, body);
+      assert.equal(response.status, status, `${why}: ${method} ${body.role}`);
+      assert.match((await response.json()).error, /^[A-Z][^.]*$/);
+      assert.deepEqual(f.state.writes, [], `${why}: ${method} ${body.role} wrote nothing`);
+    }
+    const f = fixture(); setup(f.state);
+    assert.equal((await f.invoke('PUT', { role: 'Support', permission: 'VIEW_POSTS', enabled: true })).status, 200, `${why}: an existing custom role`);
+    assert.ok(f.state.rows.some(row => row.role === 'Support' && row.permission === 'VIEW_POSTS'));
+  }
 });
