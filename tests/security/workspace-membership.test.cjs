@@ -236,3 +236,31 @@ test('a request that loses the race to add the same person changes and records n
   assert.equal(f.audit.length, before);
   assert.equal(f.workspace('w2').members.filter(row => row.userId === 'bob').length, 1);
 });
+
+test('a new workspace stores its creator\'s membership as OWNER', async () => {
+  // Each creation path is stopped at the write; what it asked to store is the answer.
+  const stored = [];
+  const stop = new Error('stop at the write');
+  const prisma = {
+    user: { findUnique: async ({ where }) => ({ id: where.id }) },
+    workspace: {
+      findFirst: async () => null, findUnique: async () => null, count: async () => 0,
+      create: async ({ data }) => { stored.push(data.members.create); throw stop; },
+    },
+  };
+  prisma.$transaction = async run => run(prisma);
+  const globals = { console: { log() {}, warn() {}, error() {} } };
+  const deps = {
+    '@/lib/prisma': { prisma },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/lib/auth-options': { authOptions: {} },
+    '@/lib/utils': { generateWorkspaceSlug: value => value.toLowerCase() },
+    'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
+    '@/lib/session': {}, '@/lib/permissions': {}, '@/lib/post-access': {}, '@/lib/issue-trash': {}, '@/lib/forge/legacy-write-guard': {},
+    '@/lib/seed-status-templates': { ensureDefaultStatusTemplates: async () => {} }, '@/lib/issue-assignee': {},
+  };
+  await assert.rejects(load('src/actions/workspace.ts', deps, globals).createWorkspace({ name: 'One' }), stop);
+  assert.equal((await load('src/app/api/workspaces/route.ts', deps, globals).POST({ json: async () => ({ name: 'Two' }) })).status, 500);
+  await assert.rejects(load('src/lib/onboarding-helpers.ts', deps, globals).createPersonalWorkspaceForUser('alice', 'Alice'), stop);
+  assert.deepEqual(stored.map(row => [row.userId, row.role]), [['alice', 'OWNER'], ['alice', 'OWNER'], ['alice', 'OWNER']]);
+});
