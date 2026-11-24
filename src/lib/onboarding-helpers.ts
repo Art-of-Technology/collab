@@ -46,7 +46,7 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
         members: {
           create: {
             userId: userId,
-            role: 'owner',
+            role: 'OWNER',
             status: true
           }
         }

@@ -25,13 +25,14 @@ function fixture() {
       findMany: async ({ where = {} } = {}) => { reads.push('workspaces'); return workspaces.filter(row => matches(row, where)); },
     },
     user: {
-      findUnique: async ({ where, include }) => {
+      findUnique: async ({ where, include, select }) => {
         const user = users.find(row => row.id === where.id);
-        if (!user || !include) return user ?? null;
-        const scope = include.workspaceMemberships.where;
+        const shape = include || select;
+        if (!user || !shape?.workspaceMemberships) return user ?? null;
+        const scope = shape.workspaceMemberships.where;
         return { ...user,
           workspaceMemberships: (workspace(scope.workspaceId)?.members ?? []).filter(row => row.userId === user.id && row.status === scope.status),
-          ownedWorkspaces: workspaces.filter(row => row.id === include.ownedWorkspaces.where.id && row.ownerId === user.id),
+          ownedWorkspaces: workspaces.filter(row => row.id === shape.ownedWorkspaces?.where.id && row.ownerId === user.id),
         };
       },
     },
@@ -131,6 +132,18 @@ test('adding a person is refused without the permission, for a stranger, for an 
   for (const body of [null, {}, { active: 'yes' }, { active: true, role: 'ADMIN' }]) {
     assert.equal((await f.put('w2', 'bob', body)).status, 400, JSON.stringify(body));
   }
+  assert.equal(f.writes(), before);
+});
+
+test('a standard member with manage permission gets the same 404 adding a stranger or a missing account', async () => {
+  const f = fixture();
+  f.rolePermissions.push({ workspaceId: 'w1', role: 'MEMBER', permission: 'MANAGE_WORKSPACE_MEMBERS' });
+  f.as('bob');
+  const before = f.writes();
+  const stranger = await f.put('w1', 'frank');
+  const missing = await f.put('w1', 'nobody');
+  assert.equal(missing.status, 404);
+  assert.deepEqual(stranger, missing);
   assert.equal(f.writes(), before);
 });
 
@@ -235,4 +248,32 @@ test('a request that loses the race to add the same person changes and records n
   assert.equal(JSON.stringify([late.status, late.body]), JSON.stringify([200, { active: true, changed: false }]));
   assert.equal(f.audit.length, before);
   assert.equal(f.workspace('w2').members.filter(row => row.userId === 'bob').length, 1);
+});
+
+test('a new workspace stores its creator\'s membership as OWNER', async () => {
+  // Each creation path is stopped at the write; what it asked to store is the answer.
+  const stored = [];
+  const stop = new Error('stop at the write');
+  const prisma = {
+    user: { findUnique: async ({ where }) => ({ id: where.id }) },
+    workspace: {
+      findFirst: async () => null, findUnique: async () => null, count: async () => 0,
+      create: async ({ data }) => { stored.push(data.members.create); throw stop; },
+    },
+  };
+  prisma.$transaction = async run => run(prisma);
+  const globals = { console: { log() {}, warn() {}, error() {} } };
+  const deps = {
+    '@/lib/prisma': { prisma },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/lib/auth-options': { authOptions: {} },
+    '@/lib/utils': { generateWorkspaceSlug: value => value.toLowerCase() },
+    'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
+    '@/lib/session': {}, '@/lib/permissions': {}, '@/lib/post-access': {}, '@/lib/issue-trash': {}, '@/lib/forge/legacy-write-guard': {},
+    '@/lib/seed-status-templates': { ensureDefaultStatusTemplates: async () => {} }, '@/lib/issue-assignee': {},
+  };
+  await assert.rejects(load('src/actions/workspace.ts', deps, globals).createWorkspace({ name: 'One' }), stop);
+  assert.equal((await load('src/app/api/workspaces/route.ts', deps, globals).POST({ json: async () => ({ name: 'Two' }) })).status, 500);
+  await assert.rejects(load('src/lib/onboarding-helpers.ts', deps, globals).createPersonalWorkspaceForUser('alice', 'Alice'), stop);
+  assert.deepEqual(stored.map(row => [row.userId, row.role]), [['alice', 'OWNER'], ['alice', 'OWNER'], ['alice', 'OWNER']]);
 });

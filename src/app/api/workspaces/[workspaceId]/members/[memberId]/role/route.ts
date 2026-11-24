@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
 import { ensureRolePermissionsForWorkspaceRole } from '@/lib/role-permission-defaults';
+import { getWorkspaceAuthority, levelOfRole, mayActOn, rolesMayGrant } from '@/lib/workspace-authority';
 
 // PUT /api/workspaces/[workspaceId]/members/[memberId]/role - Update member role
 export async function PUT(
@@ -87,12 +88,29 @@ export async function PUT(
       );
     }
 
-    // Prevent users from changing their own role to something lower
-    if (member.userId === session.user.id && role !== WorkspaceRole.OWNER && role !== WorkspaceRole.ADMIN) {
-      return NextResponse.json(
-        { error: 'You cannot downgrade your own role' },
-        { status: 400 }
-      );
+    const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } });
+    if (member.userId === workspace?.ownerId) {
+      return NextResponse.json({ error: "The primary owner's role cannot be changed" }, { status: 403 });
+    }
+
+    // The rank rule. A platform admin who is not a member keeps the answer this route gave before it.
+    const actor = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (actor?.level !== null) {
+      const target = { userId: member.userId, level: levelOfRole(member.role) };
+      const holdsChangeRoles = { holdsChangeRoles: true }; // checked above
+      if (member.userId === session.user.id) {
+        return NextResponse.json({ error: 'Nobody can change their own role' }, { status: 403 });
+      }
+      if (!member.user.email && levelOfRole(role) !== 'STANDARD') {
+        return NextResponse.json({ error: 'An agent account cannot be an Owner or an Admin' }, { status: 403 });
+      }
+      if (!mayActOn(actor, target, holdsChangeRoles)) {
+        return NextResponse.json({ error: 'You can only change the role of members below your own level' }, { status: 403 });
+      }
+      if (rolesMayGrant(actor, [role], holdsChangeRoles).length === 0) {
+        const error = levelOfRole(role) === 'OWNER' ? 'Only the primary owner can grant the Owner role' : 'Only an Owner can grant the Admin role';
+        return NextResponse.json({ error }, { status: 403 });
+      }
     }
 
     // Update the member's role

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from "@/lib/session";
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
+import { getWorkspaceAuthority, levelOfRole, may, mayActOn } from '@/lib/workspace-authority';
 
 // PATCH /api/workspaces/[workspaceId]/members/[memberId] - Update member status
 export async function PATCH(
@@ -31,24 +32,8 @@ export async function PATCH(
     }
 
     // Check if user has permission to update member status
-    const [isOwner, isAdmin] = await Promise.all([
-      prisma.workspace.findFirst({
-        where: {
-          id: workspaceId,
-          ownerId: user.id,
-        },
-      }),
-      prisma.workspaceMember.findFirst({
-        where: {
-          userId: user.id,
-          workspaceId,
-          role: 'ADMIN',
-          status: true,
-        },
-      })
-    ]);
-
-    if (!isOwner && !isAdmin) {
+    const actor = await getWorkspaceAuthority(user.id, workspaceId);
+    if (!may(actor, 'members.manage')) {
       return NextResponse.json({ error: "Only workspace owners and admins can update member status" }, { status: 403 });
     }
 
@@ -73,14 +58,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // Prevent deactivating the workspace owner
+    // The rank rule, which also keeps the workspace owner's membership on
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { ownerId: true },
     });
+    const target = { userId: member.userId, level: member.userId === workspace?.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
 
-    if (member.userId === workspace?.ownerId) {
-      return NextResponse.json({ error: "Cannot deactivate the workspace owner" }, { status: 400 });
+    if (!mayActOn(actor, target, { holdsChangeRoles: false })) {
+      return NextResponse.json({ error: "You can only switch on or off members below your own level" }, { status: 403 });
     }
 
     // Update the member status

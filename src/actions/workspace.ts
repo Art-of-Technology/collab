@@ -10,6 +10,7 @@ import { getCurrentUser } from '@/lib/session';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { generateWorkspaceSlug } from '@/lib/utils';
+import { getWorkspaceAuthority, levelOfRole, may, mayActOn } from '@/lib/workspace-authority';
 
 async function resolveWorkspaceReadId(slugOrId: string) {
   const workspace = await prisma.workspace.findUnique({
@@ -260,7 +261,7 @@ export async function createWorkspace(data: {
       members: {
         create: {
           userId: user.id,
-          role: 'owner'
+          role: 'OWNER'
         }
       }
     },
@@ -464,9 +465,14 @@ export async function removeWorkspaceMember(data: {
     throw new Error('Workspace not found');
   }
   
-  // Check if user is the owner or self-removing
-  if (workspace.ownerId !== currentUser.id && currentUser.id !== userId) {
-    throw new Error('Only the workspace owner can remove other members');
+  // Anyone but the primary owner may leave; removing someone else follows the rank rule
+  const leaving = currentUser.id === userId;
+  if (leaving && workspace.ownerId === userId) {
+    throw new Error('The primary owner cannot leave the workspace');
+  }
+  const actor = leaving ? null : await getWorkspaceAuthority(currentUser.id, workspaceId);
+  if (!leaving && !may(actor, 'members.manage')) {
+    throw new Error('Only Owners and Admins can remove other members');
   }
   
   // Find the member to remove
@@ -480,6 +486,11 @@ export async function removeWorkspaceMember(data: {
   
   if (!member) {
     throw new Error('Member not found');
+  }
+
+  const target = { userId, level: userId === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
+  if (!leaving && !mayActOn(actor, target, { holdsChangeRoles: false })) {
+    throw new Error('You can only remove members below your own level');
   }
   
   // Remove the member
@@ -818,18 +829,9 @@ export async function updateWorkspaceMemberStatus(data: {
     throw new Error('Workspace not found');
   }
   
-  // Check if user is the owner or has admin permissions
-  const isOwner = workspace.ownerId === currentUser.id;
-  const isAdmin = await prisma.workspaceMember.findFirst({
-    where: {
-      workspaceId,
-      userId: currentUser.id,
-      role: 'ADMIN',
-      status: true
-    }
-  });
-  
-  if (!isOwner && !isAdmin) {
+  // Check if user is an Owner or an Admin of the workspace
+  const actor = await getWorkspaceAuthority(currentUser.id, workspaceId);
+  if (!may(actor, 'members.manage')) {
     throw new Error('Only workspace owners and admins can update member status');
   }
   
@@ -837,8 +839,7 @@ export async function updateWorkspaceMemberStatus(data: {
   const member = await prisma.workspaceMember.findFirst({
     where: {
       id: memberId,
-      workspaceId,
-      status: true
+      workspaceId
     },
     include: {
       user: {
@@ -855,9 +856,10 @@ export async function updateWorkspaceMemberStatus(data: {
     throw new Error('Member not found');
   }
   
-  // Prevent deactivating the workspace owner
-  if (member.userId === workspace.ownerId) {
-    throw new Error('Cannot deactivate the workspace owner');
+  // The rank rule, which also keeps the workspace owner's membership on
+  const target = { userId: member.userId, level: member.userId === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
+  if (!mayActOn(actor, target, { holdsChangeRoles: false })) {
+    throw new Error('You can only switch on or off members below your own level');
   }
   
   // Update the member status
