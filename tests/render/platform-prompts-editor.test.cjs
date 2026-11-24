@@ -81,6 +81,9 @@ test('saving needs a text and a reason, and the reply becomes the text in force 
     assert.equal(button('Save').disabled, false);
     await type(document.querySelector('textarea'), '   ');
     assert.equal(button('Save').disabled, true, 'an empty text is refused');
+    // Only spaces around the text in force change nothing: the server saves the trimmed text.
+    await type(document.querySelector('textarea'), '  Edited developer rules.\n');
+    assert.equal(button('Save').disabled, true, 'the text in force with spaces around it');
     await type(document.querySelector('textarea'), 'Newer rules.');
 
     const saved = { ...roles[0], inForce: { source: 'edit', text: 'Newer rules.', version: 3, reason: 'Clearer.', by, at, shippedNewer: false },

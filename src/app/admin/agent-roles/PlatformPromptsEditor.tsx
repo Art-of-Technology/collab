@@ -98,7 +98,7 @@ export function PlatformPromptsEditor({ roles: initial }: { roles: Role[] }) {
           <Input aria-label="Why" placeholder="Why, in one line: needed to save, restore or go back" maxLength={300} value={reason}
             onChange={event => setReason(event.target.value)} />
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => send({ action: 'save', text: draft })} disabled={busy || !why || !draft.trim() || draft === inForce.text}>Save</Button>
+            <Button onClick={() => send({ action: 'save', text: draft })} disabled={busy || !why || !draft.trim() || draft.trim() === inForce.text}>Save</Button>
             {inForce.source === 'edit' && (
               <Button variant="outline" onClick={() => send({ action: 'repository' })} disabled={busy || !why}>Back to the repository&apos;s text</Button>
             )}
