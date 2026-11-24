@@ -108,6 +108,10 @@ function load(file, dependencies = {}, globals = {}) {
       // The status rules are pure, so no fixture has to stand in for them.
       if (!(name in dependencies) && name === '@/constants/project-statuses') return load('src/constants/project-statuses.ts');
       if (!(name in dependencies) && name === '@/lib/issue-requests') return load('src/lib/issue-requests.ts');
+      // The Overview's status rules, read through whatever database the fixture hands the code under test.
+      if (!(name in dependencies) && name === '@/lib/project-overview') {
+        return load('src/lib/project-overview.ts', { ...dependencies, '@/lib/project-burn': load('src/lib/project-burn.ts') }, globals);
+      }
       if (!(name in dependencies) && name === '@/lib/issue-list-snapshot') {
         return load('src/lib/issue-list-snapshot.ts', { '@/utils/issueRelations': load('src/utils/issueRelations.ts') });
       }

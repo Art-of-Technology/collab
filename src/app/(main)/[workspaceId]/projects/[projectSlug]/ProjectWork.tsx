@@ -6,6 +6,7 @@ import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 import { useIssueModalUrlState } from '@/hooks/useIssueModalUrlState';
 import type { ProjectSummary } from '@/hooks/queries/useProjects';
 import { cn } from '@/lib/utils';
+import { NO_STATUS, NO_STATUS_FINISHED } from '@/constants/project-statuses';
 
 type WorkIssue = ProjectSummary['overview']['work'][number];
 type Milestone = ProjectSummary['overview']['milestones'][number];
@@ -78,13 +79,14 @@ function WorkBoard({ issues, statuses, milestones, openIssue }: {
   milestones: Map<string, Milestone>;
   openIssue: (id: string) => void;
 }) {
-  const columns = new Map<string | null, { label: string; issues: WorkIssue[] }>(statuses.map(status => [status.id, {
+  // Issues in no status are split into finished ones and the rest, as the summary counts them.
+  const columns = new Map<string, { label: string; issues: WorkIssue[] }>(statuses.map(status => [status.id ?? status.name, {
     label: status.displayName ?? status.name,
     issues: [],
   }]));
   for (const issue of issues) {
-    const key = issue.statusId;
-    const column = columns.get(key) ?? { label: key === null ? 'No status' : issue.status, issues: [] };
+    const key = issue.statusId ?? (issue.done ? NO_STATUS_FINISHED : NO_STATUS);
+    const column = columns.get(key) ?? { label: issue.statusId ? issue.status : issue.done ? 'Finished, no status' : 'No status', issues: [] };
     column.issues.push(issue);
     columns.set(key, column);
   }
