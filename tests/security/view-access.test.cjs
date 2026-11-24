@@ -253,7 +253,7 @@ test('single position rejects malformed scalars before issue lookup or writes', 
 test('the first list of a view page leaves requests out', async t => {
   const workspace = { id: 'workspace' };
   const project = { id: 'project' };
-  const work = { id: 'work', workspaceId: workspace.id, projectId: project.id, agentRequestRole: null };
+  const work = { id: 'work', workspaceId: workspace.id, projectId: project.id, agentRequestRole: null, priority: 'medium' };
   const request = { ...work, id: 'request', agentRequestRole: 'review' };
   const rows = [work, request];
   for (const page of ['[viewId]', 'dynamic']) await t.test(page, async () => {
@@ -269,6 +269,7 @@ test('the first list of a view page leaves requests out', async t => {
         project: { findMany: async () => [project] },
         view: { findFirst: async () => ({
           id: 'view', slug: 'view', displayType: 'LIST', visibility: 'WORKSPACE', projectIds: [project.id], fields,
+          filters: { priority: ['medium'] },
         }) },
         issue: { findMany: async ({ where }) => rows.filter(row => matches(row, where)) },
       } },
@@ -288,4 +289,46 @@ test('the first list of a view page leaves requests out', async t => {
     assert.deepEqual(await list({ requests: '1' }), ['work', 'request']);
     assert.deepEqual(await list({ requests: '0' }), ['work']);
   });
+});
+
+test('a view without saved filters leaves its list to the browser, which loads it anyway', async () => {
+  const workspace = { id: 'workspace' };
+  const project = { id: 'project' };
+  const listed = [];
+  let filters;
+  const { default: render } = load('src/app/(main)/[workspaceId]/views/[viewId]/page.tsx', {
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': { notFound() { assert.fail('Expected an accessible view'); } },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { email: 'member@example.test' } }) },
+    '@/lib/auth': {},
+    '@/lib/prisma': { prisma: {
+      user: { findUnique: async () => ({ id: 'member' }) },
+      workspace: { findFirst: async () => workspace },
+      project: { findMany: async () => [project] },
+      view: { findFirst: async () => ({
+        id: 'view', slug: 'view', displayType: 'LIST', visibility: 'WORKSPACE', projectIds: [project.id], fields: [], filters,
+      }) },
+      issue: { findMany: async query => { listed.push(query); return [{ id: 'work', projectId: project.id }]; } },
+    } },
+    '@/components/views/ViewRenderer': { default: () => null },
+    '@/components/views/agent-request-display': load('src/components/views/agent-request-display.ts'),
+  });
+  const open = async (searchParams = {}) => (await render({
+    params: Promise.resolve({ workspaceId: workspace.id, viewId: 'view' }),
+    searchParams: Promise.resolve(searchParams),
+  })).props;
+
+  for (const saved of [undefined, null, {}, { project: [project.id] }, { status: [], priority: [] }]) {
+    filters = saved;
+    for (const searchParams of [{}, { requests: '1' }]) {
+      const props = await open(searchParams);
+      assert.deepEqual(props.issues.map(issue => issue.id), [], `No rows are sent for filters ${JSON.stringify(saved)}`);
+      assert.equal(props.view.projects.length, 1);
+    }
+  }
+  assert.equal(listed.length, 0, 'The issues of a view without saved filters are not read on the server');
+
+  filters = { status: ['done'] };
+  assert.deepEqual((await open()).issues.map(issue => issue.id), ['work']);
+  assert.equal(listed.length, 1, 'A view with saved filters still gets its first list from the server');
 });
