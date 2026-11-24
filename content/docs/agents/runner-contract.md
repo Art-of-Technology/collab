@@ -287,7 +287,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | --- | --- |
 | `issue` | `id`, `issueKey`, `title`, `description`, `type`, `priority`, `projectId`, `status`, `category`, `assigneeId` and `agentRequestRole`. |
 | `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out returns `null` in the context (an ambiguous checkout is refused). |
-| `instructions` | The seat's instructions in three layers, in the order to give them to the session: `platform`, `organisation`, `seat`. See [below](#the-instructions). |
+| `instructions` | The seat's instructions in three layers, in the order to give them to the session: `platform`, `organisation`, `seat`; four, with `role` before `seat`, for a seat with one of the workspace's own roles. See [below](#the-instructions). |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. See [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you). |
@@ -303,7 +303,7 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 
 ### The instructions
 
-`instructions` is always a list of three, in this order. Put each layer's `text` at the start of the session in that order; a later layer adds to an earlier one. Who writes each layer, and where, is on [Roles and layers](/docs/agents/roles-and-layers).
+`instructions` is a list of three, in this order, or of four for a seat with one of the workspace's own roles. Put each layer's `text` at the start of the session in the order of the list; a later layer adds to an earlier one. Read the list as it comes, not by position. Who writes each layer, and where, is on [Roles and layers](/docs/agents/roles-and-layers).
 
 ```json
 "instructions": [
@@ -317,6 +317,7 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 | --- | --- | --- |
 | `platform` | Collab's prompt for the seat's role, the same in every organisation. Collab ships it, and a Collab system admin can replace it on the admin Roles page; a run gets the text in force when it started. The seat owner's user id stands where it names the person to ask. | 8,000 characters |
 | `organisation` | What the workspace adds for the role. | 16,000 characters |
+| `role` | Only for a seat with one of the workspace's own roles: that role's instructions. The seat's `role` is then the built-in role it behaves like, and the first two layers are that role's. | 16,000 characters |
 | `seat` | What this seat adds. | 16,000 characters |
 
 - The layers are those of the seat the issue is assigned to. An issue assigned to no seat, or to a retired one, gets the three layers with empty text.

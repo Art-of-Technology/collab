@@ -16,6 +16,7 @@ model User {
   agentRuns              AgentRun[]
   agentRoleInstructionsEdited AgentRoleInstructions[]
   agentPlatformPromptsEdited AgentPlatformPrompt[]
+  agentCustomRolesCreated AgentCustomRole[]
   id                     String                  @id @default(cuid())
   name                   String?
   email                  String?                 @unique
@@ -396,6 +397,7 @@ model Workspace {
   agentRunners        AgentRunner[]
   agentRuns           AgentRun[]
   agentRoleInstructions AgentRoleInstructions[]
+  agentCustomRoles AgentCustomRole[]
   id                  String                @id @default(cuid())
   name                String
   slug                String                @unique
@@ -3082,10 +3084,12 @@ model AgentSeat {
   roomProgram String? // the program the seat would run next
   roomAt      DateTime? // when the figure arrived; one older than 15 minutes reads as unknown
   instructions String?  @db.Text // the seat layer of its runs' instructions (CLB-610); its length is checked in the application
+  customRoleId String? // the workspace's own role the seat has (CLB-626); `role` is then that role's base role
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User       @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
   owner       User?      @relation("AgentSeatOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  customRole  AgentCustomRole? @relation(fields: [customRoleId], references: [id], onDelete: NoAction)
   runs        AgentRun[]
 
   @@index([projectId, role])
@@ -3106,6 +3110,27 @@ model AgentRoleInstructions {
   updatedBy   User?     @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, role])
+}
+
+// A workspace's own seat role (CLB-626): a name, the built-in role of the catalogue it behaves like, and its own
+// instructions, the role layer of its seats' runs, between the organisation's and the seat's. The base role is a catalogue
+// id; that the name is not a built-in role's and the instructions' length are checked in the application. A role a seat
+// has is never deleted (the seat's foreign key holds it): it is retired, so no new seat takes it.
+model AgentCustomRole {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  name         String
+  baseRole     String
+  instructions String      @db.Text
+  retiredAt    DateTime?
+  createdById  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  seats        AgentSeat[]
+
+  @@unique([workspaceId, name])
 }
 
 // One saved version of a role's platform prompt, as a system admin edited it on the admin Roles page (CLB-916). Rows are
