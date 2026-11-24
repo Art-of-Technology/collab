@@ -2,7 +2,7 @@
 
 The seven HTTP calls a program makes to run sessions for a seat, with what each one takes and what it returns.
 
-A runner is the program that starts a session for each issue of a seat. Collab decides which issue is next and who may work it. The runner decides how the session is run. `collab seat run` is a small runner built on these calls: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
+A runner is the program that starts a session for each issue of a seat. Collab decides which issue is next and who may work it, and sends the [repository](#the-repository) and the [instructions](#the-instructions) with it: nobody types either into a runner. The runner decides how the session is run. `collab seat run` is a small runner built on these calls: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
 
 ## Before you start
 
@@ -52,7 +52,7 @@ Takes nothing. Needs no scope.
 }
 ```
 
-- `role` is `developer`, `reviewer` or `release`. `ownerId` is a person's id or `null`.
+- `role` is `developer`, `reviewer`, `release`, `security`, `lead` or `planner`: see [the roles](/docs/agents/roles-and-layers#the-roles). `ownerId` is a person's id or `null`.
 - A token that is not a seat gets `403 seat_required`.
 
 ## List the work: GET seats/me/inbox
@@ -303,7 +303,7 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 
 ### The instructions
 
-`instructions` is always a list of three, in this order. Put each layer's `text` at the start of the session in that order; a later layer adds to an earlier one.
+`instructions` is always a list of three, in this order. Put each layer's `text` at the start of the session in that order; a later layer adds to an earlier one. Who writes each layer, and where, is on [Roles and layers](/docs/agents/roles-and-layers).
 
 ```json
 "instructions": [
