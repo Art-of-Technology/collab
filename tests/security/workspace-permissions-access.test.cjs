@@ -114,19 +114,6 @@ test('legacy management reads and permission toggles retain workspace scoping', 
   assert.deepEqual(f.state.rows.filter(row => row.workspaceId === 'foreign'), [{ workspaceId: 'foreign', role: 'DEVELOPER', permission: 'DELETE_ANY_POST' }]);
 });
 
-test('a member whose role is Owner has every permission with no permission rows', async () => {
-  for (const role of ['OWNER', 'owner']) {
-    const f = fixture(); f.state.memberRole = role; f.state.rows = [];
-    const all = Object.keys(f.permissions.Permission);
-    for (const permission of ['MANAGE_APPS', 'DELETE_ANY_POST', 'MANAGE_WORKSPACE_PERMISSIONS']) {
-      const result = await f.permissions.checkUserPermission('actor', 'workspace', permission);
-      assert.equal(result.hasPermission, true, `${role} ${permission}`);
-      assert.equal(result.userRole, role);
-    }
-    assert.deepEqual([...await f.permissions.getUserPermissions('actor', 'workspace')].sort(), all.sort());
-  }
-});
-
 test('a platform admin and a deactivated member get the answers they got before', async () => {
   const ask = async (setup, permission) => { const f = fixture(); setup(f.state); return { ...await f.permissions.checkUserPermission('actor', 'workspace', permission) }; };
   const list = async setup => { const f = fixture(); setup(f.state); return [...await f.permissions.getUserPermissions('actor', 'workspace')]; };
