@@ -2,6 +2,7 @@ import "server-only";
 import type { User } from "@prisma/client";
 import { prisma } from "./prisma";
 import { Permission, UserRole, WorkspaceRole } from "./permission-types";
+import { levelOfRole } from "./workspace-authority";
 
 export { Permission, UserRole, WorkspaceRole, getRoleDisplayName, getPermissionDisplayName } from "./permission-types";
 
@@ -63,6 +64,12 @@ export async function checkUserPermission(
         reason: "User is not a member of this workspace",
       };
     }
+
+    // Owner is fixed: no permission row can take anything away from the Owner level
+    if (levelOfRole(membership.role) === "OWNER") {
+      return { hasPermission: true, userRole: membership.role as any };
+    }
+
     // Check role permission in the workspace
     const rolePermission = await (prisma as any).rolePermission.findUnique({
       where: {
@@ -153,6 +160,11 @@ export async function getUserPermissions(
     const membership = user.workspaceMemberships[0];
     if (!membership) {
       return [];
+    }
+
+    // Owner is fixed: the Owner level has every permission
+    if (levelOfRole(membership.role) === "OWNER") {
+      return Object.values(Permission);
     }
 
     // Get all enabled permissions for the user's role
