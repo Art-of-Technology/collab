@@ -14,6 +14,7 @@ model User {
   agentSeatsOwned        AgentSeat[]         @relation("AgentSeatOwner")
   agentRunners           AgentRunner[]
   agentRuns              AgentRun[]
+  agentRoleInstructionsEdited AgentRoleInstructions[]
   id                     String                  @id @default(cuid())
   name                   String?
   email                  String?                 @unique
@@ -393,6 +394,7 @@ model Workspace {
   agentSeats          AgentSeat[]
   agentRunners        AgentRunner[]
   agentRuns           AgentRun[]
+  agentRoleInstructions AgentRoleInstructions[]
   id                  String                @id @default(cuid())
   name                String
   slug                String                @unique
@@ -3078,6 +3080,7 @@ model AgentSeat {
   room        Int? // 0 to 100: percent of allowance left on roomProgram, as its runner last reported; validated in the application
   roomProgram String? // the program the seat would run next
   roomAt      DateTime? // when the figure arrived; one older than 15 minutes reads as unknown
+  instructions String?  @db.Text // the seat layer of its runs' instructions (CLB-610); its length is checked in the application
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User       @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
@@ -3085,6 +3088,23 @@ model AgentSeat {
   runs        AgentRun[]
 
   @@index([projectId, role])
+}
+
+// A workspace's own instructions for one role of the catalogue: the organisation layer of every run of a seat with that
+// role in the workspace (CLB-608). The role is a catalogue id and the text's length is checked in the application. No row
+// means nothing added; saving empty text removes the row.
+model AgentRoleInstructions {
+  id          String    @id @default(cuid())
+  workspaceId String
+  role        String
+  text        String    @db.Text
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedBy   User?     @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, role])
 }
 
 // A runner is one program on one machine under one person's logins. It starts a pairing and holds its credential
