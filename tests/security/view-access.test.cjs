@@ -313,6 +313,7 @@ test('a view without saved filters leaves its list to the browser, which loads i
     '@/components/views/ViewRenderer': { default: () => null },
     '@/components/views/agent-request-display': load('src/components/views/agent-request-display.ts'),
   });
+  // The page runs in its own context, so its arrays are copied into this one before they are compared.
   const open = async (searchParams = {}) => (await render({
     params: Promise.resolve({ workspaceId: workspace.id, viewId: 'view' }),
     searchParams: Promise.resolve(searchParams),
@@ -322,13 +323,13 @@ test('a view without saved filters leaves its list to the browser, which loads i
     filters = saved;
     for (const searchParams of [{}, { requests: '1' }]) {
       const props = await open(searchParams);
-      assert.deepEqual(props.issues.map(issue => issue.id), [], `No rows are sent for filters ${JSON.stringify(saved)}`);
+      assert.deepEqual(Array.from(props.issues, issue => issue.id), [], `No rows are sent for filters ${JSON.stringify(saved)}`);
       assert.equal(props.view.projects.length, 1);
     }
   }
   assert.equal(listed.length, 0, 'The issues of a view without saved filters are not read on the server');
 
   filters = { status: ['done'] };
-  assert.deepEqual((await open()).issues.map(issue => issue.id), ['work']);
+  assert.deepEqual(Array.from((await open()).issues, issue => issue.id), ['work']);
   assert.equal(listed.length, 1, 'A view with saved filters still gets its first list from the server');
 });
