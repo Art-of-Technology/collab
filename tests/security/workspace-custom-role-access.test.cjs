@@ -33,7 +33,7 @@ function fixture() {
       updateMany: async ({ where, data }) => update('permissions', where, data),
     },
     workspaceMember: {
-      findUnique: async ({ where }) => where.userId_workspaceId ? (state.active ? { userId: 'actor', role: state.role } : null) : state.members.find(row => match(row, where)) || null,
+      findUnique: async ({ where }) => where.userId_workspaceId ? (state.active ? { userId: 'actor', role: state.role } : null) : (row => row ? { user: { email: 'member@weezboo.com' }, ...row } : null)(state.members.find(row => match(row, where))),
       count: async ({ where }) => state.members.filter(row => match(row, where)).length,
       updateMany: async ({ where, data }) => update('members', where, data),
       update: async ({ where, data }) => { update('members', where, data); return state.members.find(row => match(row, where)); },

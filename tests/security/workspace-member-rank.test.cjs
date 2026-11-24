@@ -14,7 +14,7 @@ function fixture() {
     ...['CHANGE_MEMBER_ROLES', 'MANAGE_WORKSPACE_MEMBERS'].flatMap(permission => ['ADMIN', 'admin', 'HR'].map(role => ({ workspaceId: 'w', role, permission }))),
   ];
   const state = { userId: null };
-  const withUser = row => row && { ...row, user: { id: row.userId, name: row.userId, email: `${row.userId}@example.test` } };
+  const withUser = row => row && { ...row, user: { id: row.userId, name: row.userId, email: users.find(user => user.id === row.userId).email } };
   const find = where => rows.find(row => matches(row, where)) ?? null;
   const memberships = (userId, where) => rows.filter(row => row.userId === userId && matches(row, where));
   const prisma = {
@@ -81,7 +81,7 @@ function fixture() {
     remove: async (actor, target) => { as(actor); return settle(actions.removeWorkspaceMember({ workspaceId: 'w', userId: target })); },
   };
   const row = userId => rows.find(item => item.userId === userId) ?? null;
-  return { ...paths, row, rows };
+  return { ...paths, row, rows, rolePermissions };
 }
 
 // Criterion 8: a refusal on a route is a 403 whose error is one sentence.
@@ -186,7 +186,7 @@ test('an Owner switches a member off on all three status paths, and an Admin onl
       }
     }
   }
-  for (const path of ['patch', 'byUser']) {
+  for (const path of ['patch', 'byUser', 'action']) {
     const f = fixture();
     assert.equal((await f[path]('adm1', 'gone', true)).ok, true, `${path}: an Admin switches a standard role back on`);
     f.row('adm2').status = false;
@@ -196,6 +196,24 @@ test('an Owner switches a member off on all three status paths, and an Admin onl
   const f = fixture();
   assert.equal((await f.byUser('own1', 'agent', false)).status, 409, 'agents stay on the Agent tokens page');
   assert.equal(f.row('agent').status, true);
+});
+
+test('an Admin whose role has no manage-members permission row gets the same answer on all three status paths', async () => {
+  for (const path of ['patch', 'byUser', 'action']) {
+    const f = fixture();
+    f.rolePermissions.splice(0, f.rolePermissions.length, ...f.rolePermissions.filter(row => row.permission !== 'MANAGE_WORKSPACE_MEMBERS'));
+    assert.equal((await f[path]('adm1', 'mem', false)).ok, true, `${path}: an Admin on a standard role`);
+    assert.equal(f.row('mem').status, false, path);
+    refused(await f[path]('adm1', 'adm2', false), `${path}: an Admin on an Admin`);
+    refused(await f[path]('dev', 'mem', false), `${path}: a standard role`);
+  }
+});
+
+test('an agent account is not given the Owner or the Admin role', async () => {
+  const f = fixture();
+  for (const role of ['OWNER', 'ADMIN']) refused(await f.role('prim', 'agent', role), `the primary owner gives an agent ${role}`);
+  assert.equal(f.row('agent').role, 'MEMBER');
+  assert.equal((await f.role('prim', 'agent', 'DEVELOPER')).ok, true, 'a standard role is fine');
 });
 
 test('an Admin removes a member below Admin, and anyone but the primary owner may leave', async () => {

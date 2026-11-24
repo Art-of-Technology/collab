@@ -135,6 +135,18 @@ test('adding a person is refused without the permission, for a stranger, for an 
   assert.equal(f.writes(), before);
 });
 
+test('a standard member with manage permission gets the same 404 adding a stranger or a missing account', async () => {
+  const f = fixture();
+  f.rolePermissions.push({ workspaceId: 'w1', role: 'MEMBER', permission: 'MANAGE_WORKSPACE_MEMBERS' });
+  f.as('bob');
+  const before = f.writes();
+  const stranger = await f.put('w1', 'frank');
+  const missing = await f.put('w1', 'nobody');
+  assert.equal(missing.status, 404);
+  assert.deepEqual(stranger, missing);
+  assert.equal(f.writes(), before);
+});
+
 test('a system admin puts anyone into any workspace', async () => {
   const f = fixture();
   f.as('root');
