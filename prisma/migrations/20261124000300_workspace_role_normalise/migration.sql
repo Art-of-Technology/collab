@@ -7,16 +7,15 @@
 BEGIN;
 
 -- 1. Permission rows that would share (workspace, role, permission) once upper-cased: keep the one already in upper case
---    (else the lowest id) and delete the others first, so the unique index holds through step 2.
+--    and delete the others first, so the unique index holds through step 2.
 DELETE FROM "RolePermission" AS r
 USING (
   SELECT "id", row_number() OVER (
     PARTITION BY "workspaceId", upper("role" COLLATE "C"), "permission"
-    ORDER BY ("role" = upper("role" COLLATE "C")) DESC, "id"
+    ORDER BY ("role" = upper("role" COLLATE "C")) DESC
   ) AS n
   FROM "RolePermission"
-  WHERE upper("role" COLLATE "C") IN ('OWNER', 'ADMIN', 'MODERATOR', 'DEVELOPER', 'PROJECT_MANAGER', 'DESIGNER', 'QA_TESTER',
-    'CONTENT_CREATOR', 'ANALYST', 'HR', 'MARKETING', 'SALES', 'CUSTOMER_SUPPORT', 'MEMBER', 'VIEWER', 'GUEST')
+  WHERE upper("role" COLLATE "C") = ANY (enum_range(NULL::"WorkspaceRole")::text[])
 ) AS ranked
 WHERE r."id" = ranked."id" AND ranked.n > 1;
 
@@ -24,15 +23,13 @@ WHERE r."id" = ranked."id" AND ranked.n > 1;
 UPDATE "RolePermission"
 SET "role" = upper("role" COLLATE "C"), "updatedAt" = CURRENT_TIMESTAMP
 WHERE "role" <> upper("role" COLLATE "C")
-  AND upper("role" COLLATE "C") IN ('OWNER', 'ADMIN', 'MODERATOR', 'DEVELOPER', 'PROJECT_MANAGER', 'DESIGNER', 'QA_TESTER',
-    'CONTENT_CREATOR', 'ANALYST', 'HR', 'MARKETING', 'SALES', 'CUSTOMER_SUPPORT', 'MEMBER', 'VIEWER', 'GUEST');
+  AND upper("role" COLLATE "C") = ANY (enum_range(NULL::"WorkspaceRole")::text[]);
 
 -- 3. Upper-case the built-in names in memberships. A user has one membership per workspace, so no row can collide.
 UPDATE "WorkspaceMember"
 SET "role" = upper("role" COLLATE "C"), "updatedAt" = CURRENT_TIMESTAMP
 WHERE "role" <> upper("role" COLLATE "C")
-  AND upper("role" COLLATE "C") IN ('OWNER', 'ADMIN', 'MODERATOR', 'DEVELOPER', 'PROJECT_MANAGER', 'DESIGNER', 'QA_TESTER',
-    'CONTENT_CREATOR', 'ANALYST', 'HR', 'MARKETING', 'SALES', 'CUSTOMER_SUPPORT', 'MEMBER', 'VIEWER', 'GUEST');
+  AND upper("role" COLLATE "C") = ANY (enum_range(NULL::"WorkspaceRole")::text[]);
 
 -- 4. The owner's own membership becomes an active OWNER where it has another role or is inactive.
 UPDATE "WorkspaceMember" AS m

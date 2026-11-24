@@ -21,10 +21,14 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npx prisma generate
       - name: Install local PostgreSQL test binaries
-        run: sudo apt-get update && sudo apt-get install -y postgresql
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-17
       - name: Type check
         run: npx tsc --noEmit -p .
       - name: Security and render tests, compared with tests/known-failures.txt
+        env:
+          PG17_BINDIR: /usr/lib/postgresql/17/bin
         run: npm test
       - name: Install Chromium for browser tests
         run: npx playwright install --with-deps --only-shell chromium

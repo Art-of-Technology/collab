@@ -5,36 +5,28 @@ const assert = require('node:assert/strict');
 const { test, before, after } = require('node:test');
 const { execFileSync } = require('node:child_process');
 const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
-const { createServer } = require('node:net');
-const { tmpdir, userInfo } = require('node:os');
+const { userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
 
 const MIGRATION = resolve('prisma/migrations/20261124000300_workspace_role_normalise/migration.sql');
 const OLD = '2026-01-01 00:00:00';
-let bindir, directory, port, started;
+let bindir, directory, started;
 
 const psql = (sql, extra = []) => execFileSync(join(bindir, 'psql'),
-  ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', String(port), '-U', userInfo().username, '-d', 'postgres', ...extra],
+  ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-p', '5432', '-U', userInfo().username, '-d', 'postgres', ...extra],
   { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
 const rows = table => JSON.parse(psql(`SELECT coalesce(json_agg(t ORDER BY id), '[]') FROM "${table}" t;`, ['-At']));
 const snapshot = () => ({ members: rows('WorkspaceMember'), permissions: rows('RolePermission') });
 
-const freePort = () => new Promise((done, fail) => {
-  const server = createServer().once('error', fail).listen(0, '127.0.0.1', () => {
-    const { port: free } = server.address();
-    server.close(() => done(free));
-  });
-});
-
-before(async () => {
-  bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
-  directory = mkdtempSync(join(tmpdir(), 'collab-role-normalise-pg-'));
-  port = await freePort();
+before(() => {
+  bindir = process.env.PG17_BINDIR || execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
+  directory = mkdtempSync('/tmp/collab-role-normalise-pg-');
   const data = join(directory, 'data');
   execFileSync(join(bindir, 'initdb'), ['-D', data, '-A', 'trust', '--no-locale', '-E', 'UTF8'], { stdio: 'pipe' });
   execFileSync(join(bindir, 'pg_ctl'), ['-D', data, '-l', join(directory, 'server.log'), '-o',
-    `-p ${port} -c listen_addresses=127.0.0.1 -c unix_socket_directories='' -c fsync=off`, '-w', 'start'], { stdio: 'pipe' });
+    `-p 5432 -c listen_addresses='' -k ${directory} -c fsync=off`, '-w', 'start'], { stdio: 'pipe' });
   started = true;
+  assert.equal(psql("SELECT current_setting('server_version_num')::int / 10000", ['-At']).trim(), '17', 'fixture requires PostgreSQL 17');
   psql(execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-empty',
     '--to-schema-datamodel', resolve('prisma/schema.prisma'), '--script'], { encoding: 'utf8', stdio: 'pipe' }));
   const users = ['o1', 'o2', 'o3', 'o4', 'o5', 'a', 'm', 'c', 'r', 'q', 's'];
@@ -104,10 +96,13 @@ test('the migration SQL upper-cases the built-in role names in memberships and p
   assert.deepEqual({ ...members['m-a'], role: 'Admin', updatedAt: was['m-a'].updatedAt }, was['m-a']);
 
   // The lowercase duplicate goes, the row already in upper case stays; with no upper-case row, one of the two is kept.
-  const permissions = first.permissions.map(({ id, workspaceId, role, permission }) => `${id} ${workspaceId} ${role} ${permission}`);
+  const survivor = first.permissions.filter(row => row.workspaceId === 'w1' && row.role === 'MEMBER' && row.permission === 'EDIT_SELF_POST');
+  assert.equal(survivor.length, 1);
+  assert.ok(['p-member-a', 'p-member-b'].includes(survivor[0].id));
+  const permissions = first.permissions.filter(row => row !== survivor[0]).map(({ id, workspaceId, role, permission }) => `${id} ${workspaceId} ${role} ${permission}`);
   assert.deepEqual(permissions, [
     'p-admin-only-lower w1 ADMIN VIEW_POSTS', 'p-admin-upper w1 ADMIN CREATE_POST', 'p-custom-lite w1 Owner-Lite CREATE_POST',
-    'p-custom-reviewer w1 reviewer VIEW_POSTS', 'p-member-a w1 MEMBER EDIT_SELF_POST', 'p-member-upper w1 MEMBER VIEW_POSTS',
+    'p-custom-reviewer w1 reviewer VIEW_POSTS', 'p-member-upper w1 MEMBER VIEW_POSTS',
     'p-w2-admin w2 ADMIN CREATE_POST',
   ]);
   const kept = byId(first.permissions), old = byId(before.permissions);
