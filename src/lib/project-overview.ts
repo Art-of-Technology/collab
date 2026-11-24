@@ -41,10 +41,10 @@ const projectHomeStatusSelect = {
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
 type ForecastIssue = OverviewIssue & { parentId: string | null; assignee: { name: string | null } | null };
 type ProjectHomeStatus = Prisma.ProjectStatusGetPayload<{ select: typeof projectHomeStatusSelect }>;
-const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
+export const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
   issue.statusValue?.trim() || issue.status?.trim() || '';
 const isLegacyFinal = (label: string) => LEGACY_FINAL_STATUSES.has(label.toLowerCase());
-const isDone = (issue: Pick<OverviewIssue, 'projectStatus' | 'statusId' | 'status' | 'statusValue'>) =>
+export const isDone = (issue: Pick<OverviewIssue, 'projectStatus' | 'statusId' | 'status' | 'statusValue'>) =>
   issue.projectStatus?.isFinal ?? (!issue.statusId && isLegacyFinal(legacyStatusLabel(issue)));
 const normalizeStatus = (label: string) => label.toLowerCase().replace(/[\s_-]+/g, '');
 const issueRef = ({ id, issueKey, title }: Pick<OverviewIssue, 'id' | 'issueKey' | 'title'>) => ({ id, issueKey, title });
@@ -53,7 +53,10 @@ const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
 const dateOrder = (a: Date | null, b: Date | null) =>
   (a?.getTime() ?? Infinity) - (b?.getTime() ?? Infinity);
 
-function resolveLegacyStatus(label: string, activeStatuses: ProjectHomeStatus[]) {
+/** The active status an issue saved before project statuses existed is counted in, by the label it was saved with. */
+export function resolveLegacyStatus<Status extends Pick<ProjectHomeStatus, 'name' | 'displayName' | 'isFinal'>>(
+  label: string, activeStatuses: Status[],
+) {
   if (!label) return null;
   const exact = activeStatuses.filter(status => status.name === label || status.displayName === label);
   if (exact.length === 1) return exact[0];
