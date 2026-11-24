@@ -1,7 +1,8 @@
 const { assert, test, load } = require('./helpers.cjs');
 
 // One project read through the summary route and, in the same call, through the Overview and Work tab
-// (loadProjectHome), against one fixture database. The finished-work numbers must be the same everywhere.
+// (loadProjectHome), and through the issue list (`collab issues list`), against one fixture database.
+// The finished-work numbers must be the same everywhere.
 const DAY = 86_400_000;
 const now = new Date();
 const date = days => new Date(now.getTime() + days * DAY);
@@ -44,17 +45,17 @@ function groupBy(rows, args) {
   return [...groups.values()];
 }
 
-function fixture() {
+function fixture({ statuses: statusFields } = {}) {
   const project = { id: 'project', name: 'Project', slug: 'project', description: null, color: '#fff',
     workspaceId: 'workspace', issuePrefix: 'DEMO', createdAt: date(-90), updatedAt: now, workspace: {} };
   const status = (id, fields) => ({ id, name: id, displayName: id, color: '#fff', category: null, isFinal: false,
     isActive: true, order: 0, projectId: project.id, project, ...fields });
-  const statuses = [
-    status('todo', { displayName: 'To Do', order: 0 }),
-    status('done', { displayName: 'Done', isFinal: true, order: 1 }),
+  const statuses = (statusFields ?? [
+    ['todo', { displayName: 'To Do', order: 0 }],
+    ['done', { displayName: 'Done', isFinal: true, order: 1 }],
     // A status taken out of use that still holds a finished issue.
-    status('closed', { displayName: 'Closed', isFinal: true, isActive: false, order: 2 }),
-  ];
+    ['closed', { displayName: 'Closed', isFinal: true, isActive: false, order: 2 }],
+  ]).map(([id, fields]) => status(id, fields));
   const byId = Object.fromEntries(statuses.map(row => [row.id, row]));
   const issue = (id, fields = {}) => {
     const row = {
@@ -62,7 +63,7 @@ function fixture() {
       statusId: null, status: null, statusValue: null, dueDate: null, startDate: null, milestoneId: null, parentId: null,
       createdAt: date(-60), updatedAt: date(-1), firstStartedAt: null, finishedAt: null, baselineStartDate: null,
       baselineDueDate: null, priority: 'MEDIUM', reporterId: 'alice', assigneeId: null, assignee: null, parent: null,
-      targetRelations: [], sourceRelations: [], agentRequestRole: null, ...fields,
+      targetRelations: [], sourceRelations: [], comments: [], agentRequestRole: null, ...fields,
     };
     row.projectStatus = row.statusId ? byId[row.statusId] : null;
     return row;
@@ -111,7 +112,26 @@ function fixture() {
     '@/lib/project-overview': overview,
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status || 200 }) } },
   }, { console: { error(...args) { console.error(...args); } } });
-  return { call: () => route.GET({}, { params: Promise.resolve({ projectId: project.id }) }) };
+  const list = load('src/app/api/apps/auth/issues/route.ts', {
+    '@/lib/prisma': prisma,
+    '@/lib/apps/auth-middleware': { withAppAuth: handler => request => handler(request, { workspace: { id: project.workspaceId }, user: { id: 'alice' } }) },
+    '@/lib/project-overview': overview,
+    '@/lib/event-bus': {},
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status || 200 }) } },
+    zod: require('zod'),
+  }, { URL, console: { error(...args) { console.error(...args); } } });
+  return {
+    call: () => route.GET({}, { params: Promise.resolve({ projectId: project.id }) }),
+    list: () => list.GET({ url: `https://collab.test/api/apps/auth/issues?projectId=${project.id}&limit=100` }),
+  };
+}
+
+// What `collab issues list` gives for one project, counted the way the summary and the Overview count.
+async function listCounts(fixtureProject) {
+  const { status, body } = await fixtureProject.list();
+  assert.equal(status, 200);
+  const work = body.issues.filter(issue => issue.type !== 'MILESTONE' && !issue.request);
+  return { total: work.length, done: work.filter(issue => issue.done).length };
 }
 
 test('the summary, its status counts and the Overview count the same finished work', async () => {
@@ -138,6 +158,43 @@ test('the summary, its status counts and the Overview count the same finished wo
   assert.deepEqual(counts.map(row => [row.id, row.displayName, row.count]), [
     ['todo', 'To Do', 2], ['done', 'Done', 3], ['closed', 'Closed', 1], [null, 'No status', 2],
   ]);
+});
+
+test('the issue list says which issues are finished work, and counts them as the Overview does', async () => {
+  const project = fixture();
+  const { body } = await project.call();
+  assert.deepEqual(await listCounts(project), { total: body.overview.stats.total, done: body.overview.stats.done });
+  assert.deepEqual(await listCounts(project), { total: body.stats.totalIssues, done: body.stats.completedIssues });
+  // The stored label stays as it was saved: an old "Done" still reads "Done", and is finished.
+  const { body: list } = await project.list();
+  assert.deepEqual(list.issues.filter(issue => issue.id.startsWith('legacy-')).map(issue => [issue.id, issue.status, issue.done]).sort(),
+    [['legacy-Done', 'Done', true], ['legacy-done', 'done', true], ['legacy-open', 'to_do', false], ['legacy-unknown', 'Parked', false]]);
+});
+
+test('an old finished label that no status takes is counted as finished in the status counts', async () => {
+  // Two final statuses, neither named "done": an issue saved as "done" or "Done" fits neither, and is still finished.
+  const project = fixture({ statuses: [
+    ['todo', { displayName: 'To Do', order: 0 }],
+    ['done', { name: 'shipped', displayName: 'Shipped', isFinal: true, order: 1 }],
+    ['dropped', { displayName: 'Dropped', isFinal: true, order: 2 }],
+    ['closed', { displayName: 'Closed', isFinal: true, isActive: false, order: 3 }],
+  ] });
+  const { body } = await project.call();
+  const { stats } = body.overview;
+  assert.deepEqual({ total: stats.total, done: stats.done }, { total: 8, done: 4 });
+  assert.deepEqual({ total: body.stats.totalIssues, done: body.stats.completedIssues }, { total: stats.total, done: stats.done });
+
+  const counts = body.statusDistribution;
+  assert.equal(counts.reduce((sum, row) => sum + row.count, 0), stats.total);
+  assert.equal(counts.filter(row => row.isFinal).reduce((sum, row) => sum + row.count, 0), stats.done);
+  assert.deepEqual(counts.map(row => [row.id, row.displayName, row.isFinal, row.count]), [
+    ['todo', 'To Do', false, 2], ['done', 'Shipped', true, 1], ['dropped', 'Dropped', true, 0], ['closed', 'Closed', true, 1],
+    [null, 'Finished, no status', true, 2], [null, 'No status', false, 2],
+  ]);
+  // The Work tab's board puts the finished issues in no status in a column of their own.
+  const withoutStatus = body.overview.work.filter(item => item.statusId === null);
+  assert.deepEqual([withoutStatus.filter(item => item.done).length, withoutStatus.filter(item => !item.done).length], [2, 2]);
+  assert.deepEqual(await listCounts(project), { total: stats.total, done: stats.done });
 });
 
 test('an issue finished under its old label is not open, overdue or unassigned in the summary', async () => {

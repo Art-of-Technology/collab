@@ -8,6 +8,7 @@ import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { isDone, legacyStatusLabel, loadProjectHome, resolveLegacyStatus } from '@/lib/project-overview';
 import { withoutRequests } from '@/lib/issue-requests';
+import { NO_STATUS, NO_STATUS_FINISHED } from '@/constants/project-statuses';
 
 export async function GET(
   request: NextRequest,
@@ -120,10 +121,17 @@ export async function GET(
       .reduce((sum, c) => sum + c._count.id, 0) +
       legacy.filter(group => group.done).reduce((sum, group) => sum + group.count, 0);
     const openIssues = totalIssues - completedIssues;
+    // Issues in no status are counted apart by whether they are finished, so that the final counts add up to the done count.
     const withoutStatus = totalIssues - statusDistribution.reduce((sum, status) => sum + status.count, 0);
-    if (withoutStatus > 0) {
+    const finishedWithoutStatus = completedIssues - statusDistribution.filter(status => status.isFinal).reduce((sum, status) => sum + status.count, 0);
+    if (finishedWithoutStatus > 0) {
       statusDistribution.push({
-        id: null, name: 'no_status', displayName: 'No status', color: '#6b7280', isFinal: false, count: withoutStatus,
+        id: null, name: NO_STATUS_FINISHED, displayName: 'Finished, no status', color: '#6b7280', isFinal: true, count: finishedWithoutStatus,
+      });
+    }
+    if (withoutStatus - finishedWithoutStatus > 0) {
+      statusDistribution.push({
+        id: null, name: NO_STATUS, displayName: 'No status', color: '#6b7280', isFinal: false, count: withoutStatus - finishedWithoutStatus,
       });
     }
 

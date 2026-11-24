@@ -180,7 +180,7 @@ export interface ProjectSummaryStats {
 }
 
 export interface StatusDistribution {
-  /** null for the work issues that are in no project status. */
+  /** null for the work issues that are in no project status; `name` then tells the finished ones apart. */
   id: string | null;
   name: string;
   displayName: string | null;
