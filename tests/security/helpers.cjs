@@ -16,7 +16,6 @@ function load(file, dependencies = {}, globals = {}) {
   if (file === 'src/lib/permissions.ts') {
     dependencies['server-only'] = {};
     dependencies['./permission-types'] = load('src/lib/permission-types.ts');
-    dependencies['./workspace-authority'] ||= load('src/lib/workspace-authority.ts', { './prisma': dependencies['./prisma'] });
   }
   const database = dependencies['@/lib/prisma'];
   if (file === 'src/lib/apps/auth-middleware.ts' && database?.prisma && !database.prisma.agentSeat) {
