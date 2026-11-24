@@ -102,8 +102,9 @@ export default function MemberRow({
       await removeWorkspaceMember({ workspaceId, userId: member.user.id });
       onMessage(`${name} was removed from ${workspaceName}.`);
       onChange(member.id, null);
-    } catch (error) {
-      onMessage(error instanceof Error ? error.message : "The member was not removed.");
+    } catch {
+      // A production build hides the sentence a server action throws, so this line does not depend on it.
+      onMessage(`${name} was not removed. Reload the page to see who is here now.`);
     } finally { setBusy(false); }
   };
 
@@ -163,7 +164,7 @@ export default function MemberRow({
               <Link href={`/workspaces/${routeWorkspaceId}/settings/members/${member.user.id}`}>Other workspaces</Link>
             </Button>
           )}
-          {member.mayAct && (confirming ? (
+          {member.mayAct && member.status && (confirming ? (
             <>
               <span>Remove {name} from {workspaceName}?</span>
               <Button variant="destructive" size="sm" className="h-7 text-xs" disabled={busy} onClick={remove}>Remove</Button>

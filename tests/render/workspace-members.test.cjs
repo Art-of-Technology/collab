@@ -155,7 +155,7 @@ test('the row menu switches a member on or off and removes one after an inline c
     removal = async () => { throw new Error('You can only remove members below your own level'); };
     await click(button('Remove from workspace…'));
     await click(button('Remove'));
-    assert.equal(status(), 'You can only remove members below your own level');
+    assert.equal(status(), 'Kim Park was not removed. Reload the page to see who is here now.', 'a production build hides the thrown sentence, so the line does not use it');
     assert.ok(row('Kim Park'), 'a refused removal keeps the row');
 
     removal = async () => ({ success: true });
