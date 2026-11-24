@@ -2,9 +2,9 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 const clone = value => JSON.parse(JSON.stringify(value));
 
 function fixture() {
-  const state = { member: true, owner: false, admin: false, manage: true, targetMember: true, mapping: true, legacy: 0, actorReads: [], writes: [], seeds: 0, transactions: 0, failCreate: false,
+  const state = { member: true, memberRole: 'HR', owner: false, admin: false, manage: true, targetMember: true, mapping: true, legacy: 0, actorReads: [], writes: [], seeds: 0, transactions: 0, failCreate: false,
     rows: [{ workspaceId: 'workspace', role: 'HR', permission: 'MANAGE_WORKSPACE_PERMISSIONS' }, { workspaceId: 'workspace', role: 'DEVELOPER', permission: 'DELETE_ANY_POST' }, { workspaceId: 'workspace', role: 'VIEWER', permission: 'VIEW_POSTS' }, { workspaceId: 'foreign', role: 'DEVELOPER', permission: 'DELETE_ANY_POST' }] };
-  const actor = { id: 'actor', email: 'actor@weezboo.com', get role() { return state.admin ? 'SYSTEM_ADMIN' : 'DEVELOPER'; }, get workspaceMemberships() { return [{ workspaceId: 'workspace', role: 'HR', status: state.member }]; }, get ownedWorkspaces() { return state.owner ? [{ id: 'workspace' }] : []; } };
+  const actor = { id: 'actor', email: 'actor@weezboo.com', get role() { return state.admin ? 'SYSTEM_ADMIN' : 'DEVELOPER'; }, get workspaceMemberships() { return [{ workspaceId: 'workspace', role: state.memberRole, status: state.member }]; }, get ownedWorkspaces() { return state.owner ? [{ id: 'workspace' }] : []; } };
   const target = { id: 'target', role: 'DEVELOPER', get workspaceMemberships() { return [{ workspaceId: 'workspace', role: 'DEVELOPER', status: state.targetMember }]; }, ownedWorkspaces: [] };
   const pick = (row, args = {}) => {
     if (!row) return null; const result = args.select ? {} : { ...row };
@@ -40,7 +40,7 @@ function fixture() {
     // Never import or execute the real all-workspace operational seed script.
     '@prisma/scripts/seed-default-permissions': { seedDefaultPermissions: async () => { state.seeds++; } },
   }, globals);
-  return { state, env, defaults: defaults.defaultRolePermissions, invoke: (method, body, userId) => handlers[method](new Request('https://example.test/' + (userId ? '?userId=' + userId : ''), { method, ...(body ? { body: JSON.stringify(body) } : {}) }), { params: Promise.resolve({ workspaceId: 'workspace' }) }) };
+  return { state, env, permissions, defaults: defaults.defaultRolePermissions, invoke: (method, body, userId) => handlers[method](new Request('https://example.test/' + (userId ? '?userId=' + userId : ''), { method, ...(body ? { body: JSON.stringify(body) } : {}) }), { params: Promise.resolve({ workspaceId: 'workspace' }) }) };
 }
 
 test('foreign permission reads require caller management before target lookups', async () => {
@@ -112,4 +112,43 @@ test('legacy management reads and permission toggles retain workspace scoping', 
   assert.equal((await f.invoke('PUT', { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: true })).status, 200);
   assert.equal((await f.invoke('PUT', { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: false })).status, 200);
   assert.deepEqual(f.state.rows.filter(row => row.workspaceId === 'foreign'), [{ workspaceId: 'foreign', role: 'DEVELOPER', permission: 'DELETE_ANY_POST' }]);
+});
+
+test('a member whose role is Owner has every permission with no permission rows', async () => {
+  for (const role of ['OWNER', 'owner']) {
+    const f = fixture(); f.state.memberRole = role; f.state.rows = [];
+    const all = Object.keys(f.permissions.Permission);
+    for (const permission of ['MANAGE_APPS', 'DELETE_ANY_POST', 'MANAGE_WORKSPACE_PERMISSIONS']) {
+      const result = await f.permissions.checkUserPermission('actor', 'workspace', permission);
+      assert.equal(result.hasPermission, true, `${role} ${permission}`);
+      assert.equal(result.userRole, role);
+    }
+    assert.deepEqual([...await f.permissions.getUserPermissions('actor', 'workspace')].sort(), all.sort());
+  }
+});
+
+test('a platform admin and a deactivated member get the answers they got before', async () => {
+  const ask = async (setup, permission) => { const f = fixture(); setup(f.state); return { ...await f.permissions.checkUserPermission('actor', 'workspace', permission) }; };
+  const list = async setup => { const f = fixture(); setup(f.state); return [...await f.permissions.getUserPermissions('actor', 'workspace')]; };
+  const all = Object.keys(fixture().permissions.Permission).sort();
+  // A platform admin without a membership row: every permission, reported as OWNER.
+  const admin = state => { state.admin = true; state.member = false; state.rows = []; };
+  assert.deepEqual(await ask(admin, 'MANAGE_APPS'), { hasPermission: true, userRole: 'OWNER' });
+  assert.deepEqual((await list(admin)).sort(), all);
+  // A deactivated member, whatever the role on the row, has nothing.
+  for (const memberRole of ['HR', 'OWNER', 'owner', 'ADMIN']) {
+    const gone = state => { state.member = false; state.memberRole = memberRole; };
+    assert.deepEqual(await ask(gone, 'MANAGE_WORKSPACE_PERMISSIONS'), { hasPermission: false, reason: 'User is not a member of this workspace' });
+    assert.deepEqual(await list(gone), []);
+  }
+  // Any other active role, Admin included, has exactly its rows.
+  assert.deepEqual(await ask(() => {}, 'MANAGE_WORKSPACE_PERMISSIONS'), { hasPermission: true, userRole: 'HR' });
+  assert.deepEqual(await ask(() => {}, 'MANAGE_APPS'), { hasPermission: false, reason: 'Permission not configured for this role', userRole: 'HR' });
+  assert.deepEqual(await list(() => {}), ['MANAGE_WORKSPACE_PERMISSIONS']);
+  for (const memberRole of ['ADMIN', 'admin', 'DEVELOPER', 'Release Captain']) {
+    const other = state => { state.memberRole = memberRole; };
+    assert.deepEqual(await ask(other, 'MANAGE_APPS'), { hasPermission: false, reason: 'Permission not configured for this role', userRole: memberRole });
+  }
+  assert.deepEqual(await ask(state => { state.memberRole = 'DEVELOPER'; }, 'DELETE_ANY_POST'), { hasPermission: true, userRole: 'DEVELOPER' });
+  assert.deepEqual(await list(state => { state.memberRole = 'DEVELOPER'; }), ['DELETE_ANY_POST']);
 });
