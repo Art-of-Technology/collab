@@ -153,6 +153,9 @@ export default function ViewRenderer({
 
   const setIncludeAgentRequests = (include: boolean) => {
     const params = new URLSearchParams(searchParams.toString());
+    // The box holds the search; the address Next.js has handed back can still lag it.
+    if (search) params.set('search', search);
+    else params.delete('search');
     if (include === savedIncludesRequests) {
       params.delete('requests');
     } else {
