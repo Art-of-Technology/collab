@@ -16,6 +16,7 @@ import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
 import { assertAssignable, HandoffError } from "@/lib/issue-assignee";
 import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
 import { withoutRequests } from "@/lib/issue-requests";
+import { ISSUE_LIST_DATE_FIELDS, type IssueListSnapshot } from "@/lib/issue-list-snapshot";
 
 const RELATED_ISSUE_SELECT = {
   id: true,
@@ -121,47 +122,40 @@ function readableIssues(userId: string) {
   `;
 }
 
-const ISSUE_DATE_FIELDS = [
-  'dueDate', 'startDate', 'createdAt', 'updatedAt', 'deletedAt',
-  'baselineStartDate', 'baselineDueDate', 'finishedAt', 'firstStartedAt', 'lastProgressAt',
-] as const;
-type IssueDateField = typeof ISSUE_DATE_FIELDS[number];
-type WorkspaceIssueFields = Omit<IssueListRow, keyof typeof LIST_INCLUDE | IssueDateField> & {
-  [K in IssueDateField]: null extends IssueListRow[K] ? number | null : number;
-} & {
-  labels: IssueListRow['labels'];
-  commentCount: number;
-};
-type IssueHierarchyRow = NonNullable<IssueListRow['parent']> & { parentId: string | null };
-type IssueListEdge = Pick<IssueListRow['sourceRelations'][number], 'id' | 'relationType'> & {
-  sourceIssue: IssueListRow['targetRelations'][number]['sourceIssue'];
-  targetIssue: IssueListRow['sourceRelations'][number]['targetIssue'];
-};
+type SnapshotKind = keyof IssueListSnapshot;
 
-type WorkspaceIssueData = {
-  issues: WorkspaceIssueFields[];
-  projects: IssueListRow['project'][];
-  people: NonNullable<IssueListRow['assignee']>[];
-  statuses: NonNullable<IssueListRow['projectStatus']>[];
-  hierarchy: IssueHierarchyRow[];
-  edges: IssueListEdge[];
-};
-
-function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
+function listedIssues(workspaceId: string, projectIds: string[], includeRequests: boolean) {
   const projects = projectIds.length
     ? Prisma.sql`AND "projectId" IN (${Prisma.join(projectIds)})`
     : Prisma.empty;
+  return Prisma.sql`
+    WHERE "workspaceId" = ${workspaceId}
+      AND (${includeRequests} OR "agentRequestRole" IS NULL)
+      ${projects}
+  `;
+}
 
+// The descriptions of the issues a broad list returns, by issue id, null included.
+function issueDescriptionQuery(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
+  return Prisma.sql`
+    WITH ${readableIssues(userId)}
+    SELECT COALESCE(json_object_agg(id, description)::text, '{}') AS data
+    FROM readable_issues
+    ${listedIssues(workspaceId, projectIds, includeRequests)}
+  `;
+}
+
+function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
   // One statement supplies a consistent snapshot. Project only the listed issue
-  // fields and send shared records once. Keep these projections in sync with LIST_INCLUDE.
+  // fields and send shared records once; readIssueList expands them in the browser.
+  // Descriptions are left out; the view reads them with issueDescriptionQuery.
+  // Keep these projections in sync with LIST_INCLUDE.
   // The timestamp columns are UTC, stored as timestamp(3) without time zone.
   return Prisma.sql`
     WITH ${readableIssues(userId)}, listed AS MATERIALIZED (
       SELECT id, "projectId", "statusId", "parentId", "assigneeId", "reporterId"
       FROM readable_issues
-      WHERE "workspaceId" = ${workspaceId}
-        AND (${includeRequests} OR "agentRequestRole" IS NULL)
-        ${projects}
+      ${listedIssues(workspaceId, projectIds, includeRequests)}
     ),
     list_ids AS MATERIALIZED (SELECT id FROM listed),
     hierarchy_ids AS (
@@ -186,32 +180,37 @@ function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: st
     edge_issues AS MATERIALIZED (
       SELECT id, "issueKey", title, type FROM readable_issues
       WHERE id = ANY (ARRAY(SELECT id FROM edge_issue_ids))
+    ),
+    issue_labels AS (
+      SELECT l."A" AS id, json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) AS rows
+      FROM "_IssueToLabel" l JOIN "TaskLabel" t ON t.id = l."B"
+      WHERE l."A" = ANY (ARRAY(SELECT id FROM list_ids)) AND t."workspaceId" IN (SELECT id FROM readable_workspaces)
+      GROUP BY l."A"
+    ),
+    comment_counts AS (
+      SELECT "issueId" AS id, count(*)::int AS total FROM "IssueComment"
+      WHERE "issueId" = ANY (ARRAY(SELECT id FROM list_ids))
+      GROUP BY "issueId"
     )
-    SELECT 'issues' AS kind, row_to_json(fields)::text AS data FROM (
-      SELECT i.id, i.title, i.description, i.type, i."statusId", i."statusValue", i.priority, i."storyPoints",
+    SELECT 'issues' AS kind, fields."updatedAt"::float8 AS sort, row_to_json(fields)::text AS data FROM (
+      SELECT i.id, i.title, i.type, i."statusId", i."statusValue", i.priority, i."storyPoints",
         i."parentId", i."milestoneId", i."assigneeId", i."reporterId", i."projectId", i."workspaceId",
-        ${Prisma.join(ISSUE_DATE_FIELDS.map(key => Prisma.raw(`(extract(epoch FROM i."${key}") * 1000)::bigint AS "${key}"`)))},
+        ${Prisma.join(ISSUE_LIST_DATE_FIELDS.map(key => Prisma.raw(`(extract(epoch FROM i."${key}") * 1000)::bigint AS "${key}"`)))},
         i."deletedById", i."daysInProgress", i."issueKey", i.position, i.progress, i.color, i."postId", i.status,
         i."timeEstimateMinutes", i."timeSpentMinutes", i."agentRequestRole",
-        COALESCE(l.rows, '[]') AS labels, cm.total AS "commentCount"
+        COALESCE(l.rows, '[]') AS labels, json_build_object('comments', COALESCE(cm.total, 0)) AS "_count"
       FROM "Issue" i
-      CROSS JOIN LATERAL (
-        SELECT json_agg(json_build_object('id', t.id, 'name', t.name, 'color', t.color)) AS rows
-        FROM "_IssueToLabel" l JOIN "TaskLabel" t ON t.id = l."B"
-        WHERE l."A" = i.id AND t."workspaceId" IN (SELECT id FROM readable_workspaces)
-      ) l
-      CROSS JOIN LATERAL (
-        SELECT count(*)::int AS total FROM "IssueComment" WHERE "issueId" = i.id
-      ) cm
+      LEFT JOIN issue_labels l ON l.id = i.id
+      LEFT JOIN comment_counts cm ON cm.id = i.id
       WHERE i.id = ANY (ARRAY(SELECT id FROM list_ids))
     ) fields
     UNION ALL
-    SELECT 'projects' AS kind, row_to_json(fields)::text AS data FROM (
+    SELECT 'projects' AS kind, NULL::float8 AS sort, row_to_json(fields)::text AS data FROM (
       SELECT id, name, slug, "issuePrefix", description, color FROM "Project"
       WHERE id = ANY (ARRAY(SELECT DISTINCT "projectId" FROM listed))
     ) fields
     UNION ALL
-    SELECT 'people' AS kind, row_to_json(fields)::text AS data FROM (
+    SELECT 'people' AS kind, NULL::float8 AS sort, row_to_json(fields)::text AS data FROM (
       SELECT id, name, email, image FROM "User"
       WHERE id = ANY (ARRAY(
         SELECT "assigneeId" FROM listed WHERE "assigneeId" IS NOT NULL
@@ -220,12 +219,12 @@ function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: st
       ))
     ) fields
     UNION ALL
-    SELECT 'statuses' AS kind, row_to_json(fields)::text AS data FROM (
+    SELECT 'statuses' AS kind, NULL::float8 AS sort, row_to_json(fields)::text AS data FROM (
       SELECT id, name, "displayName", color, "order", "isDefault" FROM "ProjectStatus"
       WHERE id = ANY (ARRAY(SELECT DISTINCT "statusId" FROM listed WHERE "statusId" IS NOT NULL))
     ) fields
     UNION ALL
-    SELECT 'hierarchy' AS kind, row_to_json(fields)::text AS data FROM (
+    SELECT 'hierarchy' AS kind, NULL::float8 AS sort, row_to_json(fields)::text AS data FROM (
       SELECT i.id, i."parentId", i."issueKey", i.title, i.type, i.status,
         CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'name', s.name, 'displayName', s."displayName", 'color', s.color) END AS "projectStatus"
       FROM readable_issues i
@@ -234,7 +233,7 @@ function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: st
         AND i.id = ANY (ARRAY(SELECT id FROM hierarchy_ids))
     ) fields
     UNION ALL
-    SELECT 'edges' AS kind, row_to_json(fields)::text AS data FROM (
+    SELECT 'edges' AS kind, NULL::float8 AS sort, row_to_json(fields)::text AS data FROM (
       SELECT e.id, e."relationType",
         json_build_object('id', s.id, 'issueKey', s."issueKey", 'title', s.title, 'type', s.type) AS "sourceIssue",
         json_build_object('id', t.id, 'issueKey', t."issueKey", 'title', t.title, 'type', t.type) AS "targetIssue"
@@ -251,72 +250,25 @@ function presentIssue(issue: IssueListRow) {
   return Object.assign(fields, { issueRelations });
 }
 
-function indexRows<T extends { id: string }>(rows: T[]) {
-  return new Map(rows.map(row => [row.id, row]));
-}
-
-function appendRow<T>(rows: Map<string, T[]>, key: string, value: T) {
-  const group = rows.get(key);
-  if (group) group.push(value);
-  else rows.set(key, [value]);
-}
-
-function workspaceIssueResponse(data: WorkspaceIssueData) {
-  const projects = indexRows(data.projects);
-  const people = indexRows(data.people);
-  const statuses = indexRows(data.statuses);
-  const hierarchy = new Map<string, NonNullable<IssueListRow['parent']>>();
-  const children = new Map<string, IssueListRow['children']>();
-  const sourceRelations = new Map<string, IssueListRow['sourceRelations']>();
-  const targetRelations = new Map<string, IssueListRow['targetRelations']>();
-
-  for (const { parentId, ...issue } of data.hierarchy) {
-    hierarchy.set(issue.id, issue);
-    if (parentId !== null) appendRow(children, parentId, issue);
+// The issue rows and shared records go out as PostgreSQL wrote them, newest issue first.
+function snapshotResponse(rows: { kind: SnapshotKind; sort: number | null; data: string }[]) {
+  const issues: { sort: number; data: string }[] = [];
+  const shared = { projects: [] as string[], people: [] as string[], statuses: [] as string[], hierarchy: [] as string[], edges: [] as string[] };
+  for (const { kind, sort, data } of rows) {
+    if (kind === 'issues') issues.push({ sort: sort!, data });
+    else shared[kind].push(data);
   }
-  for (const { id, relationType, sourceIssue, targetIssue } of data.edges) {
-    appendRow(sourceRelations, sourceIssue.id, { id, relationType, targetIssue });
-    appendRow(targetRelations, targetIssue.id, { id, relationType, sourceIssue });
-  }
-  data.issues.sort((a, b) => a.updatedAt - b.updatedAt);
+  issues.sort((a, b) => b.sort - a.sort);
+  const tail = '],' + Object.entries(shared).map(([kind, records]) => `"${kind}":[${records.join(',')}]`).join(',') + '}}';
 
   const encoder = new TextEncoder();
-  let prefix = '{"issues":[';
+  let next = 0;
   function enqueueChunk(controller: ReadableStreamDefaultController<Uint8Array>) {
-    const issues = [];
-    for (let index = 0; index < 64; index++) {
-      const row = data.issues.pop();
-      if (!row) break;
-      const { commentCount, ...issue } = row;
-      const parent = issue.parentId === null ? null : hierarchy.get(issue.parentId) ?? null;
-      const issueChildren = children.get(issue.id) ?? [];
-      const issueRelations = buildIssueRelations({
-        parent,
-        children: issueChildren,
-        sourceRelations: sourceRelations.get(issue.id) ?? [],
-        targetRelations: targetRelations.get(issue.id) ?? [],
-      });
-      const dates = Object.fromEntries(ISSUE_DATE_FIELDS.map(key => {
-        const value = issue[key];
-        return [key, value === null ? null : new Date(value)];
-      }));
-      issues.push({
-        ...issue,
-        ...dates,
-        project: projects.get(issue.projectId),
-        assignee: issue.assigneeId === null ? null : people.get(issue.assigneeId) ?? null,
-        reporter: issue.reporterId === null ? null : people.get(issue.reporterId) ?? null,
-        projectStatus: issue.statusId === null ? null : statuses.get(issue.statusId) ?? null,
-        parent,
-        children: issueChildren,
-        _count: { children: issueChildren.length, comments: commentCount },
-        issueRelations,
-      });
-    }
-    const done = data.issues.length === 0;
-    controller.enqueue(encoder.encode(prefix + JSON.stringify(issues).slice(1, -1) + (done ? ']}' : '')));
+    const head = next === 0 ? '{"snapshot":{"issues":[' : ',';
+    const batch = issues.slice(next, next += 256).map(issue => issue.data).join(',');
+    const done = next >= issues.length;
+    controller.enqueue(encoder.encode(head + batch + (done ? tail : '')));
     if (done) controller.close();
-    prefix = ',';
   }
 
   const body = new ReadableStream<Uint8Array>({
@@ -370,13 +322,17 @@ export async function GET(request: NextRequest) {
     }
 
     const includeRequests = searchParams.get('requests') === '1';
+    if (!milestoneId && searchParams.get('descriptions') === '1') {
+      const [{ data }] = await prisma.$queryRaw<{ data: string }[]>(
+        issueDescriptionQuery(session.user.id, workspaceId, projectIds, includeRequests),
+      );
+      return new Response(`{"descriptions":${data}}`, { headers: { 'content-type': 'application/json' } });
+    }
     if (!milestoneId && projectIds.length !== 1) {
-      const rows = await prisma.$queryRaw<{ kind: keyof WorkspaceIssueData; data: string }[]>(
+      const rows = await prisma.$queryRaw<{ kind: SnapshotKind; sort: number | null; data: string }[]>(
         workspaceIssueQuery(session.user.id, workspaceId, projectIds, includeRequests),
       );
-      const data: WorkspaceIssueData = { issues: [], projects: [], people: [], statuses: [], hierarchy: [], edges: [] };
-      for (const row of rows) data[row.kind].push(JSON.parse(row.data));
-      return workspaceIssueResponse(data);
+      return snapshotResponse(rows);
     }
 
     const readableIssue = issueReadAccessWhere(session.user.id);

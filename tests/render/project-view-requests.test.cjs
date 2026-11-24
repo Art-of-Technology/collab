@@ -12,7 +12,7 @@ const request = {
 };
 const workspace = { id: 'workspace', slug: 'workspace' };
 
-async function withView(run, viewOverrides = {}) {
+async function withView(run, viewOverrides = {}, { serve, search } = {}) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://example.test/workspace/views/demo' });
   const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
   const previous = Object.fromEntries(Object.keys(globals).map(key => [key, global[key]]));
@@ -27,7 +27,7 @@ async function withView(run, viewOverrides = {}) {
     id: 'demo', name: 'Demo', type: 'USER', displayType: 'LIST', visibility: 'WORKSPACE',
     filters: {}, projects: [project], fields: ['Priority'], ...viewOverrides,
   };
-  let params = new URLSearchParams();
+  let params = new URLSearchParams(search ? { search } : {});
   let renderKey = 'view';
   let initialIssues = [work];
   let initialIncludesRequests = false;
@@ -38,6 +38,7 @@ async function withView(run, viewOverrides = {}) {
     const { pathname: path, searchParams } = new URL(url, window.location.origin);
     if (path === '/api/issues') {
       listRequests.push(searchParams);
+      if (serve) return serve(searchParams);
       const projects = searchParams.get('projectIds')?.split(',') || [];
       return Response.json({ issues: [work, request].filter(issue =>
         projects.includes(issue.projectId) && (issue.agentRequestRole === null || searchParams.get('requests') === '1')
@@ -218,6 +219,39 @@ test('switched on, the view asks for requests too', async () => {
     await click('Set default');
     assert.deepEqual(saves.at(-1).fields, ['Priority']);
   }, { filters: { labels: ['reviews'] }, displayType: 'KANBAN' });
+});
+
+test('a broad view finds an issue by its description once the descriptions arrive', async () => {
+  let deliver;
+  const delivered = new Promise(resolve => { deliver = resolve; });
+  const row = (id, title, projectId) => ({
+    id, title, issueKey: id.toUpperCase(), projectId, statusId: null, parentId: null,
+    assigneeId: null, reporterId: null, agentRequestRole: null, labels: [], _count: { comments: 0 },
+  });
+  // A broad list arrives as a snapshot without descriptions; they follow in a second call.
+  const serve = async searchParams => {
+    if (searchParams.get('descriptions') === '1') {
+      await delivered;
+      return Response.json({ descriptions: { work: null, described: 'Needs the migration window first' } });
+    }
+    return Response.json({ snapshot: {
+      issues: [row('work', 'Ordinary task', 'project'), row('described', 'Quiet title', 'added')],
+      projects: [], people: [], statuses: [], hierarchy: [], edges: [],
+    } });
+  };
+  await withView(async ({ rows, listRequests, settle }) => {
+    assert.equal(rows(), '', 'titles and keys alone do not match');
+    const described = listRequests.filter(params => params.get('descriptions') === '1');
+    assert.equal(described.length, 1);
+    assert.equal(described[0].get('projectIds'), 'project,added');
+    assert.ok(listRequests.some(params => !params.has('descriptions') && params.get('projectIds') === 'project,added'));
+
+    await React.act(async () => deliver());
+    await settle();
+    assert.equal(rows(), 'Quiet title');
+  }, { projects: [{ id: 'project', name: 'Demo', slug: 'demo' }, { id: 'added', name: 'Added', slug: 'added' }] }, {
+    serve, search: 'migration',
+  });
 });
 
 for (const sorting of [{ field: 'position', direction: 'asc' }, { field: 'manual', direction: 'desc' }]) {
