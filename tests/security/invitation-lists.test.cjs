@@ -106,6 +106,9 @@ test('workspace detail lists pending invitations only for a viewer who may invit
     assert.deepEqual(Array.from(result.invitations, row => row.id), ['pending-invite'], id);
     assert.equal(result.invitations[0].token, 'secret-token', id);
   }
+  // A member without INVITE_MEMBERS gets none.
+  const member = await detailFixture({ id: 'member' }).detail('space');
+  assert.deepEqual(Array.from(member.invitations), [], 'member');
 });
 
 test('a member who may not invite gets no invitation and no token', async () => {
