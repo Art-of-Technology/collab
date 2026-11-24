@@ -7,6 +7,7 @@ import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { loadProjectHome } from '@/lib/project-overview';
+import { withoutRequests } from '@/lib/issue-requests';
 
 export async function GET(
   request: NextRequest,
@@ -42,12 +43,13 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const issueWhere = {
+    // Counts and lists are of work alone: requests to seats stay out.
+    const { where: issueWhere } = withoutRequests({
       projectId,
       workspaceId: project.workspaceId,
       deletedAt: null,
       AND: [issueReadAccessWhere(actor.id)]
-    };
+    }, {});
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
