@@ -163,9 +163,27 @@ export function useViewFilterState({ view }: UseViewFilterStateOptions) {
     return 'all';
   }, [searchParams]);
 
-  const search = useMemo(() => {
-    return searchParams.get('search') || '';
-  }, [searchParams]);
+  // The box keeps its own text so each letter shows at once. The address follows it through
+  // history.replaceState, which Next.js syncs into useSearchParams without asking the server
+  // for the page again; router.replace would render the whole view page per letter.
+  const addressSearch = searchParams.get('search') || '';
+  const [search, setSearchText] = useState(addressSearch);
+  // Texts written to the address that Next.js has not handed back yet. On a slow view it can
+  // hand back an earlier one while the box already holds more letters.
+  const ownSearchWrites = useRef<string[]>([]);
+
+  useEffect(() => {
+    const own = ownSearchWrites.current;
+    const index = own.indexOf(addressSearch);
+    if (index >= 0) {
+      own.splice(0, index + 1);
+      return;
+    }
+    // The address changed from elsewhere (a link, cleared filters, another view): follow it.
+    own.length = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the address is outside React state
+    setSearchText(addressSearch);
+  }, [addressSearch]);
 
   const activeConfig = useMemo<ViewConfig>(() => {
     const layout = searchParams.get('layout') || savedConfig.layout;
@@ -237,15 +255,18 @@ export function useViewFilterState({ view }: UseViewFilterStateOptions) {
   }, [buildParams, pushParams]);
 
   const setSearch = useCallback((query: string) => {
-    const params = buildParams((p) => {
-      if (!query) {
-        p.delete('search');
-      } else {
-        p.set('search', query);
-      }
-    });
-    pushParams(params);
-  }, [buildParams, pushParams]);
+    setSearchText(query);
+    ownSearchWrites.current.push(query);
+    // Start from the real address: Next.js may not have synced the previous letter yet.
+    const params = new URLSearchParams(window.location.search);
+    if (!query) {
+      params.delete('search');
+    } else {
+      params.set('search', query);
+    }
+    const str = params.toString();
+    window.history.replaceState(null, '', str ? `${pathname}?${str}` : pathname);
+  }, [pathname]);
 
   const setConfigField = useCallback(<K extends keyof ViewConfig>(key: K, value: ViewConfig[K]) => {
     const params = buildParams((p) => {
@@ -286,11 +307,15 @@ export function useViewFilterState({ view }: UseViewFilterStateOptions) {
       p.delete('scope');
       p.delete('search');
     });
+    ownSearchWrites.current = [];
+    setSearchText('');
     pushParams(params);
   }, [buildParams, pushParams]);
 
   const resetAll = useCallback(() => {
     // Remove ALL overrides — go back to pure saved view
+    ownSearchWrites.current = [];
+    setSearchText('');
     router.replace(pathname, { scroll: false });
   }, [pathname, router]);
 
