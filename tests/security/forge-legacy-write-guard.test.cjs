@@ -83,7 +83,7 @@ function fixture() {
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/issue-finder': { findIssueByIdOrKey: async id => issues.find(issue => issue.id === id), issueReadAccessWhere: () => ({}), userHasWorkspaceAccess: async () => true },
     '@/utils/mentions': { extractMentionUserIds: () => [] },
-    '@/lib/post-access': {},
+    '@/lib/post-access': {}, '@/lib/workspace-authority': {},
     '@/lib/notification-service': {}, 'next/cache': { revalidatePath() {} },
     'server-only': {},
     '@/lib/permissions': { Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' }, checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }), canActOnOwnContent: () => true },
