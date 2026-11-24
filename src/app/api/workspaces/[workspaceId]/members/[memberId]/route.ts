@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from "@/lib/session";
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
-import { getWorkspaceAuthority, levelOfRole, may, mayActOn } from '@/lib/workspace-authority';
+import { MemberMutationError, switchMemberStatus } from '@/lib/workspace-membership';
 
 // PATCH /api/workspaces/[workspaceId]/members/[memberId] - Update member status
 export async function PATCH(
@@ -31,74 +30,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    // Check if user has permission to update member status
-    const actor = await getWorkspaceAuthority(user.id, workspaceId);
-    if (!may(actor, 'members.manage')) {
-      return NextResponse.json({ error: "Only workspace owners and admins can update member status" }, { status: 403 });
-    }
-
-    // Find the member to update
-    const member = await prisma.workspaceMember.findFirst({
-      where: {
-        id: memberId,
-        workspaceId,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    if (!member) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
-    }
-
-    // The rank rule, which also keeps the workspace owner's membership on
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { ownerId: true },
-    });
-    const target = { userId: member.userId, level: member.userId === workspace?.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
-
-    if (!mayActOn(actor, target, { holdsChangeRoles: false })) {
-      return NextResponse.json({ error: "You can only switch on or off members below your own level" }, { status: 403 });
-    }
-
-    // Update the member status
-    const updatedMember = await prisma.workspaceMember.update({
-      where: {
-        id: memberId,
-      },
-      data: {
-        status,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            useCustomAvatar: true,
-            avatarAccessory: true,
-            avatarBrows: true,
-            avatarEyes: true,
-            avatarEyewear: true,
-            avatarHair: true,
-            avatarMouth: true,
-            avatarNose: true,
-            avatarSkinTone: true,
-          },
-        },
-      },
-    });
-
+    const updatedMember = await switchMemberStatus(user.id, workspaceId, memberId, status, true);
     return NextResponse.json(updatedMember);
   } catch (error) {
+    if (error instanceof MemberMutationError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Error updating member status:", error);
     return NextResponse.json(
       { error: "Failed to update member status" },

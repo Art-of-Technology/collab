@@ -10,7 +10,7 @@ import { getCurrentUser } from '@/lib/session';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { generateWorkspaceSlug } from '@/lib/utils';
-import { getWorkspaceAuthority, levelOfRole, may, mayActOn } from '@/lib/workspace-authority';
+import { removeMember, switchMemberStatus } from '@/lib/workspace-membership';
 
 async function resolveWorkspaceReadId(slugOrId: string) {
   const workspace = await prisma.workspace.findUnique({
@@ -443,64 +443,7 @@ export async function removeWorkspaceMember(data: {
   
   const { workspaceId, userId } = data;
   
-  // Get the current user
-  const currentUser = await prisma.user.findUnique({
-    where: {
-      id: session.user.id
-    }
-  });
-  
-  if (!currentUser) {
-    throw new Error('User not found');
-  }
-  
-  // Get the workspace
-  const workspace = await prisma.workspace.findUnique({
-    where: {
-      id: workspaceId
-    }
-  });
-  
-  if (!workspace) {
-    throw new Error('Workspace not found');
-  }
-  
-  // Anyone but the primary owner may leave; removing someone else follows the rank rule
-  const leaving = currentUser.id === userId;
-  if (leaving && workspace.ownerId === userId) {
-    throw new Error('The primary owner cannot leave the workspace');
-  }
-  const actor = leaving ? null : await getWorkspaceAuthority(currentUser.id, workspaceId);
-  if (!leaving && !may(actor, 'members.manage')) {
-    throw new Error('Only Owners and Admins can remove other members');
-  }
-  
-  // Find the member to remove
-  const member = await prisma.workspaceMember.findFirst({
-    where: {
-      workspaceId,
-      userId,
-      status: true
-    }
-  });
-  
-  if (!member) {
-    throw new Error('Member not found');
-  }
-
-  const target = { userId, level: userId === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
-  if (!leaving && !mayActOn(actor, target, { holdsChangeRoles: false })) {
-    throw new Error('You can only remove members below your own level');
-  }
-  
-  // Remove the member
-  await prisma.workspaceMember.delete({
-    where: {
-      id: member.id
-    }
-  });
-  
-  return { success: true };
+  return removeMember(session.user.id, workspaceId, userId);
 }
 
 /**
@@ -800,87 +743,5 @@ export async function updateWorkspaceMemberStatus(data: {
   
   const { workspaceId, memberId, status } = data;
   
-  // Get the current user
-  const currentUser = await prisma.user.findUnique({
-    where: {
-      id: session.user.id
-    }
-  });
-  
-  if (!currentUser) {
-    throw new Error('User not found');
-  }
-  
-  // Get the workspace and check permissions
-  const workspace = await prisma.workspace.findUnique({
-    where: {
-      id: workspaceId
-    },
-    include: {
-      owner: {
-        select: {
-          id: true
-        }
-      }
-    }
-  });
-  
-  if (!workspace) {
-    throw new Error('Workspace not found');
-  }
-  
-  // Check if user is an Owner or an Admin of the workspace
-  const actor = await getWorkspaceAuthority(currentUser.id, workspaceId);
-  if (!may(actor, 'members.manage')) {
-    throw new Error('Only workspace owners and admins can update member status');
-  }
-  
-  // Find the member to update
-  const member = await prisma.workspaceMember.findFirst({
-    where: {
-      id: memberId,
-      workspaceId,
-      status: true
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      }
-    }
-  });
-  
-  if (!member) {
-    throw new Error('Member not found');
-  }
-  
-  // The rank rule, which also keeps the workspace owner's membership on
-  const target = { userId: member.userId, level: member.userId === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
-  if (!mayActOn(actor, target, { holdsChangeRoles: false })) {
-    throw new Error('You can only switch on or off members below your own level');
-  }
-  
-  // Update the member status
-  const updatedMember = await prisma.workspaceMember.update({
-    where: {
-      id: memberId
-    },
-    data: {
-      status
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      }
-    }
-  });
-  
-  return updatedMember;
+  return switchMemberStatus(session.user.id, workspaceId, memberId, status, false);
 } 

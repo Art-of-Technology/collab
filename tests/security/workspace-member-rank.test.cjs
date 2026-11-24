@@ -1,7 +1,7 @@
 const { assert, test, load, matches } = require('./helpers.cjs');
 
 // One workspace, owned by `prim`, with a member at every level.
-function fixture() {
+function fixture(beforeTransaction) {
   const rows = [
     ['prim', 'OWNER'], ['own1', 'OWNER'], ['own2', 'owner'], ['adm1', 'ADMIN'], ['adm2', 'admin'],
     ['hr', 'HR'], ['hr2', 'HR'], ['dev', 'DEVELOPER'], ['mem', 'MEMBER'], ['agent', 'MEMBER'], ['gone', 'MEMBER', false],
@@ -11,7 +11,8 @@ function fixture() {
   users.find(user => user.id === 'agent').email = null; // an agent token's service account
   const workspaces = [{ id: 'w', slug: 'w', name: 'W', ownerId: 'prim' }];
   const rolePermissions = [
-    ...['CHANGE_MEMBER_ROLES', 'MANAGE_WORKSPACE_MEMBERS'].flatMap(permission => ['ADMIN', 'admin', 'HR'].map(role => ({ workspaceId: 'w', role, permission }))),
+    ...['ADMIN', 'admin', 'HR'].map(role => ({ workspaceId: 'w', role, permission: 'CHANGE_MEMBER_ROLES' })),
+    { workspaceId: 'w', role: 'HR', permission: 'MANAGE_WORKSPACE_MEMBERS' },
   ];
   const state = { userId: null };
   const withUser = row => row && { ...row, user: { id: row.userId, name: row.userId, email: `${row.userId}@example.test` } };
@@ -42,7 +43,7 @@ function fixture() {
     customRole: { findFirst: async ({ where }) => (where.workspaceId === 'w' && where.name === 'Release Captain' ? { id: 'c', name: where.name } : null) },
     appAuditLog: { create: async ({ data }) => data },
     $queryRaw: async () => [],
-    $transaction: async run => run(prisma),
+    $transaction: async run => { beforeTransaction?.(rows); return run(prisma); },
   };
   const globals = { console: { log() {}, warn() {}, error() {} }, Date };
   const deps = {
@@ -149,6 +150,27 @@ test('a standard role with change-roles moves people between standard roles only
   assert.equal(f.row('dev').role, 'MEMBER');
 });
 
+test('a platform admin with a standard membership needs the grant on that role', async () => {
+  const f = fixture();
+  f.rows.push({ id: 'm-root', userId: 'root', workspaceId: 'w', role: 'MEMBER', status: true });
+  refused(await f.role('root', 'mem', 'DEVELOPER'), 'the workspace role has no grant');
+  assert.equal(f.row('mem').role, 'MEMBER');
+  f.row('root').role = 'HR';
+  assert.equal((await f.role('root', 'mem', 'DEVELOPER')).ok, true);
+  assert.equal(f.row('mem').role, 'DEVELOPER');
+});
+
+test('status and removal honor rank changes committed before their write transaction', async () => {
+  for (const path of ['patch', 'action', 'byUser', 'remove']) {
+    for (const change of [rows => { rows.find(row => row.userId === 'adm1').status = false; },
+      rows => { rows.find(row => row.userId === 'mem').role = 'ADMIN'; }]) {
+      const f = fixture(change);
+      refused(await f[path]('adm1', 'mem', false), path);
+      assert.equal(f.row('mem').status, true);
+    }
+  }
+});
+
 test('the primary owner\'s membership cannot be re-roled, switched off or removed, by anyone', async () => {
   const f = fixture();
   for (const actor of ['prim', 'own1', 'adm1', 'hr', 'root']) {
@@ -186,9 +208,10 @@ test('an Owner switches a member off on all three status paths, and an Admin onl
       }
     }
   }
-  for (const path of ['patch', 'byUser']) {
+  for (const path of ['patch', 'byUser', 'action']) {
     const f = fixture();
     assert.equal((await f[path]('adm1', 'gone', true)).ok, true, `${path}: an Admin switches a standard role back on`);
+    assert.equal(f.row('gone').status, true);
     f.row('adm2').status = false;
     refused(await f[path]('adm1', 'adm2', true), `${path}: but not another Admin`);
     assert.equal(f.row('adm2').status, false);

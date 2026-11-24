@@ -13,6 +13,8 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
   const project = (row, spec) => !row ? null : { ...row, members: row.members.filter(member =>
     !spec.include?.members?.where || matches(member, spec.include.members.where)) };
   const db = {
+    $transaction: async run => run(db),
+    $queryRaw: async () => [],
     issue: { count: async ({ where }) => retainedIssues.filter(issue => matches(issue, where)).length },
     user: { findUnique: async ({ where, select }) => {
       calls.users.push(where);
