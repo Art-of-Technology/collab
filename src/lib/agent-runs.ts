@@ -689,9 +689,9 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const [, repo, number] = pushed?.pullRequest.match(/^(.+)#(\d+)$/) ?? [];
   const from = last?.seat?.name ?? 'another account';
   const repository = await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId);
-  // The instructions are those of the seat that works the issue: its role's, then what this workspace adds for the role (CLB-608).
-  // The seat's own are not read yet (CLB-610).
-  const worker = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, retiredAt: null }, select: { role: true, ownerId: true } }) : null;
+  // The instructions are those of the seat that works the issue: its role's, then what this workspace adds for the role (CLB-608),
+  // then the seat's own, saved on its page (CLB-610).
+  const worker = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, retiredAt: null }, select: { role: true, ownerId: true, instructions: true } }) : null;
   const organisation = worker ? (await prisma.agentRoleInstructions.findUnique({ where: { workspaceId_role: { workspaceId: context.workspace.id, role: worker.role } }, select: { text: true } }))?.text ?? '' : '';
   // A system admin's edit of the role's prompt (CLB-916): the version in force when the open run started, so a run keeps
   // what it received; with no run open, the latest. None, or one with no text, means the repository's text.
@@ -722,7 +722,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
     repository,
-    instructions: ROLE_CATALOGUE.instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null, platform, organisation }),
+    instructions: ROLE_CATALOGUE.instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null, platform, organisation, seat: worker?.instructions ?? '' }),
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     movedFrom: last && last.userId !== issue.assigneeId ? { seat: last.seat?.name ?? null, pullRequest: pushed?.pullRequest ?? null, headCommit: pushed?.headCommit ?? null, branch,
