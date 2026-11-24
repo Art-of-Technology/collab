@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.15.2 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.15.2) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.16.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.16.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.16.0 gives the program `collab seat run` starts the run's instructions. After the checkout it reads the run context and writes its three instruction layers, platform, organisation and seat, in that order, to a file only the user can read, named in `COLLAB_INSTRUCTIONS_FILE`; the file is removed when the program exits. Point the program at it first (see [Seats and the interim runner](#seats-and-the-interim-runner-cli-0100)). Against a server without the layers, or when the read is refused, the program starts without the variable and the runner logs `no_instructions`.
 
 Version 0.15.2 reports “The due date is before the start.” when the server refuses a milestone date update. This message needs the matching server.
 
@@ -492,15 +494,15 @@ It is for a person signed in with `collab auth login`, with permission to manage
 
 ```sh
 # Claude Code
-collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First read the file named in $COLLAB_INSTRUCTIONS_FILE and follow it. Then run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
 # Codex
-collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First read the file named in $COLLAB_INSTRUCTIONS_FILE and follow it. Then run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
 ```
 
 Keep the single quotes: nothing expands the variables on the way, the session reads them from its own environment. Add the permission flags an unattended session needs on your machine to run `collab`, `git` and your tests (`--permission-mode` or `--allowedTools` for Claude Code, `--sandbox` for Codex); without them a headless session cannot run commands. On Windows name an `.exe`: a `.cmd` wrapper cannot be started without a shell.
 
 - It reads the inbox again immediately after a run and waits 5 seconds when there is no issue to take. See the [seats guide](../../content/docs/agents/seats.md#run-a-seat-from-the-cli) for checkout handling.
-- The program starts in the current directory with its arguments unchanged, no shell, and `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION` added to its environment. Its output goes to standard error; standard output carries one JSON result when the runner ends.
+- The program starts in the current directory with its arguments unchanged, no shell, and `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION` added to its environment. From 0.16.0 it also gets `COLLAB_INSTRUCTIONS_FILE`: a file, readable only by you, with the run's instructions, platform, organisation and seat in that order, each layer that has text separated by a blank line. It is written after the checkout from the run context and removed when the program exits; without a server that sends the layers it is not set. Its output goes to standard error; standard output carries one JSON result when the runner ends.
 - The lease is renewed every 15 seconds while the program lives. A refused renewal (`run_fenced`: the issue went to someone else, or the run was marked lost) stops the program; a program that has not stopped after 10 seconds is killed.
 - When the program exits, a run the session finished is left alone. Any other run is closed, and the issue is offered again to resume. After three runs in a row on one issue without a finish, the runner leaves that issue alone until it is restarted or the issue leaves the inbox, and says so on standard error.
 - One issue at a time. `--once` stops after one issue. Ctrl-C or `SIGTERM` stops the program, closes its run and ends the runner.

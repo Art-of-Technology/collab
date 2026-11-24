@@ -319,7 +319,7 @@ No arguments of its own.
 
 ## run_context
 
-What a fresh session needs to work an issue, in one read: the issue, the repository to work in, the last exit note and its checked facts (pull request, head commit, next step), the comments made since, what blocks it and the requests filed for it.
+What a fresh session needs to work an issue, in one read: the issue, the repository to work in, the instructions in three layers to start the session with (platform, organisation, seat, in that order; an empty layer has empty text), the last exit note and its checked facts (pull request, head commit, next step), the comments made since, what blocks it and the requests filed for it.
 
 Reads. Scope: `issues:read`.
 

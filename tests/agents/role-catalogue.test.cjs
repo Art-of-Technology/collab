@@ -60,3 +60,48 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
   assert.match(own, /mattpocock\/skills/);
   assert.match(own, /MIT/);
 });
+
+test('a run\'s instructions are three layers in order, platform, organisation and seat, each with a stated maximum length', () => {
+  const { ROLE_CATALOGUE, LAYER_LIMITS } = load('src/lib/agent-role-catalogue.ts');
+  // Plain values of this test's own realm, so they compare as such.
+  const instructionLayers = (...args) => JSON.parse(JSON.stringify(ROLE_CATALOGUE.instructionLayers(...args)));
+  assert.deepEqual({ ...LAYER_LIMITS }, { platform: 8000, organisation: 16000, seat: 16000 });
+  for (const role of ROLE_CATALOGUE.roles) {
+    const layers = instructionLayers(role.id, { ownerId: 'cowner00001' });
+    assert.deepEqual(layers.map(layer => layer.layer), ['platform', 'organisation', 'seat'], role.id);
+    // The owner's id stands where the prompt names the person to ask; nothing is left for the runner to fill in.
+    assert.equal(layers[0].text, role.platformPrompt.replaceAll('{{ownerId}}', 'cowner00001'), role.id);
+    assert.doesNotMatch(layers[0].text, /\{\{/, role.id);
+    assert.ok(layers[0].text.length <= LAYER_LIMITS.platform, role.id);
+    // Nothing is stored for the organisation or the seat yet: those layers are present and empty.
+    assert.deepEqual(layers.slice(1).map(layer => layer.text), ['', ''], role.id);
+  }
+  assert.match(instructionLayers('developer', { ownerId: 'cowner00001' })[0].text, /`askedUser` set to cowner00001\./);
+  // A seat with no owner is not told to ask an id that does not exist.
+  assert.doesNotMatch(instructionLayers('developer', { ownerId: null })[0].text, /\{\{|null/);
+  // The texts saved for the later layers come after the platform's, in order.
+  assert.deepEqual(instructionLayers('reviewer', { ownerId: null, organisation: 'Our rules.', seat: 'This seat\'s rules.' }).slice(1),
+    [{ layer: 'organisation', text: 'Our rules.' }, { layer: 'seat', text: 'This seat\'s rules.' }]);
+  // An issue that no seat works has no role: every layer is present and empty.
+  assert.deepEqual(instructionLayers(null, { ownerId: null }), [{ layer: 'platform', text: '' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: '' }]);
+  assert.deepEqual(instructionLayers('no-such-role', { ownerId: null }).map(layer => layer.text), ['', '', '']);
+  // A role added as one entry has its layers with no other change.
+  const { extendedCatalogue } = require('./role-catalogue-fixture.cjs');
+  assert.equal(extendedCatalogue().ROLE_CATALOGUE.instructionLayers('mapper', { ownerId: null })[0].text, extendedCatalogue().ROLE_CATALOGUE.getRole('mapper').platformPrompt);
+});
+
+test('a layer longer than its maximum is refused when it is saved', () => {
+  const { ROLE_ENTRIES, LAYER_LIMITS, createRoleCatalogue, layerText } = load('src/lib/agent-role-catalogue.ts');
+  const { extraRole } = require('./role-catalogue-fixture.cjs');
+  // The platform layer is saved in the repository: a catalogue with a platform prompt over the limit does not load.
+  const asking = createRoleCatalogue([extraRole]).getRole('mapper').platformPrompt.length - extraRole.platformPrompt.length;
+  const fits = { ...extraRole, platformPrompt: 'x'.repeat(LAYER_LIMITS.platform - asking) };
+  assert.equal(createRoleCatalogue([...ROLE_ENTRIES, fits]).getRole('mapper').platformPrompt.length, LAYER_LIMITS.platform);
+  assert.throws(() => createRoleCatalogue([...ROLE_ENTRIES, { ...fits, platformPrompt: `${fits.platformPrompt}x` }]), /mapper.*8000/);
+  // The organisation's and the seat's are checked by the function the pages that save them call.
+  for (const layer of ['organisation', 'seat']) {
+    assert.equal(layerText(layer, '   '), '');
+    assert.equal(layerText(layer, `  ${'y'.repeat(LAYER_LIMITS[layer])}  `).length, LAYER_LIMITS[layer]);
+    assert.throws(() => layerText(layer, 'y'.repeat(LAYER_LIMITS[layer] + 1)), new RegExp(`${layer}.*${LAYER_LIMITS[layer]}`));
+  }
+});
