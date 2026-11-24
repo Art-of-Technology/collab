@@ -44,13 +44,26 @@ interface SeatInput {
   together?: string[];
   /** The seat's own pick among its project's connected repositories. Without one the seat follows its project. */
   repositoryId?: string;
+  /** The workspace's own role the seat has (CLB-628); `role` is then that role's base role. */
+  customRoleId?: string;
 }
 
 /**
  * A seat is an agent token's service account tied to one project and one role. It is created with its
- * token in one step; asking again under the same name gives the same seat a further token.
+ * token in one step; asking again under the same name gives the same seat a further token. A seat given the workspace's
+ * own role (`customRoleId`, CLB-628) is made with that role's base role, and behaves as a seat of it everywhere.
  */
-export async function createSeat(input: SeatInput) {
+export async function createSeat(input: Omit<SeatInput, 'role'> & { role?: string }) {
+  if (input.customRoleId) {
+    const custom = await prisma.agentCustomRole.findFirst({ where: { id: input.customRoleId, workspaceId: input.workspaceId }, select: { baseRole: true, retiredAt: true } });
+    if (!custom || (input.role !== undefined && input.role !== custom.baseRole)) throw new HandoffError('invalid_role', 'Choose one of your organisation\'s roles');
+    if (custom.retiredAt) throw new HandoffError('role_retired', 'This role is retired: no new seat takes it', 409);
+    return createSeatOf({ ...input, role: custom.baseRole });
+  }
+  return createSeatOf({ ...input, role: input.role ?? '' });
+}
+
+async function createSeatOf(input: SeatInput) {
   const role = ROLE_CATALOGUE.getRole(input.role);
   if (!role) throw new HandoffError('invalid_role', `Choose a seat role: ${SEAT_ROLES.join(', ')}`);
   // A runner is given only the seats of the person it was admitted for, so a seat without an owner would reach no runner.
@@ -87,6 +100,10 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
       throw new HandoffError('invalid_repository', "Choose one of this project's connected repositories");
     }
   }
+  // A role retired after it was read is not taken: retiring waits for this transaction, or this one sees it retired.
+  if (input.customRoleId && !(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentCustomRole" WHERE "id" = ${input.customRoleId} AND "retiredAt" IS NULL FOR SHARE`).length) {
+    throw new HandoffError('role_retired', 'This role is retired: no new seat takes it', 409);
+  }
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
   if (input.own) {
     // A seat of this role the member was given in the meantime, under any name, is enough, whoever holds the derived
@@ -109,7 +126,8 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
       }
     }
   }
-  const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;
+  const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role
+    && existing.customRoleId === (input.customRoleId ?? null);
   if (existing && !existing.retiredAt && !same) {
     throw new HandoffError('seat_exists', `${existing.name} is already a ${existing.role} seat; retire it before giving the name another project or role`, 409);
   }
@@ -137,6 +155,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
   // same seat, which the form does with the project's default filled in, gives a further token and moves nothing.
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
     name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner, repositoryId: same ? existing.repositoryId : input.repositoryId ?? null,
+    customRoleId: input.customRoleId ?? null,
     ...(!same && { room: null, roomProgram: null, roomAt: null }) };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
@@ -144,7 +163,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
     details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned, ...(seat.byRunner && { byRunner: true }),
-      ...(seat.repositoryId && { repositoryId: seat.repositoryId }) },
+      ...(seat.repositoryId && { repositoryId: seat.repositoryId }), ...(seat.customRoleId && { customRoleId: seat.customRoleId }) },
   } });
   return seat;
 }
