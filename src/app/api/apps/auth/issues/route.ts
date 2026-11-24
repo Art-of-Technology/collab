@@ -15,6 +15,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProj
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
+import { isDone, legacyStatusLabel, resolveLegacyStatus } from '@/lib/project-overview';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -143,11 +144,24 @@ export const GET = withAppAuth(
               select: {
                 id: true
               }
-            }
+            },
+            projectStatus: { select: { isFinal: true } }
           }
         }),
         prisma.issue.count({ where })
       ]);
+
+      // An issue saved before project statuses has only a label: it is finished where the Overview counts it finished.
+      const legacyProjectIds = [...new Set(issues.filter(issue => !issue.statusId && legacyStatusLabel(issue)).map(issue => issue.projectId))];
+      const activeStatuses = legacyProjectIds.length ? await prisma.projectStatus.findMany({
+        where: { projectId: { in: legacyProjectIds }, project: { workspaceId: context.workspace.id }, isActive: true },
+        select: { projectId: true, name: true, displayName: true, isFinal: true },
+      }) : [];
+      const finished = (issue: typeof issues[number]) => {
+        const status = issue.statusId ? issue.projectStatus
+          : resolveLegacyStatus(legacyStatusLabel(issue), activeStatuses.filter(status => status.projectId === issue.projectId));
+        return status?.isFinal ?? isDone({ ...issue, projectStatus: null });
+      };
 
       const response = {
         issues: issues.map((issue: any) => ({
@@ -158,6 +172,10 @@ export const GET = withAppAuth(
           type: issue.type,
           status: issue.status || issue.statusValue, // Handle both legacy and new status fields
           statusId: issue.statusId,
+          // Finished as the project summary and the Overview count it, whatever the stored label says.
+          done: finished(issue),
+          // A request to a seat, which the summary and the Overview do not count as work.
+          request: issue.agentRequestRole !== null,
           priority: issue.priority,
           dueDate: issue.dueDate,
           startDate: issue.startDate,

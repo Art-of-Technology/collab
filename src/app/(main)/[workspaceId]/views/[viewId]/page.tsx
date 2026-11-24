@@ -78,6 +78,13 @@ export default async function ViewPage({ params, searchParams }: ViewPageProps) 
     notFound();
   }
 
+  // ViewRenderer loads the list of a view without saved filters itself (its `useLiveData`, same rule),
+  // so the page does not read and send every issue of such a view a second time.
+  const savedFilters = view.filters && typeof view.filters === 'object' ? view.filters as Record<string, unknown> : {};
+  const listedInBrowser = !Object.entries(savedFilters).some(
+    ([key, value]) => key !== 'project' && Array.isArray(value) && value.length > 0
+  );
+
   // Get projects info for the view
   const projects = await prisma.project.findMany({
     where: {
@@ -301,7 +308,9 @@ export default async function ViewPage({ params, searchParams }: ViewPageProps) 
   }
 
   // Apply project filtering based on view configuration
-  if (view.projectIds.length === 0) {
+  if (listedInBrowser) {
+    // No issues are read here; see above.
+  } else if (view.projectIds.length === 0) {
     // If no projects are specified in the view, include all workspace projects
     const workspaceProjects = await prisma.project.findMany({
       where: { workspaceId: workspace.id },
@@ -314,7 +323,7 @@ export default async function ViewPage({ params, searchParams }: ViewPageProps) 
   }
 
   const initialIncludesRequests = showAgentRequests(view.fields, (await searchParams).requests);
-  const issues = await prisma.issue.findMany(
+  const issues = listedInBrowser ? [] : await prisma.issue.findMany(
     initialIncludesRequests ? issuesQuery : withoutRequests(issuesQuery.where, issuesQuery.include)
   );
 
