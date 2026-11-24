@@ -4,8 +4,9 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 const flat = where => Object.fromEntries(Object.entries(where || {}).flatMap(([key, value]) =>
   key.includes('_') && value && typeof value === 'object' ? Object.entries(value) : [[key, value]]));
 
-// One workspace, owned by `prim`, with a member at every level, a stranger and a platform admin.
-function fixture() {
+const settings = { name: 'Renamed', description: 'Updated', slug: 'renamed', logoUrl: '/logo.png', dockEnabled: true, timeTrackingEnabled: true };
+
+function fixture(patch = settings) {
   const members = [
     ['prim', 'OWNER'], ['own1', 'OWNER'], ['own2', 'owner'], ['adm1', 'ADMIN'], ['adm2', 'admin'], ['hr', 'HR'], ['dev', 'DEVELOPER'],
   ].map(([userId, role]) => ({ id: `m-${userId}`, workspaceId: 'w', userId, role, status: true }));
@@ -117,9 +118,9 @@ function fixture() {
   };
   const act = run => async actor => { state.userId = actor; return settle(run()); };
   const paths = {
-    rename: call('workspace', 'PATCH', { name: 'Renamed' }),
-    settings: call('settings', 'PATCH', { dockEnabled: true, timeTrackingEnabled: true }),
-    updateAction: act(() => actions.updateWorkspace('w', { name: 'Renamed', slug: 'renamed' })),
+    rename: call('workspace', 'PATCH', patch),
+    settings: call('settings', 'PATCH', patch),
+    updateAction: act(() => actions.updateWorkspace('w', patch)),
     deleteRoute: call('workspace', 'DELETE'),
     deleteAction: act(() => actions.deleteWorkspace('w')),
     listInvitations: call('invitations', 'GET'),
@@ -144,17 +145,15 @@ function refused(answer, why) {
   assert.match(answer.error, /^[A-Z][^.]*\.?$/, why);
 }
 
-test('rename, slug and the two settings switches are allowed from Owner on every path, and refused below', async () => {
+test('all six workspace settings are writable from Owner on every path, and refused below', async () => {
   for (const path of ['rename', 'settings', 'updateAction']) {
     for (const actor of ['prim', 'own1', 'own2']) {
       const f = fixture();
       const answer = await f.paths[path](actor);
       assert.equal(answer.ok, true, `${path}: ${actor} ${JSON.stringify(answer)}`);
-      if (path === 'settings') assert.deepEqual([f.workspace().dockEnabled, f.workspace().timeTrackingEnabled], [true, true], `${path}: ${actor}`);
-      else assert.equal(f.workspace().name, 'Renamed', `${path}: ${actor}`);
-      if (path === 'updateAction') assert.equal(f.workspace().slug, 'renamed');
+      for (const [field, value] of Object.entries(settings)) assert.equal(f.workspace()[field], value, `${path}: ${field}`);
     }
-    for (const actor of ['adm1', 'adm2', 'hr', 'dev']) {
+    for (const actor of ['adm1', 'adm2', 'hr', 'dev', 'out']) {
       const f = fixture();
       const before = f.snapshot();
       const answer = await f.paths[path](actor);
@@ -162,11 +161,22 @@ test('rename, slug and the two settings switches are allowed from Owner on every
       assert.match(answer.error, /Owner/, `${path}: the sentence names who may`);
       assert.equal(f.snapshot(), before, `${path}: ${actor} stored nothing`);
     }
-    const f = fixture();
-    const before = f.snapshot();
-    assert.equal((await f.paths[path]('out')).ok, false, `${path}: someone outside the workspace`);
-    assert.equal(f.snapshot(), before);
+    for (const [slug, message] of [['docs', /reserved/], ['taken', /already exists/]]) {
+      const f = fixture({ ...settings, slug });
+      f.db.workspaces.push({ id: 'other', slug: 'taken' });
+      const before = f.snapshot();
+      const answer = await f.paths[path]('own1');
+      assert.equal(answer.ok, false);
+      assert.match(answer.error, message);
+      assert.equal(f.snapshot(), before);
+    }
   }
+});
+
+test('settings PATCH returns 404 for a missing workspace', async () => {
+  const f = fixture();
+  f.db.workspaces.length = 0;
+  assert.equal((await f.paths.settings('out')).status, 404);
 });
 
 test('only the primary owner deletes the workspace', async () => {
@@ -193,10 +203,13 @@ test('inviting is for Admin and above, and for a standard role that holds the in
       if (path === 'invite') assert.ok(f.db.invitations.some(row => row.email === 'new@example.test' && row.invitedById === actor));
       if (path === 'cancelInvitation') assert.equal(f.db.invitations.some(row => row.id === 'inv1'), false);
     }
-    for (const actor of ['dev', 'out']) {
+    for (const actor of ['dev', 'out', 'root']) {
       const f = fixture();
+      if (actor === 'root') f.db.members.push({ userId: 'root', workspaceId: 'w', role: 'DEVELOPER', status: true });
       const before = f.snapshot();
-      refused(await f.paths[path](actor), `${path}: ${actor}`);
+      const answer = await f.paths[path](actor);
+      refused(answer, `${path}: ${actor}`);
+      assert.match(answer.error, /Admin.*INVITE_MEMBERS/);
       assert.equal(f.snapshot(), before);
     }
   }

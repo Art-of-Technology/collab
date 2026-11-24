@@ -190,7 +190,8 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/permissions`);
       if (!response.ok) {
-        throw new Error('Failed to fetch permissions');
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to load permissions');
       }
 
       const data = await response.json();
@@ -200,7 +201,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
       console.error('Error fetching permissions:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load permissions',
+        description: error instanceof Error ? error.message : 'Failed to load permissions',
         variant: 'destructive',
       });
     } finally {
@@ -282,7 +283,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
   const resetRolePermissions = async (role: WorkspaceRole) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/permissions/reset`, {
+      const response = await fetch(`/api/workspaces/${workspaceId}/permissions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

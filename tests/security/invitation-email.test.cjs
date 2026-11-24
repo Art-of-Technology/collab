@@ -134,10 +134,10 @@ test('invitation endpoint preserves access checks and pending links for rejected
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'owner', name: 'Owner' } }) },
       '@/lib/auth-options': {}, 'node:crypto': { randomUUID: () => 'invitation-token' },
       '@/lib/email': f,
-      '@/lib/permissions': { Permission: { INVITE_MEMBERS: 'invite' }, checkUserPermission: async () => ({ hasPermission: permitted }) },
+      '@/lib/permissions': { Permission: { INVITE_MEMBERS: 'invite' } },
       '@/lib/prisma': { prisma: {
-        workspace: { findUnique: async () => ({ name: 'Workspace' }) },
-        user: { findFirst: async () => null, findUnique: async () => null },
+        workspace: { findUnique: async () => ({ name: 'Workspace', ownerId: permitted ? 'owner' : 'other' }) },
+        user: { findFirst: async () => null, findUnique: async () => ({ workspaceMemberships: [] }) },
         workspaceInvitation: { findFirst: async () => null, create: async ({ data }) => { writes.push(data); return { id: 'invitation', ...data }; } },
       } },
     }, { console: { error() {} } });

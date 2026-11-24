@@ -5,6 +5,10 @@ import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { z } from 'zod';
 
 const workspaceSettingsSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  logoUrl: z.string().nullable().optional(),
+  slug: z.string().min(1).optional(),
   timeTrackingEnabled: z.boolean().optional(),
   dockEnabled: z.boolean().optional(),
 });
@@ -64,12 +68,11 @@ export async function PATCH(
     const { workspaceId } = _params;
     const body = await request.json();
 
-    // Validate the request body
-    const validatedData = workspaceSettingsSchema.parse(body);
-
-    // Owners change the settings. Anyone without a membership, a platform admin included, gets the answer this route gave before.
     const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
-    if (!authority?.level) {
+    const missingWorkspace = !authority && !(await prisma.workspace.findUnique({
+      where: { id: workspaceId }, select: { id: true },
+    }));
+    if (missingWorkspace || authority?.level === null) {
       return NextResponse.json(
         { error: 'Workspace not found or insufficient permissions' },
         { status: 404 }
@@ -79,12 +82,28 @@ export async function PATCH(
       return NextResponse.json({ error: 'Only Owners can change the workspace settings' }, { status: 403 });
     }
 
+    const validatedData = workspaceSettingsSchema.parse(body);
+    const { slug } = validatedData;
+    if (slug) {
+      const existing = await prisma.workspace.findUnique({ where: { slug }, select: { id: true } });
+      if (existing?.id !== workspaceId && slug === 'docs') {
+        return NextResponse.json({ error: 'This slug is reserved for the documentation' }, { status: 400 });
+      }
+      if (existing && existing.id !== workspaceId) {
+        return NextResponse.json({ error: 'A workspace with this slug already exists' }, { status: 409 });
+      }
+    }
+
     // Update workspace settings
     const updatedWorkspace = await prisma.workspace.update({
       where: { id: workspaceId },
       data: validatedData,
       select: {
         id: true,
+        name: true,
+        description: true,
+        logoUrl: true,
+        slug: true,
         timeTrackingEnabled: true,
         dockEnabled: true,
       }

@@ -212,6 +212,10 @@ export async function POST(
     const body = await request.json();
     const { role } = body;
 
+    if (typeof role === 'string' && levelOfRole(role) === 'OWNER') {
+      return NextResponse.json({ error: 'The Owner role has every permission and cannot be reset' }, { status: 403 });
+    }
+
     if (typeof role !== 'string' || !Object.prototype.hasOwnProperty.call(defaultRolePermissions, role)) {
       return NextResponse.json(
         { error: 'A built-in role is required' },
@@ -223,10 +227,6 @@ export async function POST(
     const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
     if (authority?.level !== null && !may(authority, 'roles.edit')) {
       return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
-    }
-
-    if (levelOfRole(role) === 'OWNER') {
-      return NextResponse.json({ error: 'The Owner role has every permission and cannot be reset' }, { status: 403 });
     }
 
     const defaults = defaultRolePermissions[role];

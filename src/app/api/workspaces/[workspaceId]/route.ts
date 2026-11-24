@@ -128,7 +128,6 @@ export async function PATCH(
     const _params = await params;
     const { workspaceId } = _params;
     const body = await request.json();
-    const { name, description, logoUrl } = body;
 
     // Check if workspace exists
     const workspace = await prisma.workspace.findUnique({
@@ -151,13 +150,31 @@ export async function PATCH(
       );
     }
 
+    const { name, description, logoUrl, slug, dockEnabled, timeTrackingEnabled } = body;
+    if ((slug !== undefined && (typeof slug !== 'string' || !slug)) ||
+        (dockEnabled !== undefined && typeof dockEnabled !== 'boolean') ||
+        (timeTrackingEnabled !== undefined && typeof timeTrackingEnabled !== 'boolean')) {
+      return NextResponse.json({ error: 'Invalid workspace settings' }, { status: 400 });
+    }
+    if (slug && slug !== workspace.slug) {
+      if (slug === 'docs') {
+        return NextResponse.json({ error: 'This slug is reserved for the documentation' }, { status: 400 });
+      }
+      if (await prisma.workspace.findUnique({ where: { slug }, select: { id: true } })) {
+        return NextResponse.json({ error: 'A workspace with this slug already exists' }, { status: 409 });
+      }
+    }
+
     // Update workspace
     const updatedWorkspace = await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
+        slug,
+        dockEnabled,
+        timeTrackingEnabled,
         name: name || undefined,
-        description: description !== undefined ? description : undefined,
-        logoUrl: logoUrl !== undefined ? logoUrl : undefined,
+        description,
+        logoUrl,
       }
     });
 

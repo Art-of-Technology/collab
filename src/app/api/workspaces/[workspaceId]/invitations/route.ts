@@ -4,13 +4,20 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'node:crypto';
 import { sendWorkspaceInvitationEmail } from '@/lib/email';
-import { checkUserPermission, Permission } from '@/lib/permissions';
+import { Permission } from '@/lib/permissions';
 import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
+
+const inviteRule = 'Managing invitations requires Admin level or above, or the INVITE_MEMBERS permission.';
 
 // Admins and above invite; a standard role does when it holds the invite permission.
 async function mayInvite(userId: string, workspaceId: string) {
-  return may(await getWorkspaceAuthority(userId, workspaceId), 'members.invite') ||
-    (await checkUserPermission(userId, workspaceId, Permission.INVITE_MEMBERS)).hasPermission;
+  const authority = await getWorkspaceAuthority(userId, workspaceId);
+  if (may(authority, 'members.invite') || authority?.level === null) return true;
+  if (!authority?.role) return false;
+  return !!(await prisma.rolePermission.findUnique({
+    where: { workspaceId_role_permission: { workspaceId, role: authority.role, permission: Permission.INVITE_MEMBERS } },
+    select: { id: true },
+  }));
 }
 
 // GET /api/workspaces/[workspaceId]/invitations - Get invitations for a workspace
@@ -34,7 +41,7 @@ export async function GET(
     // Check if user has permission to view invitations
     if (!(await mayInvite(session.user.id, workspaceId))) {
       return NextResponse.json(
-        { error: 'You do not have permission to view invitations for this workspace' },
+        { error: inviteRule },
         { status: 403 }
       );
     }
@@ -97,7 +104,7 @@ export async function POST(
     // Check if user has permission to invite members
     if (!(await mayInvite(session.user.id, workspaceId))) {
       return NextResponse.json(
-        { error: 'You do not have permission to invite members to this workspace' },
+        { error: inviteRule },
         { status: 403 }
       );
     }
@@ -223,7 +230,7 @@ export async function DELETE(
     // Check if user has permission to cancel invitations
     if (!(await mayInvite(session.user.id, workspaceId))) {
       return NextResponse.json(
-        { error: 'You do not have permission to cancel invitations for this workspace' },
+        { error: inviteRule },
         { status: 403 }
       );
     }

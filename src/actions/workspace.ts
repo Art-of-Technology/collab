@@ -284,9 +284,11 @@ export async function createWorkspace(data: {
  */
 export async function updateWorkspace(workspaceId: string, data: {
   name?: string;
-  description?: string;
+  description?: string | null;
   slug?: string;
-  logoUrl?: string;
+  logoUrl?: string | null;
+  dockEnabled?: boolean;
+  timeTrackingEnabled?: boolean;
 }) {
   const session = await getServerSession(authOptions);
   
@@ -294,7 +296,7 @@ export async function updateWorkspace(workspaceId: string, data: {
     throw new Error('Unauthorized');
   }
   
-  const { name, description, slug, logoUrl } = data;
+  const { name, description, slug, logoUrl, dockEnabled, timeTrackingEnabled } = data;
   
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -322,6 +324,12 @@ export async function updateWorkspace(workspaceId: string, data: {
     throw new Error('Only Owners can change the workspace settings');
   }
   
+  if ((slug !== undefined && (typeof slug !== 'string' || !slug)) ||
+      (dockEnabled !== undefined && typeof dockEnabled !== 'boolean') ||
+      (timeTrackingEnabled !== undefined && typeof timeTrackingEnabled !== 'boolean')) {
+    throw new Error('Invalid workspace settings');
+  }
+
   // If slug is changing, check that the new slug is available
   if (slug && slug !== workspace.slug) {
     // /docs and everything under it is the public documentation, so a workspace there could not be opened.
@@ -347,9 +355,11 @@ export async function updateWorkspace(workspaceId: string, data: {
     },
     data: {
       name: name || undefined,
-      description: description || undefined,
-      slug: slug || undefined,
-      logoUrl: logoUrl || undefined
+      description,
+      slug,
+      logoUrl,
+      dockEnabled,
+      timeTrackingEnabled,
     },
     include: {
       owner: {

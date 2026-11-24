@@ -178,6 +178,8 @@ test("the Owner role's permissions cannot be changed or reset, and an unknown ro
       ['PUT', { role: 'OWNER', permission: 'VIEW_POSTS', enabled: false }, 403],
       ['PUT', { role: 'owner', permission: 'VIEW_POSTS', enabled: true }, 403],
       ['POST', { role: 'OWNER' }, 403],
+      ['POST', { role: 'owner' }, 403],
+      ['POST', { role: 'OwNeR' }, 403],
       ['PUT', { role: 'Nope', permission: 'VIEW_POSTS', enabled: true }, 400],
       ['PUT', { role: 'support', permission: 'VIEW_POSTS', enabled: true }, 400],
     ]) {
@@ -191,4 +193,22 @@ test("the Owner role's permissions cannot be changed or reset, and an unknown ro
     assert.equal((await f.invoke('PUT', { role: 'Support', permission: 'VIEW_POSTS', enabled: true })).status, 200, `${why}: an existing custom role`);
     assert.ok(f.state.rows.some(row => row.role === 'Support' && row.permission === 'VIEW_POSTS'));
   }
+});
+
+test('the permission editor displays the read refusal returned to an Admin', async () => {
+  const f = fixture();
+  f.state.memberRole = 'ADMIN';
+  const notifications = [];
+  const editor = load('src/components/workspace/PermissionsManager.tsx', {
+    react: { useState: value => [value, () => {}], useEffect: effect => effect() },
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    '@/components/ui/card': {}, '@/components/ui/button': {}, '@/components/ui/switch': {},
+    '@/components/ui/alert-dialog': {}, 'lucide-react': {},
+    '@/lib/permission-types': load('src/lib/permission-types.ts'),
+    '@/hooks/use-toast': { toast: message => notifications.push(message.description) },
+  }, { fetch: async () => f.invoke('GET'), console: { error() {} } });
+
+  editor.default({ workspaceId: 'workspace', currentUserRole: 'ADMIN' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(notifications, ['Only Owners can manage roles and permissions']);
 });
