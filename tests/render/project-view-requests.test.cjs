@@ -224,10 +224,10 @@ test('switched on, the view asks for requests too', async () => {
 test('a broad view finds an issue by its description once the descriptions arrive', async () => {
   let deliver;
   const delivered = new Promise(resolve => { deliver = resolve; });
-  const row = (id, title, projectId) => ({
-    id, title, issueKey: id.toUpperCase(), projectId, statusId: null, parentId: null,
-    assigneeId: null, reporterId: null, agentRequestRole: null, labels: [], _count: { comments: 0 },
-  });
+  const fields = ['id', 'title', 'issueKey', 'projectId', 'statusId', 'parentId',
+    'assigneeId', 'reporterId', 'agentRequestRole', 'labels', '_count'];
+  // Each issue arrives as its values, in the order the snapshot names its fields once.
+  const row = (id, title, projectId) => [id, title, id.toUpperCase(), projectId, null, null, null, null, null, [], { comments: 0 }];
   // A broad list arrives as a snapshot without descriptions; they follow in a second call.
   const serve = async searchParams => {
     if (searchParams.get('descriptions') === '1') {
@@ -235,8 +235,9 @@ test('a broad view finds an issue by its description once the descriptions arriv
       return Response.json({ descriptions: { work: null, described: 'Needs the migration window first' } });
     }
     return Response.json({ snapshot: {
+      workspaceId: 'workspace', fields: { issues: fields, hierarchy: [], edges: [], related: [] },
       issues: [row('work', 'Ordinary task', 'project'), row('described', 'Quiet title', 'added')],
-      projects: [], people: [], statuses: [], hierarchy: [], edges: [],
+      projects: [], people: [], statuses: [], hierarchy: [], edges: [], related: [],
     } });
   };
   await withView(async ({ rows, listRequests, settle }) => {

@@ -145,6 +145,13 @@ test('workspace and multi-project lists return every visible row and field', asy
       const { snapshot } = JSON.parse(body);
       assert.deepEqual(snapshot.projects.map(project => project.id).sort(), projects === '&projectIds=q,missing' ? ['q'] : ['p', 'q']);
       assert.equal(body.split('"Project Q"').length - 1, 1, 'a shared record is sent once');
+      assert.equal(body.split('"statusValue"').length - 1, 1, 'each issue field is named once, not on every row');
+      assert.equal(body.split('"projectStatus"').length - 1, 1, 'each parent and child field is named once');
+      assert.equal(body.split('"workspace"').length - 1, 1, 'the workspace of the listed issues is sent once');
+      // A listed issue that is also a parent, a child or a related issue is sent once, as a listed row.
+      for (const issueKey of projects === '&projectIds=q,missing' ? ['"ISS-2"'] : ['"ISS-1"', '"ISS-2"']) {
+        assert.equal(body.split(issueKey).length - 1, 1, `${issueKey} is sent once`);
+      }
       assert.ok(!body.includes('Full description'), 'a broad list leaves descriptions out');
       issueQueries.length = 0;
       const listed = await readRows(await list('workspaceId=workspace' + requests + projects));
