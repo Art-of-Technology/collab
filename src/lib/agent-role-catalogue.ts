@@ -44,10 +44,10 @@ const askingAPerson = `Asking a person. This applies whenever your result names 
 
 /**
  * The longest text each instruction layer may hold, counted after trimming. The platform layer is the role's prompt with
- * the "Asking a person" rule and is checked when the catalogue loads; the organisation's and the seat's are checked by
- * `layerText` wherever they are saved.
+ * the "Asking a person" rule and is checked when the catalogue loads; the organisation's, a custom role's (CLB-626) and
+ * the seat's are checked by `layerText` wherever they are saved.
  */
-export const LAYER_LIMITS = Object.freeze({ platform: 8_000, organisation: 16_000, seat: 16_000 });
+export const LAYER_LIMITS = Object.freeze({ platform: 8_000, organisation: 16_000, role: 16_000, seat: 16_000 });
 export type InstructionLayer = keyof typeof LAYER_LIMITS;
 
 /** The text to save for a layer, trimmed; a RangeError when it is longer than the layer's limit. */
@@ -93,14 +93,17 @@ export function createRoleCatalogue(entries: readonly RoleEntry[]) {
      * A run's instructions: the platform layer (the role's prompt), then the organisation's and the seat's, in the order a
      * session reads them. A layer with nothing in it is present and empty, and so is every layer of an issue no seat works.
      * The owner's id stands where a prompt names the person to ask. `platform` is a system admin's edit of the role's
-     * prompt in force (CLB-916); without one, the role's prompt as the repository ships it.
+     * prompt in force (CLB-916); without one, the role's prompt as the repository ships it. A seat with the workspace's
+     * own role (CLB-626) passes that role's instructions as `customRole`, and `roleId` is its base role: a fourth layer,
+     * `role`, then stands between the organisation's and the seat's.
      */
-    instructionLayers(roleId: string | null, { ownerId, platform, organisation = '', seat = '' }: { ownerId: string | null; platform?: string | null; organisation?: string; seat?: string }) {
+    instructionLayers(roleId: string | null, { ownerId, platform, organisation = '', customRole, seat = '' }: { ownerId: string | null; platform?: string | null; organisation?: string; customRole?: string; seat?: string }) {
       const role = roleId ? byRole.get(roleId) : undefined;
       const prompt = role ? platform ?? role.platformPrompt : '';
       return [
         { layer: 'platform' as const, text: prompt.replaceAll('{{ownerId}}', ownerId ?? "a person's Collab user id") },
         { layer: 'organisation' as const, text: organisation },
+        ...(customRole === undefined ? [] : [{ layer: 'role' as const, text: customRole }]),
         { layer: 'seat' as const, text: seat },
       ];
     },

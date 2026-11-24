@@ -29,8 +29,9 @@ test("a system admin edits a role's platform prompt, with a history", async t =>
   deps['@/lib/agent-platform-prompts'] = load('src/lib/agent-platform-prompts.ts', deps, { Date });
   const { readPlatformPrompts } = deps['@/lib/agent-platform-prompts'];
   const route = load('src/app/api/admin/agent-roles/[role]/route.ts', deps);
-  const { readRoleInstructions } = load('src/lib/agent-role-instructions.ts', { ...deps, '@/lib/post-access': load('src/lib/post-access.ts'),
-    '@/lib/permissions': { Permission: {}, checkUserPermission: async () => ({ hasPermission: false }) } });
+  const readDeps = { ...deps, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/permissions': { Permission: {}, checkUserPermission: async () => ({ hasPermission: false }) } };
+  readDeps['@/lib/agent-custom-roles'] = load('src/lib/agent-custom-roles.ts', readDeps);
+  const { readRoleInstructions } = load('src/lib/agent-role-instructions.ts', readDeps);
 
   const shipped = id => ROLE_CATALOGUE.getRole(id).platformPrompt;
   /** Posts `body` for `role` as the signed-in person `as`, with any extra headers: the status and the body. */

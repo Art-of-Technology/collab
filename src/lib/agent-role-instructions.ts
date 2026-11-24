@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { ROLE_CATALOGUE, layerText } from '@/lib/agent-role-catalogue';
+import { CUSTOM_ROLE_SELECT, customRoleView } from '@/lib/agent-custom-roles';
 
 /** What a role of the catalogue takes, in words: ordinary issues, then each kind of request. */
 const takes = (role: (typeof ROLE_CATALOGUE.roles)[number]) => [
@@ -11,17 +12,19 @@ const takes = (role: (typeof ROLE_CATALOGUE.roles)[number]) => [
 
 /**
  * The Roles page of a workspace (CLB-608): each role of the catalogue with its platform layer in force (CLB-916), as a run
- * gets it with no one owner named, and the organisation's own text. Every member reads it, as every member sees the
- * seats; `canEdit` is true for those who may manage the workspace's permissions. Null when the person is not in the workspace.
+ * gets it with no one owner named, and the organisation's own text; then the workspace's own roles (CLB-626), retired
+ * ones too, by name. Every member reads it, as every member sees the seats; `canEdit` is true for those who may manage the
+ * workspace's permissions. Null when the person is not in the workspace.
  */
 export async function readRoleInstructions(userId: string, workspaceIdOrSlug: string) {
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true, name: true } });
   if (!workspace) return null;
-  const [{ hasPermission }, rows, edits] = await Promise.all([
+  const [{ hasPermission }, rows, edits, custom] = await Promise.all([
     checkUserPermission(userId, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS),
     prisma.agentRoleInstructions.findMany({ where: { workspaceId: workspace.id }, select: { role: true, text: true } }),
     // The latest version of each role's platform prompt that a system admin saved (CLB-916).
     prisma.agentPlatformPrompt.findMany({ orderBy: [{ role: 'asc' }, { version: 'desc' }], distinct: ['role'], select: { role: true, text: true } }),
+    prisma.agentCustomRole.findMany({ where: { workspaceId: workspace.id }, orderBy: { name: 'asc' }, select: CUSTOM_ROLE_SELECT }),
   ]);
   const saved = new Map(rows.map(row => [row.role, row.text]));
   const platform = new Map(edits.map(row => [row.role, row.text]));
@@ -30,6 +33,7 @@ export async function readRoleInstructions(userId: string, workspaceIdOrSlug: st
     canEdit: hasPermission,
     roles: ROLE_CATALOGUE.roles.map(role => ({ id: role.id, name: role.name, takes: takes(role), repository: role.repository,
       platform: ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: null, platform: platform.get(role.id) })[0].text, organisation: saved.get(role.id) ?? '' })),
+    custom: custom.map(customRoleView),
   };
 }
 
