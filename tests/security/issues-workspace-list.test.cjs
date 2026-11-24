@@ -90,6 +90,10 @@ test('workspace and multi-project lists return every visible row and field', asy
       return super.encode(input);
     }
   }
+  // The browser reads every list through this.
+  const snapshots = load('src/lib/issue-list-snapshot.ts', {
+    '@/utils/issueRelations': load('src/utils/issueRelations.ts'),
+  });
   const { GET } = load('src/app/api/issues/route.ts', {
     'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: userId } }) },
@@ -101,14 +105,23 @@ test('workspace and multi-project lists return every visible row and field', asy
     '@/lib/notification-service': {},
     '@/lib/event-bus': {},
     '@/utils/issueRelations': load('src/utils/issueRelations.ts'),
+    '@/lib/issue-list-snapshot': snapshots,
   }, {
     URL, Response, ReadableStream, TextEncoder: IssueEncoder,
     console: { ...console, error: (...args) => errors.push(args) },
   });
   const list = query => GET(new Request(`https://example.test/api/issues?${query}`));
-  const readRows = async response => {
+  const { readIssueList, withDescriptions } = snapshots;
+  // The view reads a broad list first and its descriptions in a second call.
+  const readRows = async (response, described) => {
     assert.equal(response.status, 200);
-    const { issues } = await response.json();
+    let { issues } = readIssueList(await response.json());
+    if (described) {
+      assert.equal(described.status, 200);
+      issues = withDescriptions(issues, (await described.json()).descriptions);
+    }
+    // structuredClone keeps undefined fields and moves the rows out of the module's realm.
+    ({ issues } = structuredClone({ issues }));
     for (const issue of issues) {
       // SQL does not promise an order inside these arrays.
       issue.children.sort((a, b) => a.id.localeCompare(b.id));
@@ -116,6 +129,8 @@ test('workspace and multi-project lists return every visible row and field', asy
     }
     return issues;
   };
+  const readList = async query => readRows(await list(query), await list(query + '&descriptions=1'));
+  const brief = rows => rows.map(({ description, ...row }) => row);
   for (const requests of ['', '&requests=1']) {
     const expected = [];
     for (const project of ['p', 'q']) {
@@ -126,8 +141,40 @@ test('workspace and multi-project lists return every visible row and field', asy
     const ids = requests ? ['parent', 'child', 'request', 'follow-up', 'retained-child']
       : ['parent', 'child', 'follow-up', 'retained-child'];
     for (const projects of ['', '&projectIds=p,q,r', '&projectIds=q,missing']) {
+      // A browser tab loaded before rows were sent as arrays does not ask for them,
+      // and gets the objects its reader knows.
+      const before = JSON.parse(await (await list('workspaceId=workspace' + requests + projects)).text()).snapshot;
+      assert.ok(!('fields' in before), 'the previous shape names its fields on each row');
+      assert.ok(before.issues.length > 0 && before.issues.every(issue => !Array.isArray(issue) && issue.workspaceId === 'workspace'));
+      assert.ok(before.issues.every(issue => !('description' in issue)), 'the previous shape leaves descriptions out too');
+      assert.ok(before.hierarchy.every(issue => !Array.isArray(issue) && 'parentId' in issue));
+      assert.ok(before.edges.every(edge => typeof edge.sourceIssue.id === 'string' && typeof edge.targetIssue.id === 'string'));
+      assert.ok(!('related' in before));
+      const previous = await readRows(await list('workspaceId=workspace' + requests + projects));
+      assert.deepEqual(previous, await readRows(await list('workspaceId=workspace' + requests + projects + '&rows=arrays')),
+        'both shapes read to the same rows');
+
+      const body = await (await list('workspaceId=workspace' + requests + projects + '&rows=arrays')).text();
+      const { snapshot } = JSON.parse(body);
+      assert.deepEqual(snapshot.projects.map(project => project.id).sort(), projects === '&projectIds=q,missing' ? ['q'] : ['p', 'q']);
+      assert.equal(body.split('"Project Q"').length - 1, 1, 'a shared record is sent once');
+      assert.equal(body.split('"statusValue"').length - 1, 1, 'each issue field is named once, not on every row');
+      assert.equal(body.split('"projectStatus"').length - 1, 1, 'each parent and child field is named once');
+      assert.equal(body.split('"workspace"').length - 1, 1, 'the workspace of the listed issues is sent once');
+      // A listed issue that is also a parent, a child or a related issue is sent once, as a listed row.
+      for (const issueKey of projects === '&projectIds=q,missing' ? ['"ISS-2"'] : ['"ISS-1"', '"ISS-2"']) {
+        assert.equal(body.split(issueKey).length - 1, 1, `${issueKey} is sent once`);
+      }
+      assert.ok(!body.includes('Full description'), 'a broad list leaves descriptions out');
       issueQueries.length = 0;
-      const issues = await readRows(await list('workspaceId=workspace' + requests + projects));
+      const listed = await readRows(await list('workspaceId=workspace' + requests + projects + '&rows=arrays'));
+      assert.equal(issueQueries.length, 1, 'one statement reads the complete list');
+      assert.ok(listed.every(issue => !('description' in issue)), 'broad rows carry no description');
+      const { descriptions } = await (await list('workspaceId=workspace' + requests + projects + '&descriptions=1')).json();
+      assert.deepEqual(Object.keys(descriptions).sort(), listed.map(issue => issue.id).sort(),
+        'descriptions cover exactly the listed issues');
+      assert.equal(issueQueries.length, 2, 'one statement reads the descriptions');
+      const issues = await readList('workspaceId=workspace' + requests + projects + '&rows=arrays');
       if (projects === '&projectIds=q,missing') {
         assert.deepEqual(issues, expected.filter(issue => issue.projectId === 'q'));
       } else {
@@ -138,11 +185,13 @@ test('workspace and multi-project lists return every visible row and field', asy
         assert.deepEqual(issues[0].issueRelations.relates_to, []);
       }
       assert.equal(issues.at(-1).parent, null);
-      assert.equal(issueQueries.length, 1, 'one statement reads the complete list');
+      assert.deepEqual(brief(issues), listed);
     }
   }
 
-  assert.deepEqual(await readRows(await list('workspaceId=workspace&projectIds=missing,also-missing')), []);
+  assert.deepEqual(await readList('workspaceId=workspace&projectIds=missing,also-missing'), []);
+  assert.deepEqual(await (await list('workspaceId=workspace&projectIds=missing,also-missing&descriptions=1')).json(), { descriptions: {} });
+  assert.equal((await list('workspaceId=other&descriptions=1')).status, 403);
 
   statements.length = 0;
   assert.equal((await list('workspaceId=other')).status, 403);
@@ -156,10 +205,15 @@ test('workspace and multi-project lists return every visible row and field', asy
   ]) {
     await t.test(`relation visibility with the ${scope} filter follows current workspace access`, async () => {
       const readRelations = async () => {
-        const rows = await readRows(await list('workspaceId=workspace' + filter));
-        const { children, _count, issueRelations: { blocks, duplicated_by } } = rows.find(row => row.id === 'child');
-        assert.equal(_count.children, children.length);
-        return [blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id), children.map(issue => issue.id)];
+        const read = [];
+        for (const shape of ['&rows=arrays', '']) {
+          const rows = await readRows(await list('workspaceId=workspace' + filter + shape));
+          const { children, _count, issueRelations: { blocks, duplicated_by } } = rows.find(row => row.id === 'child');
+          assert.equal(_count.children, children.length);
+          read.push([blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id), children.map(issue => issue.id)]);
+        }
+        assert.deepEqual(read[0], read[1], 'both shapes show the same relations');
+        return read[0];
       };
       const key = { userId_workspaceId: { userId: 'member', workspaceId: 'other' } };
       const membership = await raw.workspaceMember.create({ data: { ...key.userId_workspaceId, status: false } });
@@ -220,19 +274,32 @@ test('workspace and multi-project lists return every visible row and field', asy
     expected.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     issueQueries.length = 0;
     statements.length = 0;
-    const response = await list('workspaceId=workspace');
+    const response = await list('workspaceId=workspace&rows=arrays');
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /^application\/json\b/);
     const [sample, body] = response.body.tee();
     const reader = sample.getReader();
     const first = await reader.read();
     const cancel = reader.cancel();
-    assert.deepEqual(await readRows(new Response(body)), expected);
+    assert.deepEqual(await readRows(new Response(body)), brief(expected));
     await cancel;
     assert.ok(first.value.byteLength < 1024 * 1024, 'the response sends a small first chunk');
     assert.equal(expected.length, 5156);
     assert.equal(issueQueries.length, 1, 'a broad list reads every issue in one database statement');
     assert.equal(statements.length, 2, 'the workspace access check and the snapshot read are the only statements');
+    statements.length = 0;
+    const described = await list('workspaceId=workspace&descriptions=1');
+    assert.equal(statements.length, 2, 'the workspace access check and the description read are the only statements');
+    assert.deepEqual(await readRows(await list('workspaceId=workspace&rows=arrays'), described), expected);
+    assert.deepEqual(await readRows(await list('workspaceId=workspace')), brief(expected), 'the previous shape reads to the same rows');
+    const text = await (await list('workspaceId=workspace&rows=arrays')).text();
+    assert.equal(text.split('"Project P"').length - 1, 1, 'the project is sent once, not on each row');
+    assert.ok(!text.includes('Full description.'), 'the broad list leaves descriptions out');
+    assert.ok(text.length < JSON.stringify({ issues: brief(expected) }).length * 0.9,
+      `the snapshot (${text.length} bytes) is smaller than the expanded rows`);
+    issueQueries.length = 0;
+    await list('workspaceId=workspace&rows=arrays');
+    await list('workspaceId=workspace&descriptions=1');
 
     function largestRead(plan) {
       const rows = ['Issue', 'IssueComment', 'issue_relations', '_IssueToLabel'].includes(plan['Relation Name'])
@@ -264,7 +331,7 @@ test('workspace and multi-project lists return every visible row and field', asy
     userId = 'owner';
     try {
       issueQueries.length = 0;
-      const rows = await readRows(await list('workspaceId=workspace'));
+      const rows = await readList('workspaceId=workspace&rows=arrays');
       assert.deepEqual(rows.map(issue => issue.id), expected.map(issue => issue.id));
       await assertReadBound();
     } finally {
@@ -278,16 +345,16 @@ test('workspace and multi-project lists return every visible row and field', asy
         await raw.project.update({ where: { id: 'p' }, data: { name: 'Renamed after the read' } });
       };
       try {
-        assert.deepEqual(await readRows(await list('workspaceId=workspace')), expected);
+        assert.deepEqual(await readRows(await list('workspaceId=workspace&rows=arrays')), brief(expected));
       } finally {
         afterIssueRead = undefined;
       }
     });
 
-    failEncoding = '{"issues":[';
-    assert.equal((await list('workspaceId=workspace')).status, 500);
+    failEncoding = '{"snapshot":';
+    assert.equal((await list('workspaceId=workspace&rows=arrays')).status, 500);
     failEncoding = ',';
-    const interrupted = await list('workspaceId=workspace');
+    const interrupted = await list('workspaceId=workspace&rows=arrays');
     assert.equal(interrupted.status, 200);
     await assert.rejects(interrupted.arrayBuffer(), streamError);
     assert.deepEqual(errors, [['[ISSUES_GET]', streamError], ['[ISSUES_GET]', streamError]]);

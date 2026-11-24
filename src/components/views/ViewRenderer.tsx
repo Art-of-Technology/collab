@@ -28,7 +28,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
 import { useProjects } from '@/hooks/queries/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
+import { useIssuesByWorkspace, useIssueDescriptions, issueKeys } from '@/hooks/queries/useIssues';
+import { readIssueList, withDescriptions } from '@/lib/issue-list-snapshot';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
 import { NewIssueModal } from '@/components/issue';
@@ -152,6 +153,9 @@ export default function ViewRenderer({
 
   const setIncludeAgentRequests = (include: boolean) => {
     const params = new URLSearchParams(searchParams.toString());
+    // The box holds the search; the address Next.js has handed back can still lag it.
+    if (search) params.set('search', search);
+    else params.delete('search');
     if (include === savedIncludesRequests) {
       params.delete('requests');
     } else {
@@ -286,9 +290,10 @@ export default function ViewRenderer({
   const useLiveData = !hasActiveDbFilters || hasFilterOverrides || recentIssueCreated;
   const shouldFetchLiveData = useLiveData || includeAgentRequests || initialIncludesRequests !== includeAgentRequests;
 
+  const listedProjectIds = projectIds.length > 0 ? projectIds : view.projects.map(p => p.id);
   const { data: liveIssuesData, isLoading: isLoadingLiveIssues } = useIssuesByWorkspace(
     shouldFetchLiveData ? workspace.id : '',
-    shouldFetchLiveData ? (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id)) : undefined,
+    shouldFetchLiveData ? listedProjectIds : undefined,
     { requests: includeAgentRequests }
   );
 
@@ -303,10 +308,17 @@ export default function ViewRenderer({
       });
       const response = await fetch(`/api/issues?${params}`);
       if (!response.ok) throw new Error('Failed to fetch additional issues');
-      return response.json();
+      return readIssueList(await response.json());
     },
     enabled: additionalProjectIds.length > 0,
     staleTime: 5000,
+  });
+
+  // Broad lists leave descriptions out; search reads them once this second call lands.
+  // It covers every listed project, so it serves the additional projects too.
+  const { data: descriptionsData } = useIssueDescriptions(workspace.id, listedProjectIds, {
+    requests: includeAgentRequests,
+    enabled: !!(liveIssuesData?.withoutDescriptions || additionalIssuesData?.withoutDescriptions),
   });
 
   const allIssues = useMemo(() => {
@@ -316,8 +328,8 @@ export default function ViewRenderer({
     const additional = additionalIssuesData?.issues || [];
     const issueMap = new Map();
     [...baseIssues, ...additional].forEach(issue => issueMap.set(issue.id, issue));
-    return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, useLiveData, includeAgentRequests, initialIncludesRequests]);
+    return withDescriptions(Array.from(issueMap.values()), descriptionsData?.descriptions);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, descriptionsData, useLiveData, includeAgentRequests, initialIncludesRequests]);
   // A view without saved filters gets no rows from its page: they arrive with the list call.
   // Other list calls (such as switching requests) keep the board mounted, with the rows it holds.
   const isLoadingIssues = useLiveData && isLoadingLiveIssues && allIssues.length === 0;

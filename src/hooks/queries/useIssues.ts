@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { readIssueList, type IssueDescriptions } from '@/lib/issue-list-snapshot';
 
 export interface CreateIssueData {
   title: string;
@@ -60,7 +61,9 @@ export function useIssuesByWorkspace(
       const params = new URLSearchParams({
         workspaceId,
         ...(projectIds && projectIds.length > 0 && { projectIds: projectIds.join(',') }),
-        ...(requests && { requests: '1' })
+        ...(requests && { requests: '1' }),
+        // A broad list then sends each issue as an array of values; readIssueList reads both shapes.
+        rows: 'arrays',
       });
       
       const response = await fetch(`/api/issues?${params}`,
@@ -75,7 +78,7 @@ export function useIssuesByWorkspace(
       if (!response.ok) {
         throw new Error('Failed to fetch issues');
       }
-      return response.json();
+      return readIssueList(await response.json());
     },
     enabled: !!workspaceId,
     // More reasonable caching with proper invalidation
@@ -85,6 +88,38 @@ export function useIssuesByWorkspace(
     refetchOnWindowFocus: false, // We have realtime updates
     refetchOnReconnect: true,
     retry: 1, // Retry once on failure
+  });
+}
+
+// The descriptions a broad issue list leaves out, read for the same issues.
+// The key extends the list's key, so invalidating the list also refreshes these.
+export function useIssueDescriptions(
+  workspaceId: string,
+  projectIds: string[],
+  { requests = false, enabled = true }: { requests?: boolean; enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: [...issueKeys.byWorkspace(workspaceId), ...[...projectIds].sort(), ...(requests ? [{ requests }] : []), { descriptions: true }],
+    queryFn: async (): Promise<{ descriptions: IssueDescriptions }> => {
+      const params = new URLSearchParams({
+        workspaceId,
+        ...(projectIds.length > 0 && { projectIds: projectIds.join(',') }),
+        ...(requests && { requests: '1' }),
+        descriptions: '1',
+      });
+      const response = await fetch(`/api/issues?${params}`, { cache: 'no-store', headers: { 'cache-control': 'no-store' } });
+      if (!response.ok) {
+        throw new Error('Failed to fetch issue descriptions');
+      }
+      return response.json();
+    },
+    enabled: !!workspaceId && enabled,
+    staleTime: 10000,
+    gcTime: 60000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    retry: 1,
   });
 }
 

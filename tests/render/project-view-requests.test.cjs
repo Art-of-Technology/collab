@@ -12,7 +12,7 @@ const request = {
 };
 const workspace = { id: 'workspace', slug: 'workspace' };
 
-async function withView(run, viewOverrides = {}) {
+async function withView(run, viewOverrides = {}, { serve, search } = {}) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://example.test/workspace/views/demo' });
   const globals = { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true };
   const previous = Object.fromEntries(Object.keys(globals).map(key => [key, global[key]]));
@@ -27,7 +27,7 @@ async function withView(run, viewOverrides = {}) {
     id: 'demo', name: 'Demo', type: 'USER', displayType: 'LIST', visibility: 'WORKSPACE',
     filters: {}, projects: [project], fields: ['Priority'], ...viewOverrides,
   };
-  let params = new URLSearchParams();
+  let params = new URLSearchParams(search ? { search } : {});
   let renderKey = 'view';
   let initialIssues = [work];
   let initialIncludesRequests = false;
@@ -38,6 +38,7 @@ async function withView(run, viewOverrides = {}) {
     const { pathname: path, searchParams } = new URL(url, window.location.origin);
     if (path === '/api/issues') {
       listRequests.push(searchParams);
+      if (serve) return serve(searchParams);
       const projects = searchParams.get('projectIds')?.split(',') || [];
       return Response.json({ issues: [work, request].filter(issue =>
         projects.includes(issue.projectId) && (issue.agentRequestRole === null || searchParams.get('requests') === '1')
@@ -116,7 +117,7 @@ async function withView(run, viewOverrides = {}) {
     '@/lib/featureFlags': {},
     '@/components/issue': {},
     '@/hooks/useActionFilteredIssues': load('src/hooks/useActionFilteredIssues.ts', deps),
-    '@/hooks/useViewFilterState': load('src/hooks/useViewFilterState.ts', { ...deps, 'next/navigation': navigation }, { URLSearchParams }),
+    '@/hooks/useViewFilterState': load('src/hooks/useViewFilterState.ts', { ...deps, 'next/navigation': navigation }, { URLSearchParams, window }),
     './shared/ViewTopBar': { default: ViewTopBar },
     './agent-request-display': load('src/components/views/agent-request-display.ts'),
     './renderers/KanbanViewRenderer': { default: BoardRows },
@@ -219,6 +220,49 @@ test('switched on, the view asks for requests too', async () => {
     assert.deepEqual(saves.at(-1).fields, ['Priority']);
   }, { filters: { labels: ['reviews'] }, displayType: 'KANBAN' });
 });
+
+// A server sends the rows as arrays when the view asks for them. A server from before
+// that change (after a rollback) sends objects; the view reads both.
+for (const shape of ['arrays', 'objects']) {
+  test(`a broad view finds an issue by its description once the descriptions arrive (${shape})`, async () => {
+    let deliver;
+    const delivered = new Promise(resolve => { deliver = resolve; });
+    const fields = ['id', 'title', 'issueKey', 'projectId', 'statusId', 'parentId',
+      'assigneeId', 'reporterId', 'agentRequestRole', 'labels', '_count'];
+    // Each issue arrives as its values, in the order the snapshot names its fields once.
+    const row = (id, title, projectId) => [id, title, id.toUpperCase(), projectId, null, null, null, null, null, [], { comments: 0 }];
+    const object = values => ({ ...Object.fromEntries(fields.map((field, index) => [field, values[index]])), workspaceId: 'workspace' });
+    const issues = [row('work', 'Ordinary task', 'project'), row('described', 'Quiet title', 'added')];
+    // A broad list arrives as a snapshot without descriptions; they follow in a second call.
+    const serve = async searchParams => {
+      if (searchParams.get('descriptions') === '1') {
+        await delivered;
+        return Response.json({ descriptions: { work: null, described: 'Needs the migration window first' } });
+      }
+      return Response.json({ snapshot: shape === 'arrays' && searchParams.get('rows') === 'arrays' ? {
+        workspaceId: 'workspace', fields: { issues: fields, hierarchy: [], edges: [], related: [] },
+        issues, projects: [], people: [], statuses: [], hierarchy: [], edges: [], related: [],
+      } : {
+        issues: issues.map(object), projects: [], people: [], statuses: [], hierarchy: [], edges: [],
+      } });
+    };
+    await withView(async ({ rows, listRequests, settle }) => {
+      assert.equal(rows(), '', 'titles and keys alone do not match');
+      const described = listRequests.filter(params => params.get('descriptions') === '1');
+      assert.equal(described.length, 1);
+      assert.equal(described[0].get('projectIds'), 'project,added');
+      const broad = listRequests.filter(params => !params.has('descriptions') && params.get('projectIds') === 'project,added');
+      assert.ok(broad.length > 0);
+      assert.ok(broad.every(params => params.get('rows') === 'arrays'), 'the view asks for its rows as arrays');
+
+      await React.act(async () => deliver());
+      await settle();
+      assert.equal(rows(), 'Quiet title');
+    }, { projects: [{ id: 'project', name: 'Demo', slug: 'demo' }, { id: 'added', name: 'Added', slug: 'added' }] }, {
+      serve, search: 'migration',
+    });
+  });
+}
 
 for (const sorting of [{ field: 'position', direction: 'asc' }, { field: 'manual', direction: 'desc' }]) {
   test(`Set default keeps a saved ${sorting.field} ordering`, async () => {
