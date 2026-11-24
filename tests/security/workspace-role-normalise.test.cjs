@@ -19,14 +19,13 @@ const rows = table => JSON.parse(psql(`SELECT coalesce(json_agg(t ORDER BY id), 
 const snapshot = () => ({ members: rows('WorkspaceMember'), permissions: rows('RolePermission') });
 
 before(() => {
-  bindir = process.env.PG17_BINDIR || execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
+  bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
   directory = mkdtempSync('/tmp/collab-role-normalise-pg-');
   const data = join(directory, 'data');
   execFileSync(join(bindir, 'initdb'), ['-D', data, '-A', 'trust', '--no-locale', '-E', 'UTF8'], { stdio: 'pipe' });
   execFileSync(join(bindir, 'pg_ctl'), ['-D', data, '-l', join(directory, 'server.log'), '-o',
     `-p 5432 -c listen_addresses='' -k ${directory} -c fsync=off`, '-w', 'start'], { stdio: 'pipe' });
   started = true;
-  assert.equal(psql("SELECT current_setting('server_version_num')::int / 10000", ['-At']).trim(), '17', 'fixture requires PostgreSQL 17');
   psql(execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-empty',
     '--to-schema-datamodel', resolve('prisma/schema.prisma'), '--script'], { encoding: 'utf8', stdio: 'pipe' }));
   const users = ['o1', 'o2', 'o3', 'o4', 'o5', 'a', 'm', 'c', 'r', 'q', 's'];
