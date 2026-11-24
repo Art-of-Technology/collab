@@ -96,6 +96,21 @@ export function expandIssueListSnapshot(snapshot: IssueListSnapshot) {
 }
 
 // Read a GET /api/issues body: broad lists arrive as a snapshot, the others as rows.
-export function readIssueList<T>(body: { issues: T[] } | { snapshot: IssueListSnapshot }) {
-  return 'snapshot' in body ? { issues: expandIssueListSnapshot(body.snapshot) } : body;
+// A snapshot has no descriptions; read them with `descriptions=1` and withDescriptions.
+export function readIssueList<T>(
+  body: { issues: T[] } | { snapshot: IssueListSnapshot },
+): { issues: T[] | SnapshotIssue[]; withoutDescriptions?: true } {
+  return 'snapshot' in body
+    ? { issues: expandIssueListSnapshot(body.snapshot), withoutDescriptions: true as const }
+    : body;
+}
+
+export type IssueDescriptions = Record<string, string | null>;
+
+// Adds each listed description to the rows that arrived without one.
+export function withDescriptions<T extends { id: string }>(issues: T[], descriptions?: IssueDescriptions) {
+  if (!descriptions) return issues;
+  return issues.map(issue => 'description' in issue || !Object.hasOwn(descriptions, issue.id)
+    ? issue
+    : { ...issue, description: descriptions[issue.id] });
 }

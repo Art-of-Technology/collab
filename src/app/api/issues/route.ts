@@ -124,22 +124,38 @@ function readableIssues(userId: string) {
 
 type SnapshotKind = keyof IssueListSnapshot;
 
-function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
+function listedIssues(workspaceId: string, projectIds: string[], includeRequests: boolean) {
   const projects = projectIds.length
     ? Prisma.sql`AND "projectId" IN (${Prisma.join(projectIds)})`
     : Prisma.empty;
+  return Prisma.sql`
+    WHERE "workspaceId" = ${workspaceId}
+      AND (${includeRequests} OR "agentRequestRole" IS NULL)
+      ${projects}
+  `;
+}
 
+// The descriptions of the issues a broad list returns, by issue id, null included.
+function issueDescriptionQuery(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
+  return Prisma.sql`
+    WITH ${readableIssues(userId)}
+    SELECT COALESCE(json_object_agg(id, description)::text, '{}') AS data
+    FROM readable_issues
+    ${listedIssues(workspaceId, projectIds, includeRequests)}
+  `;
+}
+
+function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: string[], includeRequests: boolean) {
   // One statement supplies a consistent snapshot. Project only the listed issue
   // fields and send shared records once; readIssueList expands them in the browser.
+  // Descriptions are left out; the view reads them with issueDescriptionQuery.
   // Keep these projections in sync with LIST_INCLUDE.
   // The timestamp columns are UTC, stored as timestamp(3) without time zone.
   return Prisma.sql`
     WITH ${readableIssues(userId)}, listed AS MATERIALIZED (
       SELECT id, "projectId", "statusId", "parentId", "assigneeId", "reporterId"
       FROM readable_issues
-      WHERE "workspaceId" = ${workspaceId}
-        AND (${includeRequests} OR "agentRequestRole" IS NULL)
-        ${projects}
+      ${listedIssues(workspaceId, projectIds, includeRequests)}
     ),
     list_ids AS MATERIALIZED (SELECT id FROM listed),
     hierarchy_ids AS (
@@ -177,7 +193,7 @@ function workspaceIssueQuery(userId: string, workspaceId: string, projectIds: st
       GROUP BY "issueId"
     )
     SELECT 'issues' AS kind, fields."updatedAt"::float8 AS sort, row_to_json(fields)::text AS data FROM (
-      SELECT i.id, i.title, i.description, i.type, i."statusId", i."statusValue", i.priority, i."storyPoints",
+      SELECT i.id, i.title, i.type, i."statusId", i."statusValue", i.priority, i."storyPoints",
         i."parentId", i."milestoneId", i."assigneeId", i."reporterId", i."projectId", i."workspaceId",
         ${Prisma.join(ISSUE_LIST_DATE_FIELDS.map(key => Prisma.raw(`(extract(epoch FROM i."${key}") * 1000)::bigint AS "${key}"`)))},
         i."deletedById", i."daysInProgress", i."issueKey", i.position, i.progress, i.color, i."postId", i.status,
@@ -306,6 +322,12 @@ export async function GET(request: NextRequest) {
     }
 
     const includeRequests = searchParams.get('requests') === '1';
+    if (!milestoneId && searchParams.get('descriptions') === '1') {
+      const [{ data }] = await prisma.$queryRaw<{ data: string }[]>(
+        issueDescriptionQuery(session.user.id, workspaceId, projectIds, includeRequests),
+      );
+      return new Response(`{"descriptions":${data}}`, { headers: { 'content-type': 'application/json' } });
+    }
     if (!milestoneId && projectIds.length !== 1) {
       const rows = await prisma.$queryRaw<{ kind: SnapshotKind; sort: number | null; data: string }[]>(
         workspaceIssueQuery(session.user.id, workspaceId, projectIds, includeRequests),

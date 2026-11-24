@@ -28,8 +28,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
 import { useProjects } from '@/hooks/queries/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
-import { readIssueList } from '@/lib/issue-list-snapshot';
+import { useIssuesByWorkspace, useIssueDescriptions, issueKeys } from '@/hooks/queries/useIssues';
+import { readIssueList, withDescriptions } from '@/lib/issue-list-snapshot';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
 import { NewIssueModal } from '@/components/issue';
@@ -287,9 +287,10 @@ export default function ViewRenderer({
   const useLiveData = !hasActiveDbFilters || hasFilterOverrides || recentIssueCreated;
   const shouldFetchLiveData = useLiveData || includeAgentRequests || initialIncludesRequests !== includeAgentRequests;
 
+  const listedProjectIds = projectIds.length > 0 ? projectIds : view.projects.map(p => p.id);
   const { data: liveIssuesData } = useIssuesByWorkspace(
     shouldFetchLiveData ? workspace.id : '',
-    shouldFetchLiveData ? (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id)) : undefined,
+    shouldFetchLiveData ? listedProjectIds : undefined,
     { requests: includeAgentRequests }
   );
 
@@ -310,6 +311,13 @@ export default function ViewRenderer({
     staleTime: 5000,
   });
 
+  // Broad lists leave descriptions out; search reads them once this second call lands.
+  // It covers every listed project, so it serves the additional projects too.
+  const { data: descriptionsData } = useIssueDescriptions(workspace.id, listedProjectIds, {
+    requests: includeAgentRequests,
+    enabled: !!(liveIssuesData?.withoutDescriptions || additionalIssuesData?.withoutDescriptions),
+  });
+
   const allIssues = useMemo(() => {
     // A previous server response can still contain requests while the switch turns off.
     const serverIssues = includeAgentRequests || !initialIncludesRequests ? initialIssues : [];
@@ -317,8 +325,8 @@ export default function ViewRenderer({
     const additional = additionalIssuesData?.issues || [];
     const issueMap = new Map();
     [...baseIssues, ...additional].forEach(issue => issueMap.set(issue.id, issue));
-    return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, useLiveData, includeAgentRequests, initialIncludesRequests]);
+    return withDescriptions(Array.from(issueMap.values()), descriptionsData?.descriptions);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, descriptionsData, useLiveData, includeAgentRequests, initialIncludesRequests]);
 
   // ─── 3-Layer Filter Pipeline ───────────────────────────
   // Layer 1: Action filters (async)
