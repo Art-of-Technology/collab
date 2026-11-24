@@ -200,13 +200,15 @@ export function useViewFilterState({ view }: UseViewFilterStateOptions) {
 
   const buildParams = useCallback((updater: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams.toString());
+    // The box holds the search; the address Next.js has handed back can still lag it.
+    params.set('search', search);
     updater(params);
     // Clean empty params
     for (const [key, value] of Array.from(params.entries())) {
       if (!value) params.delete(key);
     }
     return params;
-  }, [searchParams]);
+  }, [searchParams, search]);
 
   const pushParams = useCallback((params: URLSearchParams) => {
     const str = params.toString();

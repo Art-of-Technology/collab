@@ -208,3 +208,21 @@ test('a search changed by the address from elsewhere replaces the text in the bo
     assert.equal(rows(), 'Internationalisation migration, Board colours');
   }, { address: '/workspace/views/demo' });
 });
+
+test('choosing a scope while the address still lags the typing keeps the search', async () => {
+  await withView(async ({ box, openBox, typeLetter, handBacks, handBackOne, answerServer, settle, addressSearch, pageRequests }) => {
+    await openBox();
+    for (const letter of 'board') await typeLetter(letter);
+    const backlog = [...document.querySelectorAll('button')].find(button => button.textContent.trim().startsWith('Backlog'));
+    assert.ok(backlog, 'Expected the Backlog scope');
+    await React.act(async () => backlog.click());
+    assert.equal(pageRequests.length, 1, 'a scope is one request for the view page');
+    assert.equal(new URL(pageRequests[0], 'https://example.test').searchParams.get('search'), 'board');
+    while (handBacks.length) await handBackOne();
+    await answerServer();
+    await settle();
+    assert.equal(box().value, 'board');
+    assert.equal(addressSearch(), 'board');
+    assert.equal(new URLSearchParams(window.location.search).get('scope'), 'backlog');
+  });
+});
