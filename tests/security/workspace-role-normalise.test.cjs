@@ -14,7 +14,8 @@ let bindir, directory, started;
 
 const psql = (sql, extra = []) => execFileSync(join(bindir, 'psql'),
   ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-p', '5432', '-U', userInfo().username, '-d', 'postgres', ...extra],
-  { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+    env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PG'))) });
 const rows = table => JSON.parse(psql(`SELECT coalesce(json_agg(t ORDER BY id), '[]') FROM "${table}" t;`, ['-At']));
 const snapshot = () => ({ members: rows('WorkspaceMember'), permissions: rows('RolePermission') });
 
