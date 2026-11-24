@@ -38,6 +38,13 @@ async function openView({ issues, filters = {} }, run) {
       await new Promise(resolve => setTimeout(resolve, 0));
     });
   };
+  // The list hook reads the answer and the page renders it a few ticks later: wait for that, within a bound.
+  const settle = async (done, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (!done() && Date.now() < end) {
+      await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+    }
+  };
 
   const deps = { react: React, 'react/jsx-runtime': require('react/jsx-runtime') };
   const queryDeps = { ...deps, '@tanstack/react-query': query };
@@ -82,9 +89,11 @@ async function openView({ issues, filters = {} }, run) {
     });
     await run({
       answer,
+      settle,
       listCalls,
       rows: () => document.getElementById('rows')?.textContent ?? null,
-      loading: () => document.querySelector('[role="status"][aria-label="Loading issues"]'),
+      // A boolean, so that a failed check prints true or false rather than the whole element.
+      loading: () => document.querySelector('[role="status"][aria-label="Loading issues"]') !== null,
     });
   } finally {
     await React.act(async () => root.unmount());
@@ -95,26 +104,28 @@ async function openView({ issues, filters = {} }, run) {
 }
 
 test('a view whose page sent no rows shows that its issues are loading, not that there are none', async () => {
-  await openView({ issues: [] }, async ({ answer, listCalls, rows, loading }) => {
+  await openView({ issues: [] }, async ({ answer, settle, listCalls, rows, loading }) => {
     assert.equal(listCalls.length, 1, 'The browser asks for the list once');
-    assert.ok(loading(), 'Expected a loading state while the list call is out');
+    assert.equal(loading(), true, 'Expected a loading state while the list call is out');
     assert.equal(rows(), null, 'No empty list is shown while the list call is out');
 
     await answer();
-    assert.equal(loading(), null);
+    await settle(() => rows() !== null);
+    assert.equal(loading(), false);
     assert.equal(rows(), 'Ordinary task');
   });
 });
 
 test('a view whose list call fails does not stay loading', async () => {
-  await openView({ issues: [] }, async ({ answer, listCalls, rows, loading }) => {
-    assert.ok(loading());
+  await openView({ issues: [] }, async ({ answer, settle, listCalls, rows, loading }) => {
+    assert.equal(loading(), true);
     await answer({ error: 'unavailable' }, 500);
     // The list hook asks once more after a failure, about a second later.
-    await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 1200)); });
+    await settle(() => listCalls.length === 2);
     assert.equal(listCalls.length, 2);
     await answer({ error: 'unavailable' }, 500);
-    assert.equal(loading(), null);
+    await settle(() => !loading());
+    assert.equal(loading(), false);
     assert.equal(rows(), 'No issues match your filters');
   });
 });
@@ -122,7 +133,7 @@ test('a view whose list call fails does not stay loading', async () => {
 test('a view with saved filters shows the rows its page sent straight away', async () => {
   await openView({ issues: [work], filters: { priority: ['medium'] } }, async ({ listCalls, rows, loading }) => {
     assert.equal(listCalls.length, 0, 'The saved filters were applied on the server, so no list call is made');
-    assert.equal(loading(), null);
+    assert.equal(loading(), false);
     assert.equal(rows(), 'Ordinary task');
   });
 });
