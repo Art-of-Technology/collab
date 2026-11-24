@@ -70,14 +70,14 @@ test('a system admin without membership receives workspace permissions', async (
 });
 
 test('reset replaces only selected workspace role with existing application defaults', async () => {
-  const f = fixture(); const unaffected = clone(f.state.rows.filter(row => row.workspaceId !== 'workspace' || row.role !== 'DEVELOPER'));
+  const f = fixture(); f.state.memberRole = 'OWNER'; const unaffected = clone(f.state.rows.filter(row => row.workspaceId !== 'workspace' || row.role !== 'DEVELOPER'));
   assert.equal((await f.invoke('POST', { role: 'DEVELOPER' })).status, 200); assert.equal(f.state.seeds, 0); assert.equal(f.state.transactions, 1);
   assert.deepEqual(f.state.rows.filter(row => row.workspaceId !== 'workspace' || row.role !== 'DEVELOPER'), unaffected);
   assert.deepEqual(f.state.rows.filter(row => row.workspaceId === 'workspace' && row.role === 'DEVELOPER').map(row => row.permission).sort(), [...f.defaults.DEVELOPER].sort());
 });
 
 test('reset insert failure rolls back the modeled selected role deletion', async () => {
-  const f = fixture(); const before = clone(f.state.rows); f.state.failCreate = true;
+  const f = fixture(); f.state.memberRole = 'OWNER'; const before = clone(f.state.rows); f.state.failCreate = true;
   assert.equal((await f.invoke('POST', { role: 'DEVELOPER' })).status, 500); assert.equal(f.state.transactions, 1); assert.equal(f.state.seeds, 0); assert.deepEqual(f.state.rows, before);
 });
 
@@ -95,22 +95,22 @@ test('PUT rejects Prisma operator inputs and invalid permissions before writes',
 
 test('both mutation paths preserve own management access while owners/admins may reset', async () => {
   const f = fixture();
-  assert.equal((await f.invoke('PUT', { role: 'HR', permission: 'MANAGE_WORKSPACE_PERMISSIONS', enabled: false })).status, 400);
-  assert.equal((await f.invoke('POST', { role: 'HR' })).status, 400); assert.deepEqual(f.state.writes, []); assert.equal(f.state.seeds, 0);
+  assert.equal((await f.invoke('PUT', { role: 'HR', permission: 'MANAGE_WORKSPACE_PERMISSIONS', enabled: false })).status, 403);
+  assert.equal((await f.invoke('POST', { role: 'HR' })).status, 403); assert.deepEqual(f.state.writes, []); assert.equal(f.state.seeds, 0);
   for (const field of ['owner', 'admin']) { const f = fixture(); f.state.member = false; f.state.manage = false; f.state[field] = true; assert.equal((await f.invoke('POST', { role: 'DEVELOPER' })).status, 200); }
 });
 
 for (const method of ['GET', 'PUT', 'POST']) {
   test(`${method}: gateway actor and revoked manager denial`, async () => {
     const body = method === 'PUT' ? { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: true } : method === 'POST' ? { role: 'DEVELOPER' } : undefined;
-    const f = fixture(); f.env.env.COLLAB_AUTH_MODE = 'gateway'; assert.equal((await f.invoke(method, body)).status, 200); assert.equal(f.state.legacy, 0);
+    const f = fixture(); f.state.memberRole = 'OWNER'; f.env.env.COLLAB_AUTH_MODE = 'gateway'; assert.equal((await f.invoke(method, body)).status, 200); assert.equal(f.state.legacy, 0);
     const denied = fixture(); denied.env.env.COLLAB_AUTH_MODE = 'gateway'; denied.state.mapping = false; assert.equal((await denied.invoke(method, body)).status, 401); assert.equal(denied.state.legacy, 0); assert.deepEqual(denied.state.writes, []);
     const revoked = fixture(); revoked.state.member = false; assert.equal((await revoked.invoke(method, body)).status, 403); assert.deepEqual(revoked.state.writes, []); assert.equal(revoked.state.seeds, 0);
   });
 }
 
 test('legacy management reads and permission toggles retain workspace scoping', async () => {
-  const f = fixture(); const result = await f.invoke('GET'); assert.equal(result.status, 200); assert.equal(result.headers.get('cache-control'), 'no-store'); assert.ok((await result.json()).permissions.every(row => row.workspaceId === 'workspace'));
+  const f = fixture(); f.state.memberRole = 'OWNER'; const result = await f.invoke('GET'); assert.equal(result.status, 200); assert.equal(result.headers.get('cache-control'), 'no-store'); assert.ok((await result.json()).permissions.every(row => row.workspaceId === 'workspace'));
   assert.equal((await f.invoke('PUT', { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: true })).status, 200);
   assert.equal((await f.invoke('PUT', { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: false })).status, 200);
   assert.deepEqual(f.state.rows.filter(row => row.workspaceId === 'foreign'), [{ workspaceId: 'foreign', role: 'DEVELOPER', permission: 'DELETE_ANY_POST' }]);

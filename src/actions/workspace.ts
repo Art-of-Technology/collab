@@ -318,9 +318,8 @@ export async function updateWorkspace(workspaceId: string, data: {
     throw new Error('Workspace not found');
   }
   
-  // Check if user is the owner
-  if (workspace.ownerId !== user.id) {
-    throw new Error('Only the workspace owner can update it');
+  if (!may(await getWorkspaceAuthority(user.id, workspaceId), 'workspace.settings')) {
+    throw new Error('Only Owners can change the workspace settings');
   }
   
   // If slug is changing, check that the new slug is available
@@ -410,9 +409,8 @@ export async function deleteWorkspace(workspaceId: string) {
     throw new Error('Workspace not found');
   }
   
-  // Check if user is the owner
-  if (workspace.ownerId !== user.id) {
-    throw new Error('Only the workspace owner can delete it');
+  if (!may(await getWorkspaceAuthority(user.id, workspaceId), 'workspace.delete')) {
+    throw new Error('Only the primary owner can delete the workspace');
   }
   
   await assertLegacyWorkspaceDeleteAllowed(workspaceId);
