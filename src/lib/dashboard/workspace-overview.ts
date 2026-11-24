@@ -84,6 +84,8 @@ export async function loadWorkspaceIssueOverview({
           AND p.id = ANY(${projectIds}::text[])
           AND p."isArchived" IS NOT TRUE
           AND i."deletedAt" IS NULL
+          -- Counts and previews are of work alone, as withoutRequests() filters Prisma reads.
+          AND i."agentRequestRole" IS NULL
           AND (i."statusId" IS NULL OR s.id IS NOT NULL)
           AND (${scope !== 'mine'} OR i."assigneeId" = ${actorId})
       )

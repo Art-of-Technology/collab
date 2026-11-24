@@ -244,3 +244,27 @@ test('Prisma sends the same Home statements after adding projects with new statu
   assert.deepEqual(after.sort(), before.sort(), 'statement text stays fixed');
   assert.equal(before.filter(sql => sql.includes('"Issue"')).length, 3);
 });
+
+test('the workspace dashboard counts no request', async () => {
+  const f = await fixture();
+  const work = { all: await f.invoke(), mine: await f.invoke({ scope: 'mine' }) };
+  const request = (id, extra) => ({ id, issueKey: `CLB-${id}`, title: id, workspaceId: 'workspace', projectId: 'p0',
+    assigneeId: 'alice', status: 'open', agentRequestRole: 'review', updatedAt: date(2), ...extra });
+  await db.issue.createMany({ data: [
+    request('request-overdue', { dueDate: date(-30) }),
+    request('request-due-soon', { projectId: 'p1', dueDate: date(1) }),
+    request('request-undated', { projectId: 'p2', dueDate: null }),
+    request('request-done', { status: 'done', dueDate: date(-30) }),
+  ] });
+
+  for (const scope of ['all', 'mine']) {
+    const before = work[scope];
+    const result = await f.invoke({ scope });
+    assert.equal(result.kind, 'ready');
+    assert.deepEqual(plain(result.summary), plain(before.summary), `${scope}: counts are of the work alone`);
+    assert.deepEqual(plain(result.projects), plain(before.projects), `${scope}: project rows are of the work alone`);
+    for (const row of [...result.attention, ...result.recent]) {
+      assert.ok(!row.id.startsWith('request-'), `${scope}: ${row.id} is a request`);
+    }
+  }
+});
