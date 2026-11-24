@@ -176,4 +176,28 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     const reply = await context(target);
     assert.deepEqual([reply.blockers, reply.requests, reply.requestFor], [[], [], []]);
   });
+  await t.test('the instructions for the run, in three layers, for every role', async () => {
+    const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+    const layers = reply => reply.instructions.map(layer => layer.layer);
+    for (const role of ROLE_CATALOGUE.roles) {
+      const worker = role.id === 'developer' ? devA : (await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: B, role: role.id, ownerId: person, name: `${role.id}-b`, expiresInDays: 30 })).seat;
+      const target = await issue({ projectId: B, assigneeId: worker.userId, ...(role.requests[0] && { agentRequestRole: role.requests[0].id }) });
+      const reply = await context(target);
+      // Platform first, then the organisation's, then the seat's; nothing is stored for the last two yet, so they are present and empty.
+      assert.deepEqual(layers(reply), ['platform', 'organisation', 'seat'], role.id);
+      assert.deepEqual(reply.instructions.slice(1).map(layer => layer.text), ['', ''], role.id);
+      // The role's own prompt, with the seat owner as the person to ask.
+      assert.equal(reply.instructions[0].text, role.platformPrompt.replaceAll('{{ownerId}}', person), role.id);
+    }
+    // An issue no seat works has no role: the three layers are there and empty.
+    for (const data of [{}, { assigneeId: person }]) {
+      const reply = await context(await issue(data));
+      assert.deepEqual(reply.instructions, [{ layer: 'platform', text: '' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: '' }]);
+    }
+    // A retired seat's issue gets none of its role's instructions.
+    const gone = (await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role: 'reviewer', ownerId: person, name: 'gone', expiresInDays: 30 })).seat;
+    const left = await issue({ assigneeId: gone.userId, agentRequestRole: 'review' });
+    await raw.agentSeat.update({ where: { id: gone.id }, data: { retiredAt: new Date() } });
+    assert.equal((await context(left)).instructions[0].text, '');
+  });
 });

@@ -19,7 +19,7 @@ Any runner that speaks the [runner contract](/docs/agents/runner-contract) can b
 3. In the folder of the project's code, start the runner with the program that should work each issue:
 
    ```sh
-   collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+   collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First read the file named in $COLLAB_INSTRUCTIONS_FILE and follow it. Then run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
    ```
 
 4. Leave it running. To stop after one issue, put `--once` before the `--`: `collab seat run --once -- claude -p '...'`.

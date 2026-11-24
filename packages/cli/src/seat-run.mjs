@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { CliError } from './client.mjs';
 import { serverAway } from './inbox-watch.mjs';
@@ -19,17 +22,47 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
       catch (error) { if (!serverAway(error)) throw error; await delay(pollMs); }
     }
   };
+  // The run's instructions, platform, organisation and seat, as one file the program is pointed at. Without a run context
+  // that carries them (an older server, or a refused read) the program starts as before, and that is said.
+  async function instructionsFile(issueKey) {
+    // Tried again while the server is away, as the other reads are, but not past a request to stop.
+    let layers;
+    while (!signal?.aborted) {
+      try { layers = (await api('GET', `issues/${encodeURIComponent(issueKey)}/run-context`))?.instructions; break; }
+      catch (error) { if (!serverAway(error)) break; await sleep(pollMs); }
+    }
+    if (signal?.aborted) return null;
+    if (!Array.isArray(layers) || layers.some(layer => typeof layer?.text !== 'string')) { log({ event: 'no_instructions', issueKey }); return null; }
+    const texts = layers.map(layer => layer.text.trim()).filter(Boolean);
+    let dir = null;
+    try {
+      dir = await mkdtemp(join(tmpdir(), 'collab-run-'));
+      await writeFile(join(dir, 'instructions.md'), texts.length ? `${texts.join('\n\n')}\n` : '', { mode: 0o600 });
+      return dir;
+    } catch {
+      if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
+      log({ event: 'no_instructions', issueKey });
+      return null;
+    }
+  }
   async function work(item, run, generation) {
     const issueKey = item.issueKey ?? item.issueId;
     log({ event: 'run_started', issueKey, runId: run.id });
     // The program's output goes to stderr: stdout is this command's one JSON result.
-    let failed = false, exitCode = null;
+    let failed = false, exitCode = null, dir = null;
     if (!signal?.aborted) {
       let child;
-      try {
-        child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
-          env: { ...process.env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey } });
-      } catch { failed = true; }
+      dir = await instructionsFile(issueKey);
+      // A file named by this runner's own environment is not this run's: the variable is set only for a file written here.
+      const { COLLAB_INSTRUCTIONS_FILE: _inherited, ...env } = process.env;
+      // Asked to stop while the instructions were read: the program is not started, and the run is closed below.
+      if (!signal?.aborted) {
+        try {
+          child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
+            env: { ...env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey,
+              ...(dir && { COLLAB_INSTRUCTIONS_FILE: join(dir, 'instructions.md') }) } });
+        } catch { failed = true; }
+      }
       if (child) {
         // A program that does not stop when asked is killed: a fenced session must not go on working.
         let killer, active = true;
@@ -45,6 +78,7 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
         });
         clearInterval(timer); clearTimeout(killer); signal?.removeEventListener('abort', stop);
       }
+      if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
     }
     let state;
     try {
