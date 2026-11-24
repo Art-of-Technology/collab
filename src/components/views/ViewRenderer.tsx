@@ -319,7 +319,8 @@ export default function ViewRenderer({
     return Array.from(issueMap.values());
   }, [initialIssues, liveIssuesData, additionalIssuesData, useLiveData, includeAgentRequests, initialIncludesRequests]);
   // A view without saved filters gets no rows from its page: they arrive with the list call.
-  const isLoadingIssues = isLoadingLiveIssues && allIssues.length === 0;
+  // Other list calls (such as switching requests) keep the board mounted, with the rows it holds.
+  const isLoadingIssues = useLiveData && isLoadingLiveIssues && allIssues.length === 0;
 
   // ─── 3-Layer Filter Pipeline ───────────────────────────
   // Layer 1: Action filters (async)
