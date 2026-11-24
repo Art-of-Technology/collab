@@ -47,6 +47,9 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     psql(readFileSync(resolve('prisma/migrations/20261124000100_agent_role_instructions/migration.sql'), 'utf8'));
     psql('DROP TABLE "AgentPlatformPrompt";');
     psql(readFileSync(resolve('prisma/migrations/20261124000200_agent_platform_prompts/migration.sql'), 'utf8'));
+    // The remade seats table has no custom role column yet either: the migration that adds it makes the custom roles table too.
+    psql('DROP TABLE "AgentCustomRole";');
+    psql(readFileSync(resolve('prisma/migrations/20261125000100_agent_custom_roles/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();

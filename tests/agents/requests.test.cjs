@@ -408,4 +408,18 @@ test('requests: one seat asks another, in its own project or in another one', as
       { code: 'role_mismatch', status: 422 });
   });
 
+  await t.test("a seat with the organisation's own role takes the requests of its base role (CLB-626)", async () => {
+    // Project C's only reviewer seat has the role "QA Reviewer", which behaves like a Reviewer.
+    const qa = await raw.agentCustomRole.create({ data: { workspaceId: 'w', name: 'QA Reviewer', baseRole: 'reviewer', instructions: 'Run the app before you approve.' } });
+    const tester = await seat('qa-c', C, 'reviewer');
+    await raw.agentSeat.update({ where: { id: tester.id }, data: { customRoleId: qa.id } });
+    const source = await issue(devA);
+    const { row } = await filed(devA, source, { role: 'review', project: 'CC' });
+    assert.deepEqual([row.projectId, row.assigneeId, row.agentRequestRole], [C, tester.userId, 'review']);
+    assert.deepEqual(await offered(tester, row), ['assigned']);
+    // And only those: a developer request finds no seat for it.
+    await refused(file(devA, source, { role: 'developer', project: 'CC' }), 409, 'no_default_seat');
+    await settle(C);
+  });
+
 });

@@ -61,11 +61,11 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
   assert.match(own, /MIT/);
 });
 
-test('a run\'s instructions are three layers in order, platform, organisation and seat, each with a stated maximum length', () => {
+test('a run\'s instructions are three layers in order, platform, organisation and seat, or four with a custom role\'s, each with a stated maximum length', () => {
   const { ROLE_CATALOGUE, LAYER_LIMITS } = load('src/lib/agent-role-catalogue.ts');
   // Plain values of this test's own realm, so they compare as such.
   const instructionLayers = (...args) => JSON.parse(JSON.stringify(ROLE_CATALOGUE.instructionLayers(...args)));
-  assert.deepEqual({ ...LAYER_LIMITS }, { platform: 8000, organisation: 16000, seat: 16000 });
+  assert.deepEqual({ ...LAYER_LIMITS }, { platform: 8000, organisation: 16000, role: 16000, seat: 16000 });
   for (const role of ROLE_CATALOGUE.roles) {
     const layers = instructionLayers(role.id, { ownerId: 'cowner00001' });
     assert.deepEqual(layers.map(layer => layer.layer), ['platform', 'organisation', 'seat'], role.id);
@@ -82,6 +82,10 @@ test('a run\'s instructions are three layers in order, platform, organisation an
   // The texts saved for the later layers come after the platform's, in order.
   assert.deepEqual(instructionLayers('reviewer', { ownerId: null, organisation: 'Our rules.', seat: 'This seat\'s rules.' }).slice(1),
     [{ layer: 'organisation', text: 'Our rules.' }, { layer: 'seat', text: 'This seat\'s rules.' }]);
+  // A seat with the organisation's own role (CLB-626) gets that role's text as a fourth layer, before the seat's; empty text is still a layer.
+  assert.deepEqual(instructionLayers('developer', { ownerId: null, organisation: 'Our rules.', customRole: 'QA rules.', seat: 'This seat\'s rules.' }).map(layer => [layer.layer, layer.text]).slice(1),
+    [['organisation', 'Our rules.'], ['role', 'QA rules.'], ['seat', 'This seat\'s rules.']]);
+  assert.deepEqual(instructionLayers('developer', { ownerId: null, customRole: '' }).map(layer => layer.layer), ['platform', 'organisation', 'role', 'seat']);
   // An issue that no seat works has no role: every layer is present and empty.
   assert.deepEqual(instructionLayers(null, { ownerId: null }), [{ layer: 'platform', text: '' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: '' }]);
   assert.deepEqual(instructionLayers('no-such-role', { ownerId: null }).map(layer => layer.text), ['', '', '']);

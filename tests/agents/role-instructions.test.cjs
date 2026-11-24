@@ -24,6 +24,7 @@ test("an organisation's own instructions per role", async t => {
   const deps = { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), 'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => user ? { user: { id: user } } : null }, '@/lib/auth-options': { authOptions: {} },
     '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'MANAGE_WORKSPACE_PERMISSIONS' }, checkUserPermission: async (userId, workspaceId) => ({ hasPermission: userId === owner && workspaceId === 'w' }) } };
+  deps['@/lib/agent-custom-roles'] = load('src/lib/agent-custom-roles.ts', deps);
   deps['@/lib/agent-role-instructions'] = load('src/lib/agent-role-instructions.ts', deps);
   const { readRoleInstructions } = deps['@/lib/agent-role-instructions'];
   const route = load('src/app/api/workspaces/[workspaceId]/agent-roles/[role]/route.ts', deps);

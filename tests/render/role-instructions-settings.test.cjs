@@ -107,3 +107,99 @@ test('"Show what a run receives" shows the saved layers in the order a run gets 
     assert.equal(document.querySelector('[aria-label="What a run receives"]'), null);
   } finally { await React.act(async () => root.unmount()); }
 });
+
+// CLB-626: the organisation's own roles, under "Your organisation", each behaving like a built-in one.
+const qa = { id: 'cqa000000001', name: 'QA Tester', baseRole: 'developer', baseName: 'Developer', instructions: 'Write the failing test first.', retired: false, seats: 1 };
+async function renderCustom(canEdit, custom = [qa]) {
+  const root = createRoot(document.getElementById('root'));
+  await React.act(async () => root.render(React.createElement(RoleInstructionsSettings, { workspaceId: 'w', canEdit, roles, custom })));
+  return root;
+}
+const field = label => document.querySelector(`[aria-label="${label}"]`);
+const setValue = (target, value) => React.act(async () => {
+  const proto = target.tagName === 'SELECT' ? dom.window.HTMLSelectElement.prototype : target.tagName === 'INPUT' ? dom.window.HTMLInputElement.prototype : dom.window.HTMLTextAreaElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(target, value);
+  target.dispatchEvent(new dom.window.Event(target.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+});
+const navButton = text => [...document.querySelectorAll('nav button')].find(candidate => candidate.textContent.startsWith(text));
+
+test("the organisation's own roles are listed under Your organisation with the role they behave like, and show four layers", async () => {
+  const root = await renderCustom(false);
+  try {
+    const nav = document.querySelector('nav').textContent;
+    assert.ok(nav.indexOf('Your organisation') > nav.indexOf('Reviewer'), nav);
+    assert.match(navButton('QA Tester').textContent, /like Developer/);
+    assert.equal(button('+ New role'), undefined, 'only a permission manager adds a role');
+    await click(navButton('QA Tester'));
+    assert.match(document.querySelector('h2').textContent, /QA Tester/);
+    assert.match(document.body.textContent, /Behaves like Developer/);
+    assert.deepEqual(layerTitles(), ['Layer 1: Platform', 'Layer 2: Your organisation', 'Layer 3: This role', 'Layer 4: One seat']);
+    // The base role's platform layer, locked, and the organisation's text for the base role.
+    assert.match(document.querySelector('section[aria-label="Layer 1: Platform"]').textContent, /Work only the issue you were given\./);
+    assert.match(document.querySelector('section[aria-label="Layer 2: Your organisation"]').textContent, /We use British English\./);
+    assert.match(document.querySelector('section[aria-label="Layer 3: This role"]').textContent, /Write the failing test first\./);
+    assert.equal(document.querySelector('textarea'), null);
+    await click(button('Show what a run receives'));
+    const text = document.querySelector('[aria-label="What a run receives"]').textContent;
+    const order = ['Work only the issue you were given.', 'We use British English.', 'Write the failing test first.', 'Set on each seat'].map(part => text.indexOf(part));
+    assert.ok(order.every(at => at >= 0), text);
+    assert.deepEqual([...order].sort((a, b) => a - b), order);
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a permission manager creates a role: a name, the built-in role it behaves like, its instructions', async () => {
+  const root = await renderCustom(true, []);
+  try {
+    await click(button('+ New role'));
+    assert.match(document.querySelector('h2').textContent, /New role/);
+    assert.deepEqual([...field('Behaves like').options].map(option => option.textContent), ['Developer', 'Reviewer']);
+    await setValue(field('Name'), 'QA Tester');
+    await setValue(field('Behaves like'), 'reviewer');
+    // The locked layer on top is the one of the role picked.
+    assert.match(document.querySelector('section[aria-label="Layer 1: Platform"]').textContent, /Review the change\./);
+    await setValue(field('Instructions for this role'), 'Run the app first.');
+    answers = [[201, { role: { ...qa, baseRole: 'reviewer', baseName: 'Reviewer', instructions: 'Run the app first.', seats: 0 } }]];
+    await click(button('Create role'));
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w/agent-custom-roles', 'POST', { name: 'QA Tester', baseRole: 'reviewer', instructions: 'Run the app first.' }]);
+    assert.equal(notices.at(-1).title, 'Role created');
+    // It appears under Your organisation, picked.
+    assert.match(navButton('QA Tester').textContent, /like Reviewer/);
+    assert.match(document.querySelector('h2').textContent, /QA Tester/);
+
+    // A built-in role's name is refused, with the reason, and the form keeps what was typed.
+    await click(button('+ New role'));
+    await setValue(field('Name'), 'Developer');
+    answers = [[409, { error: '“Developer” is the name of a built-in role', code: 'built_in_name' }]];
+    await click(button('Create role'));
+    assert.equal(notices.at(-1).variant, 'destructive');
+    assert.equal(notices.at(-1).description, '“Developer” is the name of a built-in role');
+    assert.equal(field('Name').value, 'Developer');
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a role with seats is retired, not deleted; a role with none is deleted', async () => {
+  const idle = { ...qa, id: 'cqa000000002', name: 'Idle', seats: 0 };
+  const root = await renderCustom(true, [qa, idle]);
+  try {
+    await click(navButton('QA Tester'));
+    assert.equal(button('Delete role').disabled, true);
+    assert.match(document.body.textContent, /1 seat has this role/);
+    answers = [[200, { role: { ...qa, retired: true } }]];
+    await click(button('Retire role'));
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w/agent-custom-roles/cqa000000001', 'PATCH', { retired: true }]);
+    assert.match(navButton('QA Tester').textContent, /retired/);
+    assert.ok(button('Bring back'));
+
+    // Editing the instructions saves them.
+    await setValue(field('Instructions for this role'), 'Write the test first.');
+    answers = [[200, { role: { ...qa, retired: true, instructions: 'Write the test first.' } }]];
+    await click(button('Save'));
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w/agent-custom-roles/cqa000000001', 'PATCH', { name: 'QA Tester', instructions: 'Write the test first.' }]);
+
+    await click(navButton('Idle'));
+    answers = [[200, { deleted: idle.id }]];
+    await click(button('Delete role'));
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w/agent-custom-roles/cqa000000002', 'DELETE', undefined]);
+    assert.equal(navButton('Idle'), undefined);
+  } finally { await React.act(async () => root.unmount()); }
+});

@@ -9,7 +9,8 @@ import { RoleInstructionsSettings } from '@/components/workspace/RoleInstruction
 
 export const dynamic = 'force-dynamic';
 
-// Workspace settings, Roles (CLB-608): every member reads each role's layers; those who may manage permissions edit the organisation's.
+// Workspace settings, Roles (CLB-608): every member reads each role's layers; those who may manage permissions edit the organisation's,
+// and add the organisation's own roles (CLB-626).
 export default async function RolesPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;
   const session = await getServerSession(authOptions);
@@ -36,7 +37,7 @@ export default async function RolesPage({ params }: { params: Promise<{ workspac
         </p>
       </div>
 
-      <RoleInstructionsSettings workspaceId={view.workspace.id} canEdit={view.canEdit} roles={view.roles} />
+      <RoleInstructionsSettings workspaceId={view.workspace.id} canEdit={view.canEdit} roles={view.roles} custom={view.custom} />
     </div>
   );
 }
