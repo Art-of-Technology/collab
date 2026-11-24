@@ -31,10 +31,10 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
     orderBy: { name: 'asc' },
   }) : [];
   // A seat is tied to one project and may have an owner: the person whose logins run it.
-  const [projects, { seats, people }] = tokens ? await Promise.all([
+  const [projects, { seats, people, customRoles }] = tokens ? await Promise.all([
     prisma.project.findMany({ where: { workspaceId: workspace.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     listSeatOwnerChoices(workspace.id),
-  ]) : [[], { seats: [], people: [] }];
+  ]) : [[], { seats: [], people: [], customRoles: [] }];
   const manageable = [];
   for (const { id, name, slug } of others) {
     if ((await checkUserPermission(session.user.id, id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission) manageable.push({ id, name, slug });
@@ -63,6 +63,7 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
         workspaces={manageable}
         projects={projects}
         seats={seats}
+        customRoles={customRoles}
         people={people}
         tokens={tokens && tokens.map(token => ({
           id: token.id,

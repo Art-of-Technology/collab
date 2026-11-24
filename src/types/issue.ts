@@ -24,8 +24,8 @@ export interface IssueUser {
   avatarMouth?: number;
   avatarNose?: number;
   avatarSkinTone?: number;
-  /** Set when the member is an agent seat: it takes only issues of that project. */
-  agentSeat?: { projectId: string; role: string; retiredAt: string | null } | null;
+  /** Set when the member is an agent seat: it takes only issues of that project. `customRole` is the workspace's own role it has (CLB-628). */
+  agentSeat?: { projectId: string; role: string; retiredAt: string | null; customRole?: { name: string } | null } | null;
 }
 
 export interface IssueProject {
