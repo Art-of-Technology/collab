@@ -48,6 +48,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
         {' '}Opening this page changes nothing.</p>
       <div className="flex gap-2">
         <Button asChild variant="outline"><Link href="/docs/agents/overview">About seats</Link></Button>
+        <Button asChild variant="outline"><Link href={`/workspaces/${encodeURIComponent(workspace.id)}/settings/roles`}>Roles</Link></Button>
         {canManage && <Button asChild variant="outline"><Link href={`/workspaces/${encodeURIComponent(workspace.id)}/settings/agent-tokens`}>Create or retire a seat</Link></Button>}
       </div>
     </div>
