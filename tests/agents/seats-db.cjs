@@ -45,6 +45,8 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     // The remade seats table has no instructions column yet: the migration that adds it makes the role instructions table too.
     psql('DROP TABLE "AgentRoleInstructions";');
     psql(readFileSync(resolve('prisma/migrations/20261124000100_agent_role_instructions/migration.sql'), 'utf8'));
+    psql('DROP TABLE "AgentPlatformPrompt";');
+    psql(readFileSync(resolve('prisma/migrations/20261124000200_agent_platform_prompts/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();
