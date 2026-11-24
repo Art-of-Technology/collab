@@ -286,7 +286,7 @@ export default function ViewRenderer({
   const useLiveData = !hasActiveDbFilters || hasFilterOverrides || recentIssueCreated;
   const shouldFetchLiveData = useLiveData || includeAgentRequests || initialIncludesRequests !== includeAgentRequests;
 
-  const { data: liveIssuesData } = useIssuesByWorkspace(
+  const { data: liveIssuesData, isLoading: isLoadingLiveIssues } = useIssuesByWorkspace(
     shouldFetchLiveData ? workspace.id : '',
     shouldFetchLiveData ? (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id)) : undefined,
     { requests: includeAgentRequests }
@@ -318,6 +318,8 @@ export default function ViewRenderer({
     [...baseIssues, ...additional].forEach(issue => issueMap.set(issue.id, issue));
     return Array.from(issueMap.values());
   }, [initialIssues, liveIssuesData, additionalIssuesData, useLiveData, includeAgentRequests, initialIncludesRequests]);
+  // A view without saved filters gets no rows from its page: they arrive with the list call.
+  const isLoadingIssues = isLoadingLiveIssues && allIssues.length === 0;
 
   // ─── 3-Layer Filter Pipeline ───────────────────────────
   // Layer 1: Action filters (async)
@@ -708,6 +710,14 @@ export default function ViewRenderer({
       onIssueUpdate: handleIssueUpdate,
       onColumnUpdate: handleColumnUpdate,
     };
+
+    if (isLoadingIssues) {
+      return (
+        <div role="status" aria-label="Loading issues" className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      );
+    }
 
     switch (layout) {
       case 'KANBAN':
