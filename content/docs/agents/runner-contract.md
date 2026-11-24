@@ -315,7 +315,7 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 
 | Layer | What it holds | At most |
 | --- | --- | --- |
-| `platform` | Collab's prompt for the seat's role, the same in every organisation. The seat owner's user id stands where it names the person to ask. | 8,000 characters |
+| `platform` | Collab's prompt for the seat's role, the same in every organisation. Collab ships it, and a Collab system admin can replace it on the admin Roles page; a run gets the text in force when it started. The seat owner's user id stands where it names the person to ask. | 8,000 characters |
 | `organisation` | What the workspace adds for the role. | 16,000 characters |
 | `seat` | What this seat adds. | 16,000 characters |
 

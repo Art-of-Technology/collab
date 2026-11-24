@@ -92,10 +92,12 @@ export function createRoleCatalogue(entries: readonly RoleEntry[]) {
     /**
      * A run's instructions: the platform layer (the role's prompt), then the organisation's and the seat's, in the order a
      * session reads them. A layer with nothing in it is present and empty, and so is every layer of an issue no seat works.
-     * The owner's id stands where a prompt names the person to ask.
+     * The owner's id stands where a prompt names the person to ask. `platform` is a system admin's edit of the role's
+     * prompt in force (CLB-916); without one, the role's prompt as the repository ships it.
      */
-    instructionLayers(roleId: string | null, { ownerId, organisation = '', seat = '' }: { ownerId: string | null; organisation?: string; seat?: string }) {
-      const prompt = roleId ? byRole.get(roleId)?.platformPrompt ?? '' : '';
+    instructionLayers(roleId: string | null, { ownerId, platform, organisation = '', seat = '' }: { ownerId: string | null; platform?: string | null; organisation?: string; seat?: string }) {
+      const role = roleId ? byRole.get(roleId) : undefined;
+      const prompt = role ? platform ?? role.platformPrompt : '';
       return [
         { layer: 'platform' as const, text: prompt.replaceAll('{{ownerId}}', ownerId ?? "a person's Collab user id") },
         { layer: 'organisation' as const, text: organisation },

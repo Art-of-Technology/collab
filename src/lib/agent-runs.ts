@@ -693,6 +693,10 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   // The seat's own are not read yet (CLB-610).
   const worker = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, retiredAt: null }, select: { role: true, ownerId: true } }) : null;
   const organisation = worker ? (await prisma.agentRoleInstructions.findUnique({ where: { workspaceId_role: { workspaceId: context.workspace.id, role: worker.role } }, select: { text: true } }))?.text ?? '' : '';
+  // A system admin's edit of the role's prompt (CLB-916): the version in force when the open run started, so a run keeps
+  // what it received; with no run open, the latest. None, or one with no text, means the repository's text.
+  const open = worker ? await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null, state: { in: LIVE } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }) : null;
+  const platform = worker ? (await prisma.agentPlatformPrompt.findFirst({ where: { role: worker.role, createdAt: { lte: open?.startedAt ?? new Date() } }, orderBy: { version: 'desc' }, select: { text: true } }))?.text : null;
   const matches = repo ? (await connectedRepositories(prisma, issue.projectId)).filter(row => row.name.toLowerCase() === repo.toLowerCase()) : [];
   const elsewhere = !!pushed && (matches.length !== 1 || matches[0].id !== repository?.id);
   const branch = !elsewhere && repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { id: matches[0].id, projectId: issue.projectId, isActive: true } },
@@ -718,7 +722,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
     repository,
-    instructions: ROLE_CATALOGUE.instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null, organisation }),
+    instructions: ROLE_CATALOGUE.instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null, platform, organisation }),
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     movedFrom: last && last.userId !== issue.assigneeId ? { seat: last.seat?.name ?? null, pullRequest: pushed?.pullRequest ?? null, headCommit: pushed?.headCommit ?? null, branch,

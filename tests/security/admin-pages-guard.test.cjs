@@ -5,6 +5,8 @@ function fixture() {
   const users = [
     { id: 'root', name: 'Root', email: 'root@example.test', role: 'SYSTEM_ADMIN', createdAt: new Date(), _count: { workspaceMemberships: 1 } },
     { id: 'bob', name: 'Bob', email: 'bob@example.test', role: 'DEVELOPER', createdAt: new Date(), _count: { workspaceMemberships: 2 } },
+    // Owns a workspace: that makes them its owner, not a system admin.
+    { id: 'olive', name: 'Olive', email: 'olive@example.test', role: 'PROJECT_MANAGER', createdAt: new Date(), _count: { workspaceMemberships: 1 } },
   ];
   const state = { session: null, reads: [] };
   const prisma = {
@@ -30,11 +32,14 @@ function fixture() {
     '@/components/ui/skeleton': ui(['Skeleton']), '@/components/ui/alert': ui(['Alert', 'AlertDescription', 'AlertTitle']),
     '@/components/ui/button': ui(['Button']), '@/components/ui/input': ui(['Input']),
     './SystemAppToggle': ui(['SystemAppToggle']), './AppConfigEditor': ui(['AppConfigEditor']),
+    './PlatformPromptsEditor': ui(['PlatformPromptsEditor']),
+    '@/lib/agent-platform-prompts': { readPlatformPrompts: async () => { state.reads.push('agent-roles'); return { roles: [] }; } },
   };
   deps['@/lib/system-admin'] = load('src/lib/system-admin.ts', deps);
   const pages = {
     users: load('src/app/admin/users/page.tsx', deps, { Date }).default,
     apps: load('src/app/admin/system-apps/page.tsx', deps, { Date }).default,
+    'agent-roles': load('src/app/admin/agent-roles/page.tsx', deps, { Date }).default,
   };
   // Runs a page as the server does: an async component under a Suspense boundary is awaited too.
   const render = async (page, query = {}) => {
@@ -46,12 +51,13 @@ function fixture() {
   return { state, users, render, as };
 }
 
-for (const page of ['users', 'apps']) {
+for (const page of ['users', 'apps', 'agent-roles']) {
   test(`the admin ${page} page reads nothing for a visitor who is not a system admin`, async () => {
     const f = fixture();
     for (const [id, role, why] of [
       [null, null, 'no session'],
       ['bob', 'DEVELOPER', 'an ordinary user'],
+      ['olive', 'PROJECT_MANAGER', 'a workspace owner'],
       ['bob', 'SYSTEM_ADMIN', 'a session that claims the role the account does not have'],
       ['gone', 'SYSTEM_ADMIN', 'a session for an account that no longer exists'],
     ]) {
@@ -96,8 +102,8 @@ test('user summary counts cover the platform regardless of search and list limit
   }
   for (const q of ['', 'nobody', 'root']) {
     const rendered = text(await f.render('users', { q }));
-    assert.match(rendered, /Total Users\s+53/);
+    assert.match(rendered, /Total Users\s+54/);
     assert.match(rendered, /System Admins\s+1/);
-    assert.match(rendered, /Regular Users\s+52/);
+    assert.match(rendered, /Regular Users\s+53/);
   }
 });
