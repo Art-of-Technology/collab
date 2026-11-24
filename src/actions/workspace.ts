@@ -7,10 +7,10 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/request-session';
 import { getCurrentUser } from '@/lib/session';
-import { checkUserPermission, Permission } from '@/lib/permissions';
+import { checkUserPermission, Permission, WorkspaceRole } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { generateWorkspaceSlug } from '@/lib/utils';
-import { getWorkspaceAuthority, levelOfRole, may, mayActOn } from '@/lib/workspace-authority';
+import { getWorkspaceAuthority, levelOfRole, may, mayActOn, rolesMayGrant } from '@/lib/workspace-authority';
 
 async function resolveWorkspaceReadId(slugOrId: string) {
   const workspace = await prisma.workspace.findUnique({
@@ -697,10 +697,25 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
   }
 
   // Pending invitations carry the token of the invitation link: only a viewer who may invite receives them.
-  const { hasPermission: canInvite } = await checkUserPermission(currentUser.id, workspace.id, Permission.INVITE_MEMBERS);
+  const [{ hasPermission: canInvite }, { hasPermission: holdsChangeRoles }, viewer, customRoles] = await Promise.all([
+    checkUserPermission(currentUser.id, workspace.id, Permission.INVITE_MEMBERS),
+    checkUserPermission(currentUser.id, workspace.id, Permission.CHANGE_MEMBER_ROLES),
+    getWorkspaceAuthority(currentUser.id, workspace.id),
+    prisma.customRole.findMany({ where: { workspaceId: workspace.id }, select: { name: true } }),
+  ]);
+  const rank = { holdsChangeRoles };
 
   return {
     ...workspace,
+    // The Members screen renders these as they are: it compares no role and no owner itself.
+    members: workspace.members.map((member) => {
+      // An account with no email is an agent token's service account, which the Agent tokens page manages.
+      const agent = !member.user.email;
+      const level = member.user.id === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role);
+      return { ...member, level, agent, mayAct: !agent && mayActOn(viewer, { userId: member.user.id, level }, rank) };
+    }),
+    viewerLevel: viewer?.level ?? null,
+    rolesViewerMayGrant: rolesMayGrant(viewer, [...Object.values(WorkspaceRole), ...customRoles.map((role) => role.name)], rank),
     invitations: canInvite ? workspace.invitations : [],
     isOwner,
     isMember,
