@@ -141,7 +141,20 @@ test('workspace and multi-project lists return every visible row and field', asy
     const ids = requests ? ['parent', 'child', 'request', 'follow-up', 'retained-child']
       : ['parent', 'child', 'follow-up', 'retained-child'];
     for (const projects of ['', '&projectIds=p,q,r', '&projectIds=q,missing']) {
-      const body = await (await list('workspaceId=workspace' + requests + projects)).text();
+      // A browser tab loaded before rows were sent as arrays does not ask for them,
+      // and gets the objects its reader knows.
+      const before = JSON.parse(await (await list('workspaceId=workspace' + requests + projects)).text()).snapshot;
+      assert.ok(!('fields' in before), 'the previous shape names its fields on each row');
+      assert.ok(before.issues.length > 0 && before.issues.every(issue => !Array.isArray(issue) && issue.workspaceId === 'workspace'));
+      assert.ok(before.issues.every(issue => !('description' in issue)), 'the previous shape leaves descriptions out too');
+      assert.ok(before.hierarchy.every(issue => !Array.isArray(issue) && 'parentId' in issue));
+      assert.ok(before.edges.every(edge => typeof edge.sourceIssue.id === 'string' && typeof edge.targetIssue.id === 'string'));
+      assert.ok(!('related' in before));
+      const previous = await readRows(await list('workspaceId=workspace' + requests + projects));
+      assert.deepEqual(previous, await readRows(await list('workspaceId=workspace' + requests + projects + '&rows=arrays')),
+        'both shapes read to the same rows');
+
+      const body = await (await list('workspaceId=workspace' + requests + projects + '&rows=arrays')).text();
       const { snapshot } = JSON.parse(body);
       assert.deepEqual(snapshot.projects.map(project => project.id).sort(), projects === '&projectIds=q,missing' ? ['q'] : ['p', 'q']);
       assert.equal(body.split('"Project Q"').length - 1, 1, 'a shared record is sent once');
@@ -154,14 +167,14 @@ test('workspace and multi-project lists return every visible row and field', asy
       }
       assert.ok(!body.includes('Full description'), 'a broad list leaves descriptions out');
       issueQueries.length = 0;
-      const listed = await readRows(await list('workspaceId=workspace' + requests + projects));
+      const listed = await readRows(await list('workspaceId=workspace' + requests + projects + '&rows=arrays'));
       assert.equal(issueQueries.length, 1, 'one statement reads the complete list');
       assert.ok(listed.every(issue => !('description' in issue)), 'broad rows carry no description');
       const { descriptions } = await (await list('workspaceId=workspace' + requests + projects + '&descriptions=1')).json();
       assert.deepEqual(Object.keys(descriptions).sort(), listed.map(issue => issue.id).sort(),
         'descriptions cover exactly the listed issues');
       assert.equal(issueQueries.length, 2, 'one statement reads the descriptions');
-      const issues = await readList('workspaceId=workspace' + requests + projects);
+      const issues = await readList('workspaceId=workspace' + requests + projects + '&rows=arrays');
       if (projects === '&projectIds=q,missing') {
         assert.deepEqual(issues, expected.filter(issue => issue.projectId === 'q'));
       } else {
@@ -192,10 +205,15 @@ test('workspace and multi-project lists return every visible row and field', asy
   ]) {
     await t.test(`relation visibility with the ${scope} filter follows current workspace access`, async () => {
       const readRelations = async () => {
-        const rows = await readRows(await list('workspaceId=workspace' + filter));
-        const { children, _count, issueRelations: { blocks, duplicated_by } } = rows.find(row => row.id === 'child');
-        assert.equal(_count.children, children.length);
-        return [blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id), children.map(issue => issue.id)];
+        const read = [];
+        for (const shape of ['&rows=arrays', '']) {
+          const rows = await readRows(await list('workspaceId=workspace' + filter + shape));
+          const { children, _count, issueRelations: { blocks, duplicated_by } } = rows.find(row => row.id === 'child');
+          assert.equal(_count.children, children.length);
+          read.push([blocks.map(issue => issue.id), duplicated_by.map(issue => issue.id), children.map(issue => issue.id)]);
+        }
+        assert.deepEqual(read[0], read[1], 'both shapes show the same relations');
+        return read[0];
       };
       const key = { userId_workspaceId: { userId: 'member', workspaceId: 'other' } };
       const membership = await raw.workspaceMember.create({ data: { ...key.userId_workspaceId, status: false } });
@@ -256,7 +274,7 @@ test('workspace and multi-project lists return every visible row and field', asy
     expected.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     issueQueries.length = 0;
     statements.length = 0;
-    const response = await list('workspaceId=workspace');
+    const response = await list('workspaceId=workspace&rows=arrays');
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /^application\/json\b/);
     const [sample, body] = response.body.tee();
@@ -272,14 +290,15 @@ test('workspace and multi-project lists return every visible row and field', asy
     statements.length = 0;
     const described = await list('workspaceId=workspace&descriptions=1');
     assert.equal(statements.length, 2, 'the workspace access check and the description read are the only statements');
-    assert.deepEqual(await readRows(await list('workspaceId=workspace'), described), expected);
-    const text = await (await list('workspaceId=workspace')).text();
+    assert.deepEqual(await readRows(await list('workspaceId=workspace&rows=arrays'), described), expected);
+    assert.deepEqual(await readRows(await list('workspaceId=workspace')), brief(expected), 'the previous shape reads to the same rows');
+    const text = await (await list('workspaceId=workspace&rows=arrays')).text();
     assert.equal(text.split('"Project P"').length - 1, 1, 'the project is sent once, not on each row');
     assert.ok(!text.includes('Full description.'), 'the broad list leaves descriptions out');
     assert.ok(text.length < JSON.stringify({ issues: brief(expected) }).length * 0.9,
       `the snapshot (${text.length} bytes) is smaller than the expanded rows`);
     issueQueries.length = 0;
-    await list('workspaceId=workspace');
+    await list('workspaceId=workspace&rows=arrays');
     await list('workspaceId=workspace&descriptions=1');
 
     function largestRead(plan) {
@@ -312,7 +331,7 @@ test('workspace and multi-project lists return every visible row and field', asy
     userId = 'owner';
     try {
       issueQueries.length = 0;
-      const rows = await readList('workspaceId=workspace');
+      const rows = await readList('workspaceId=workspace&rows=arrays');
       assert.deepEqual(rows.map(issue => issue.id), expected.map(issue => issue.id));
       await assertReadBound();
     } finally {
@@ -326,16 +345,16 @@ test('workspace and multi-project lists return every visible row and field', asy
         await raw.project.update({ where: { id: 'p' }, data: { name: 'Renamed after the read' } });
       };
       try {
-        assert.deepEqual(await readRows(await list('workspaceId=workspace')), brief(expected));
+        assert.deepEqual(await readRows(await list('workspaceId=workspace&rows=arrays')), brief(expected));
       } finally {
         afterIssueRead = undefined;
       }
     });
 
     failEncoding = '{"snapshot":';
-    assert.equal((await list('workspaceId=workspace')).status, 500);
+    assert.equal((await list('workspaceId=workspace&rows=arrays')).status, 500);
     failEncoding = ',';
-    const interrupted = await list('workspaceId=workspace');
+    const interrupted = await list('workspaceId=workspace&rows=arrays');
     assert.equal(interrupted.status, 200);
     await assert.rejects(interrupted.arrayBuffer(), streamError);
     assert.deepEqual(errors, [['[ISSUES_GET]', streamError], ['[ISSUES_GET]', streamError]]);

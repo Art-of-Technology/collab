@@ -18,7 +18,7 @@ import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
 import { withoutRequests } from "@/lib/issue-requests";
 import {
   ISSUE_LIST_DATE_FIELDS, ISSUE_LIST_EDGE_FIELDS, ISSUE_LIST_FIELDS, ISSUE_LIST_HIERARCHY_FIELDS, ISSUE_LIST_RELATED_FIELDS,
-  type IssueListSnapshot,
+  previousIssueListSnapshot, type IssueListSnapshot,
 } from "@/lib/issue-list-snapshot";
 
 const RELATED_ISSUE_SELECT = {
@@ -266,8 +266,10 @@ function presentIssue(issue: IssueListRow) {
   return Object.assign(fields, { issueRelations });
 }
 
-// The issue rows and shared records go out as PostgreSQL wrote them, newest issue first.
-function snapshotResponse(workspaceId: string, rows: { kind: SnapshotKind; sort: number | null; data: string }[]) {
+type SnapshotRow = { kind: SnapshotKind; sort: number | null; data: string };
+
+// The issue rows and shared records as PostgreSQL wrote them, newest issue first.
+function snapshotText(workspaceId: string, rows: SnapshotRow[]) {
   const issues: { sort: number; data: string }[] = [];
   const shared = { projects: [] as string[], people: [] as string[], statuses: [] as string[], hierarchy: [] as string[], edges: [] as string[], related: [] as string[] };
   for (const { kind, sort, data } of rows) {
@@ -278,12 +280,24 @@ function snapshotResponse(workspaceId: string, rows: { kind: SnapshotKind; sort:
   const fields = { issues: ISSUE_LIST_FIELDS, hierarchy: ISSUE_LIST_HIERARCHY_FIELDS, edges: ISSUE_LIST_EDGE_FIELDS, related: ISSUE_LIST_RELATED_FIELDS };
   const tail = '],' + Object.entries(shared).map(([kind, records]) => `"${kind}":[${records.join(',')}]`).join(',')
     + `,"workspaceId":${JSON.stringify(workspaceId)},"fields":${JSON.stringify(fields)}}}`;
+  return { issues: issues.map(issue => issue.data), tail };
+}
 
+// A browser tab loaded before rows were sent as arrays does not ask for them, and reads only the previous snapshot.
+function previousSnapshotResponse(workspaceId: string, rows: SnapshotRow[]) {
+  const { issues, tail } = snapshotText(workspaceId, rows);
+  const { snapshot } = JSON.parse(`{"snapshot":{"issues":[${issues.join(',')}${tail}`) as { snapshot: IssueListSnapshot };
+  return NextResponse.json({ snapshot: previousIssueListSnapshot(snapshot) });
+}
+
+// The rows go out as PostgreSQL wrote them, in batches.
+function snapshotResponse(workspaceId: string, rows: SnapshotRow[]) {
+  const { issues, tail } = snapshotText(workspaceId, rows);
   const encoder = new TextEncoder();
   let next = 0;
   function enqueueChunk(controller: ReadableStreamDefaultController<Uint8Array>) {
     const head = next === 0 ? '{"snapshot":{"issues":[' : ',';
-    const batch = issues.slice(next, next += 256).map(issue => issue.data).join(',');
+    const batch = issues.slice(next, next += 256).join(',');
     const done = next >= issues.length;
     controller.enqueue(encoder.encode(head + batch + (done ? tail : '')));
     if (done) controller.close();
@@ -347,10 +361,12 @@ export async function GET(request: NextRequest) {
       return new Response(`{"descriptions":${data}}`, { headers: { 'content-type': 'application/json' } });
     }
     if (!milestoneId && projectIds.length !== 1) {
-      const rows = await prisma.$queryRaw<{ kind: SnapshotKind; sort: number | null; data: string }[]>(
+      const rows = await prisma.$queryRaw<SnapshotRow[]>(
         workspaceIssueQuery(session.user.id, workspaceId, projectIds, includeRequests),
       );
-      return snapshotResponse(workspaceId, rows);
+      return searchParams.get('rows') === 'arrays'
+        ? snapshotResponse(workspaceId, rows)
+        : previousSnapshotResponse(workspaceId, rows);
     }
 
     const readableIssue = issueReadAccessWhere(session.user.id);
