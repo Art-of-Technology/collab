@@ -217,6 +217,26 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.equal((await context(mine)).instructions[2].text, '');
   });
 
+  await t.test("a seat with the organisation's own role gets four layers: its base role's platform and organisation layers, the role's, the seat's (CLB-626)", async () => {
+    const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+    const qa = await raw.agentCustomRole.create({ data: { workspaceId: 'w', name: 'QA Tester', baseRole: 'developer', instructions: 'Write the failing test first.' } });
+    const tester = (await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: B, role: 'developer', ownerId: person, name: 'qa-b', expiresInDays: 30 })).seat;
+    await raw.agentSeat.update({ where: { id: tester.id }, data: { customRoleId: qa.id, instructions: 'You own the test suite.' } });
+    const target = await issue({ projectId: B, assigneeId: tester.userId });
+    const organisation = (await raw.agentRoleInstructions.findUnique({ where: { workspaceId_role: { workspaceId: 'w', role: 'developer' } } }))?.text ?? '';
+    assert.deepEqual((await context(target)).instructions, [
+      { layer: 'platform', text: ROLE_CATALOGUE.getRole('developer').platformPrompt.replaceAll('{{ownerId}}', person) },
+      { layer: 'organisation', text: organisation },
+      { layer: 'role', text: 'Write the failing test first.' },
+      { layer: 'seat', text: 'You own the test suite.' },
+    ]);
+    // A retired role is one no new seat takes: the seats that have it keep its layer.
+    await raw.agentCustomRole.update({ where: { id: qa.id }, data: { retiredAt: new Date(), instructions: '' } });
+    assert.deepEqual((await context(target)).instructions.map(layer => [layer.layer, layer.text]).slice(2), [['role', ''], ['seat', 'You own the test suite.']]);
+    // A seat of a built-in role still gets three.
+    assert.deepEqual((await context(await issue({ assigneeId: devA.userId }))).instructions.map(layer => layer.layer), ['platform', 'organisation', 'seat']);
+  });
+
   await t.test("a system admin's edit of a role's platform prompt is the platform layer of the next run, in every workspace", async () => {
     const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
     const shipped = ROLE_CATALOGUE.getRole('developer').platformPrompt.replaceAll('{{ownerId}}', person);
