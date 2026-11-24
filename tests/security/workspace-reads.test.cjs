@@ -11,7 +11,17 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
   const reads = [];
   let materialized = 0;
   const db = {
-    user: { findUnique: async ({ where }) => users.find(user => matches(user, where)) ?? null },
+    user: { findUnique: async ({ where, include }) => {
+      const user = users.find(row => matches(row, where)) ?? null;
+      // The permission check asks for the viewer's active membership and owned workspace in one workspace.
+      if (!user || !include) return user;
+      return { ...user,
+        workspaceMemberships: spaces.flatMap(row => row.members.map(member => ({ ...member, workspaceId: row.id })))
+          .filter(member => member.userId === user.id && matches(member, include.workspaceMemberships.where)),
+        ownedWorkspaces: spaces.filter(row => row.ownerId === user.id && matches(row, include.ownedWorkspaces.where)).map(row => ({ id: row.id })) };
+    } },
+    // No role holds a permission here: only owners and platform admins may invite.
+    rolePermission: { findUnique: async () => null },
     workspace: {
       findMany: async spec => {
         reads.push(spec);
@@ -37,6 +47,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
     '@/lib/auth': { getAuthSession: async () => sessionUser && { user: sessionUser } },
     '@/lib/auth-options': {}, '@/lib/prisma': { prisma: db }, '@/lib/utils': {} };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
+  deps['@/lib/permissions'] = load('src/lib/permissions.ts', { './prisma': { prisma: db } }, { console });
   return { actions: load('src/actions/workspace.ts', deps), spaces, users, reads, materialized: () => materialized };
 }
 
@@ -72,7 +83,8 @@ for (const name of ['getWorkspaceById', 'getDetailedWorkspaceById']) test(`${nam
       assert.equal(result.members.length, 1);
       if (name === 'getDetailedWorkspaceById') {
         assert.equal(result.canManage, id === 'own');
-        assert.equal(result.invitations[0].id, `invite-${id}`);
+        // The owner may invite and sees pending invitations; a plain member does not.
+        assert.deepEqual(Array.from(result.invitations, row => row.id), id === 'own' ? [`invite-${id}`] : []);
       }
       f.spaces[1].members[0].status = false;
       if (id === 'joined') {
@@ -94,6 +106,7 @@ test('detailed workspace keeps current SYSTEM_ADMIN authority and fails closed o
     assert.equal(result.canManage, true);
     assert.equal(result.isOwner, false);
     assert.equal(result.isMember, false);
+    assert.deepEqual(Array.from(result.invitations, row => row.id), ['invite-foreign']);
   }
   f.users.find(user => user.id === 'root').role = 'DEVELOPER';
   const before = f.materialized();

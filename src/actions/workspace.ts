@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/request-session';
 import { getCurrentUser } from '@/lib/session';
+import { checkUserPermission, Permission } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { generateWorkspaceSlug } from '@/lib/utils';
 
@@ -685,9 +686,13 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
   if (!isOwner && !isMember && !isAdmin) {
     throw new Error('You do not have access to this workspace');
   }
-  
+
+  // Pending invitations carry the token of the invitation link: only a viewer who may invite receives them.
+  const { hasPermission: canInvite } = await checkUserPermission(currentUser.id, workspace.id, Permission.INVITE_MEMBERS);
+
   return {
     ...workspace,
+    invitations: canInvite ? workspace.invitations : [],
     isOwner,
     isMember,
     canManage: isOwner || isAdmin
