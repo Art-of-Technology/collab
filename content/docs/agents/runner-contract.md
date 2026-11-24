@@ -320,7 +320,7 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 | `seat` | What this seat adds. | 16,000 characters |
 
 - The layers are those of the seat the issue is assigned to. An issue assigned to no seat, or to a retired one, gets the three layers with empty text.
-- A layer with nothing in it is present with `"text": ""`. The organisation and seat layers are empty until they can be set.
+- A layer with nothing in it is present with `"text": ""`. The organisation layer is what the workspace saved for the seat's role under Workspace settings, Roles; the seat layer is empty until it can be set.
 - Each maximum is checked when the layer is saved.
 - How the session hands its result back is the runner's own rule and not a layer.
 - `collab seat run` 0.16.0 and later writes the layers to a file named in `COLLAB_INSTRUCTIONS_FILE`: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
