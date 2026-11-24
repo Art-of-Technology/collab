@@ -25,13 +25,14 @@ function fixture() {
       findMany: async ({ where = {} } = {}) => { reads.push('workspaces'); return workspaces.filter(row => matches(row, where)); },
     },
     user: {
-      findUnique: async ({ where, include }) => {
+      findUnique: async ({ where, include, select }) => {
         const user = users.find(row => row.id === where.id);
-        if (!user || !include) return user ?? null;
-        const scope = include.workspaceMemberships.where;
+        const shape = include || select;
+        if (!user || !shape?.workspaceMemberships) return user ?? null;
+        const scope = shape.workspaceMemberships.where;
         return { ...user,
           workspaceMemberships: (workspace(scope.workspaceId)?.members ?? []).filter(row => row.userId === user.id && row.status === scope.status),
-          ownedWorkspaces: workspaces.filter(row => row.id === include.ownedWorkspaces.where.id && row.ownerId === user.id),
+          ownedWorkspaces: workspaces.filter(row => row.id === shape.ownedWorkspaces?.where.id && row.ownerId === user.id),
         };
       },
     },

@@ -16,6 +16,7 @@ function fixture() {
   const prisma = {
     account: { findUnique: async () => state.mapping ? { user: { ...actor, accounts: [{ id: 'mapping' }] } } : null },
     user: { findUnique: async ({ where }) => where.id === actor.id ? { ...actor } : null },
+    workspace: { findUnique: async () => ({ ownerId: 'owner' }) },
     customRole: {
       findFirst: async ({ where }) => clone(state.roles.find(row => match(row, where)) || null),
       findMany: async ({ where }) => state.roles.filter(row => match(row, where)),
@@ -92,7 +93,7 @@ test('active read, revoked caller and foreign ID controls remain', async () => {
   f.state.active = false; assert.equal((await f.invoke('list', 'GET')).status, 403); assert.equal((await f.invoke('detail', 'GET')).status, 403); assert.equal((await f.invoke('detail', 'PUT', { name: 'New' })).status, 403); assert.deepEqual(f.state.writes, []);
 });
 test('member self-downgrade denied; legitimate current member role update succeeds', async () => {
-  const f = fixture(); f.state.members[0].userId = 'actor'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 400); assert.deepEqual(f.state.writes, []);
+  const f = fixture(); f.state.members[0].userId = 'actor'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 403); assert.deepEqual(f.state.writes, []);
   f.state.members[0].userId = 'target'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 200);
 });
 for (const [route, method, body] of [['list', 'GET'], ['list', 'POST', { name: 'New', permissions: [] }], ['detail', 'GET'], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE'], ['member', 'PUT', { role: 'Support' }]]) {

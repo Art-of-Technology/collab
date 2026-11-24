@@ -13,6 +13,7 @@ const refusals = {
   not_found: [404, 'User or workspace not found'],
   owner: [409, 'The owner is always in their workspace'],
   agent: [409, 'Agents are managed on the Agent tokens page'],
+  rank: [403, 'You can only switch on or off members below your own level'],
 } as const;
 
 // PUT /api/workspaces/[workspaceId]/members/by-user/[userId] - make a person a member without an invitation, or switch them off.
