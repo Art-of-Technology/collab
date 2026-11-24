@@ -7,6 +7,23 @@ export const ISSUE_LIST_DATE_FIELDS = [
   'baselineStartDate', 'baselineDueDate', 'finishedAt', 'firstStartedAt', 'lastProgressAt',
 ] as const;
 
+// The fields of each issue a broad list sends, in the order of its rows.
+// Every listed issue is in the workspace the list was asked for, so workspaceId is sent once.
+export const ISSUE_LIST_FIELDS = [
+  'id', 'title', 'type', 'statusId', 'statusValue', 'priority', 'storyPoints',
+  'parentId', 'milestoneId', 'assigneeId', 'reporterId', 'projectId',
+  ...ISSUE_LIST_DATE_FIELDS,
+  'deletedById', 'daysInProgress', 'issueKey', 'position', 'progress', 'color', 'postId', 'status',
+  'timeEstimateMinutes', 'timeSpentMinutes', 'agentRequestRole', 'labels', '_count',
+] as const;
+
+// The fields of each parent, child and related issue that is not listed itself, in the order of its rows.
+// A listed issue is sent once, as a listed row; the browser reads these records from it.
+export const ISSUE_LIST_HIERARCHY_FIELDS = ['id', 'parentId', 'issueKey', 'title', 'type', 'status', 'projectStatus'] as const;
+export const ISSUE_LIST_RELATED_FIELDS = ['id', 'issueKey', 'title', 'type'] as const;
+// Each relation between two issues the user can read.
+export const ISSUE_LIST_EDGE_FIELDS = ['id', 'relationType', 'sourceIssueId', 'targetIssueId'] as const;
+
 type Row = { id: string };
 type RelatedIssue = Row & { issueKey: string | null; title: string; type: string };
 type SnapshotIssue = Row & {
@@ -19,14 +36,32 @@ type SnapshotIssue = Row & {
   [field: string]: unknown;
 };
 type HierarchyIssue = RelatedIssue & { parentId: string | null; [field: string]: unknown };
+type Edge = Row & { relationType: string; sourceIssueId: string; targetIssueId: string };
+type Status = Row & { name: string; displayName: string | null; color: string | null };
 
-export type IssueListSnapshot = {
+// The snapshot as it was sent before rows were sent as arrays, with field names on every row.
+// A browser tab that loaded before that change does not ask for arrays and reads only this.
+export type PreviousIssueListSnapshot = {
   issues: SnapshotIssue[]; // newest first; dates are milliseconds since the epoch
   projects: Row[];
   people: Row[];
   statuses: Row[];
   hierarchy: HierarchyIssue[];
   edges: (Row & { relationType: string; sourceIssue: RelatedIssue; targetIssue: RelatedIssue })[];
+};
+
+// Sent when the request asks for `rows=arrays`.
+export type IssueListSnapshot = {
+  workspaceId: string;
+  // The names of the values in each kind of row that is sent as an array.
+  fields: { issues: string[]; hierarchy: string[]; edges: string[]; related: string[] };
+  issues: unknown[][]; // newest first; dates are milliseconds since the epoch
+  projects: Row[];
+  people: Row[];
+  statuses: Row[];
+  hierarchy: unknown[][];
+  edges: unknown[][];
+  related: unknown[][];
 };
 
 function group<T>(rows: Map<string, T[]>, key: string, value: T) {
@@ -50,8 +85,45 @@ function relationsOf(issue: Parameters<typeof buildIssueRelations>[0]) {
   return relations;
 }
 
-// Expands the snapshot in place into the rows the one-project list returns.
-export function expandIssueListSnapshot(snapshot: IssueListSnapshot) {
+function records<T>(names: string[], rows: unknown[][]) {
+  return rows.map(row => {
+    const record: Record<string, unknown> = {};
+    for (let index = 0; index < names.length; index++) record[names[index]] = row[index];
+    return record as T;
+  });
+}
+
+// Rebuilds the previous snapshot from the one sent as arrays.
+export function previousIssueListSnapshot(snapshot: IssueListSnapshot): PreviousIssueListSnapshot {
+  const { workspaceId } = snapshot;
+  const statuses = new Map((snapshot.statuses as Status[]).map(row => [row.id, row]));
+  const issues = records<SnapshotIssue>(snapshot.fields.issues, snapshot.issues);
+  const hierarchy: HierarchyIssue[] = [];
+  const related = new Map<string, RelatedIssue>();
+  // A listed issue is the parent, child or related issue of others as it is listed.
+  for (const issue of issues) {
+    issue.workspaceId = workspaceId;
+    const { id, issueKey, title, type } = issue as SnapshotIssue & RelatedIssue;
+    const status = issue.statusId === null ? undefined : statuses.get(issue.statusId);
+    const projectStatus = status ? { id: status.id, name: status.name, displayName: status.displayName, color: status.color } : null;
+    hierarchy.push({ id, parentId: issue.parentId, issueKey, title, type, status: issue.status, projectStatus });
+    related.set(id, { id, issueKey, title, type });
+  }
+  hierarchy.push(...records<HierarchyIssue>(snapshot.fields.hierarchy, snapshot.hierarchy));
+  for (const issue of records<RelatedIssue>(snapshot.fields.related, snapshot.related)) related.set(issue.id, issue);
+  const edges: PreviousIssueListSnapshot['edges'] = [];
+  for (const { id, relationType, sourceIssueId, targetIssueId } of records<Edge>(snapshot.fields.edges, snapshot.edges)) {
+    const sourceIssue = related.get(sourceIssueId);
+    const targetIssue = related.get(targetIssueId);
+    if (sourceIssue && targetIssue) edges.push({ id, relationType, sourceIssue, targetIssue });
+  }
+  const { projects, people } = snapshot;
+  return { issues, projects, people, statuses: snapshot.statuses, hierarchy, edges };
+}
+
+// Expands either snapshot into the rows the one-project list returns.
+export function expandIssueListSnapshot(sent: IssueListSnapshot | PreviousIssueListSnapshot) {
+  const snapshot = 'fields' in sent ? previousIssueListSnapshot(sent) : sent;
   const projects = new Map(snapshot.projects.map(row => [row.id, row]));
   const people = new Map(snapshot.people.map(row => [row.id, row]));
   const statuses = new Map(snapshot.statuses.map(row => [row.id, row]));
@@ -98,7 +170,7 @@ export function expandIssueListSnapshot(snapshot: IssueListSnapshot) {
 // Read a GET /api/issues body: broad lists arrive as a snapshot, the others as rows.
 // A snapshot has no descriptions; read them with `descriptions=1` and withDescriptions.
 export function readIssueList<T>(
-  body: { issues: T[] } | { snapshot: IssueListSnapshot },
+  body: { issues: T[] } | { snapshot: IssueListSnapshot | PreviousIssueListSnapshot },
 ): { issues: T[] | SnapshotIssue[]; withoutDescriptions?: true } {
   return 'snapshot' in body
     ? { issues: expandIssueListSnapshot(body.snapshot), withoutDescriptions: true as const }

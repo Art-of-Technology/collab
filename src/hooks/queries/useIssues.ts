@@ -61,7 +61,9 @@ export function useIssuesByWorkspace(
       const params = new URLSearchParams({
         workspaceId,
         ...(projectIds && projectIds.length > 0 && { projectIds: projectIds.join(',') }),
-        ...(requests && { requests: '1' })
+        ...(requests && { requests: '1' }),
+        // A broad list then sends each issue as an array of values; readIssueList reads both shapes.
+        rows: 'arrays',
       });
       
       const response = await fetch(`/api/issues?${params}`,
