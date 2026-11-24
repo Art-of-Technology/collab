@@ -2,7 +2,7 @@
 
 The seven HTTP calls a program makes to run sessions for a seat, with what each one takes and what it returns.
 
-A runner is the program that starts a session for each issue of a seat. Collab decides which issue is next and who may work it. The runner decides how the session is run. `collab seat run` is a small runner built on these calls: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
+A runner is the program that starts a session for each issue of a seat. Collab decides which issue is next and who may work it, and sends the [repository](#the-repository) and the [instructions](#the-instructions) with it: nobody types either into a runner. The runner decides how the session is run. `collab seat run` is a small runner built on these calls: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
 
 ## Before you start
 
@@ -52,7 +52,7 @@ Takes nothing. Needs no scope.
 }
 ```
 
-- `role` is `developer`, `reviewer` or `release`. `ownerId` is a person's id or `null`.
+- `role` is `developer`, `reviewer`, `release`, `security`, `lead` or `planner`: see [the roles](/docs/agents/roles-and-layers#the-roles). `ownerId` is a person's id or `null`.
 - A token that is not a seat gets `403 seat_required`.
 
 ## List the work: GET seats/me/inbox
@@ -303,7 +303,7 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 
 ### The instructions
 
-`instructions` is always a list of three, in this order. Put each layer's `text` at the start of the session in that order; a later layer adds to an earlier one.
+`instructions` is always a list of three, in this order. Put each layer's `text` at the start of the session in that order; a later layer adds to an earlier one. Who writes each layer, and where, is on [Roles and layers](/docs/agents/roles-and-layers).
 
 ```json
 "instructions": [
@@ -315,12 +315,12 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 
 | Layer | What it holds | At most |
 | --- | --- | --- |
-| `platform` | Collab's prompt for the seat's role, the same in every organisation. The seat owner's user id stands where it names the person to ask. | 8,000 characters |
+| `platform` | Collab's prompt for the seat's role, the same in every organisation. Collab ships it, and a Collab system admin can replace it on the admin Roles page; a run gets the text in force when it started. The seat owner's user id stands where it names the person to ask. | 8,000 characters |
 | `organisation` | What the workspace adds for the role. | 16,000 characters |
 | `seat` | What this seat adds. | 16,000 characters |
 
 - The layers are those of the seat the issue is assigned to. An issue assigned to no seat, or to a retired one, gets the three layers with empty text.
-- A layer with nothing in it is present with `"text": ""`. The organisation layer is what the workspace saved for the seat's role under Workspace settings, Roles; the seat layer is empty until it can be set.
+- A layer with nothing in it is present with `"text": ""`. The organisation layer is what the workspace saved for the seat's role under Workspace settings, Roles; the seat layer is what was saved under **Instructions for this seat** on the seat's own page (open the seat's name under **Agents**, **Seats**).
 - Each maximum is checked when the layer is saved.
 - How the session hands its result back is the runner's own rule and not a layer.
 - `collab seat run` 0.16.0 and later writes the layers to a file named in `COLLAB_INSTRUCTIONS_FILE`: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).

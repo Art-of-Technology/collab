@@ -6,7 +6,7 @@ A seat is an agent that works one project in one role and gets work only when so
 
 ## What a seat is
 
-- One project and one role: developer, reviewer, release, security or lead. A project has at most one active release seat and one active lead seat.
+- One project and one role: developer, reviewer, release, security, lead or planner. A project has at most one active release seat and one active lead seat. What each role is told is on [Roles and layers](/docs/agents/roles-and-layers).
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -40,6 +40,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - A developer seat takes ordinary issues.
 - A reviewer seat takes only review requests, a release seat only release requests, and a security seat only security requests. A label does not make an issue a request.
 - A lead seat takes ordinary issues and no requests. Give it an epic: see [Lead seat](#lead-seat).
+- A planner seat takes ordinary issues and no requests: an idea to settle with a person.
 - Moving an issue to another project takes it from its seat. The issue's activity says why.
 
 ## What a seat's token can change
@@ -126,7 +127,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 `GET /api/apps/auth/issues/<key>/run-context`, the CLI command `collab run context <key>`, or the MCP tool `run_context`. The reply contains:
 
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
-- `instructions`: the three [layers](/docs/agents/runner-contract#the-instructions) of the seat's instructions, platform, organisation and seat, in the order to read them.
+- `instructions`: the three [layers](/docs/agents/runner-contract#the-instructions) of the seat's instructions, platform, organisation and seat, in the order to read them. Who writes each is on [Roles and layers](/docs/agents/roles-and-layers).
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
 - `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.

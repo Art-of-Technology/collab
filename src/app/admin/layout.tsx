@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Settings, Puzzle, Users, BarChart3, ArrowLeft, Code2 } from "lucide-react";
+import { Settings, Puzzle, Users, BarChart3, ArrowLeft, Code2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,11 @@ const adminNavItems = [
     name: "Users",
     href: "/admin/users",
     icon: Users,
+  },
+  {
+    name: "Roles",
+    href: "/admin/agent-roles",
+    icon: Layers,
   },
   {
     name: "Settings",

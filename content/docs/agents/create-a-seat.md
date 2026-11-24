@@ -29,8 +29,11 @@ To have no token to copy at all, switch on **Run by the owner's runner** in step
 | Release | Release requests | One per project |
 | Security | Security requests | A project can have several |
 | Lead | An epic, whose child issues it assigns to the other seats. See [Use a lead seat](/docs/agents/lead-seat) | One per project |
+| Planner | An idea to settle with a person, one question per comment thread | A project can have several |
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
+
+What a seat of each role is told, and how your organisation and the seat itself add to it, is kept in Collab too: see [Roles and layers](/docs/agents/roles-and-layers).
 
 ## Which repository
 

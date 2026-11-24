@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Armchair, ArrowLeftRight, Bot, Compass, FileText, FolderTree, Home, KeyRound, LayoutTemplate, Layers, Play, Plug, ScrollText, Search, Send, SquareTerminal, Terminal, User,
+  Armchair, ArrowLeftRight, Bot, Compass, FileText, FolderTree, Home, KeyRound, LayoutTemplate, Layers, Layers3, Play, Plug, ScrollText, Search, Send, SquareTerminal, Terminal, User,
   UserPlus, Webhook, Workflow, Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -20,6 +20,7 @@ const ICONS: Record<string, LucideIcon> = {
   '/docs/context/folders-and-files': FolderTree,
   '/docs/agents/overview': Armchair,
   '/docs/agents/create-a-seat': UserPlus,
+  '/docs/agents/roles-and-layers': Layers3,
   '/docs/agents/give-a-seat-work': Send,
   '/docs/agents/run-a-seat': Play,
   '/docs/agents/admit-a-runner': KeyRound,
