@@ -78,7 +78,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
       <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
         <thead><tr className="border-b"><th className="w-2/5 p-3">Seat</th><th className="w-1/5 p-3">Project</th><th className="p-3">Works on now</th><th className="w-24 p-3">Waiting</th></tr></thead>
         <tbody>{own.map(seat => <tr key={seat.id} className="border-b last:border-0">
-          <th scope="row" className="space-y-1 p-3 font-medium"><span className="mr-2 rounded border px-2 py-0.5 text-xs font-normal">{seat.role}{seat.isDefault && ' · default'}</span>{seat.name}
+          <th scope="row" className="space-y-1 p-3 font-medium"><span className="mr-2 rounded border px-2 py-0.5 text-xs font-normal">{seat.role}{seat.isDefault && ' · default'}</span><Link className="underline-offset-4 hover:underline" href={`${base}/agents/seats/${encodeURIComponent(seat.id)}`}>{seat.name}</Link>
             {!one && seat.room && <span className="block font-normal">{unknown && seat.room.kind === 'unknown'
               ? <span className="text-xs text-muted-foreground">{seat.room.reason}</span> : <Room room={seat.room} />}</span>}
             {seat.noRunner && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">No runner yet: its work waits until its owner connects a <Link className="underline" href={`${base}/agents/runners`}>runner</Link></span>}
