@@ -49,15 +49,14 @@ export async function PUT(
       }
     }
 
-    const actor = await getWorkspaceAuthority(session.user.id, workspaceId);
-    const holdsChangeRoles = actor?.level === 'STANDARD'
-      ? actor.role !== null && !!await prisma.rolePermission.findUnique({
-          where: { workspaceId_role_permission: { workspaceId, role: actor.role, permission: Permission.CHANGE_MEMBER_ROLES } },
-          select: { id: true },
-        })
-      : (await checkUserPermission(session.user.id, workspaceId, Permission.CHANGE_MEMBER_ROLES)).hasPermission;
+    // Check if user has permission to manage member roles
+    const hasPermission = await checkUserPermission(
+      session.user.id,
+      workspaceId,
+      Permission.CHANGE_MEMBER_ROLES
+    );
 
-    if (!holdsChangeRoles) {
+    if (!hasPermission.hasPermission) {
       return NextResponse.json(
         { error: 'You do not have permission to manage member roles' },
         { status: 403 }
@@ -95,15 +94,17 @@ export async function PUT(
     }
 
     // The rank rule. A platform admin who is not a member keeps the answer this route gave before it.
+    const actor = await getWorkspaceAuthority(session.user.id, workspaceId);
     if (actor?.level !== null) {
       const target = { userId: member.userId, level: levelOfRole(member.role) };
+      const holdsChangeRoles = { holdsChangeRoles: true }; // checked above
       if (member.userId === session.user.id) {
         return NextResponse.json({ error: 'Nobody can change their own role' }, { status: 403 });
       }
-      if (!mayActOn(actor, target, { holdsChangeRoles })) {
+      if (!mayActOn(actor, target, holdsChangeRoles)) {
         return NextResponse.json({ error: 'You can only change the role of members below your own level' }, { status: 403 });
       }
-      if (rolesMayGrant(actor, [role], { holdsChangeRoles }).length === 0) {
+      if (rolesMayGrant(actor, [role], holdsChangeRoles).length === 0) {
         const error = levelOfRole(role) === 'OWNER' ? 'Only the primary owner can grant the Owner role' : 'Only an Owner can grant the Admin role';
         return NextResponse.json({ error }, { status: 403 });
       }
