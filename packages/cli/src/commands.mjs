@@ -85,12 +85,12 @@ export const commands = {
   }),
   'seat run': command('GET', 'seats/me/inbox', {}, {}, {
     seatRun: true, localOptions: { once: boolean },
-    description: 'collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.',
+    description: 'collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment, and COLLAB_INSTRUCTIONS_FILE naming a file with the instructions for the run: platform, organisation and seat, in that order. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.',
   }),
   'run start': command('POST', 'runs', { issue: string, generation: string, runner: string }, {}, {
     required: ['issue'], description: 'Take an issue assigned to you. One run is open per issue. The reply carries the generation that renew and finish need.',
   }),
-  'run context': command('GET', 'issues/:id/run-context', {}, {}, { description: 'What a fresh session needs to work an issue, in one read: the issue, the last exit note and its checked facts (pull request, head commit, next step), comments since, blockers and requests.' }),
+  'run context': command('GET', 'issues/:id/run-context', {}, {}, { description: 'What a fresh session needs to work an issue, in one read: the issue, its instructions in three layers (platform, organisation, seat), the last exit note and its checked facts (pull request, head commit, next step), comments since, blockers and requests.' }),
   'run renew': command('PATCH', 'runs/:id', { generation: string }, {}, { event: 'renew', required: ['generation'], description: "Extend a seat's 60 second lease. collab seat run does this for the program it starts." }),
   'run finish': command('PATCH', 'runs/:id', { generation: string, outcome: string, note: string, status: string, reviewRequest: string, askedUser: string, blockedBy: string, alsoFinish: array, verdict: string, reviewed: string, pullRequest: string, headCommit: string, nextStep: string }, {}, {
     event: 'finish', required: ['generation', 'outcome', 'note'],

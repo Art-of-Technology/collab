@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Users, Mail, Bell, Loader2, Shield, UserCheck, UserX, AlertTriangle, KeyRound, ListChecks } from "lucide-react";
+import { ArrowLeft, Building2, Users, Mail, Bell, Loader2, Shield, UserCheck, UserX, AlertTriangle, KeyRound, ListChecks, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -454,6 +454,20 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                         </Button>
                       </div>
                     )}
+                    <div className="flex items-center justify-between border border-border/20 p-2.5 rounded hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-purple-500/10 rounded">
+                          <Layers className="h-3 w-3 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium">Roles</h3>
+                          <p className="text-xs text-muted-foreground">What each seat role is told, and what your organisation adds</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="text-xs h-7" asChild>
+                        <Link href={`/workspaces/${workspaceId}/settings/roles`}>Open</Link>
+                      </Button>
+                    </div>
                     <div className="flex items-center justify-between border border-border/20 p-2.5 rounded hover:bg-muted/30 transition-colors">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-blue-500/10 rounded">

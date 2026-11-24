@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   if (authMode() !== "nextauth") return NextResponse.json({ message: "Registration is unavailable" }, { status: 403 });
   try {
     const body = await req.json();
-    const { name, email, password, role, team, currentFocus } = body;
+    const { name, email, password, team, currentFocus } = body;
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         name,
         email,
         hashedPassword,
-        role: role || "developer",
+        // The global role is never taken from the request: the schema default applies.
         team,
         currentFocus,
         // Add avatar configuration
@@ -56,17 +56,15 @@ export async function POST(req: Request) {
         avatarEyewear: randomAvatar.avatarEyewear,
         avatarAccessory: randomAvatar.avatarAccessory,
         useCustomAvatar: true // Enable custom avatar by default
-      }
+      },
+      select: { id: true, name: true, email: true }
     });
 
     // Note: We don't create workspaces automatically anymore
     // Users will be directed to welcome page to create workspace manually
     console.log(`✅ User registered successfully: ${user.email}`);
 
-    // Create a sanitized version without the password
-    const { ...userWithoutPassword } = user;
-
-    return NextResponse.json(userWithoutPassword);
+    return NextResponse.json({ id: user.id, name: user.name, email: user.email });
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(

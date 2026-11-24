@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -655,8 +656,9 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * owner, room and the owner's open runs too, and the seats of one role in the order to prefer (`byRoom`); room is its
  * owner's figure, so no other reader is given it or the order that would say it. When the last run that finished was
  * another account's, `movedFrom` names that seat, what its last run pushed and what to do before anything else (CLB-809). A run that ended without a note moves nothing:
- * what was said since the last note is still what the next session lacks. A read like any other: every token that
- * reads the workspace's issues gets it.
+ * what was said since the last note is still what the next session lacks. `instructions` are the three layers of the
+ * assigned seat's instructions, platform, organisation and seat, each present and empty when it has nothing (CLB-607).
+ * A read like any other: every token that reads the workspace's issues gets it.
  */
 export async function runContext(context: Caller, issueIdOrKey: string) {
   const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
@@ -687,6 +689,14 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const [, repo, number] = pushed?.pullRequest.match(/^(.+)#(\d+)$/) ?? [];
   const from = last?.seat?.name ?? 'another account';
   const repository = await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId);
+  // The instructions are those of the seat that works the issue: its role's, then what this workspace adds for the role (CLB-608),
+  // then the seat's own, saved on its page (CLB-610).
+  const worker = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, retiredAt: null }, select: { role: true, ownerId: true, instructions: true } }) : null;
+  const organisation = worker ? (await prisma.agentRoleInstructions.findUnique({ where: { workspaceId_role: { workspaceId: context.workspace.id, role: worker.role } }, select: { text: true } }))?.text ?? '' : '';
+  // A system admin's edit of the role's prompt (CLB-916): the version in force when the open run started, so a run keeps
+  // what it received; with no run open, the latest. None, or one with no text, means the repository's text.
+  const open = worker ? await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null, state: { in: LIVE } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }) : null;
+  const platform = worker ? (await prisma.agentPlatformPrompt.findFirst({ where: { role: worker.role, createdAt: { lte: open?.startedAt ?? new Date() } }, orderBy: { version: 'desc' }, select: { text: true } }))?.text : null;
   const matches = repo ? (await connectedRepositories(prisma, issue.projectId)).filter(row => row.name.toLowerCase() === repo.toLowerCase()) : [];
   const elsewhere = !!pushed && (matches.length !== 1 || matches[0].id !== repository?.id);
   const branch = !elsewhere && repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { id: matches[0].id, projectId: issue.projectId, isActive: true } },
@@ -712,6 +722,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
     repository,
+    instructions: ROLE_CATALOGUE.instructionLayers(worker?.role ?? null, { ownerId: worker?.ownerId ?? null, platform, organisation, seat: worker?.instructions ?? '' }),
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     movedFrom: last && last.userId !== issue.assigneeId ? { seat: last.seat?.name ?? null, pullRequest: pushed?.pullRequest ?? null, headCommit: pushed?.headCommit ?? null, branch,

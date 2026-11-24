@@ -150,6 +150,9 @@ test('Seats tab: a card per person with the runner and the room, and each seat w
   assert.match(html, /<section aria-label="Cem"[^>]*>.*<section aria-label="No owner \(API key\)"/s);
   assert.match(html, /href="\/team\/issues\/CLB-9"/);
   assert.match(html, /<a[^>]*href="\/team\/agents\/inbox#seat-seat-dev"[^>]*>1<\/a>/);
+  // Each seat's name leads to its own page, where its instructions are.
+  assert.match(html, /<a[^>]*href="\/team\/agents\/seats\/seat-dev"[^>]*>Collab Developer<\/a>/);
+  assert.match(html, /<a[^>]*href="\/team\/agents\/seats\/seat-rel"[^>]*>Collab Release<\/a>/);
   // Creating and retiring stays under Settings, and only who may do it is led there.
   assert.doesNotMatch(html, /settings\/agent-tokens|Handoffs/);
   assert.match(await page({ manage: true, handoffs: true }).open(), /href="\/workspaces\/ws\/settings\/agent-tokens"[^>]*>Create or retire a seat<.*Handoffs \(old\)|Handoffs \(old\).*href="\/workspaces\/ws\/settings\/agent-tokens"/s);

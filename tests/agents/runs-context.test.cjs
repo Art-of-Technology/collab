@@ -176,4 +176,74 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     const reply = await context(target);
     assert.deepEqual([reply.blockers, reply.requests, reply.requestFor], [[], [], []]);
   });
+  await t.test('the instructions for the run, in three layers, for every role', async () => {
+    const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+    const layers = reply => reply.instructions.map(layer => layer.layer);
+    // The organisation's own text for developers here, and for reviewers in another workspace only.
+    await raw.agentRoleInstructions.create({ data: { workspaceId: 'w', role: 'developer', text: 'We use British English.' } });
+    await raw.agentRoleInstructions.create({ data: { workspaceId: 'x', role: 'reviewer', text: 'Not for w.' } });
+    for (const role of ROLE_CATALOGUE.roles) {
+      const worker = role.id === 'developer' ? devA : (await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: B, role: role.id, ownerId: person, name: `${role.id}-b`, expiresInDays: 30 })).seat;
+      const target = await issue({ projectId: B, assigneeId: worker.userId, ...(role.requests[0] && { agentRequestRole: role.requests[0].id }) });
+      const reply = await context(target);
+      // Platform first, then the organisation's for the seat's role in this workspace, then the seat's; a layer with nothing saved is present and empty.
+      assert.deepEqual(layers(reply), ['platform', 'organisation', 'seat'], role.id);
+      assert.deepEqual(reply.instructions.slice(1).map(layer => layer.text), [role.id === 'developer' ? 'We use British English.' : '', ''], role.id);
+      // The role's own prompt, with the seat owner as the person to ask.
+      assert.equal(reply.instructions[0].text, role.platformPrompt.replaceAll('{{ownerId}}', person), role.id);
+    }
+    // An issue no seat works has no role: the three layers are there and empty.
+    for (const data of [{}, { assigneeId: person }]) {
+      const reply = await context(await issue(data));
+      assert.deepEqual(reply.instructions, [{ layer: 'platform', text: '' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: '' }]);
+    }
+    // A retired seat's issue gets none of its role's instructions.
+    const gone = (await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role: 'reviewer', ownerId: person, name: 'gone', expiresInDays: 30 })).seat;
+    const left = await issue({ assigneeId: gone.userId, agentRequestRole: 'review' });
+    await raw.agentSeat.update({ where: { id: gone.id }, data: { retiredAt: new Date() } });
+    assert.equal((await context(left)).instructions[0].text, '');
+  });
+
+  await t.test("the text saved on a seat's page is the seat layer of its next run, and only of that seat's", async () => {
+    const mine = await issue({ assigneeId: devA.userId });
+    const theirs = await issue({ projectId: B, assigneeId: devB.userId });
+    await raw.agentSeat.update({ where: { id: devA.id }, data: { instructions: 'You own the billing module.' } });
+    assert.deepEqual((await context(mine)).instructions.map(layer => layer.layer), ['platform', 'organisation', 'seat']);
+    assert.equal((await context(mine)).instructions[2].text, 'You own the billing module.');
+    // Another seat of the same role and owner keeps its own, empty, layer.
+    assert.equal((await context(theirs)).instructions[2].text, '');
+    // Removed on the page, the next run gets an empty seat layer again.
+    await raw.agentSeat.update({ where: { id: devA.id }, data: { instructions: null } });
+    assert.equal((await context(mine)).instructions[2].text, '');
+  });
+
+  await t.test("a system admin's edit of a role's platform prompt is the platform layer of the next run, in every workspace", async () => {
+    const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+    const shipped = ROLE_CATALOGUE.getRole('developer').platformPrompt.replaceAll('{{ownerId}}', person);
+    const platform = async target => (await context(target)).instructions[0].text;
+    const target = await issue({ assigneeId: devA.userId });
+    // With no edit, the repository's text exactly.
+    assert.equal(await platform(target), shipped);
+    // A run that started before the edit keeps what it received.
+    await run(target, 0, { state: 'running', outcome: null, endedAt: null, startedAt: ago(10) });
+    const edit = (version, text, minutes) => raw.agentPlatformPrompt.create({ data: { role: 'developer', version, text, reason: `Version ${version}`, shippedSha256: 'x', createdById: owner, createdAt: ago(minutes) } });
+    await edit(1, 'Before the run. Ask {{ownerId}}.', 20);
+    await edit(2, 'Edited during the run. Ask {{ownerId}}.', 5);
+    assert.equal(await platform(target), `Before the run. Ask ${person}.`);
+    // The next run gets the latest edit, with the seat owner named.
+    await raw.agentRun.updateMany({ where: { issueId: target.id, endedAt: null }, data: { state: 'finished', outcome: 'done', endedAt: ago(1) } });
+    assert.equal(await platform(target), `Edited during the run. Ask ${person}.`);
+    // A seat of the role in another workspace gets it too; another role does not.
+    const elsewhere = (await seats.createSeat({ workspaceId: 'x', actorId: owner, projectId: 'cprojectx001', role: 'developer', ownerId: owner, name: 'dev-x', expiresInDays: 30 })).seat;
+    const foreign = await raw.issue.create({ data: { workspaceId: 'x', projectId: 'cprojectx001', title: 'There', issueKey: 'XX-9', assigneeId: elsewhere.userId } });
+    // Read with a person's token of that workspace: the run context is the same whoever reads it.
+    await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'x', userId: owner, installationId: null, accessToken: Buffer.from('collab_owner_x_token').toString('base64'), scopes } });
+    const [status, reply] = await read('collab_owner_x_token', foreign.issueKey);
+    assert.deepEqual([status, reply.instructions[0].text], [200, `Edited during the run. Ask ${owner}.`]);
+    const reviewer = (await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role: 'reviewer', ownerId: person, name: 'rev-a', expiresInDays: 30 })).seat;
+    assert.equal(await platform(await issue({ assigneeId: reviewer.userId, agentRequestRole: 'review' })), ROLE_CATALOGUE.getRole('reviewer').platformPrompt.replaceAll('{{ownerId}}', person));
+    // Back to the repository's text: runs receive the shipped text again.
+    await edit(3, null, 0);
+    assert.equal(await platform(target), shipped);
+  });
 });

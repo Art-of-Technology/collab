@@ -327,3 +327,62 @@ test('diagrams are drawn in the page\'s own element after it is on screen', () =
   effects.forEach(effect => effect());
   assert.deepEqual(drawn, [container]);
 });
+
+// CLB-611: the page on roles and layers, served everywhere the other pages are.
+const ROLES_PAGE = 'agents/roles-and-layers';
+
+test('the roles and layers page leads with the three layers, in the order a run reads them', () => {
+  const page = docsIn(repo).docPage(ROLES_PAGE);
+  assert.ok(page, 'the page loads');
+  assert.equal(page.title, 'Roles and layers');
+  const blocks = require('marked').lexer(page.markdown).filter(token => token.type !== 'space');
+  // The title, the one-line summary, then the picture before any other text.
+  assert.deepEqual(blocks.slice(0, 2).map(token => token.type), ['heading', 'paragraph']);
+  const picture = blocks[2];
+  assert.equal(picture.type, 'code');
+  assert.equal(picture.lang, 'mermaid');
+  const at = word => picture.text.search(new RegExp(word));
+  assert.ok(at('Platform') >= 0 && at('Platform') < at('Organisation') && at('Organisation') < at('Seat'), picture.text);
+});
+
+test('llms.txt, docs_search and docs_get serve the roles and layers page', async () => {
+  const globals = { Response, URL, process: { cwd: () => repo, env: { NEXT_PUBLIC_APP_URL: 'https://docs.example' } } };
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities') }, globals);
+  const page = docs.docPage(ROLES_PAGE);
+  assert.ok(page, 'the page loads');
+
+  const llms = await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET().text();
+  assert.ok(llms.split('\n').includes(`- [${page.title}](https://docs.example/docs/${ROLES_PAGE}.md): ${page.summary}`), 'llms.txt lists the page');
+
+  // The route behind the MCP tools docs_search and docs_get.
+  const api = load('src/app/api/apps/auth/docs/route.ts', {
+    'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
+    '@/lib/apps/auth-middleware': { withAppAuth: handler => request => handler(request, {}) },
+    '@/lib/docs': docs, '@/lib/docs-search': load('src/lib/docs-search.ts', { minisearch: { default: require('minisearch') } }),
+  }, globals);
+  const ask = async query => (await api.GET(new Request(`http://localhost/api/apps/auth/docs?${query}`))).json();
+  const got = await ask(`slug=${encodeURIComponent(ROLES_PAGE)}`);
+  assert.equal(got.markdown, page.markdown);
+  const found = await ask('query=organisation%20layer&limit=5');
+  assert.ok(found.results.some(hit => hit.slug === ROLES_PAGE), JSON.stringify(found.results.map(hit => hit.slug)));
+});
+
+test('the roles and layers page is in the real menu, under Seats, with an icon of its own', () => {
+  const sidebar = component('src/components/docs/DocsSidebar.tsx', {
+    'next/link': require('next/link'), 'next/navigation': { usePathname: () => '/docs' }, 'lucide-react': require('lucide-react'),
+  });
+  const docs = docsIn(repo);
+  const sections = docs.docsNav().map(section => ({
+    title: section.title, pages: section.pages.map(page => ({ href: docs.docHref(page.slug), title: page.title })),
+  }));
+  const html = renderToStaticMarkup(sidebar.DocsSidebar({ sections }));
+  const link = html.match(new RegExp(`<a[^>]*href="/docs/${ROLES_PAGE}"[^>]*>(<svg.*?</svg>)([^<]+)<`, 's'));
+  assert.ok(link, 'the page is in the menu');
+  assert.equal(link[2], 'Roles and layers');
+  const section = html.match(/>Seats<\/p>(.*?)(<p[^>]*>[^<]*<\/p>|$)/s);
+  assert.ok(section, 'a Seats section');
+  assert.match(section[1], new RegExp(`href="/docs/${ROLES_PAGE}"`));
+  // Not the plain page icon that a page the menu does not know gets.
+  assert.match(link[1], /lucide-/);
+  assert.doesNotMatch(link[1], /lucide-file-text/);
+});

@@ -2,7 +2,7 @@
 
 The seven HTTP calls a program makes to run sessions for a seat, with what each one takes and what it returns.
 
-A runner is the program that starts a session for each issue of a seat. Collab decides which issue is next and who may work it. The runner decides how the session is run. `collab seat run` is a small runner built on these calls: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
+A runner is the program that starts a session for each issue of a seat. Collab decides which issue is next and who may work it, and sends the [repository](#the-repository) and the [instructions](#the-instructions) with it: nobody types either into a runner. The runner decides how the session is run. `collab seat run` is a small runner built on these calls: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
 
 ## Before you start
 
@@ -33,7 +33,7 @@ curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/app
 
 1. Read the inbox. If it is empty, wait and read again. Nothing is pushed to a runner.
 2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read. The exception is `repository_required`: keep that issue and try it again at the next read of the inbox after a seat pick or project default resolves.
-3. Start a fresh session for the issue. Give it the issue key, the run id, the generation and the repository the checkout named.
+3. Start a fresh session for the issue. Give it the issue key, the run id, the generation and the repository the checkout named. Put the [instructions](#the-instructions) from the run context at its start, in their order.
 4. Renew the lease while the session lives. A lease lasts 60 seconds from each renewal; renew well inside that.
 5. The session reads the run context, does the work and finishes the run with an exit note.
 6. When the session has exited, read the run. If it is not finished, close it.
@@ -52,7 +52,7 @@ Takes nothing. Needs no scope.
 }
 ```
 
-- `role` is `developer`, `reviewer` or `release`. `ownerId` is a person's id or `null`.
+- `role` is `developer`, `reviewer`, `release`, `security`, `lead` or `planner`: see [the roles](/docs/agents/roles-and-layers#the-roles). `ownerId` is a person's id or `null`.
 - A token that is not a seat gets `403 seat_required`.
 
 ## List the work: GET seats/me/inbox
@@ -287,6 +287,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | --- | --- |
 | `issue` | `id`, `issueKey`, `title`, `description`, `type`, `priority`, `projectId`, `status`, `category`, `assigneeId` and `agentRequestRole`. |
 | `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out returns `null` in the context (an ambiguous checkout is refused). |
+| `instructions` | The seat's instructions in three layers, in the order to give them to the session: `platform`, `organisation`, `seat`. See [below](#the-instructions). |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. See [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you). |
@@ -299,6 +300,30 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
 An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
+
+### The instructions
+
+`instructions` is always a list of three, in this order. Put each layer's `text` at the start of the session in that order; a later layer adds to an earlier one. Who writes each layer, and where, is on [Roles and layers](/docs/agents/roles-and-layers).
+
+```json
+"instructions": [
+  { "layer": "platform", "text": "2. Do the work on the current branch. ..." },
+  { "layer": "organisation", "text": "" },
+  { "layer": "seat", "text": "" }
+]
+```
+
+| Layer | What it holds | At most |
+| --- | --- | --- |
+| `platform` | Collab's prompt for the seat's role, the same in every organisation. Collab ships it, and a Collab system admin can replace it on the admin Roles page; a run gets the text in force when it started. The seat owner's user id stands where it names the person to ask. | 8,000 characters |
+| `organisation` | What the workspace adds for the role. | 16,000 characters |
+| `seat` | What this seat adds. | 16,000 characters |
+
+- The layers are those of the seat the issue is assigned to. An issue assigned to no seat, or to a retired one, gets the three layers with empty text.
+- A layer with nothing in it is present with `"text": ""`. The organisation layer is what the workspace saved for the seat's role under Workspace settings, Roles; the seat layer is what was saved under **Instructions for this seat** on the seat's own page (open the seat's name under **Agents**, **Seats**).
+- Each maximum is checked when the layer is saved.
+- How the session hands its result back is the runner's own rule and not a layer.
+- `collab seat run` 0.16.0 and later writes the layers to a file named in `COLLAB_INSTRUCTIONS_FILE`: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
 
 ## File a request: POST seats/me/requests
 

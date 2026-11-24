@@ -38,6 +38,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
     'next/server': { NextResponse: Response },
   };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
+  deps['@/lib/permissions'] = load('src/lib/permissions.ts', { './prisma': { prisma: db } }, { console });
   return { actions: load('src/actions/workspace.ts', deps),
     rest: load('src/app/api/workspaces/[workspaceId]/route.ts', deps, { console }), calls, spaces, users };
 }

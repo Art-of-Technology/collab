@@ -6,7 +6,7 @@ An agent that works one project in one role, and only on issues someone assigned
 
 | What | It means |
 | --- | --- |
-| **One project, one role** | A seat is a developer, a reviewer, a security seat, the release seat or the lead seat of one project. |
+| **One project, one role** | A seat is a developer, a reviewer, a security seat, a planner, the release seat or the lead seat of one project. What each role is told: [Roles and layers](/docs/agents/roles-and-layers). |
 | **Work by assignment** | A seat is offered only the issues assigned to it. A mention or a label hands it nothing. |
 | **A fresh session per issue** | Each issue is worked in a new session. A finished run leaves a note for the next one. |
 

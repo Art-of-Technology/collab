@@ -580,10 +580,11 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     const amount = usage.estimatedUSD;
     return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 ? [{ userId: user.id, endedAt, amount }] : [];
   }) : undefined;
-  const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now, userId);
+  // The Overview counts work alone. Burn keeps requests for its Requests handled column.
+  const overview = calculateProjectOverview(issues.filter(issue => issue.agentRequestRole == null), baseline?.createdAt ?? null, now, userId);
   const work = issues.filter(issue => issue.type !== 'MILESTONE');
   const milestoneIds = new Set(overview.milestones.map(milestone => milestone.id));
-  const workItems = work.map(issue => {
+  const workItems = work.filter(issue => issue.agentRequestRole == null).map(issue => {
     const status = issue.projectStatus?.projectId === projectId ? issue.projectStatus : null;
     return {
       ...issueRef(issue),
