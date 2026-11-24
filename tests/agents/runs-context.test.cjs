@@ -204,6 +204,19 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.equal((await context(left)).instructions[0].text, '');
   });
 
+  await t.test("the text saved on a seat's page is the seat layer of its next run, and only of that seat's", async () => {
+    const mine = await issue({ assigneeId: devA.userId });
+    const theirs = await issue({ projectId: B, assigneeId: devB.userId });
+    await raw.agentSeat.update({ where: { id: devA.id }, data: { instructions: 'You own the billing module.' } });
+    assert.deepEqual((await context(mine)).instructions.map(layer => layer.layer), ['platform', 'organisation', 'seat']);
+    assert.equal((await context(mine)).instructions[2].text, 'You own the billing module.');
+    // Another seat of the same role and owner keeps its own, empty, layer.
+    assert.equal((await context(theirs)).instructions[2].text, '');
+    // Removed on the page, the next run gets an empty seat layer again.
+    await raw.agentSeat.update({ where: { id: devA.id }, data: { instructions: null } });
+    assert.equal((await context(mine)).instructions[2].text, '');
+  });
+
   await t.test("a system admin's edit of a role's platform prompt is the platform layer of the next run, in every workspace", async () => {
     const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
     const shipped = ROLE_CATALOGUE.getRole('developer').platformPrompt.replaceAll('{{ownerId}}', person);
