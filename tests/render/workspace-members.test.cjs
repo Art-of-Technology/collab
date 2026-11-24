@@ -37,7 +37,8 @@ const MemberRow = load('src/components/workspace/MemberRow.tsx', {
   ...ui,
   '@/lib/permission-types': load('src/lib/permission-types.ts'),
   '@/actions/workspace': { removeWorkspaceMember: async input => { removals.push(input); return removal(); } },
-}, { fetch });
+  // The action's refusal is an Error from this realm, as it is in the browser.
+}, { fetch, Error });
 
 let current;
 const Screen = load('src/components/workspace/WorkspaceDetailClient.tsx', {
@@ -159,7 +160,7 @@ test('the row menu switches a member on or off and removes one after an inline c
 
     removal = async () => ({ success: true });
     await click(button('Remove'));
-    assert.deepEqual(removals.at(-1), { workspaceId: 'w1', userId: 'kim' });
+    assert.deepEqual({ ...removals.at(-1) }, { workspaceId: 'w1', userId: 'kim' });
     assert.equal(status(), 'Kim Park was removed from Acme.');
     assert.equal(row('Kim Park'), undefined);
   } finally { await React.act(async () => root.unmount()); }
