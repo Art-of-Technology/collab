@@ -48,7 +48,7 @@ test("a seat's own instructions, on the seat's page", async t => {
       for (const id of ['w', 'w-slug']) {
         const view = await readSeatPage(as, id, 'seat');
         assert.deepEqual(plain(view), { workspace: { id: 'w', slug: 'w-slug' }, canEdit,
-          seat: { id: 'seat', name: 'Dev-1', role: 'developer', project: 'Collab', owner: member, instructions: '' } }, as);
+          seat: { id: 'seat', name: 'Dev-1', role: 'developer', customRole: null, project: 'Collab', owner: member, instructions: '' } }, as);
       }
     }
     // Someone outside the workspace, a seat of another workspace and a seat that does not exist read nothing.

@@ -72,7 +72,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     const view = await page.readSeats(member, 'team');
     assert.deepEqual(view.workspace, { id: 'w', slug: 'team' });
     assert.deepEqual(view.seats.map(row => [row.id, row.role, row.project, row.isDefault]), [['dev-a', 'developer', 'Alpha', true], ['rev-a', 'reviewer', 'Alpha', true]]);
-    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'owner', 'ownerId', 'project', 'role', 'room', 'runner', 'tokenExpired', 'waiting', 'working']);
+    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['customRole', 'id', 'isDefault', 'name', 'noRunner', 'owner', 'ownerId', 'project', 'role', 'room', 'runner', 'tokenExpired', 'waiting', 'working']);
     // Who pays for the seat: the owner's own sign-in, or nobody's when the seat has no owner.
     assert.deepEqual(view.seats.map(row => row.owner), [null, null]);
     // The projects that use seats, each with its owner's switch and the roles this person has a seat of there.
