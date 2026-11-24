@@ -114,12 +114,12 @@ test('workspace REST requires subject ID before reads/writes in all methods', as
 
 test('workspace REST update rejects revoked admins and preserves active-admin/owner rules', async () => {
   const { rest, calls } = fixture({ id: 'alice', email: 'bob@example.test' });
-  for (const id of ['revoked', 'foreign']) {
+  for (const id of ['revoked', 'foreign', 'active']) {
     const response = await rest.PATCH(request('PATCH', id), params(id));
     assert.equal(response.status, 403);
     assert.equal(calls.writes.length, 0);
   }
-  for (const id of ['own', 'active']) {
+  for (const id of ['own']) {
     assert.equal((await rest.PATCH(request('PATCH', id), params(id))).status, 200);
     assert.equal(calls.writes.at(-1).where.id, id);
   }

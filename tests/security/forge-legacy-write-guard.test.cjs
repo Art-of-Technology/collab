@@ -65,7 +65,7 @@ function fixture() {
     workspace: { findFirst: async ({ where }) => ['workspace', 'other'].map(id => ({ id, slug: id, name: id, ownerId: 'actor', members: [] })).find(row => matches(row, where)) || null, findUnique: async ({ where }) => ({ id: where.id, ownerId: 'actor' }), delete: mutate },
     project: { findFirst: async ({ where }) => projects.find(row => matches(row, where)) || null },
     issueDeletionAudit: { create: mutate }, issueActivity: { create: mutate },
-    user: { findUnique: async () => ({ id: 'actor' }) },
+    user: { findUnique: async () => ({ id: 'actor', workspaceMemberships: [] }) },
     $transaction: async operation => { writes++; return typeof operation === 'function' ? operation(prisma) : Promise.all(operation); },
   };
   const guard = load('src/lib/forge/legacy-write-guard.ts', {
@@ -83,7 +83,7 @@ function fixture() {
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/issue-finder': { findIssueByIdOrKey: async id => issues.find(issue => issue.id === id), issueReadAccessWhere: () => ({}), userHasWorkspaceAccess: async () => true },
     '@/utils/mentions': { extractMentionUserIds: () => [] },
-    '@/lib/post-access': {}, '@/lib/workspace-authority': {},
+    '@/lib/post-access': {}, '@/lib/workspace-authority': load('src/lib/workspace-authority.ts', { './prisma': { prisma } }),
     '@/lib/notification-service': {}, 'next/cache': { revalidatePath() {} },
     'server-only': {},
     '@/lib/permissions': { Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' }, checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }), canActOnOwnContent: () => true },

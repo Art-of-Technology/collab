@@ -137,7 +137,7 @@ test('invitation endpoint preserves access checks and pending links for rejected
       '@/lib/permissions': { Permission: { INVITE_MEMBERS: 'invite' }, checkUserPermission: async () => ({ hasPermission: permitted }) },
       '@/lib/prisma': { prisma: {
         workspace: { findUnique: async () => ({ name: 'Workspace' }) },
-        user: { findFirst: async () => null },
+        user: { findFirst: async () => null, findUnique: async () => null },
         workspaceInvitation: { findFirst: async () => null, create: async ({ data }) => { writes.push(data); return { id: 'invitation', ...data }; } },
       } },
     }, { console: { error() {} } });
