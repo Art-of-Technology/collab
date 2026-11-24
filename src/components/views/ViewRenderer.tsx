@@ -291,7 +291,7 @@ export default function ViewRenderer({
   const shouldFetchLiveData = useLiveData || includeAgentRequests || initialIncludesRequests !== includeAgentRequests;
 
   const listedProjectIds = projectIds.length > 0 ? projectIds : view.projects.map(p => p.id);
-  const { data: liveIssuesData } = useIssuesByWorkspace(
+  const { data: liveIssuesData, isLoading: isLoadingLiveIssues } = useIssuesByWorkspace(
     shouldFetchLiveData ? workspace.id : '',
     shouldFetchLiveData ? listedProjectIds : undefined,
     { requests: includeAgentRequests }
@@ -330,6 +330,9 @@ export default function ViewRenderer({
     [...baseIssues, ...additional].forEach(issue => issueMap.set(issue.id, issue));
     return withDescriptions(Array.from(issueMap.values()), descriptionsData?.descriptions);
   }, [initialIssues, liveIssuesData, additionalIssuesData, descriptionsData, useLiveData, includeAgentRequests, initialIncludesRequests]);
+  // A view without saved filters gets no rows from its page: they arrive with the list call.
+  // Other list calls (such as switching requests) keep the board mounted, with the rows it holds.
+  const isLoadingIssues = useLiveData && isLoadingLiveIssues && allIssues.length === 0;
 
   // ─── 3-Layer Filter Pipeline ───────────────────────────
   // Layer 1: Action filters (async)
@@ -720,6 +723,14 @@ export default function ViewRenderer({
       onIssueUpdate: handleIssueUpdate,
       onColumnUpdate: handleColumnUpdate,
     };
+
+    if (isLoadingIssues) {
+      return (
+        <div role="status" aria-label="Loading issues" className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      );
+    }
 
     switch (layout) {
       case 'KANBAN':
