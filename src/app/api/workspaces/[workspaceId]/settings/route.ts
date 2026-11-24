@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isValidWorkspaceSlug } from '@/lib/url-utils';
 import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { z } from 'zod';
 
@@ -86,6 +87,9 @@ export async function PATCH(
     const { slug } = validatedData;
     if (slug) {
       const existing = await prisma.workspace.findUnique({ where: { slug }, select: { id: true } });
+      if (existing?.id !== workspaceId && !isValidWorkspaceSlug(slug)) {
+        return NextResponse.json({ error: 'Invalid workspace settings' }, { status: 400 });
+      }
       if (existing?.id !== workspaceId && slug === 'docs') {
         return NextResponse.json({ error: 'This slug is reserved for the documentation' }, { status: 400 });
       }

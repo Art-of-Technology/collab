@@ -173,6 +173,28 @@ test('all six workspace settings are writable from Owner on every path, and refu
   }
 });
 
+test('settings writers reject invalid patches atomically and accept nullable fields with an unchanged slug', async () => {
+  for (const path of ['rename', 'settings', 'updateAction']) {
+    const patch = {};
+    const f = fixture(patch);
+    const before = f.snapshot();
+    for (const invalid of [
+      { name: '' }, { name: 42 }, { description: false }, { logoUrl: {} },
+      ...['sales/eu', 'sales%2Feu', '..', 'sales?eu', 'sales#eu'].map(slug => ({ slug })),
+    ]) {
+      Object.assign(patch, settings, invalid);
+      const answer = await f.paths[path]('own1');
+      assert.equal(answer.ok, false, path);
+      if (path !== 'updateAction') assert.equal(answer.status, 400, path);
+      assert.equal(f.snapshot(), before, path);
+    }
+    Object.assign(patch, settings, { slug: 'w', description: null, logoUrl: null });
+    Object.assign(f.workspace(), { description: 'Old', logoUrl: '/old.png' });
+    assert.equal((await f.paths[path]('own1')).ok, true, path);
+    for (const [key, value] of Object.entries(patch)) assert.equal(f.workspace()[key], value, path);
+  }
+});
+
 test('settings PATCH returns 404 for a missing workspace', async () => {
   const f = fixture();
   f.db.workspaces.length = 0;

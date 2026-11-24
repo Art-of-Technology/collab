@@ -10,6 +10,7 @@ import { getCurrentUser } from '@/lib/session';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { generateWorkspaceSlug } from '@/lib/utils';
+import { isValidWorkspaceSlug } from '@/lib/url-utils';
 import { getWorkspaceAuthority, levelOfRole, may, mayActOn } from '@/lib/workspace-authority';
 
 async function resolveWorkspaceReadId(slugOrId: string) {
@@ -296,8 +297,6 @@ export async function updateWorkspace(workspaceId: string, data: {
     throw new Error('Unauthorized');
   }
   
-  const { name, description, slug, logoUrl, dockEnabled, timeTrackingEnabled } = data;
-  
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
@@ -324,7 +323,14 @@ export async function updateWorkspace(workspaceId: string, data: {
     throw new Error('Only Owners can change the workspace settings');
   }
   
-  if ((slug !== undefined && (typeof slug !== 'string' || !slug)) ||
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Invalid workspace settings');
+  }
+  const { name, description, slug, logoUrl, dockEnabled, timeTrackingEnabled } = data;
+  if ((name !== undefined && (typeof name !== 'string' || !name)) ||
+      (description != null && typeof description !== 'string') ||
+      (logoUrl != null && typeof logoUrl !== 'string') ||
+      (slug !== undefined && (typeof slug !== 'string' || !slug)) ||
       (dockEnabled !== undefined && typeof dockEnabled !== 'boolean') ||
       (timeTrackingEnabled !== undefined && typeof timeTrackingEnabled !== 'boolean')) {
     throw new Error('Invalid workspace settings');
@@ -332,6 +338,7 @@ export async function updateWorkspace(workspaceId: string, data: {
 
   // If slug is changing, check that the new slug is available
   if (slug && slug !== workspace.slug) {
+    if (!isValidWorkspaceSlug(slug)) throw new Error('Invalid workspace settings');
     // /docs and everything under it is the public documentation, so a workspace there could not be opened.
     if (slug === 'docs') throw new Error('This slug is reserved for the documentation');
     const existingWorkspace = await prisma.workspace.findFirst({
@@ -354,7 +361,7 @@ export async function updateWorkspace(workspaceId: string, data: {
       id: workspaceId
     },
     data: {
-      name: name || undefined,
+      name,
       description,
       slug,
       logoUrl,

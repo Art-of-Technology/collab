@@ -4,6 +4,7 @@ import { assertLegacyWorkspaceDeleteAllowed, ForgeProjectWriteError } from '@/li
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
+import { isValidWorkspaceSlug } from '@/lib/url-utils';
 import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 // GET /api/workspaces/[workspaceId] - Get workspace details
@@ -150,13 +151,22 @@ export async function PATCH(
       );
     }
 
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Invalid workspace settings' }, { status: 400 });
+    }
     const { name, description, logoUrl, slug, dockEnabled, timeTrackingEnabled } = body;
-    if ((slug !== undefined && (typeof slug !== 'string' || !slug)) ||
+    if ((name !== undefined && (typeof name !== 'string' || !name)) ||
+        (description != null && typeof description !== 'string') ||
+        (logoUrl != null && typeof logoUrl !== 'string') ||
+        (slug !== undefined && (typeof slug !== 'string' || !slug)) ||
         (dockEnabled !== undefined && typeof dockEnabled !== 'boolean') ||
         (timeTrackingEnabled !== undefined && typeof timeTrackingEnabled !== 'boolean')) {
       return NextResponse.json({ error: 'Invalid workspace settings' }, { status: 400 });
     }
     if (slug && slug !== workspace.slug) {
+      if (!isValidWorkspaceSlug(slug)) {
+        return NextResponse.json({ error: 'Invalid workspace settings' }, { status: 400 });
+      }
       if (slug === 'docs') {
         return NextResponse.json({ error: 'This slug is reserved for the documentation' }, { status: 400 });
       }
@@ -172,7 +182,7 @@ export async function PATCH(
         slug,
         dockEnabled,
         timeTrackingEnabled,
-        name: name || undefined,
+        name,
         description,
         logoUrl,
       }
