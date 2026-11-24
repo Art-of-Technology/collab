@@ -117,7 +117,7 @@ async function withView(run, viewOverrides = {}, { serve, search } = {}) {
     '@/lib/featureFlags': {},
     '@/components/issue': {},
     '@/hooks/useActionFilteredIssues': load('src/hooks/useActionFilteredIssues.ts', deps),
-    '@/hooks/useViewFilterState': load('src/hooks/useViewFilterState.ts', { ...deps, 'next/navigation': navigation }, { URLSearchParams }),
+    '@/hooks/useViewFilterState': load('src/hooks/useViewFilterState.ts', { ...deps, 'next/navigation': navigation }, { URLSearchParams, window }),
     './shared/ViewTopBar': { default: ViewTopBar },
     './agent-request-display': load('src/components/views/agent-request-display.ts'),
     './renderers/KanbanViewRenderer': { default: BoardRows },
