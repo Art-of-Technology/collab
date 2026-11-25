@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { createAgentToken } from '@/lib/agent-tokens';
 import { markNoRoom, saysNoRoom } from '@/lib/agent-seats';
-import { getWorkspaceAuthority, levelOfRole, may, mayActOn, type WorkspaceAuthority, type WorkspaceLevel } from '@/lib/workspace-authority';
+import { accessOnPeople, getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -49,31 +49,12 @@ export async function startPairing(name: string) {
   });
 }
 
-/** Someone else's runner: an actor holding `runners.manage` acts on it when its person is strictly below them; no level counts as below everyone. */
-function runnerAccess(actor: Pick<WorkspaceAuthority, 'userId' | 'level'>, person: Pick<WorkspaceAuthority, 'userId' | 'level'>) {
-  if (!may(actor, 'runners.manage')) return 'denied';
-  if (!person.level) return 'inactive';
-  return mayActOn(actor, person, { holdsChangeRoles: false }) ? 'below' : 'denied';
-}
-
 /**
- * The actor's verdict on each of these people's runners. The actor's level and theirs come from ONE snapshot, so a
- * verdict is always one that was true at some instant, and are read the way `getWorkspaceAuthority` reads one person:
- * the workspace's owner is the primary owner, an active membership gives its role's level. Read outside any transaction:
- * it takes a connection of its own. With no workspace nobody acts on anyone.
+ * The actor's verdict on each of these people's runners: an actor holding `runners.manage` acts on a person strictly
+ * below them, and no level counts as below everyone. Both levels come from one snapshot (`accessOnPeople`).
  */
 async function runnerAccessFor(actorId: string, workspaceId: string, personIds: string[]) {
-  const [workspace, members] = await prisma.$transaction([
-    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
-    prisma.workspaceMember.findMany({ where: { workspaceId, status: true, userId: { in: [actorId, ...personIds] } }, select: { userId: true, role: true } }),
-  ], { isolationLevel: 'RepeatableRead' });
-  const rolesByUserId = new Map(members.map(member => [member.userId, member.role]));
-  const levelOf = (userId: string): WorkspaceLevel | null => {
-    const role = rolesByUserId.get(userId);
-    return userId === workspace?.ownerId ? 'PRIMARY_OWNER' : role === undefined ? null : levelOfRole(role);
-  };
-  const actor = { userId: actorId, level: levelOf(actorId) };
-  return (personId: string) => workspace ? runnerAccess(actor, { userId: personId, level: levelOf(personId) }) : 'denied';
+  return (await accessOnPeople(actorId, workspaceId, personIds, 'runners.manage')).access;
 }
 
 /** Whether the actor may act on `personId`'s runner. */

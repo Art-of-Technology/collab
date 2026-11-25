@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { encryptToken } from '@/lib/apps/crypto';
 import { prisma } from '@/lib/prisma';
+import { seatOwnerAccess } from '@/lib/workspace-authority';
 
 // Agent tokens belong to their own system app (scripts/setup-agent-apps.mjs), so a workspace's
 // agent tokens are exactly that app's tokens there, and those tokens' users are its service accounts.
@@ -107,12 +108,18 @@ export async function listAgentTokens(workspaceId: string) {
  */
 export async function createAgentToken<S = undefined>(input: {
   workspaceId: string; actorId: string; name: string; access: AgentTokenAccess; expiresInDays: number;
-  /** Makes the account a seat in the minting transaction (src/lib/agent-seats.ts); when it throws, nothing is minted. `agents` reads the accounts a name is looked up in here, as they are when it is called. */
-  seat?: (tx: Prisma.TransactionClient, account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>) => Promise<S>;
+  /**
+   * Makes the account a seat in the minting transaction (src/lib/agent-seats.ts); when it throws, nothing is minted. `agents` reads the accounts a name is looked up in here, as they are when it is called.
+   * `owners` is the rank rule's verdict on a seat's person, decided before the transaction (CLB-1185): the seat decides whose seat it acts on.
+   */
+  seat?: (tx: Prisma.TransactionClient, account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>,
+    owners: (ownerId: string | null) => 'pass' | 'refused' | 'unread') => Promise<S>;
   /** False makes the account (and its seat) without a token: a runner fetches the first one. */
   mint?: boolean;
   /** The runner this token is fetched by (src/lib/agent-runners.ts). */
   runnerId?: string;
+  /** With `seat`: the person a seat made here belongs to, decided on with the account's live seat's. */
+  seatOwnerId?: string | null;
 }) {
   const app = await agentApp();
   if (app?.status !== 'PUBLISHED') return { error: 'unavailable' as const };
@@ -126,13 +133,24 @@ export async function createAgentToken<S = undefined>(input: {
   const accessToken = input.mint === false ? '' : Buffer.from(await encryptToken(token)).toString('base64');
   const expiresAt = new Date(Date.now() + input.expiresInDays * 86_400_000);
   const wanted = input.name.trim();
+  // Someone else's seat needs the rank rule (CLB-1185): the person of the account's live seat, and of a seat made here,
+  // are decided on before the transaction. A runner fetches only its own person's seats, which its `seat` checks.
+  const named = input.runnerId ? undefined : (await serviceAccounts(prisma, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase());
+  const held = named && await prisma.agentSeat.findUnique({ where: { userId: named.id }, select: { ownerId: true, retiredAt: true } });
+  const owners = input.runnerId ? () => 'pass' as const : await seatOwnerAccess(input.actorId, input.workspaceId, [held && !held.retiredAt ? held.ownerId : null, input.seatOwnerId]);
 
   const created = await prisma.$transaction(async tx => {
     // One mint at a time per name and workspace, so two cannot both find no account and create it twice.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-token:${input.workspaceId}:${wanted.toLowerCase()}`}))`;
     // Only accounts this app already owns here are reused: a person who shares the name never is.
-    const account = (await serviceAccounts(tx, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase())
-      ?? await tx.user.create({ data: { name: wanted }, select: { id: true, name: true } });
+    const found = (await serviceAccounts(tx, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase());
+    // A plain token: the account's live seat as it is now (its owner changes only under this lock); a person not decided on
+    // above reads as not found. Before anything is written, so a refusal leaves no account behind. A seat decides in `seat`.
+    const seatNow = found && !input.seat && await tx.agentSeat.findUnique({ where: { userId: found.id }, select: { ownerId: true, retiredAt: true } });
+    const verdict = owners(seatNow && !seatNow.retiredAt ? seatNow.ownerId : null);
+    if (verdict === 'unread') return { error: 'not_found' as const };
+    if (verdict === 'refused') return { error: 'outranked' as const };
+    const account = found ?? await tx.user.create({ data: { name: wanted }, select: { id: true, name: true } });
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${account.id} FOR UPDATE`;
     // The token of a seat a runner runs goes to that runner only: nobody makes one by hand, under its name or as a seat.
     if (input.mint !== false && !input.runnerId && await tx.agentSeat.count({ where: { userId: account.id, byRunner: true, retiredAt: null } })) return { error: 'runner_seat' as const };
@@ -158,7 +176,7 @@ export async function createAgentToken<S = undefined>(input: {
       update: membership?.status ? {} : { status: true, role: 'MEMBER' },
       create: { userId: account.id, workspaceId: input.workspaceId, role: 'MEMBER' },
     });
-    const seat = await input.seat?.(tx, account, () => serviceAccounts(tx, app.id, input.workspaceId));
+    const seat = await input.seat?.(tx, account, () => serviceAccounts(tx, app.id, input.workspaceId), owners);
     if (input.mint === false) return { id: null, name: account.name ?? wanted, seat };
     const row = await tx.appToken.create({
       data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenHash: createHash('sha256').update(token).digest('hex'), tokenExpiresAt: expiresAt, scopes,
@@ -178,15 +196,34 @@ export async function createAgentToken<S = undefined>(input: {
   return { id: created.id, name: created.name, seat: created.seat as S, scopes, expiresAt, ...(created.id && { token }) };
 }
 
-/** Revoke one agent token of this workspace. False when it is absent or already revoked. */
+/**
+ * The rank rule for a token's account when it is someone else's live seat (CLB-1185), decided before the transaction
+ * on the seat's person as read now. Called again inside it, under the account's lock, it tells whether the seat's
+ * person is still one decided on: `unread` reads as not found.
+ */
+async function tokenSeatOwners(actorId: string, workspaceId: string, where: Prisma.AppTokenWhereInput) {
+  const userId = (await prisma.appToken.findFirst({ where, select: { userId: true } }))?.userId;
+  const seat = userId ? await prisma.agentSeat.findUnique({ where: { userId }, select: { ownerId: true, retiredAt: true } }) : null;
+  const owners = await seatOwnerAccess(actorId, workspaceId, [seat && !seat.retiredAt ? seat.ownerId : null]);
+  return async (tx: Prisma.TransactionClient, userId: string) => {
+    const now = await tx.agentSeat.findUnique({ where: { userId }, select: { ownerId: true, retiredAt: true } });
+    return owners(now && !now.retiredAt ? now.ownerId : null);
+  };
+}
+
+/** Revoke one agent token of this workspace. False when it is absent or already revoked; `outranked` when it is the token of a seat of someone at or above the actor. */
 export async function revokeAgentToken(input: { workspaceId: string; actorId: string; tokenId: string }) {
   const app = await agentApp();
   if (!app) return false;
   const scope = { appId: app.id, workspaceId: input.workspaceId };
+  const owners = await tokenSeatOwners(input.actorId, input.workspaceId, { id: input.tokenId, ...scope, isRevoked: false });
   return prisma.$transaction(async tx => {
     const token = await tx.appToken.findFirst({ where: { id: input.tokenId, ...scope, isRevoked: false }, select: { id: true, userId: true } });
     if (!token) return false;
     if (token.userId) await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${token.userId} FOR UPDATE`;
+    const verdict = token.userId ? await owners(tx, token.userId) : 'pass';
+    if (verdict === 'unread') return false;
+    if (verdict === 'refused') return 'outranked' as const;
     const updated = await tx.appToken.updateMany({ where: { id: token.id, ...scope, isRevoked: false }, data: { isRevoked: true, revokedAt: new Date() } });
     if (!updated.count) return false;
     let name: string | null = null;
@@ -223,6 +260,7 @@ export async function setAgentWorkspaceAccess(input: {
   const app = await agentApp();
   if (!app || input.targetWorkspaceId === input.workspaceId) return false;
   const where = { id: input.tokenId, appId: app.id, workspaceId: input.workspaceId, isRevoked: false };
+  const owners = await tokenSeatOwners(input.actorId, input.workspaceId, where);
   return prisma.$transaction(async tx => {
     const userId = (await tx.appToken.findFirst({ where, select: { userId: true } }))?.userId;
     if (!userId || !await tx.workspace.findUnique({ where: { id: input.targetWorkspaceId }, select: { id: true } })) return false;
@@ -230,6 +268,9 @@ export async function setAgentWorkspaceAccess(input: {
     // everywhere must not be followed by this switching it back on.
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
     if (!await tx.appToken.count({ where })) return false;
+    const verdict = await owners(tx, userId);
+    if (verdict === 'unread') return false;
+    if (verdict === 'refused') return 'outranked' as const;
     const key = { userId, workspaceId: input.targetWorkspaceId };
     await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${userId} AND "workspaceId" = ${input.targetWorkspaceId} FOR UPDATE`;
     const active = !!(await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } }))?.status;

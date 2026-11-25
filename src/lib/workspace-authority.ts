@@ -22,7 +22,8 @@ export type WorkspaceAction =
   | "content.manage"
   | "spend.view"
   | "integrations.manage"
-  | "runners.manage";
+  | "runners.manage"
+  | "seats.manage";
 
 export interface WorkspaceAuthority {
   userId: string;
@@ -53,6 +54,8 @@ const MINIMUM: Record<WorkspaceAction, WorkspaceLevel> = {
   // Someone else's git connection, and someone else's runner.
   "integrations.manage": "OWNER",
   "runners.manage": "OWNER",
+  // Someone else's agent seat, besides MANAGE_AGENTS (CLB-1185).
+  "seats.manage": "ADMIN",
 };
 
 /** The level a stored role gives an active member. Built-in names match in any letter case. */
@@ -121,4 +124,55 @@ export function rolesMayGrant(actor: Ranked, roleNames: string[], { holdsChangeR
   if (mine === null) return [];
   if (mine === RANK.STANDARD) return holdsChangeRoles ? roleNames.filter((name) => levelOfRole(name) === "STANDARD") : [];
   return roleNames.filter((name) => RANK[levelOfRole(name)] < mine);
+}
+
+/** The actor's verdict on what belongs to another person: acts on it (`below`), the person has no level any more (`inactive`), or neither. */
+export type PersonAccess = "below" | "inactive" | "denied";
+
+/**
+ * The actor's verdict on what belongs to each of these people (a runner, a seat): an actor allowed `action` acts on a
+ * person strictly below them; a person with no level counts as below everyone, which each caller decides on. The
+ * actor's level and theirs come from ONE snapshot, so a verdict is always one that was true at some instant, and are
+ * read the way `getWorkspaceAuthority` reads one person: the workspace's owner is the primary owner, an active
+ * membership gives its role's level. `platformAdmin` is the actor's, from the same snapshot; whether it counts stays with
+ * each caller. Read outside any transaction: it takes a connection of its own. With no workspace nobody acts on anyone.
+ */
+export async function accessOnPeople(actorId: string, workspaceId: string, personIds: string[], action: WorkspaceAction) {
+  const [workspace, members, platformAdmins] = await prisma.$transaction([
+    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
+    prisma.workspaceMember.findMany({ where: { workspaceId, status: true, userId: { in: [actorId, ...personIds] } }, select: { userId: true, role: true } }),
+    prisma.user.count({ where: { id: actorId, role: "SYSTEM_ADMIN" } }),
+  ], { isolationLevel: "RepeatableRead" });
+  const rolesByUserId = new Map(members.map((member) => [member.userId, member.role]));
+  const levelOf = (userId: string): WorkspaceLevel | null => {
+    const role = rolesByUserId.get(userId);
+    return userId === workspace?.ownerId ? "PRIMARY_OWNER" : role === undefined ? null : levelOfRole(role);
+  };
+  const actor = { userId: actorId, level: levelOf(actorId) };
+  const access = (personId: string): PersonAccess => {
+    if (!workspace || !may(actor, action)) return "denied";
+    const person = { userId: personId, level: levelOf(personId) };
+    if (!person.level) return "inactive";
+    return mayActOn(actor, person, { holdsChangeRoles: false }) ? "below" : "denied";
+  };
+  return { access, platformAdmin: platformAdmins > 0 };
+}
+
+/** What a refused act on someone else's seat answers. */
+export const SEAT_RANK_REFUSAL = "A seat of someone at or above your own level is managed by someone above them";
+
+/**
+ * Who acts on the seats of these people besides holding MANAGE_AGENTS (CLB-1185): anyone on their own seats and on
+ * seats with no owner, as before; on someone else's, a platform admin, or an actor at the Admin level or above when
+ * the person is strictly below them or has no level any more. Decided before any transaction; a seat whose person is
+ * not one decided on here is `unread`, which the caller treats as not found.
+ */
+export async function seatOwnerAccess(actorId: string, workspaceId: string, ownerIds: (string | null | undefined)[]) {
+  const others = [...new Set(ownerIds.filter((id): id is string => !!id && id !== actorId))];
+  const read = others.length ? await accessOnPeople(actorId, workspaceId, others, "seats.manage") : null;
+  return (ownerId: string | null): "pass" | "refused" | "unread" => {
+    if (!ownerId || ownerId === actorId) return "pass";
+    if (!read || !others.includes(ownerId)) return "unread";
+    return read.platformAdmin || read.access(ownerId) !== "denied" ? "pass" : "refused";
+  };
 }

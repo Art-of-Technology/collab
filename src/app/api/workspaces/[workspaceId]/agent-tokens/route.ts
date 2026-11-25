@@ -4,6 +4,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { Permission, checkUserPermission } from '@/lib/permissions';
 import { createAgentToken } from '@/lib/agent-tokens';
+import { SEAT_RANK_REFUSAL } from '@/lib/workspace-authority';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (result.error) {
     const [status, error] = ({
       not_found: [404, 'Workspace not found'],
+      outranked: [403, SEAT_RANK_REFUSAL],
       paused: [409, 'This agent was switched off or removed and still has usable tokens. Revoke them, or switch its member back on, before creating another token.'],
       unavailable: [503, 'Agent tokens are not set up on this deployment'],
       runner_seat: [409, 'This seat is run by a runner, which fetches its tokens itself. No token is made for it by hand.'],
