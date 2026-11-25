@@ -101,7 +101,6 @@ function fixture() {
   const params = value => ({ params: Promise.resolve(value) });
   const status = expected => reply => reply.status === expected ? 'passed' : reply.status === 403 ? 'refused' : `status ${reply.status}`;
   const flag = value => value === true ? 'passed' : value === false ? 'refused' : `unexpected ${value}`;
-  const refusal = result => result?.error === 'forbidden' ? 'refused' : result?.error === 'not_found' ? 'passed' : `unexpected ${JSON.stringify(result)}`;
   const managerOf = tree => !tree?.props ? undefined : tree.type === 'AgentTokensManager' ? tree.props : [tree.props.children].flat().map(managerOf).find(Boolean);
   const rendered = async workspaceId => {
     try { return managerOf(await page.default(params({ workspaceId }))); } catch (error) { if (error.message === 'NEXT_NOT_FOUND') return null; throw error; }
@@ -125,12 +124,14 @@ function fixture() {
     'set a project up with seats': () => setup.seatSetupState({ user: session.user, app: { slug: 'collab-cli' }, workspace: { id: 'w' } }, 'missing-project')
       .then(() => 'unexpected return', error => error.code === 'forbidden' ? 'refused' : error.code === 'project_not_found' ? 'passed' : error.code),
     'manage seats on the Agents page': async () => flag((await agentsPage.readSeats(session.user.id, 'team')).canManage),
-    'delete a custom role': () => customRoles.deleteCustomRole(session.user.id, 'w', 'r').then(refusal),
+    'delete a custom role': () => customRoles.deleteCustomRole(session.user.id, 'w', 'r')
+      .then(result => result.error === 'forbidden' ? 'refused' : result.error === 'not_found' ? 'passed' : `unexpected ${JSON.stringify(result)}`),
     'edit role instructions on the Roles page': async () => flag((await roleInstructions.readRoleInstructions(session.user.id, 'team')).canEdit),
     'save role instructions': () => roleInstructions.saveRoleInstructions(session.user.id, 'w', 'developer', 'Text')
       .then(result => result.error === 'forbidden' ? 'refused' : result.role === 'developer' && result.text === 'Text' ? 'passed' : `unexpected ${JSON.stringify(result)}`),
     "edit a seat's instructions on its page": async () => flag((await seatInstructions.readSeatPage(session.user.id, 'team', 's')).canEdit),
-    "save a seat's instructions": () => seatInstructions.saveSeatInstructions(session.user.id, 'w', 's', 'Text').then(result => result.seat === 's' ? 'passed' : refusal(result)),
+    "save a seat's instructions": () => seatInstructions.saveSeatInstructions(session.user.id, 'w', 's', 'Text')
+      .then(result => result.error === 'forbidden' ? 'refused' : result.seat === 's' && result.text === 'Text' ? 'passed' : `unexpected ${JSON.stringify(result)}`),
   };
   return { paths, writes, team, as: userId => { session = { user: { id: userId } }; } };
 }
