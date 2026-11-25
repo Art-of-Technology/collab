@@ -62,7 +62,9 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }),
     '@/lib/permissions': load('src/lib/permissions.ts', { './prisma': { prisma } }, { console }),
     '@/lib/session': { getCurrentUser: async () => session && { id: session } }, '@/lib/agent-tokens': tokens };
-  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
+  // The deployment's settings, as a finish reads them: none is set until a test sets one.
+  const env = {};
+  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date, process: { env } });
   const inboxRoute = load('src/app/api/apps/auth/seats/me/inbox/route.ts', deps, globals);
   const runs = load('src/app/api/apps/auth/runs/route.ts', deps, globals);
   const one = load('src/app/api/apps/auth/runs/[id]/route.ts', deps, globals);
@@ -248,6 +250,75 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const done = await started(devA);
     assert.equal((await finish(devA, done.run.id, { outcome: 'done', note: bare[0] }))[0], 200);
     assert.deepEqual(await facts(done.target), { pullRequest: null, headCommit: null, nextStep: null });
+  });
+
+  await t.test('declared stops: a finish that names a person may say what it asks, a decision or work for their hands', async () => {
+    const { target, run } = await started(devA);
+    const decision = { kind: 'decision', questions: [{ question: ' The migration rewrites the orders table, about four minutes with the app stopped. Run it in tonight\'s window, or split it into two releases? ',
+      options: ['window', ' split '], suggested: 'split' }] };
+    const hands = { kind: 'hands', steps: '1. Open the repository settings.\n2. Under Webhooks, add the pull request event.\n3. Save.', doneWord: 'webhook added' };
+    const [question] = decision.questions;
+    const asks = body => finish(devA, run.id, { outcome: 'blocked', askedUser: person, ...body });
+    // Only a finish that names a person asks one.
+    assert.deepEqual((await refused(finish(devA, run.id, { outcome: 'in_review', ask: decision }), 422, 'exit_state_required')).missing, ['askedUser']);
+    assert.deepEqual((await refused(finish(devA, run.id, { outcome: 'done', ask: hands }), 422, 'exit_state_required')).missing, ['askedUser']);
+    // A wrong one is refused like a wrong exit fact, and says where it is wrong.
+    const one = (changed, more = []) => ({ kind: 'decision', questions: [{ ...question, ...changed }, ...more] });
+    for (const [ask, missing] of [
+      ['Run it tonight or split it? Reply `window` or `split`.', ['ask']],
+      [{ kind: 'status', text: 'Nothing new since yesterday.' }, ['ask.kind']],
+      [{ ...decision, replyOn: 'K-1' }, ['ask']],
+      [{ kind: 'decision', questions: [] }, ['ask.questions']],
+      [one({}, Array(5).fill(question)), ['ask.questions']],
+      [one({ question: 'x'.repeat(2001) }), ['ask.questions.0.question']],
+      [one({ question: '  ' }), ['ask.questions.0.question']],
+      [one({ options: ['window'], suggested: undefined }), ['ask.questions.0.options']],
+      [one({ options: ['window', 'split', 'later', 'never', 'ask again'], suggested: undefined }), ['ask.questions.0.options']],
+      [one({ options: ['window', 'window'], suggested: undefined }), ['ask.questions.0.options']],
+      [one({ options: ['window', 'x'.repeat(41)], suggested: undefined }), ['ask.questions.0.options.1']],
+      [one({ options: ['window/split', 'later'], suggested: undefined }), ['ask.questions.0.options.0']],
+      [one({ options: ['window', 'split\nlater'], suggested: undefined }), ['ask.questions.0.options.1']],
+      [one({ suggested: 'later' }), ['ask.questions.0.suggested']],
+      [one({}, [{ question: 'And the backfill?', options: ['now'] }]), ['ask.questions.1.options']],
+      [{ kind: 'hands', steps: hands.steps }, ['ask.doneWord']],
+      [{ ...hands, steps: 'x'.repeat(4001) }, ['ask.steps']],
+      [{ ...hands, doneWord: 'done/not done' }, ['ask.doneWord']],
+    ]) assert.deepEqual((await refused(asks({ ask }), 422, 'exit_note_required')).missing, missing, JSON.stringify(ask).slice(0, 80));
+    await untouched(target, run);
+
+    // It is kept with the finish's other checked facts, trimmed, and nowhere else.
+    assert.equal((await asks({ ask: decision }))[0], 200);
+    const [entry] = await activities(target, 'AGENT_RUN_FINISHED');
+    assert.deepEqual(JSON.parse(entry.details).ask, { kind: 'decision', questions: [{ question: question.question.trim(), options: ['window', 'split'], suggested: 'split' }] });
+    assert.equal((await stored(run.id)).ask, null);
+    const second = await started(devA);
+    assert.equal((await finish(devA, second.run.id, { outcome: 'in_review', askedUser: person, ask: hands }))[0], 200);
+    assert.deepEqual(JSON.parse((await activities(second.target, 'AGENT_RUN_FINISHED'))[0].details).ask, hands);
+  });
+
+  await t.test('declared stops: one setting of the deployment refuses a finish that names a person without ask, and it is off until set', async () => {
+    const { target, run } = await started(devA);
+    const blocker = await issue(null);
+    await link(blocker, 'BLOCKS', target);
+    t.after(() => { delete env.COLLAB_STOP_ASK_REQUIRED; });
+    env.COLLAB_STOP_ASK_REQUIRED = 'true';
+    for (const outcome of ['blocked', 'in_review']) {
+      assert.deepEqual((await refused(finish(devA, run.id, { outcome, askedUser: person }), 422, 'exit_state_required')).missing, ['ask']);
+    }
+    await untouched(target, run);
+    // A stop that names no person asks nothing, and one that says what it asks is taken.
+    assert.equal((await finish(devA, run.id, { outcome: 'blocked', blockedBy: blocker.issueKey }))[0], 200);
+    const asked = await started(devA);
+    assert.equal((await finish(devA, asked.run.id, { outcome: 'blocked', askedUser: person, ask: { kind: 'hands', steps: 'Merge pull request 12 after the backup.', doneWord: 'merged' } }))[0], 200);
+
+    // Off, and with any other value, a finish without ask is accepted as before and records none.
+    for (const value of [undefined, 'false', '1']) {
+      if (value === undefined) delete env.COLLAB_STOP_ASK_REQUIRED; else env.COLLAB_STOP_ASK_REQUIRED = value;
+      const legacy = await started(devA);
+      assert.equal((await finish(devA, legacy.run.id, { outcome: 'blocked', askedUser: person }))[0], 200, String(value));
+      const details = JSON.parse((await activities(legacy.target, 'AGENT_RUN_FINISHED'))[0].details);
+      assert.deepEqual([details.askedUser, 'ask' in details], [person, false]);
+    }
   });
 
   await t.test('a valid finish ends the run, keeps note and usage, writes the timeline and moves the issue', async () => {

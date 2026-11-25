@@ -236,6 +236,8 @@ const finishSchema = z.object({
   verdict: z.enum(['passed', 'failed']).optional(), reviewed: text(200).optional(),
   // Checked in `exitFacts`, so a wrong one is refused like a missing heading, with its name.
   pullRequest: z.string().trim().optional(), headCommit: z.string().trim().optional(), nextStep: z.string().trim().optional(),
+  // Checked in `askOf`, so a wrong one is refused like a wrong fact, with the place it is wrong in.
+  ask: z.unknown(),
   // The shape a managed worker reports (`workerSchema` in src/lib/agent-handoffs.ts), so one reader serves both.
   usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: amount, reservedUSD: amount, estimatedUSD: amount, unknownUSD: amount,
     restarts: z.number().int().min(0).max(100), starts: tally, totalStarts: tally,
@@ -494,6 +496,36 @@ function exitFacts(input: Finish) {
     + `the full 40-character commit it was left at; a run that finishes ${input.outcome === 'done' ? 'in review or blocked' : input.outcome} gives nextStep, the first thing to do next, in one line`, missing);
   return { ...(input.pullRequest && { pullRequest: input.pullRequest, headCommit: input.headCommit }), ...(nextStep && { nextStep }) };
 }
+
+/** A word a person sends back as a comment: short enough for a button, and one word of a choice, not the choice itself. */
+const replyWord = text(40).regex(/^[^\r\n\u2028\u2029/]+$/);
+const askSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('decision'), questions: z.array(z.object({ question: text(2000), options: z.array(replyWord).min(2).max(4), suggested: replyWord.optional() }).strict()
+    .refine(({ options }) => new Set(options).size === options.length, { path: ['options'] })
+    .refine(({ options, suggested }) => suggested === undefined || options.includes(suggested), { path: ['suggested'] })).min(1).max(5) }).strict(),
+  z.object({ kind: z.literal('hands'), steps: text(4000), doneWord: replyWord }).strict(),
+]);
+
+/**
+ * Declared stops: what a finish that names a person asks of them, so Home shows it from fields and not out of a comment.
+ * A decision has its questions, each with the reply words to choose from; work for the person's hands has its steps and
+ * the word that says they are done. It comes only with `askedUser`. A finish that names a person without it is refused
+ * once the deployment sets `COLLAB_STOP_ASK_REQUIRED=true`: set before the seats and the CLI send `ask`, that would
+ * refuse every seat that names a person.
+ */
+function askOf(input: Finish) {
+  if (input.ask === undefined) {
+    if (input.askedUser && process.env.COLLAB_STOP_ASK_REQUIRED === 'true') throw incomplete('exit_state_required', 'A run that names a person says what it asks of them: '
+      + 'ask is a decision with its questions and their reply words, or hands with the steps and the word that says they are done', ['ask']);
+    return undefined;
+  }
+  if (!input.askedUser) throw incomplete('exit_state_required', 'ask is what a person is asked: it comes with askedUser', ['askedUser']);
+  const parsed = askSchema.safeParse(input.ask);
+  if (!parsed.success) throw incomplete('exit_note_required', 'ask is incomplete: its kind is decision, with 1 to 5 questions of at most 2,000 characters, each with 2 to 4 different options '
+    + 'and at most one of them as suggested, or hands, with steps of at most 4,000 characters and doneWord; an option and doneWord have at most 40 characters, no line break and no slash',
+  [...new Set(parsed.error.issues.map(issue => ['ask', ...issue.path].join('.')))]);
+  return parsed.data;
+}
 const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, statusId: true, agentRequestRole: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
 
 /**
@@ -515,6 +547,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
   const stray = given.filter(name => !waitsFor.includes(name));
   if (stray.length) throw new HandoffError('invalid_request', `A run that finishes ${input.outcome} does not take ${stray.join(' or ')}`);
   if (input.outcome !== 'done' && (input.verdict || input.reviewed)) throw new HandoffError('invalid_request', 'Only a security request that finishes done takes a verdict');
+  const ask = askOf(input);
   // A lead waits for the children of its issue: blocked with nothing named. Whether one of them is open is decided with the finish, below.
   const forChildren = input.outcome === 'blocked' && !given.length && run.seat?.role === 'lead';
   if (waitsFor.length && !given.length && !forChildren) throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}`, waitsFor);
@@ -583,7 +616,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
 
     // Every issue here is in one project: when it has no status for the outcome, the first issue already says so.
     const unmapped = await settle(tx, me, workspaceId, issue, input, now);
-    await entry(issue, 'AGENT_RUN_FINISHED', { runId: run.id, ...waits });
+    await entry(issue, 'AGENT_RUN_FINISHED', { runId: run.id, ...waits, ...(ask && { ask }) });
     if (security) {
       // The issue the request was filed for is read from what filing wrote, never from the request's links: a link
       // somebody added later would put a verdict on an issue nobody reviewed. A request that asked for a review of

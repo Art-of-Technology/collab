@@ -63,7 +63,7 @@ test('started work moves between runs once its seat has had no room for 30 minut
     '@/lib/apps/auth-middleware': middleware,
     '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async () => {}, emitIssueDeleted: async () => {} },
   };
-  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
+  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date, process: { env: {} } });
   deps['@/lib/agent-requests'] = load('src/lib/agent-requests.ts', deps, { Date, console });
   deps['@/lib/issue-mutation'] = load('src/lib/issue-mutation.ts', deps);
   const route = path => load(`src/app/api/apps/auth/${path}/route.ts`, deps, globals);
@@ -175,7 +175,7 @@ test('started work moves between runs once its seat has had no room for 30 minut
     const started = await startedRequest();
     const single = new PrismaClient({ datasources: { db: { url: `${db.url}&connection_limit=1&pool_timeout=1` } } });
     try {
-      const limitedRuns = load('src/lib/agent-runs.ts', { ...deps, '@/lib/prisma': { prisma: single } }, { Date });
+      const limitedRuns = load('src/lib/agent-runs.ts', { ...deps, '@/lib/prisma': { prisma: single } }, { Date, process: { env: {} } });
       const offered = await single.$transaction(tx => limitedRuns.waitsPushed('w', A, revCem, tx));
       assert.equal(offered.get(started.id)?.pullRequest, started.pullRequest);
     } finally {
