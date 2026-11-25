@@ -4,8 +4,10 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 const flat = where => Object.fromEntries(Object.entries(where || {}).flatMap(([key, value]) =>
   key.includes('_') && value && typeof value === 'object' ? Object.entries(value) : [[key, value]]));
 const W = 'cworkspace1';
+const B = 'cworkspace2';
 
-// One workspace owned by `prim`, a member at every level, switched-off members, a stranger and platform admins.
+// Workspace A owned by `prim`, a member at every level, switched-off members, a stranger and platform admins.
+// Workspace B belongs to `bob` alone: nobody from A has access to it.
 function fixture() {
   const members = [
     // The primary owner's own row says nothing useful: a standard role, switched off.
@@ -15,9 +17,9 @@ function fixture() {
     ['pas', 'DEVELOPER'], ['paa', 'ADMIN'], ['pao', 'OWNER'],
   ].map(([userId, role, status = true]) => ({ id: `m-${userId}`, workspaceId: W, userId, role, status }));
   const users = [...members.map(row => ({ id: row.userId, role: row.userId.startsWith('pa') ? 'SYSTEM_ADMIN' : 'DEVELOPER' })),
-    { id: 'out', role: 'DEVELOPER' }, { id: 'root', role: 'SYSTEM_ADMIN' }];
+    { id: 'out', role: 'DEVELOPER' }, { id: 'root', role: 'SYSTEM_ADMIN' }, { id: 'bob', role: 'DEVELOPER' }];
   const db = {
-    workspaces: [{ id: W, slug: 'w', name: 'W', ownerId: 'prim' }],
+    workspaces: [{ id: W, slug: 'alpha', name: 'Alpha Team', ownerId: 'prim' }, { id: B, slug: 'beta', name: 'Beta Team', ownerId: 'bob' }],
     members,
     // Admin holds both permissions; the standard role APPS holds them too.
     rolePermissions: ['ADMIN', 'APPS'].flatMap(role => ['MANAGE_APPS', 'MANAGE_WORKSPACE_PERMISSIONS'].map(permission => ({ workspaceId: W, role, permission }))),
@@ -25,20 +27,22 @@ function fixture() {
       { id: 'app-fresh', slug: 'fresh', name: 'Fresh', status: 'PUBLISHED', isSystemApp: false },
       { id: 'app-tool', slug: 'tool', name: 'Tool', status: 'PUBLISHED', isSystemApp: false },
     ],
-    installations: [{ id: 'inst1', appId: 'app-tool', workspaceId: W, status: 'ACTIVE', scopes: ['issues:read'] }],
-    webhooks: [{ id: 'hook1', appId: 'app-tool', installationId: 'inst1', url: 'https://hooks.example.test/one', eventTypes: ['issue.created'], isActive: true }],
+    installations: [{ id: 'inst1', appId: 'app-tool', workspaceId: W, status: 'ACTIVE', scopes: ['issues:read'] },
+      { id: 'instB', appId: 'app-tool', workspaceId: B, status: 'ACTIVE', scopes: ['issues:read'] }],
+    webhooks: [{ id: 'hook1', appId: 'app-tool', installationId: 'inst1', url: 'https://hooks.example.test/one', eventTypes: ['issue.created'], isActive: true },
+      { id: 'hookB', appId: 'app-tool', installationId: 'instB', url: 'https://hooks.example.test/beta', eventTypes: ['issue.created'], isActive: true }],
     deliveries: [],
   };
-  const state = { userId: null, audit: [], events: [] };
+  const state = { userId: null, audit: [], events: [], sent: [] };
   const find = (table, where) => db[table].find(row => matches(row, flat(where))) ?? null;
   const appView = (app, include) => app && {
     ...app, oauthClient: { clientId: 'client', redirectUris: ['https://app.example.test/callback'] }, scopes: [{ scope: 'issues:read' }], versions: [],
     installations: db.installations.filter(row => row.appId === app.id && matches(row, include?.installations?.where || {}))
-      .map(row => ({ ...row, webhooks: db.webhooks.filter(hook => hook.installationId === row.id) })),
+      .map(row => ({ ...row, workspace: db.workspaces.find(space => space.id === row.workspaceId), webhooks: db.webhooks.filter(hook => hook.installationId === row.id) })),
   };
   const hookView = hook => hook && {
     ...hook, deliveries: [], app: db.apps.find(app => app.id === hook.appId),
-    installation: { ...db.installations.find(row => row.id === hook.installationId), workspace: db.workspaces[0] },
+    installation: (row => ({ ...row, workspace: db.workspaces.find(space => space.id === row.workspaceId) }))(db.installations.find(row => row.id === hook.installationId)),
   };
   const prisma = {
     workspace: {
@@ -80,10 +84,10 @@ function fixture() {
       delete: async ({ where }) => { db.webhooks = db.webhooks.filter(row => row.id !== where.id); return {}; },
       deleteMany: async ({ where }) => { db.webhooks = db.webhooks.filter(row => !matches(row, where)); return {}; },
     },
-    appWebhookDelivery: { deleteMany: async () => ({}) },
+    appWebhookDelivery: { deleteMany: async () => ({}), findMany: async () => [] },
     $transaction: async run => run(prisma),
   };
-  const globals = { console: { log() {}, warn() {}, error() {} }, Date, URL, JSON };
+  const globals = { console: { log() {}, warn() {}, error() {} }, Date, URL, JSON, Math };
   const session = async () => state.userId && { user: { id: state.userId } };
   const record = name => async (...args) => { state.audit.push([name, ...args]); };
   const deps = {
@@ -99,6 +103,8 @@ function fixture() {
     '@/lib/event-bus': { emitAppUninstalled: async (...args) => { state.events.push(args); } },
     '@/lib/webhooks': { generateWebhookSecret: () => 'secret', isValidWebhookUrl: () => true, validateEventTypes: () => true, WEBHOOK_EVENT_TYPES: ['issue.created'] },
     '@/lib/apps/crypto': { encrypt: async value => `enc:${value}` },
+    // Nothing is sent: a test delivery is only recorded.
+    '@/lib/webhook-delivery': { processWebhookEvent: async event => { state.sent.push(event); } },
   };
   // The real authority module and the real permission check, both reading the fixture database.
   deps['@/lib/workspace-authority'] = load('src/lib/workspace-authority.ts', { './prisma': { prisma } });
@@ -109,6 +115,7 @@ function fixture() {
     uninstall: load(`${base}uninstall/route.ts`, deps, globals),
     hooks: load(`${base}webhooks/route.ts`, deps, globals),
     hook: load(`${base}webhooks/[webhookId]/route.ts`, deps, globals),
+    test: load(`${base}webhooks/test/route.ts`, deps, globals),
   };
   const actions = load('src/actions/appInstallation.ts', deps, globals);
 
@@ -133,6 +140,16 @@ function fixture() {
     getHook: call('hook', 'GET', 'tool', undefined, query, { webhookId: 'hook1' }),
     changeHook: call('hook', 'PATCH', 'tool', { isActive: false }, undefined, { webhookId: 'hook1' }),
     deleteHook: call('hook', 'DELETE', 'tool', undefined, query, { webhookId: 'hook1' }),
+    testHook: call('test', 'POST', 'tool', { workspaceId: W, eventType: 'issue.created' }),
+  };
+  // Reaching into workspace B, with A's workspace id or with B's.
+  const queryFor = id => `https://example.test/?workspaceId=${id}`;
+  const crossPaths = {
+    getHookB: id => call('hook', 'GET', 'tool', undefined, queryFor(id), { webhookId: 'hookB' }),
+    changeHookB: id => call('hook', 'PATCH', 'tool', { isActive: false, workspaceId: id }, undefined, { webhookId: 'hookB' }),
+    deleteHookB: id => call('hook', 'DELETE', 'tool', undefined, queryFor(id), { webhookId: 'hookB' }),
+    uninstallB: id => act('uninstallApp', { installationId: 'instB', workspaceId: id }),
+    testHookB: id => call('test', 'POST', 'tool', { workspaceId: id, eventType: 'issue.created' }),
   };
 
   // The Apps settings page, with its client parts replaced so the tree can be read.
@@ -156,12 +173,12 @@ function fixture() {
       return tree.some(node => node?.type === WorkspaceAppsManager) ? 'opened' : 'empty';
     } catch (error) { return error.message; }
   };
-  return { paths, appsPage, state, snapshot: () => JSON.stringify(db) };
+  return { paths, crossPaths, appsPage, state, snapshot: () => JSON.stringify(db) };
 }
 
-const routePaths = ['installRoute', 'uninstallRoute', 'listHooks', 'createHook', 'getHook', 'changeHook', 'deleteHook'];
+const routePaths = ['installRoute', 'uninstallRoute', 'listHooks', 'createHook', 'getHook', 'changeHook', 'deleteHook', 'testHook'];
 const allPaths = [...routePaths.slice(0, 2), 'installAction', 'uninstallAction', ...routePaths.slice(2)];
-const webhookPaths = ['listHooks', 'createHook', 'getHook', 'changeHook', 'deleteHook'];
+const webhookPaths = ['listHooks', 'createHook', 'getHook', 'changeHook', 'deleteHook', 'testHook'];
 const installPaths = ['installRoute', 'installAction', 'uninstallRoute', 'uninstallAction'];
 
 async function passes(path, actor) {
@@ -169,7 +186,8 @@ async function passes(path, actor) {
   const answer = await f.paths[path](actor);
   assert.equal(answer.ok, true, `${path}: ${actor} should pass ${JSON.stringify(answer)}`);
   // The uninstall event still names the workspace, also for a caller without a membership row.
-  if (path === 'uninstallRoute') assert.deepEqual([f.state.events[0]?.[1].workspaceName, f.state.events[0]?.[1].workspaceSlug], ['W', 'w'], `${path}: ${actor}`);
+  if (path === 'uninstallRoute') assert.deepEqual([f.state.events[0]?.[1].workspaceName, f.state.events[0]?.[1].workspaceSlug], ['Alpha Team', 'alpha'], `${path}: ${actor}`);
+  if (path === 'testHook') assert.equal(f.state.sent.length, 1, `${path}: ${actor} a delivery is attempted`);
 }
 
 // A refusal stores nothing. A route answers 403 with a sentence naming Owners, except the install
@@ -186,6 +204,7 @@ async function refused(path, actor) {
     assert.match(answer.error, /Owner/, why);
   }
   assert.equal(f.snapshot(), before, `${why}: stored nothing`);
+  assert.equal(f.state.sent.length, 0, `${why}: delivered nothing`);
   if (path.startsWith('install')) assert.ok(f.state.audit.some(([name]) => name === 'failed'), `${why}: the failure is still audited`);
 }
 
@@ -211,4 +230,31 @@ test('a platform admin keeps install and uninstall, member or not, and on webhoo
     await passes(path, 'pao');
     for (const actor of ['root', 'pas', 'paa']) await refused(path, actor);
   }
+});
+
+test('an Owner of one workspace reaches no webhook or installation of another', async () => {
+  const answers = {};
+  for (const actor of ['prim', 'own1']) {
+    for (const [name, path] of Object.entries(fixture().crossPaths)) {
+      for (const [label, id] of [['A', W], ['B', B]]) {
+        // The action is checked with A's id only; the test route takes no webhook, so with A's id it serves A.
+        if ((name === 'uninstallB' && label === 'B') || (name === 'testHookB' && label === 'A')) continue;
+        const f = fixture();
+        const before = f.snapshot();
+        const answer = await f.crossPaths[name](id)(actor);
+        const why = `${name} with ${label}'s id: ${actor} ${JSON.stringify(answer)}`;
+        assert.equal(answer.ok, false, why);
+        if (answer.status !== undefined) assert.ok([403, 404].includes(answer.status), why);
+        assert.equal(f.snapshot(), before, `${why}: stored nothing`);
+        assert.equal(f.state.sent.length, 0, `${why}: delivered nothing`);
+        answers[`${name}/${label}`] = answer.status ?? answer.error;
+      }
+    }
+  }
+  // What the code answers today, pinned so a broken guard shows.
+  assert.deepEqual(answers, {
+    'getHookB/A': 404, 'getHookB/B': 403, 'changeHookB/A': 403, 'changeHookB/B': 403,
+    'deleteHookB/A': 404, 'deleteHookB/B': 403, 'uninstallB/A': 'Installation not found',
+    'testHookB/B': 403,
+  });
 });
