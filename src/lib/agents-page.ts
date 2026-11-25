@@ -5,6 +5,7 @@ import { inboxOf, type InboxItem } from '@/lib/agent-runs';
 import { fetchedBy } from '@/lib/agent-runners';
 import { MEMBER_ROLES, seatRoom } from '@/lib/agent-seats';
 import { checkUserPermission, Permission } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 /**
  * True while a project of the workspace still works with handoffs: the Agents page lists "Handoffs (old)" until
@@ -15,14 +16,14 @@ export async function usesHandoffs(workspaceId: string): Promise<boolean> {
 }
 
 /**
- * What the Runners tab needs before it asks for the runners themselves: the workspace, and for its owner the people a
- * runner can be connected for. Only the owner connects a runner for someone else, so nobody else gets the list. Null when
- * the workspace is not the person's.
+ * What the Runners tab needs before it asks for the runners themselves: the workspace, and for an Owner or the primary
+ * owner the people a runner can be connected for. Only they connect a runner for someone else, so nobody else gets the
+ * list. Null when the workspace is not the person's.
  */
 export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) {
-  const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true, ownerId: true } });
+  const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true } });
   if (!workspace) return null;
-  const people = workspace.ownerId !== userId ? [] : await prisma.user.findMany({
+  const people = !may(await getWorkspaceAuthority(userId, workspace.id), 'runners.manage') ? [] : await prisma.user.findMany({
     where: { OR: [{ id: userId }, { email: { not: null }, workspaceMemberships: { some: { workspaceId: workspace.id, status: true } } }] },
     select: { id: true, name: true, email: true }, orderBy: { name: 'asc' },
   });
