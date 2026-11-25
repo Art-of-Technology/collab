@@ -166,6 +166,20 @@ test('the row menu switches a member on or off and removes one after an inline c
   } finally { await React.act(async () => root.unmount()); }
 });
 
+test('one row menu is open at a time, and Escape closes it and gives the focus back', async () => {
+  const root = await render(workspace());
+  try {
+    const robin = button('More actions for Robin Lee'), kim = button('More actions for Kim Park');
+    await click(robin);
+    await click(kim);
+    assert.equal(robin.getAttribute('aria-expanded'), 'false', 'opening another row closes the first');
+    assert.equal(kim.getAttribute('aria-expanded'), 'true');
+    await React.act(async () => button('Deactivate').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    assert.equal(kim.getAttribute('aria-expanded'), 'false');
+    assert.equal(document.activeElement, kim);
+  } finally { await React.act(async () => root.unmount()); }
+});
+
 test('agents are listed in their own group with no role and no control', async () => {
   const root = await render(workspace());
   try {

@@ -35,6 +35,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [memberMessage, setMemberMessage] = useState("");
+  const [openMemberId, setOpenMemberId] = useState<string | null>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -288,6 +289,8 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                           viewerManages={current.viewerLevel !== null && current.viewerLevel !== "STANDARD"}
                           platformAdmin={current.viewerLevel === null && canManage}
                           canSeeOtherWorkspaces={canManageMembers}
+                          open={openMemberId === member.id}
+                          onOpen={(open) => setOpenMemberId(open ? member.id : null)}
                           onChange={handleMemberChange}
                           onMessage={setMemberMessage}
                         />

@@ -34,6 +34,9 @@ interface MemberRowProps {
   /** A platform admin who is not a member keeps the switch this screen gave them before. */
   readonly platformAdmin: boolean;
   readonly canSeeOtherWorkspaces: boolean;
+  /** The screen keeps one row menu open at a time. */
+  readonly open: boolean;
+  readonly onOpen: (open: boolean) => void;
   readonly onChange: (memberId: string, patch: Partial<MemberRowMember> | null) => void;
   readonly onMessage: (message: string) => void;
 }
@@ -51,11 +54,11 @@ async function refusal(response: Response, fallback: string) {
 }
 
 export default function MemberRow({
-  member, workspaceId, routeWorkspaceId, workspaceName, rolesViewerMayGrant, viewerManages, platformAdmin, canSeeOtherWorkspaces, onChange, onMessage,
+  member, workspaceId, routeWorkspaceId, workspaceName, rolesViewerMayGrant, viewerManages, platformAdmin, canSeeOtherWorkspaces, open, onOpen, onChange, onMessage,
 }: MemberRowProps) {
-  const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const menuRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const askRef = useRef<HTMLButtonElement>(null);
   const asked = useRef(false);
@@ -123,9 +126,10 @@ export default function MemberRow({
   else role = <Badge variant="outline" className="h-5 px-2 text-xs">{roleName(member.role)}</Badge>;
 
   return (
-    <div>
-      <div data-member className="p-3 border border-collab-700 rounded flex justify-between items-center gap-2 hover:bg-collab-800 transition-colors">
-        <div className={`flex items-center gap-2.5 min-w-0 ${member.status ? "" : "opacity-50"}`}>
+    <div onKeyDown={(event) => { if (event.key === "Escape" && open) { onOpen(false); menuRef.current?.focus(); } }}>
+      {/* On a narrow screen the role and the menu move under the name instead of squeezing it. */}
+      <div data-member className="p-3 border border-collab-700 rounded flex flex-wrap justify-between items-center gap-2 hover:bg-collab-800 transition-colors">
+        <div className={`flex items-center gap-2.5 min-w-0 flex-1 basis-56 ${member.status ? "" : "opacity-50"}`}>
           {member.user.useCustomAvatar ? (
             <CustomAvatar user={member.user as never} size="lg" className="h-8 w-8 border border-collab-700" />
           ) : (
@@ -137,18 +141,18 @@ export default function MemberRow({
               {member.agent && <span className="text-xs text-collab-500 font-normal"> · agent seat</span>}
             </div>
             {member.user.email && (
-              <div className="text-xs text-collab-500 flex items-center gap-1">
-                <Mail className="h-3 w-3" />
-                {member.user.email}
+              <div className="text-xs text-collab-500 flex items-center gap-1 min-w-0">
+                <Mail className="h-3 w-3 shrink-0" />
+                <span className="truncate">{member.user.email}</span>
               </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto whitespace-nowrap">
           {role}
           {hasMenu && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`More actions for ${name}`} aria-expanded={open}
-              onClick={() => { setOpen(!open); setConfirming(false); }}>
+            <Button ref={menuRef} variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`More actions for ${name}`} aria-expanded={open}
+              onClick={() => { onOpen(!open); setConfirming(false); }}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           )}
