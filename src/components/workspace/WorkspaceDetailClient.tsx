@@ -267,7 +267,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
               <CardDescription className="text-xs">Manage the members of your workspace.</CardDescription>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              {memberMessage && <p role="status" className="mb-3 rounded border border-collab-700 bg-collab-900 px-3 py-2 text-sm">{memberMessage}</p>}
+              {memberMessage && <p role="status" className="mb-3 rounded border border-collab-700 bg-collab-900 px-3 py-2 text-sm break-words">{memberMessage}</p>}
               {current.viewerLevel === "STANDARD" && current.rolesViewerMayGrant.length === 0 && (
                 <p className="mb-3 text-sm text-collab-400">You can see who is here. Changing roles needs Admin or above.</p>
               )}

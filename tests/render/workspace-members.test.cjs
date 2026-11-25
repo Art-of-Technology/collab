@@ -213,6 +213,20 @@ test('a lost connection keeps the last confirmed role and status and leaves cont
   } finally { answer = { ok: true, json: async () => ({}) }; await React.act(async () => root.unmount()); }
 });
 
+test('a removal that is under way cannot be cancelled on the screen', async () => {
+  const root = await render(workspace());
+  let release;
+  try {
+    removal = () => new Promise(done => { release = () => done({ success: true }); });
+    await click(button('More actions for Kim Park'));
+    await click(button('Remove from workspace…'));
+    await click(button('Remove'));
+    assert.equal(button('Cancel').disabled, true, 'the question stays until the server has answered');
+    await React.act(async () => release());
+    assert.equal(row('Kim Park'), undefined);
+  } finally { removal = async () => ({ success: true }); await React.act(async () => root.unmount()); }
+});
+
 test('one row menu is open at a time, and Escape closes it and gives the focus back', async () => {
   const root = await render(workspace());
   try {

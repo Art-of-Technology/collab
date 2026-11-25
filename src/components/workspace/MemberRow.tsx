@@ -129,7 +129,7 @@ export default function MemberRow({
     role = <Badge variant="outline" title={label} className="min-w-0 h-5 px-2 text-xs text-collab-500"><span className="truncate">{label}</span></Badge>;
   } else if (editsRole) role = (
     <Select value={builtInRole(member.role) ?? member.role} onValueChange={changeRole} disabled={busy}>
-      <SelectTrigger aria-label={`Role of ${name}`} className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+      <SelectTrigger aria-label={`Role of ${name}`} title={roleName(member.role)} className="h-7 w-40 text-xs [&>span]:truncate [&>svg]:shrink-0"><SelectValue /></SelectTrigger>
       <SelectContent>
         {rolesViewerMayGrant.map((grant) => <SelectItem key={grant} value={grant}>{roleName(grant)}</SelectItem>)}
       </SelectContent>
@@ -166,7 +166,7 @@ export default function MemberRow({
         <div className="flex items-center gap-2 ml-auto whitespace-nowrap max-w-full min-w-0">
           {role}
           {hasMenu && (
-            <Button ref={menuRef} variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`More actions for ${name}`} aria-expanded={open}
+            <Button ref={menuRef} variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" aria-label={`More actions for ${name}`} aria-expanded={open}
               onClick={() => { onOpen(!open); setConfirming(false); }}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
@@ -187,7 +187,7 @@ export default function MemberRow({
             <>
               <span>Remove {name} from {workspaceName}?</span>
               <Button variant="destructive" size="sm" className="h-7 text-xs" disabled={busy} onClick={remove}>Remove</Button>
-              <Button ref={cancelRef} variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirming(false)}>Cancel</Button>
+              <Button ref={cancelRef} variant="ghost" size="sm" className="h-7 text-xs" disabled={busy} onClick={() => setConfirming(false)}>Cancel</Button>
             </>
           ) : (
             <Button ref={askRef} variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirming(true)}>Remove from workspace…</Button>
