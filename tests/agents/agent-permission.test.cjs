@@ -42,7 +42,7 @@ function fixture() {
     rolePermission: { findUnique: async ({ where: { workspaceId_role_permission: key } }) => ROWS.find(row => row.workspaceId === key.workspaceId && row.role === key.role && row.permission === key.permission) ?? null },
     workspace: lookups(workspaces),
     project: lookups([project]),
-    agentSeat: lookups([seatRow]),
+    agentSeat: { ...lookups([seatRow]), updateMany: async () => ({ count: 1 }) },
   };
   const prisma = new Proxy({}, { get: (_, model) => model === '$transaction' ? async run => run(prisma) : new Proxy({}, { get: (__, op) => async args => {
     if (/^(create|update|upsert|delete)/.test(op)) writes.push(`${String(model)}.${String(op)}`);

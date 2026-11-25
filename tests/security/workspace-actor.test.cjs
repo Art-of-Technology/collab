@@ -31,7 +31,11 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
       delete: async spec => { calls.writes.push({ operation: 'delete', ...spec }); return {}; },
     },
     workspaceMember: {
-      findFirst: async ({ where }) => { calls.reads.push(where); return spaces.flatMap(row => row.members).find(row => matches(row, where)) ?? null; },
+      findFirst: async ({ where }) => {
+        calls.reads.push(where);
+        const row = spaces.flatMap(space => space.members).find(member => matches(member, where));
+        return row ? { ...row, user: users.find(user => user.id === row.userId) } : null;
+      },
       create: async spec => { calls.writes.push({ operation: 'member-create', ...spec }); return spec.data; },
       delete: async spec => { calls.writes.push({ operation: 'member-delete', ...spec }); return {}; },
       update: async spec => { calls.writes.push({ operation: 'member-update', ...spec }); return spec.data; },

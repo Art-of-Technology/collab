@@ -479,11 +479,17 @@ export async function removeWorkspaceMember(data: {
       workspaceId,
       userId,
       status: true
-    }
+    },
+    include: { user: { select: { email: true } } }
   });
   
   if (!member) {
     throw new Error('Member not found');
+  }
+
+  // An account with no email is an agent token's service account: the Agent tokens page has its own rules for those.
+  if (!leaving && !member.user.email) {
+    throw new Error('Agents are managed on the Agent tokens page');
   }
 
   const target = { userId, level: userId === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
@@ -876,6 +882,11 @@ export async function updateWorkspaceMemberStatus(data: {
   
   if (!member) {
     throw new Error('Member not found');
+  }
+
+  // An account with no email is an agent token's service account: the Agent tokens page has its own rules for those.
+  if (!member.user.email) {
+    throw new Error('Agents are managed on the Agent tokens page');
   }
   
   // The rank rule, which also keeps the workspace owner's membership on. A platform admin keeps the

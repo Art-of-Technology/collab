@@ -185,3 +185,34 @@ test('a refused call writes nothing, and a platform admin keeps today\'s answer'
     assert.equal(await written(), unchanged, path);
   }
 });
+
+test('a seat with no owner is written only while it still has none', async () => {
+  const { prisma, seatFor, written, call, routes } = await setUp();
+  const seat = await seatFor(null);
+  const unchanged = await written();
+  const read = prisma.agentSeat.findFirst;
+  let once = false;
+  prisma.agentSeat.findFirst = async (...args) => {
+    const rows = await read.apply(prisma.agentSeat, args);
+    if (!once && (once = true)) await prisma.agentSeat.update({ where: { id: seat.id }, data: { ownerId: O2 } });
+    return rows;
+  };
+  let status;
+  try { [status] = await call(O, routes.instructions.PUT, 'PUT', { seatId: seat.id }, { text: 'x' }); } finally { prisma.agentSeat.findFirst = read; }
+  assert.equal(status, 404, 'the seat now belongs to someone and reads as not found');
+  await prisma.agentSeat.update({ where: { id: seat.id }, data: { ownerId: null } });
+  assert.equal(await written(), unchanged, 'nothing was stored');
+});
+
+test('asking again for a live seat of someone above is decided on that seat\'s person, not on the owner asked for', async () => {
+  const { prisma, seatFor, written, call, routes } = await setUp();
+  const seat = await seatFor(O2);
+  for (const ownerId of [null, A]) {
+    const before = await written();
+    const [status, body] = await call(A, routes.seats.POST, 'POST', {}, { name: seat.name, projectId: 'p', role: 'developer', ownerId });
+    assert.deepEqual([status, body.error], [403, REFUSAL], `asked for with owner ${ownerId}`);
+    assert.equal(body.token, undefined, 'no token returned');
+    assert.equal(await written(), before, `owner ${ownerId}: nothing written`);
+  }
+  assert.equal((await prisma.agentSeat.findUnique({ where: { id: seat.id } })).ownerId, O2);
+});

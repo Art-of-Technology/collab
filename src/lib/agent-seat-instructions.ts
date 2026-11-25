@@ -48,8 +48,7 @@ export async function saveSeatInstructions(userId: string, workspaceId: string, 
   let trimmed: string;
   // The only thing layerText throws is that the text is over the limit.
   try { trimmed = layerText('seat', text); } catch (error) { return { error: 'too_long' as const, message: (error as Error).message }; }
-  if (!others) await prisma.agentSeat.update({ where: { id: seat.id }, data: { instructions: trimmed || null } });
-  // Someone else's is written only while its person is still the one decided on: otherwise it reads as not found.
-  else if (!(await prisma.agentSeat.updateMany({ where: { id: seat.id, ownerId: seat.ownerId }, data: { instructions: trimmed || null } })).count) return { error: 'not_found' as const };
+  // Written only while the seat is live with the person read above: otherwise it reads as not found.
+  if (!(await prisma.agentSeat.updateMany({ where: { id: seat.id, ownerId: seat.ownerId, retiredAt: null }, data: { instructions: trimmed || null } })).count) return { error: 'not_found' as const };
   return { seat: seat.id, text: trimmed };
 }

@@ -211,18 +211,42 @@ test('an Admin whose role has no manage-members permission row gets the same ans
   }
 });
 
-test('an agent account is not given the Owner or the Admin role', async () => {
-  for (const actor of ['prim', 'pas', 'root']) {
-    const f = fixture();
-    for (const role of ['OWNER', 'ADMIN']) {
-      assert.deepEqual(await f.role(actor, 'agent', role), {
-        ok: false, status: 403, error: 'An agent account cannot be an Owner or an Admin',
-      }, `${actor} grants ${role}`);
-      assert.equal(f.row('agent').role, 'MEMBER');
+test('an agent account is managed on the Agent tokens page: no member path changes its role, switches it or removes it', async () => {
+  const agentRefusal = { ok: false, status: 409, error: 'Agents are managed on the Agent tokens page' };
+  // An Admin, an Owner, the primary owner and platform admins, member or not.
+  for (const actor of ['adm1', 'own1', 'prim', 'paa', 'pao', 'pas', 'root']) {
+    for (const role of ['OWNER', 'ADMIN', 'DEVELOPER', 'MEMBER', 'Release Captain']) {
+      const f = fixture();
+      const before = JSON.stringify(f.rows);
+      assert.deepEqual(await f.role(actor, 'agent', role), agentRefusal, `${actor} gives the agent ${role}`);
+      assert.equal(JSON.stringify(f.rows), before, `${actor}: nothing was stored`);
     }
-    assert.equal((await f.role(actor, 'agent', 'DEVELOPER')).status, 200);
-    assert.equal(f.row('agent').role, 'DEVELOPER');
   }
+  for (const actor of ['adm1', 'own1', 'prim', 'paa', 'pao']) {
+    for (const status of [false, true]) {
+      for (const path of ['patch', 'action']) {
+        const f = fixture();
+        f.row('agent').status = !status;
+        const before = JSON.stringify(f.rows);
+        const answer = await f[path](actor, 'agent', status);
+        if (path === 'patch') assert.deepEqual(answer, agentRefusal, `${actor} switches the agent ${status ? 'on' : 'off'} on ${path}`);
+        else assert.deepEqual(answer, { ok: false, error: agentRefusal.error }, `${actor} switches the agent ${status ? 'on' : 'off'} on ${path}`);
+        assert.equal(JSON.stringify(f.rows), before, `${actor} on ${path}: nothing was stored`);
+      }
+    }
+    const f = fixture();
+    const before = JSON.stringify(f.rows);
+    assert.deepEqual(await f.remove(actor, 'agent'), { ok: false, error: agentRefusal.error }, `${actor} removes the agent`);
+    assert.equal(JSON.stringify(f.rows), before, `${actor} removes: nothing was stored`);
+  }
+  // A person's account at the same level keeps today's answers.
+  const f = fixture();
+  assert.equal((await f.role('adm1', 'mem', 'DEVELOPER')).ok, true);
+  assert.equal((await f.patch('adm1', 'mem', false)).ok, true);
+  assert.equal((await f.action('adm1', 'mem', true)).ok, true);
+  assert.deepEqual([f.row('mem').role, f.row('mem').status], ['DEVELOPER', true]);
+  assert.equal((await f.remove('adm1', 'mem')).ok, true);
+  assert.equal(f.row('mem'), null);
 });
 
 test('an Admin removes a member below Admin, and anyone but the primary owner may leave', async () => {
