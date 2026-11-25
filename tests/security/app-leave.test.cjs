@@ -15,7 +15,7 @@ function fixture({ rows = ['ADMIN', 'HR'] } = {}) {
       startDate: new Date(0), endDate: new Date(1), duration: 'FULL_DAY', notes: 'Away', createdAt: new Date(0), updatedAt: new Date(0) }));
   const db = {
     appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: state.actor, scopes: ['leave:read', 'leave:write'], tokenExpiresAt: null,
-      installation: { id: 'install', appId: 'app', workspaceId: 'w', installedById: state.actor, scopes: ['leave:read', 'leave:write'], status: 'ACTIVE',
+      installation: { id: 'install', appId: 'app', workspaceId: 'w', installedById: workspace.ownerId, scopes: ['leave:read', 'leave:write'], status: 'ACTIVE',
         workspace: { id: 'w', slug: 'w', name: 'Workspace' },
         app: { id: 'app', slug: 'app', name: 'App', status: 'PUBLISHED', scopes: [{ scope: 'leave:read' }, { scope: 'leave:write' }] } } }] },
     user: { findUnique: async ({ where, include }) => {
@@ -36,7 +36,12 @@ function fixture({ rows = ['ADMIN', 'HR'] } = {}) {
       findMany: async ({ where, skip, take }) => requests.filter(r => matches(r, where)).slice(skip, skip + take),
       count: async ({ where }) => requests.filter(r => matches(r, where)).length,
       findFirst: async ({ where }) => requests.find(r => matches(r, where)) ?? null,
-      update: async ({ where, data }) => { state.writes.push({ id: where.id, data: { ...data } }); return { ...requests.find(r => r.id === where.id), ...data }; },
+      update: async ({ where, data }) => {
+        const request = requests.find(r => r.id === where.id);
+        Object.assign(request, data);
+        state.writes.push({ id: where.id, data: { ...data } });
+        return request;
+      },
     },
   };
   const deps = { '@/lib/prisma': { prisma: db }, 'next/server': { NextResponse: Response }, zod: require('zod'),
@@ -82,6 +87,7 @@ test("a token of someone who holds MANAGE_LEAVE lists, reads, approves and rejec
     // The other checks keep their order and answers.
     const canceled = await call.patch(actor, 'r-canceled', { status: 'APPROVED' });
     assert.equal(canceled.status, 400); assert.equal(canceled.body.error, 'invalid_status_change');
+    assert.equal((await call.read(actor, 'r-member')).body.status, 'APPROVED');
     const notes = await call.patch(actor, 'r-member', { notes: 'Not mine' });
     assert.equal(notes.status, 403); assert.equal(notes.body.error, 'insufficient_permissions');
     assert.equal(state.writes.length, 2);

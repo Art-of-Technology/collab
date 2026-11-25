@@ -135,7 +135,7 @@ test('a post of someone else is updated and deleted by a token of an Admin and a
       isPinned: false, author: { id: 'author', name: 'Author', image: null }, _count: { comments: 0, reactions: 0, bookmarks: 0 } }];
     const db = {
       appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: state.actor, scopes: ['posts:read', 'posts:write'], tokenExpiresAt: null,
-        installation: { id: 'install', appId: 'app', workspaceId: 'w', installedById: state.actor, scopes: ['posts:read', 'posts:write'], status: 'ACTIVE',
+        installation: { id: 'install', appId: 'app', workspaceId: 'w', installedById: workspace.ownerId, scopes: ['posts:read', 'posts:write'], status: 'ACTIVE',
           workspace: { id: 'w', slug: 'w', name: 'Workspace' },
           app: { id: 'app', slug: 'app', name: 'App', status: 'PUBLISHED', scopes: [{ scope: 'posts:read' }, { scope: 'posts:write' }] } } }] },
       user: { findUnique: async ({ where, select }) => {
@@ -151,7 +151,13 @@ test('a post of someone else is updated and deleted by a token of an Admin and a
       workspaceMember: { findUnique: async ({ where }) => workspace.members.find(m => m.userId === where.userId_workspaceId.userId) ?? null },
       post: {
         findFirst: async ({ where }) => posts.find(p => matches(p, where)) ?? null,
-        update: async ({ where, data }) => { state.writes.push({ update: where.id, data: { ...data } }); return { ...posts.find(p => p.id === where.id), ...data, resolvedBy: null, pinnedByUser: null }; },
+        update: async ({ where, data }) => {
+          const post = posts.find(p => p.id === where.id);
+          Object.assign(post, data);
+          state.writes.push({ update: where.id, data: { ...data } });
+          const pinnedByUser = post.pinnedBy ? { id: post.pinnedBy, name: post.pinnedBy, image: null } : null;
+          return { ...post, resolvedBy: null, pinnedByUser };
+        },
         delete: async ({ where }) => { state.writes.push({ delete: where.id }); posts = posts.filter(p => !matches(p, where)); },
       },
       $queryRaw: async () => [], $transaction: async fn => fn(db),
@@ -183,7 +189,7 @@ test('a post of someone else is updated and deleted by a token of an Admin and a
   // A standard member, a platform admin whose membership is standard, and a switched-off Admin are refused and write nothing.
   for (const actor of ['member', 'root', 'off']) await t.test(`${actor} is refused`, async () => {
     const { state, send } = fixture();
-    for (const [method, body] of [['PATCH', { message: 'Not mine' }], ['DELETE']]) {
+    for (const [method, body] of [['PATCH', { message: 'Not mine' }], ['PATCH', { isPinned: true }], ['DELETE']]) {
       const refused = await send(actor, method, body);
       assert.equal(refused.status, 403, `${method} ${JSON.stringify(refused.body)}`);
       if (actor !== 'off') assert.equal(refused.body.error, 'insufficient_permissions');
@@ -192,12 +198,24 @@ test('a post of someone else is updated and deleted by a token of an Admin and a
   });
 
   // Pinning stays with those who may manage other people's posts; the author alone does not pin.
-  await t.test('pinning follows the same rule', async () => {
+  for (const actor of ['admin', 'owner', 'primary']) await t.test(`${actor} can pin and unpin, the author cannot`, async () => {
     const { state, send } = fixture();
-    const refused = await send('author', 'PATCH', { isPinned: true });
-    assert.equal(refused.status, 403); assert.equal(refused.body.error, 'insufficient_permissions');
+    const refusedPin = await send('author', 'PATCH', { isPinned: true });
+    assert.equal(refusedPin.status, 403); assert.equal(refusedPin.body.error, 'insufficient_permissions');
     assert.equal(state.writes.length, 0);
-    for (const actor of ['admin', 'owner', 'primary']) assert.equal((await send(actor, 'PATCH', { isPinned: true })).status, 200, actor);
-    assert.equal(state.writes.length, 3);
+
+    const pinned = await send(actor, 'PATCH', { isPinned: true });
+    assert.equal(pinned.status, 200); assert.equal(pinned.body.isPinned, true);
+    assert.ok(pinned.body.pinnedAt); assert.equal(pinned.body.pinnedBy.id, actor);
+    assert.equal(state.writes.length, 1);
+
+    const refusedUnpin = await send('author', 'PATCH', { isPinned: false });
+    assert.equal(refusedUnpin.status, 403); assert.equal(refusedUnpin.body.error, 'insufficient_permissions');
+    assert.equal(state.writes.length, 1);
+
+    const unpinned = await send(actor, 'PATCH', { isPinned: false });
+    assert.equal(unpinned.status, 200); assert.equal(unpinned.body.isPinned, false);
+    assert.equal(unpinned.body.pinnedAt, null); assert.equal(unpinned.body.pinnedBy, null);
+    assert.deepEqual(state.writes.slice(1), [{ update: 'post', data: { isPinned: false, pinnedAt: null, pinnedBy: null } }]);
   });
 });
