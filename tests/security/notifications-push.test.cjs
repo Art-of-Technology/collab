@@ -62,6 +62,7 @@ test('push delivery uses global subscriptions for direct, bulk and leave callers
   const workspaceRows = structuredClone(rows.filter(row => row.workspaceId));
   let expired = false;
   const db = {
+    $transaction: read => read(db),
     notificationPreferences: {
       findFirst: async ({ where }) => rows.find(row => matches(row, where)),
       updateMany: async ({ where, data }) => rows.filter(row => matches(row, where)).forEach(row => Object.assign(row, data)),
@@ -83,7 +84,7 @@ test('push delivery uses global subscriptions for direct, bulk and leave callers
   } } });
   const { NotificationService, NotificationType } = load('src/lib/notification-service.ts', {
     '@/lib/prisma': { prisma: db }, '@/lib/push-notifications': push,
-    '@/lib/permissions': { WorkspaceRole: { HR: 'HR' } }, 'date-fns': require('date-fns'),
+    '@/lib/permissions': load('src/lib/permission-types.ts'), 'date-fns': require('date-fns'),
     '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {},
   });
   assert.equal(await push.sendPushNotification('alice', { title: 'Title', body: 'Body' }), true);

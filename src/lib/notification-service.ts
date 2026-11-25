@@ -858,31 +858,38 @@ export class NotificationService {
    * @returns Array of user IDs, each once
    */
   static async findManagersInWorkspace(workspaceId: string): Promise<string[]> {
-    const [grants, members, workspace] = await Promise.all([
-      prisma.rolePermission.findMany({
+    return prisma.$transaction(async (tx) => {
+      const grants = await tx.rolePermission.findMany({
         where: { workspaceId, permission: "MANAGE_LEAVE" },
         select: { role: true },
-      }),
-      prisma.workspaceMember.findMany({
-        where: { workspaceId, status: true },
+      });
+      const approverRoles = new Set(grants.map((g) => g.role));
+      const members = await tx.workspaceMember.findMany({
+        where: {
+          workspaceId,
+          status: true,
+          OR: [
+            { role: { in: [...approverRoles] } },
+            { role: { equals: WorkspaceRole.OWNER, mode: "insensitive" } },
+          ],
+        },
         select: { userId: true, role: true },
-      }),
-      prisma.workspace.findUnique({
+      });
+      const workspace = await tx.workspace.findUnique({
         where: { id: workspaceId },
         select: { ownerId: true },
-      }),
-    ]);
+      });
 
-    const approverRoles = new Set(grants.map((g) => g.role));
-    const managerIds = new Set(
-      members
-        // The Owner level holds every permission, whatever the rows say.
-        .filter((m) => approverRoles.has(m.role) || levelOfRole(m.role) === "OWNER")
-        .map((m) => m.userId)
-    );
-    if (workspace?.ownerId) managerIds.add(workspace.ownerId);
+      const managerIds = new Set(
+        members
+          // The Owner level holds every permission, whatever the rows say.
+          .filter((m) => approverRoles.has(m.role) || levelOfRole(m.role) === "OWNER")
+          .map((m) => m.userId)
+      );
+      if (workspace?.ownerId) managerIds.add(workspace.ownerId);
 
-    return [...managerIds];
+      return [...managerIds];
+    }, { isolationLevel: "RepeatableRead" });
   }
 
   /**
