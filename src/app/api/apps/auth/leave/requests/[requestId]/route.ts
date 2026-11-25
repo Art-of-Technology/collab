@@ -14,6 +14,7 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { checkUserPermission, Permission } from '@/lib/permissions';
 
 // Schema for updating leave requests
 const UpdateLeaveRequestSchema = z.object({
@@ -66,16 +67,8 @@ export const GET = withAppAuth(
       }
 
       // Check if user can view this request
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: context.user.id,
-            workspaceId: context.workspace.id
-          }
-        }
-      });
-
-      const canView = leaveRequest.userId === context.user.id || membership?.role === 'ADMIN';
+      const canView = leaveRequest.userId === context.user.id ||
+        (await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_LEAVE)).hasPermission;
       if (!canView) {
         return NextResponse.json(
           { error: 'insufficient_permissions', error_description: 'You can only view your own leave requests' },
@@ -138,24 +131,16 @@ export const PATCH = withAppAuth(
         );
       }
 
-      // Check user permissions
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: context.user.id,
-            workspaceId: context.workspace.id
-          }
-        }
-      });
-
       const isOwner = existingRequest.userId === context.user.id;
-      const isAdmin = membership?.role === 'ADMIN';
+      // Asked at most once, and only when the answer is needed.
+      let holds: boolean | undefined;
+      const managesLeave = async () => holds ??= (await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_LEAVE)).hasPermission;
 
-      // Status changes (approve/reject) require admin role
+      // Status changes (approve/reject) require MANAGE_LEAVE
       if (updateData.status && updateData.status !== existingRequest.status) {
-        if (!isAdmin) {
+        if (!await managesLeave()) {
           return NextResponse.json(
-            { error: 'insufficient_permissions', error_description: 'Admin role required to approve/reject leave requests' },
+            { error: 'insufficient_permissions', error_description: 'Manage leave permission required to approve/reject leave requests' },
             { status: 403 }
           );
         }
@@ -181,6 +166,14 @@ export const PATCH = withAppAuth(
         return NextResponse.json(
           { error: 'invalid_update', error_description: 'Can only update notes for pending requests' },
           { status: 400 }
+        );
+      }
+
+      // Someone else's request is changed, and answered with, only for someone who may manage leave, whatever the update holds.
+      if (!isOwner && !await managesLeave()) {
+        return NextResponse.json(
+          { error: 'insufficient_permissions', error_description: 'Manage leave permission required to update other users\' leave requests' },
+          { status: 403 }
         );
       }
 

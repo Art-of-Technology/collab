@@ -25,7 +25,6 @@ import {
 import { 
   Puzzle, 
   MoreVertical, 
-  Settings, 
   Trash2, 
   ExternalLink, 
   Webhook, 
@@ -103,10 +102,6 @@ export default function WorkspaceAppsManager({
     router.push(`/${workspaceSlug}/apps/${appSlug}`);
   };
 
-  const navigateToAppSettings = (appSlug: string) => {
-    router.push(`/${workspaceSlug}/apps/${appSlug}/settings`);
-  };
-
   if (installedApps.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -129,6 +124,7 @@ export default function WorkspaceAppsManager({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {installedApps.map((installation) => {
           const { app } = installation;
+          const canOpen = app.status === 'PUBLISHED';
           const totalWebhooks = installation.webhooks.length;
           const activeWebhooks = installation.webhooks.filter(w => w.isActive).length;
           const totalDeliveries = installation.webhooks.reduce((sum, w) => sum + w._count.deliveries, 0);
@@ -166,15 +162,15 @@ export default function WorkspaceAppsManager({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => navigateToApp(app.slug)}>
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Open App
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigateToAppSettings(app.slug)}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Settings
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
+                      {canOpen && (
+                        <>
+                          <DropdownMenuItem onClick={() => navigateToApp(app.slug)}>
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Open App
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
                       <DropdownMenuItem 
                         onClick={() => setUninstallApp(installation)}
                         className="text-red-600 focus:text-red-600"
@@ -235,27 +231,19 @@ export default function WorkspaceAppsManager({
                     </div>
                   )}
 
-                  {/* Quick Actions */}
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-xs h-7"
-                      onClick={() => navigateToApp(app.slug)}
-                    >
-                      <ExternalLink className="w-3 h-3 mr-1" />
-                      Open
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 text-xs h-7"
-                      onClick={() => navigateToAppSettings(app.slug)}
-                    >
-                      <Settings className="w-3 h-3 mr-1" />
-                      Settings
-                    </Button>
-                  </div>
+                  {canOpen && (
+                    <div className="pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs h-7"
+                        onClick={() => navigateToApp(app.slug)}
+                      >
+                        <ExternalLink className="w-3 h-3 mr-1" />
+                        Open
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
