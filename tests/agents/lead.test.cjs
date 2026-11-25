@@ -422,18 +422,23 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
   await t.test('a dependency whose status the lead cannot read does not count as cleared', async () => {
     const [source, completed] = await epicOf(B, leadB, 1);
     const [dependent, waiting] = await epicOf(B, leadB, 1);
+    const [crossWorkspace, linked] = await epicOf(B, leadB, 1);
     const otherWorkspace = await raw.workspace.create({ data: { name: 'Other', slug: 'other-blocker', ownerId: owner } });
     const otherProject = await raw.project.create({ data: { workspaceId: otherWorkspace.id, name: 'Other', slug: 'other-blocker', issuePrefix: 'OB' } });
     const hidden = await issue(B, { projectId: otherProject.id, statusId: null });
+    const outside = await issue(B, { workspaceId: otherWorkspace.id, projectId: otherProject.id, statusId: null });
     await blocks(completed, waiting);
     await blocks(hidden, waiting);
+    await blocks(completed, linked);
+    await blocks(outside, linked);
     await waits(leadB, source, devB, completed);
     await waits(leadB, dependent, devB);
+    await waits(leadB, crossWorkspace, devB);
 
     await work(devB, completed, 'done');
     const offered = await inbox(leadB);
     await work(leadB, source, 'done');
-    await raw.issue.update({ where: { id: dependent.id }, data: { statusId: `${B}-done` } });
+    await raw.issue.updateMany({ where: { id: { in: [dependent.id, crossWorkspace.id] } }, data: { statusId: `${B}-done` } });
     assert.deepEqual(offered, [[source.issueKey, 'child_done']]);
   });
   await t.test('a completed blocker wakes its dependent epic with work the lead may place, once', async () => {

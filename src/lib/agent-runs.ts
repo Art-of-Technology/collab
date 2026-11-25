@@ -155,10 +155,9 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const toPlace = loose.filter(child => !placedBefore.has(child.id)).map(child => child.id);
   const readyEpics = new Set<string>();
   if (seat && toPlace.length) {
-    const readAccess = issueReadAccessWhere(me);
-    const blockerScope = { workspaceId, ...readAccess };
-    // A blocker in this workspace can only count as resolved if the lead can read it.
-    const hiddenBlocker = { workspaceId, NOT: { AND: [readAccess] } };
+    const blockerScope = { workspaceId, ...issueReadAccessWhere(me) };
+    // A recorded blocker outside this scope prevents an offer without its status being read.
+    const hiddenBlocker = { NOT: { AND: [blockerScope] } };
     const blockerSelect = {
       projectId: true, projectStatus: statusSelect, finishedAt: true,
       parent: { where: { workspaceId, projectId: seat.projectId, assigneeId: me }, select: { id: true } },

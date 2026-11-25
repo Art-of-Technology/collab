@@ -45,7 +45,7 @@ The epic returns to the lead's inbox with a reason:
 | `other_child_done` | A child of another epic the lead holds in the project reached a final done status, clearing a recorded blocker for an unassigned child the lead may place. All blockers on that child are done. |
 | `reply` | Someone commented on the epic. |
 
-When a child must wait for work under another epic, record the dependency between the children with `BLOCKS` or `BLOCKED_BY`. The lead's inbox checks for completions since it last started a run on the dependent epic.
+When a child must wait for work under another epic, record the dependency between the children with `BLOCKS` or `BLOCKED_BY`. The inbox checks for completions since the lead last started a run on the dependent epic. Each blocker must be in the lead's workspace and have a done status the lead can read.
 
 ## Overrule the lead
 
