@@ -19,7 +19,7 @@ function fixture() {
   ];
   const users = ['alice', 'bob', 'carol', 'dave', 'erin'].map(id => ({ id, name: id, email: `${id}@example.test`, role: 'DEVELOPER' }));
   users.push({ id: 'root', name: 'root', email: 'root@example.test', role: 'SYSTEM_ADMIN' });
-  const rolePermissions = [{ workspaceId: 'w1', role: 'ADMIN', permission: 'MANAGE_WORKSPACE_PERMISSIONS' }];
+  const rolePermissions = [{ workspaceId: 'w1', role: 'ADMIN', permission: 'MANAGE_AGENTS' }];
   const tokens = [], audit = [], logs = [];
   const state = { session: null };
   const workspace = id => workspaces.find(row => row.id === id);
@@ -193,6 +193,19 @@ test('an admin role holding the permission and a system admin may mint', async (
     assert.equal(response.status, 201);
     assert.equal((await f.auth(response.body.token)).success, true);
   }
+});
+
+test('the existing token tests pass on the new permission', async () => {
+  // The fixture's Admin row is MANAGE_AGENTS, which every test here runs on. An Admin row of only the permission editor's
+  // permission manages no token, and the refusal writes nothing.
+  const f = fixture();
+  f.prisma.rolePermission.findUnique = async ({ where: { workspaceId_role_permission: key } }) =>
+    key.workspaceId === 'w1' && key.role === 'ADMIN' && key.permission === 'MANAGE_WORKSPACE_PERMISSIONS' ? key : null;
+  f.as('carol');
+  const before = f.writes();
+  assert.equal((await f.mint()).status, 403);
+  assert.equal((await f.revoke('token-0')).status, 403);
+  assert.equal(f.writes(), before);
 });
 
 test('invalid input is rejected and writes nothing', async () => {

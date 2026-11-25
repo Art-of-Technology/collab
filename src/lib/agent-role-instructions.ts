@@ -20,7 +20,7 @@ export async function readRoleInstructions(userId: string, workspaceIdOrSlug: st
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true, name: true } });
   if (!workspace) return null;
   const [{ hasPermission }, rows, edits, custom] = await Promise.all([
-    checkUserPermission(userId, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS),
+    checkUserPermission(userId, workspace.id, Permission.MANAGE_AGENTS),
     prisma.agentRoleInstructions.findMany({ where: { workspaceId: workspace.id }, select: { role: true, text: true } }),
     // The latest version of each role's platform prompt that a system admin saved (CLB-916).
     prisma.agentPlatformPrompt.findMany({ orderBy: [{ role: 'asc' }, { version: 'desc' }], distinct: ['role'], select: { role: true, text: true } }),
@@ -42,7 +42,7 @@ export async function readRoleInstructions(userId: string, workspaceIdOrSlug: st
  * the workspace's permissions may; the role must be in the catalogue and the text within the layer's limit.
  */
 export async function saveRoleInstructions(userId: string, workspaceId: string, roleId: string, text: string) {
-  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_AGENTS);
   if (!hasPermission) return { error: 'forbidden' as const };
   // A system admin passes the check above for any id, so the workspace is looked up too.
   if (!await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } })) return { error: 'not_found' as const };

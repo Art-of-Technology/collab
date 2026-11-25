@@ -19,7 +19,7 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
       customRole: { select: { name: true } } },
   });
   if (!seat) return null;
-  const { hasPermission } = await checkUserPermission(userId, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission } = await checkUserPermission(userId, workspace.id, Permission.MANAGE_AGENTS);
   return {
     workspace, canEdit: hasPermission && seat.userId !== userId,
     seat: { id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name, instructions: seat.instructions ?? '',
@@ -33,7 +33,7 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
  * the seat layer's limit.
  */
 export async function saveSeatInstructions(userId: string, workspaceId: string, seatId: string, text: string) {
-  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_AGENTS);
   if (!hasPermission) return { error: 'forbidden' as const };
   // A system admin passes the check above for any id, so the seat is looked up in the workspace named.
   const seat = await prisma.agentSeat.findFirst({ where: { id: seatId, workspaceId, retiredAt: null }, select: { id: true, userId: true } });

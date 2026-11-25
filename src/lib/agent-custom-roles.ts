@@ -37,7 +37,7 @@ export function customRoleRefusal(result: Refusal) {
 
 /** Whether `userId` may manage the workspace's roles, and the workspace exists: a system admin passes the check for any id. */
 async function mayManage(userId: string, workspaceId: string) {
-  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_AGENTS);
   if (!hasPermission) return { error: 'forbidden' as const };
   if (!await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } })) return { error: 'not_found' as const };
   return null;

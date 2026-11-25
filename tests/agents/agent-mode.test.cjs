@@ -311,7 +311,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
       '@/lib/agent-runners': load('src/lib/agent-runners.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': tokens }, { Date }),
       '@/lib/request-session': { getServerSession: async () => session }, '@/lib/auth-options': {},
       '@/lib/slug-resolvers': { resolveWorkspaceSlug: async value => (value === 'w' ? 'w' : null) },
-      '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' },
+      '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'manage' },
         checkUserPermission: async (user, workspace, permission) => ({ hasPermission: allowed && user === owner && workspace === 'w' && permission === 'manage' }) } }, { console });
     const call = async (method, projectSlug, body, workspaceId = 'w') => {
       const reply = await route[method](new Request('https://collab.test/api', { method, ...(body && { body: typeof body === 'string' ? body : JSON.stringify(body) }) }),
