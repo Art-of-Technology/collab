@@ -5,6 +5,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission, getUserWorkspaceRole } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import PermissionsManager from '@/components/workspace/PermissionsManager';
 import CustomRolesManager from '@/components/workspace/CustomRolesManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -58,6 +59,10 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
     notFound();
   }
 
+  // The permission routes are for Owners. A member below Owner reads that here instead of an editor that loads nothing.
+  const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+  const ownersOnly = authority?.level !== null && !may(authority, 'roles.edit');
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="mb-4">
@@ -76,6 +81,9 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
         </p>
       </div>
 
+      {ownersOnly ? (
+        <p className="text-sm text-muted-foreground">Only Owners can manage roles and permissions.</p>
+      ) : (
       <Tabs defaultValue="permissions" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="permissions" className="flex items-center gap-1.5 text-sm">
@@ -125,6 +133,7 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
           </Card>
         </TabsContent>
       </Tabs>
+      )}
     </div>
   );
 }
