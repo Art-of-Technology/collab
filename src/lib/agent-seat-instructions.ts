@@ -22,8 +22,7 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
   if (!seat) return null;
   const { hasPermission } = await checkUserPermission(userId, workspace.id, Permission.MANAGE_AGENTS);
   // What saving would answer: someone else's seat needs the rank rule as well (CLB-1185), read only then.
-  const owner = seat.owner?.id ?? null;
-  const canEdit = hasPermission && seat.userId !== userId && (!owner || owner === userId || (await seatOwnerAccess(userId, workspace.id, [owner]))(owner) === 'pass');
+  const canEdit = hasPermission && seat.userId !== userId && (await seatOwnerAccess(userId, workspace.id, seat.owner?.id ?? null))() === 'pass';
   return {
     workspace, canEdit,
     seat: { id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name, instructions: seat.instructions ?? '',
@@ -43,8 +42,7 @@ export async function saveSeatInstructions(userId: string, workspaceId: string, 
   if (!seat) return { error: 'not_found' as const };
   if (seat.userId === userId) return { error: 'forbidden' as const };
   // Someone else's seat needs the rank rule as well (CLB-1185), decided on the seat's person as read above.
-  const others = !!seat.ownerId && seat.ownerId !== userId;
-  if (others && (await seatOwnerAccess(userId, workspaceId, [seat.ownerId]))(seat.ownerId) === 'refused') return { error: 'outranked' as const };
+  if ((await seatOwnerAccess(userId, workspaceId, seat.ownerId))() === 'refused') return { error: 'outranked' as const };
   let trimmed: string;
   // The only thing layerText throws is that the text is over the limit.
   try { trimmed = layerText('seat', text); } catch (error) { return { error: 'too_long' as const, message: (error as Error).message }; }

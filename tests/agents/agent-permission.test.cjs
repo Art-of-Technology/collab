@@ -72,7 +72,6 @@ function fixture() {
     '@/lib/agent-mode': { HandoffError, agentModeSchema: z.any(), agentModeState: async () => ({ mode: 'seats' }), setAgentMode: mutation('setAgentMode', {}) },
     '@/lib/agent-runners': { RUNNER_TOKEN_DAYS: 90, runnerSeats: async () => [], fetchedBy: async () => new Map(), runnerPeopleBelow: async () => new Set() },
     '@/lib/agent-runs': { inboxOf: async () => ({ items: [] }) },
-    '@/lib/workspace-authority': {},
     '@/lib/slug-resolvers': load('src/lib/slug-resolvers.ts', {
       '@/lib/prisma': { prisma }, '@/lib/url-utils': load('src/lib/url-utils.ts'),
     }, globals),

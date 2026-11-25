@@ -155,24 +155,23 @@ export async function accessOnPeople(actorId: string, workspaceId: string, perso
     if (!person.level) return "inactive";
     return mayActOn(actor, person, { holdsChangeRoles: false }) ? "below" : "denied";
   };
-  return { access, platformAdmin: platformAdmins > 0 };
+  return { access, platformAdmin: platformAdmins > 0, levelOf };
 }
 
 /** What a refused act on someone else's seat answers. */
 export const SEAT_RANK_REFUSAL = "A seat of someone at or above your own level is managed by someone above them";
 
-/**
- * Who acts on the seats of these people besides holding MANAGE_AGENTS (CLB-1185): anyone on their own seats and on
- * seats with no owner, as before; on someone else's, a platform admin, or an actor at the Admin level or above when
- * the person is strictly below them or has no level any more. Decided before any transaction; a seat whose person is
- * not one decided on here is `unread`, which the caller treats as not found.
- */
-export async function seatOwnerAccess(actorId: string, workspaceId: string, ownerIds: (string | null | undefined)[]) {
-  const others = [...new Set(ownerIds.filter((id): id is string => !!id && id !== actorId))];
-  const read = others.length ? await accessOnPeople(actorId, workspaceId, others, "seats.manage") : null;
-  return (ownerId: string | null): "pass" | "refused" | "unread" => {
-    if (!ownerId || ownerId === actorId) return "pass";
-    if (!read || !others.includes(ownerId)) return "unread";
-    return read.platformAdmin || read.access(ownerId) !== "denied" ? "pass" : "refused";
+export async function seatOwnerAccess(actorId: string, workspaceId: string, observedOwnerId: string | null, requestedOwnerId: string | null = null) {
+  const personId = observedOwnerId ?? requestedOwnerId;
+  let rank: PersonAccess = "below";
+  if (personId && personId !== actorId) {
+    const snapshot = await accessOnPeople(actorId, workspaceId, [personId], "seats.manage");
+    rank = snapshot.platformAdmin ? (snapshot.levelOf(personId) ? "below" : "inactive") : snapshot.access(personId);
+  }
+  return (liveOwnerId = observedOwnerId, creating = false): "pass" | "refused" | "changed" | "inactive" => {
+    if (liveOwnerId !== observedOwnerId) return "changed";
+    if (!liveOwnerId && !creating) return "pass";
+    if (creating && rank === "inactive") return "inactive";
+    return rank === "denied" ? "refused" : "pass";
   };
 }

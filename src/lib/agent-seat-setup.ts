@@ -72,7 +72,7 @@ export async function seatSetupState(context: Caller, projectRef: string) {
     : (['in_progress', 'done'] as const).filter(group => !state.statuses.some(status => status.category === group));
   const missing = seats.filter(seat => !seat.exists);
   // The seats would be the runner's person's, and someone else's seat follows the rank rule (CLB-1185): the apply would refuse.
-  const above = !!missing.length && !!runner && (await seatOwnerAccess(context.user.id, workspaceId, [runner.ownerId]))(runner.ownerId) === 'refused';
+  const above = !!missing.length && !!runner && (await seatOwnerAccess(context.user.id, workspaceId, runner.ownerId))() === 'refused';
   const blocked = project.isArchived ? 'project_archived' : missingGroups.length ? 'status_groups'
     : !missing.length ? null : !runner ? runners.length ? 'runner_choice' : 'no_runner' : above ? 'runner_above' : null;
 

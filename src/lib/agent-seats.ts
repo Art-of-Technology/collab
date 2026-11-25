@@ -73,7 +73,6 @@ async function createSeatOf(input: SeatInput) {
     workspaceId: input.workspaceId, actorId: input.actorId, name: input.name, access: 'write', expiresInDays: input.expiresInDays,
     seat: (tx, account, agents, owners) => writeSeat(tx, input, role, account, agents, owners), mint: !input.byRunner, seatOwnerId: input.ownerId,
   });
-  if (minted.error === 'outranked') throw new HandoffError('outranked', SEAT_RANK_REFUSAL, 403);
   if (minted.error) return { error: minted.error };
   const { seat, token: secret, ...token } = minted;
   return { seat, token: secret ? { ...token, token: secret } : null };
@@ -89,7 +88,7 @@ export async function lockMemberSeatProject(tx: Prisma.TransactionClient, worksp
 }
 
 async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (typeof ROLE_CATALOGUE.roles)[number], account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>,
-  owners: (ownerId: string | null) => 'pass' | 'refused' | 'unread') {
+  owners: Awaited<ReturnType<typeof seatOwnerAccess>>) {
   // One seat change at a time per project, so "the first of its role is the default" and "one release seat" are decided on settled rows.
   if (input.own) await lockMemberSeatProject(tx, input.workspaceId, input.projectId);
   else {
@@ -138,8 +137,8 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
   }
   if (same && existing.byRunner !== !!input.byRunner) throw new HandoffError('seat_exists', `${existing.name} is run by hand; retire it before giving the seat to a runner`, 409);
   // Someone else's seat, the one asked for again or the one made here, needs the rank rule (CLB-1185); throwing undoes the mint's writes.
-  const verdict = owners(same ? existing.ownerId : input.ownerId);
-  if (verdict === 'unread') throw new HandoffError('not_found', 'Seat not found', 404);
+  const verdict = owners(same ? existing.ownerId : null, !same);
+  if (verdict === 'changed') throw new HandoffError('not_found', 'Seat not found', 404);
   if (verdict === 'refused') throw new HandoffError('outranked', SEAT_RANK_REFUSAL, 403);
   // Tokens a person once saw, or another person's runner fetched, would work the seat beside its runner's. And a token
   // a runner fetched for the seat before it was retired would work the seat made again by hand, whoever owns it now.
@@ -147,9 +146,9 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
     throw new HandoffError('tokens_exist', input.byRunner ? `${account.name ?? input.name} still has usable tokens; revoke them before a runner runs the seat`
       : `${account.name ?? input.name} still has usable tokens a runner fetched; revoke them before the seat is made again`, 409);
   }
-  if (!same && input.ownerId && !await tx.workspace.findFirst({
+  if (!same && input.ownerId && (verdict === 'inactive' || !await tx.workspace.findFirst({
     where: { id: input.workspaceId, OR: [{ ownerId: input.ownerId }, { members: { some: { userId: input.ownerId, status: true } } }] }, select: { id: true },
-  })) throw new HandoffError('owner_not_found', "The seat's owner is not an active member of this workspace");
+  }))) throw new HandoffError('owner_not_found', "The seat's owner is not an active member of this workspace");
   const others = await tx.agentSeat.findMany({
     where: { projectId: input.projectId, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
   });
@@ -449,8 +448,9 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
   // another project or in another role in the meantime is not found.
   const where = { ...input.only, id: input.seatId, workspaceId: input.workspaceId, retiredAt: null };
   // Someone else's seat is decided on before the transaction, on its person as read now (CLB-1185); inside it a seat of anyone else reads as absent.
-  const person = (await prisma.agentSeat.findFirst({ where, select: { ownerId: true } }))?.ownerId;
-  const owners = await seatOwnerAccess(input.actorId, input.workspaceId, [person]);
+  const observed = await prisma.agentSeat.findFirst({ where, select: { ownerId: true } });
+  if (!observed) throw new HandoffError('not_found', 'Seat not found', 404);
+  const access = await seatOwnerAccess(input.actorId, input.workspaceId, observed.ownerId);
   return prisma.$transaction(async tx => {
     const found = await tx.agentSeat.findFirst({ where, select: { projectId: true } });
     if (!found) throw new HandoffError('not_found', 'Seat not found', 404);
@@ -458,8 +458,9 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${found.projectId}`}))`;
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${input.seatId} FOR UPDATE`;
     const seat = await tx.agentSeat.findFirst({ where });
-    if (!seat || owners(seat.ownerId) === 'unread') throw new HandoffError('not_found', 'Seat not found', 404);
-    if (owners(seat.ownerId) === 'refused') throw new HandoffError('outranked', SEAT_RANK_REFUSAL, 403);
+    const verdict = seat && access(seat.ownerId);
+    if (!seat || verdict === 'changed') throw new HandoffError('not_found', 'Seat not found', 404);
+    if (verdict === 'refused') throw new HandoffError('outranked', SEAT_RANK_REFUSAL, 403);
     if (await tx.agentRun.count({ where: { seatId: seat.id, endedAt: null } })) {
       throw new HandoffError('already_running', 'This seat has a run open; let it finish, or clear it, before retiring the seat', 409);
     }

@@ -132,7 +132,7 @@ test("a person's own seats and seats with no owner work as before", async () => 
 });
 
 test('a refused call writes nothing, and a platform admin keeps today\'s answer', async () => {
-  const { prisma, seatFor, actOn, create, written, passed, call, routes, canEdit } = await setUp();
+  const { prisma, seatFor, actOn, create, written, passed, canEdit } = await setUp();
   // An Admin on the primary owner's seat: refused on every path, and not one row changes, the audit log included.
   const theirs = await seatFor(P);
   const before = await written();
@@ -145,30 +145,81 @@ test('a refused call writes nothing, and a platform admin keeps today\'s answer'
   assert.equal(await canEdit(X, await seatFor(P)), true);
   assert.deepEqual((await actOn(X, await seatFor(P))).map(([path, [status]]) => [path, status]), Object.entries(passed));
   assert.equal((await create(X, P))[0], 201);
+});
 
-  const afterRead = async (model, method, change, action) => {
-    const read = model[method];
-    let once = false;
-    model[method] = async (...args) => {
-      const rows = await read.apply(model, args);
-      if (!once && (once = true)) await change();
-      return rows;
-    };
-    try { return await action(); } finally { model[method] = read; }
+async function afterRead(model, method, change, action) {
+  const read = model[method];
+  let once = false;
+  model[method] = async (...args) => {
+    const rows = await read.apply(model, args);
+    if (!once && (once = true)) await change();
+    return rows;
   };
-  // The seat's person changes between the read and the write: the seat reads as not found and nothing is written.
-  for (const [path, model, method, act] of [
-    ['retire', prisma.agentSeat, 'findFirst', seat => call(O, routes.seat.DELETE, 'DELETE', { seatId: seat.id })],
-    ['instructions', prisma.agentSeat, 'findFirst', seat => call(O, routes.instructions.PUT, 'PUT', { seatId: seat.id }, { text: 'x' })],
-    ['revoke', prisma.agentSeat, 'findUnique', seat => call(O, routes.token.DELETE, 'DELETE', { tokenId: seat.tokenId })],
+  try { return await action(); } finally { model[method] = read; }
+}
+
+test('seat and token writes return 404 when the live owner changes', async () => {
+  const { prisma, seatFor, written, call, routes } = await setUp();
+  const seat = await seatFor(M);
+  const setOwner = ownerId => prisma.agentSeat.update({ where: { id: seat.id }, data: { ownerId } });
+  for (const [path, method, act] of [
+    ['retire', 'findFirst', () => call(O, routes.seat.DELETE, 'DELETE', { seatId: seat.id })],
+    ['instructions', 'findFirst', () => call(O, routes.instructions.PUT, 'PUT', { seatId: seat.id }, { text: 'x' })],
+    ['request again', 'findUnique', () => call(O, routes.seats.POST, 'POST', {}, { name: seat.name, projectId: 'p', role: 'developer', ownerId: A2 })],
+    ['mint', 'findUnique', () => call(O, routes.tokens.POST, 'POST', {}, { name: seat.name })],
+    ['revoke', 'findUnique', () => call(O, routes.token.DELETE, 'DELETE', { tokenId: seat.tokenId })],
+    ...[true, false].map(allowed => [allowed ? 'grant' : 'withdraw', 'findUnique',
+      () => call(O, routes.token.PATCH, 'PATCH', { tokenId: seat.tokenId }, { workspaceId: 'w2', allowed })]),
   ]) {
-    const seat = await seatFor(M);
-    const unchanged = await written();
-    const [status] = await afterRead(model, method, () => prisma.agentSeat.update({ where: { id: seat.id }, data: { ownerId: O2 } }), () => act(seat));
-    assert.equal(status, 404, path);
-    await prisma.agentSeat.update({ where: { id: seat.id }, data: { ownerId: M } });
-    assert.equal(await written(), unchanged, path);
+    for (const [from, to] of [[M, O2], [M, O], [M, A2], [M, null], [null, O], [O, null]]) {
+      await setOwner(from);
+      const unchanged = await written();
+      const [status, body] = await afterRead(prisma.agentSeat, method, () => setOwner(to), act);
+      assert.equal(status, 404, `${path}: ${from} to ${to}`);
+      if (path === 'mint') assert.equal(body.error, 'Seat not found');
+      await setOwner(from);
+      assert.equal(await written(), unchanged, path);
+    }
   }
+});
+
+test('new and retired seats require an active owner in the rank snapshot', async () => {
+  const { prisma, seatFor, call, routes, written } = await setUp();
+  const retired = await seatFor(M);
+  assert.equal((await call(P, routes.seat.DELETE, 'DELETE', { seatId: retired.id }))[0], 200);
+  const setActive = status => prisma.workspaceMember.update({
+    where: { userId_workspaceId: { userId: O2, workspaceId: 'w' } }, data: { status },
+  });
+  for (const name of ['new-after-reactivation', retired.name]) {
+    const before = await written();
+    await setActive(false);
+    try {
+      const [status, body] = await afterRead(prisma, '$transaction', () => setActive(true),
+        () => call(A, routes.seats.POST, 'POST', {}, { name, projectId: 'p', role: 'developer', ownerId: O2 }));
+      assert.equal((await prisma.workspaceMember.findUniqueOrThrow({ where: { userId_workspaceId: { userId: O2, workspaceId: 'w' } } })).status, true);
+      assert.deepEqual([status, body.code], [400, 'owner_not_found'], name);
+      assert.equal(await written(), before, name);
+    } finally {
+      await setActive(true);
+    }
+  }
+});
+
+test('a pending retirement leaves a replacement owned by the caller intact', async () => {
+  const { prisma, seatFor, call, routes, written } = await setUp();
+  const seat = await seatFor(M);
+  const retire = () => call(A, routes.seat.DELETE, 'DELETE', { seatId: seat.id });
+  let replacement;
+  const [status] = await afterRead(prisma.agentSeat, 'findFirst', async () => {
+    assert.equal((await retire())[0], 200);
+    const [created, body] = await call(A, routes.seats.POST, 'POST', {}, { name: seat.name, projectId: 'p', role: 'developer', ownerId: A });
+    assert.equal(created, 201);
+    assert.equal(body.seat.id, seat.id);
+    assert.equal(body.seat.ownerId, A);
+    replacement = await written();
+  }, retire);
+  assert.equal(status, 404);
+  assert.equal(await written(), replacement);
 });
 
 test('an Owner cannot act on a peer who becomes primary owner between rank reads', async () => {
