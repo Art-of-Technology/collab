@@ -149,9 +149,28 @@ test('collection predicates match the single-note read policy across scope and m
     assert.equal(matches(row, noteAccessWhere('alice')), expected, JSON.stringify({ scope, role, isRestricted, isEncrypted, authorId, shared, expired, projectFallback }));
   }
   assert.equal(matches(note, noteAccessWhere('')), false);
-  // The list filter names the stored role names exactly. A database lowers a custom role such as 'ADMİN' to 'admin',
-  // so a case-blind filter would list other people's notes for a member the single read treats as standard.
-  assert.ok(!JSON.stringify(noteAccessWhere('alice')).includes('insensitive'));
+});
+
+test('personal note listings grant active non-owners access only for exact ADMIN and OWNER roles', () => {
+  const { noteAccessWhere } = load('src/lib/secrets/access.ts', {
+    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+  });
+  const where = noteAccessWhere('alice');
+  function assertExactRoleComparisons(filter) {
+    if (filter.role) assert.equal(filter.role.mode ?? 'default', 'default');
+    for (const child of Object.values(filter)) {
+      if (child && typeof child === 'object') assertExactRoleComparisons(child);
+    }
+  }
+  assertExactRoleComparisons(where);
+
+  const personal = { ...note, scope: 'PERSONAL' };
+  for (const [role, listed] of Object.entries({ ADMIN: true, OWNER: true, admin: false, owner: false, 'ADMİN': false })) {
+    const workspace = { ownerId: 'bob', members: [{ userId: 'alice', status: true, role }] };
+    assert.equal(matches({ ...personal, workspace, project: null }, where), listed, `direct workspace: ${role}`);
+    const projectNote = { ...personal, workspaceId: null, workspace: null, projectId: 'project', project: { workspace } };
+    assert.equal(matches(projectNote, where), listed, `project workspace: ${role}`);
+  }
 });
 
 test('all Notes collections constrain their result reads', async () => {
