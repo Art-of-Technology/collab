@@ -23,12 +23,15 @@ jobs:
           # The pull request's merge commit and its first parent, the base branch.
           fetch-depth: 2
       - id: docs-only
-        run: echo "docs-only=$(git diff --name-only --no-renames HEAD^1 HEAD | node scripts/docs-only.mjs)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          docs_only=$(git diff --name-only -z --no-renames HEAD^1 HEAD | node scripts/docs-only.mjs)
+          echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
   full-tests:
     name: full tests
     needs: changes
     # Runs when the changes job was skipped (a push) or failed: only a docs-only answer skips it.
-    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.docs-only != 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -56,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DOCS_ONLY: ${{ needs.changes.outputs.docs-only == 'true' }}
+      DOCS_ONLY: ${{ needs.changes.result == 'success' && needs.changes.outputs.docs-only == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -79,7 +82,7 @@ jobs:
   production-build:
     name: production build
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.docs-only != 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

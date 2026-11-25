@@ -6,13 +6,15 @@ const { test } = require('node:test');
 const script = resolve(__dirname, '../../scripts/docs-only.mjs');
 
 function docsOnly(paths) {
-  const result = spawnSync(process.execPath, [script], { input: paths.map(path => `${path}\n`).join(''), encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [script], { input: paths.map(path => `${path}\0`).join(''), encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 }
 
 test('a change to documentation only is docs-only', () => {
   assert.equal(docsOnly(['docs/agent-search.md']), 'true');
+  assert.equal(docsOnly(['docs/café.png']), 'true');
+  assert.equal(docsOnly(['content/docs/line\nbreak.png']), 'true');
   assert.equal(docsOnly(['content/docs/cli.md']), 'true');
   assert.equal(docsOnly(['content/docs/nav.json']), 'true');
   assert.equal(docsOnly(['README.md']), 'true');
