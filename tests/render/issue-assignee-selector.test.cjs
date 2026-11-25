@@ -10,6 +10,7 @@ const members = [
   { id: 'dev1', name: 'dev-one', email: null, agentSeat: { projectId: 'p1', role: 'developer', retiredAt: null } },
   { id: 'dev2', name: 'dev-two', email: null, agentSeat: { projectId: 'p2', role: 'release', retiredAt: null } },
   { id: 'old1', name: 'old-one', email: null, agentSeat: { projectId: 'p1', role: 'developer', retiredAt: '2026-11-15T00:00:00.000Z' } },
+  { id: 'qa1', name: 'qa-one', email: null, agentSeat: { projectId: 'p3', role: 'developer', retiredAt: null, customRole: { name: 'QA Tester' } } },
 ];
 const shown = ({ children }) => React.createElement('div', null, children);
 const { IssueAssigneeSelector } = load('src/components/issue/selectors/IssueAssigneeSelector.tsx', {
@@ -48,4 +49,8 @@ test('a current assignee absent from active members remains visible', async () =
   const picker = await choices({ projectId: 'p1', value: 'inactive', currentAssignee: { id: 'inactive', name: 'Retired agent' } });
   assert.equal(picker.current, 'Retired agent');
   assert.ok(!picker.names.some(name => name.includes('Retired agent')));
+});
+
+test("a seat with the organisation's own role is badged by that role's name (CLB-628)", async () => {
+  assert.deepEqual((await choices({ projectId: 'p3' })).names, ['No assignee✓', 'Cem (You)', 'qa-oneQA Tester seat']);
 });

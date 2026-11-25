@@ -36,22 +36,28 @@ function personLabel(user: { id: string; name: string | null; email: string | nu
   return name && user.email ? `${name} (${user.email})` : name || user.email || user.id;
 }
 
-/** The people who can own a seat in a workspace (its owner and active members with a sign-in), and its live seats. */
+/**
+ * The people who can own a seat in a workspace (its owner and active members with a sign-in), its live seats, and the
+ * workspace's own roles a new seat can take (CLB-628): those that are not retired.
+ */
 export async function listSeatOwnerChoices(workspaceId: string) {
-  const [people, seats] = await Promise.all([
+  const [people, seats, customRoles] = await Promise.all([
     prisma.user.findMany({
       where: { email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspaceId } } }, { workspaceMemberships: { some: { workspaceId, status: true } } }] },
       select: personSelect(workspaceId),
     }),
     prisma.agentSeat.findMany({
       where: { workspaceId, retiredAt: null },
-      select: { id: true, name: true, role: true, isDefault: true, project: { select: { name: true } }, owner: { select: personSelect(workspaceId) } },
+      select: { id: true, name: true, role: true, isDefault: true, project: { select: { name: true } }, owner: { select: personSelect(workspaceId) },
+        customRole: { select: { name: true } } },
     }),
+    prisma.agentCustomRole.findMany({ where: { workspaceId, retiredAt: null }, orderBy: { name: 'asc' }, select: { id: true, name: true, baseRole: true } }),
   ]);
   return {
     people: people.map(user => ({ id: user.id, name: personLabel(user) })).sort((a, b) => a.name.localeCompare(b.name)),
-    seats: seats.map(seat => ({ id: seat.id, name: seat.name, role: seat.role, project: seat.project.name, isDefault: seat.isDefault,
-      owner: seat.owner && personLabel(seat.owner) })),
+    seats: seats.map(seat => ({ id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name,
+      isDefault: seat.isDefault, owner: seat.owner && personLabel(seat.owner) })),
+    customRoles,
   };
 }
 
@@ -74,12 +80,12 @@ export async function listAgentTokens(workspaceId: string) {
   const seats = names.size ? await prisma.agentSeat.findMany({
     where: { userId: { in: [...names.keys()] } },
     select: { id: true, userId: true, role: true, isDefault: true, retiredAt: true, project: { select: { name: true } },
-      owner: { select: personSelect(workspaceId) } },
+      owner: { select: personSelect(workspaceId) }, customRole: { select: { name: true } } },
   }) : [];
   const seatOf = (userId: string | null) => {
     const seat = seats.find(row => row.userId === userId);
     // The owner is the person whose sign-in runs the seat; without one, no person's subscription pays for it.
-    return seat ? { id: seat.id, role: seat.role, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt,
+    return seat ? { id: seat.id, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt,
       owner: seat.owner && personLabel(seat.owner) } : null;
   };
   return tokens.map(token => ({

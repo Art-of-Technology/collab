@@ -119,3 +119,10 @@ test("the seat's page names the seat, its role, project and owner, with the box;
   assert.deepEqual(anonymous.calls, []);
   await assert.rejects(page({ view: null }).open('seat-dev'), /404/);
 });
+
+test("a seat with the organisation's own role is named by that role on its page (CLB-628)", async () => {
+  const view = { workspace: { id: 'ws', slug: 'team' }, canEdit: true, seat: { ...seat, customRole: 'QA Tester' } };
+  const text = (await page({ view }).open('seat-dev')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.match(text, /QA Tester seat of Collab · owner Cem/);
+  assert.doesNotMatch(text, /Developer seat/);
+});

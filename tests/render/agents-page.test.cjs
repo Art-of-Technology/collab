@@ -303,3 +303,12 @@ test('the menu is told the page being read, not only the workspace the layout kn
   renderToStaticMarkup(React.createElement(Layout, { pathname: '/weezboo' }, 'page'));
   assert.deepEqual(seen, ['/weezboo/agents/inbox', '/weezboo/agents/inbox']);
 });
+
+test("a seat with the organisation's own role is shown by that role's name on the Seats and Inbox tabs (CLB-628)", async () => {
+  const qa = { ...seats[0], id: 'seat-qa', name: 'QA-1', role: 'developer', customRole: 'QA Tester', isDefault: false, working: [], waiting: [] };
+  const view = { workspace: { id: 'ws', slug: 'team' }, seats: [qa] };
+  const html = await page({ view }).open();
+  assert.match(text(html), /Waiting QA Tester QA-1 Collab Nothing 0/);
+  assert.doesNotMatch(text(html), /developer QA-1/);
+  assert.match(text(await page({ view }).open('inbox')), /QA-1 QA Tester seat of Collab · 0 waiting/);
+});

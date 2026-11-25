@@ -11,14 +11,16 @@ const noStore = { 'Cache-Control': 'no-store' };
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(50),
   projectId: z.string().min(1).max(128),
-  role: z.string().refine(role => SEAT_ROLES.includes(role)),
+  role: z.string().refine(role => SEAT_ROLES.includes(role)).optional(),
+  // The workspace's own role (CLB-628), in place of a built-in one: the seat behaves like its base role.
+  customRoleId: z.string().min(1).max(128).optional(),
   ownerId: z.string().min(1).max(128).nullable().default(null),
   expiresInDays: z.number().int().min(1).max(365).default(90),
   isDefault: z.boolean().optional(),
   byRunner: z.boolean().optional(),
   // The seat's own pick among its project's repositories, where the project has several.
   repositoryId: z.string().min(1).max(128).optional(),
-}).strict();
+}).strict().refine(body => (body.role === undefined) !== (body.customRoleId === undefined));
 
 // POST /api/workspaces/[workspaceId]/agent-seats - create a seat with its first token; the token is returned once.
 // With `byRunner` no token is made: the owner's runner fetches it, and `token` is null.

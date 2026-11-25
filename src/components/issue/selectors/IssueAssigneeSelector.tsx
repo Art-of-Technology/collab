@@ -194,7 +194,7 @@ export function IssueAssigneeSelector({
                 {user.name}{user.id === currentUserId ? " (You)" : ""}
               </span>
               {user.agentSeat && (
-                <span className="rounded border border-collab-600 px-1 text-[10px] text-collab-500">{user.agentSeat.role} seat</span>
+                <span className="rounded border border-collab-600 px-1 text-[10px] text-collab-500">{user.agentSeat.customRole?.name ?? user.agentSeat.role} seat</span>
               )}
               {value === user.id && (
                 <span className="text-xs text-collab-500">✓</span>

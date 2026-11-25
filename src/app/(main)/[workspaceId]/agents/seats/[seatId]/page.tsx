@@ -15,7 +15,8 @@ export default async function SeatPage({ params }: { params: Promise<{ workspace
   const view = await readSeatPage(session.user.id, workspaceId, seatId);
   if (!view) notFound();
   const { workspace, seat, canEdit } = view;
-  const role = `${seat.role[0].toUpperCase()}${seat.role.slice(1)}`;
+  // The workspace's own role by its name (CLB-628), else the built-in one.
+  const role = seat.customRole ?? `${seat.role[0].toUpperCase()}${seat.role.slice(1)}`;
   return <main className="w-full max-w-3xl space-y-6 p-6">
     <Link className="text-sm text-primary underline-offset-4 hover:underline" href={`/${encodeURIComponent(workspace.slug || workspace.id)}/agents`}>Seats</Link>
     <div className="space-y-1">

@@ -67,8 +67,9 @@ export async function GET(
             avatarMouth: true,
             avatarNose: true,
             avatarSkinTone: true,
-            // Lets the assignee picker badge seats and leave out those of other projects.
-            agentSeat: { select: { projectId: true, role: true, retiredAt: true } }
+            // Lets the assignee picker badge seats, by the name of the workspace's own role where one has it (CLB-628),
+            // and leave out those of other projects.
+            agentSeat: { select: { projectId: true, role: true, retiredAt: true, customRole: { select: { name: true } } } }
           },
         },
       },
