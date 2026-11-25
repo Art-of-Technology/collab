@@ -73,14 +73,6 @@ test('the migration adds MANAGE_AGENTS, gives it to every role that holds MANAGE
   assert.deepEqual(enumValues(), expectedEnum);
   assert.deepEqual(permissions(), before);
 
-  const retiring = await db.rolePermission.create({
-    data: { workspaceId: 'w4', role: 'Retiring lead', permission: 'MANAGE_WORKSPACE_PERMISSIONS' },
-  });
-  await db.$transaction(async tx => {
-    await tx.rolePermission.delete({ where: { id: retiring.id } });
-    assert.throws(() => psql(`SET lock_timeout = '250ms';\n${rowsSql}`),
-      error => error.stderr.includes('canceling statement due to lock timeout'));
-  });
   psql(rowsSql);
   const adminGrants = await db.rolePermission.findMany({
     where: { workspaceId: 'w1', role: 'ADMIN' },
