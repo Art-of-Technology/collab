@@ -142,9 +142,9 @@ export async function PATCH(
       );
     }
 
-    // Owners change the settings. A platform admin who is not a member keeps the answer this route gave before.
+    // Owners change the settings. A platform admin, member or not, keeps the answer this route gave before.
     const authority = await getWorkspaceAuthority(currentUser.id, workspaceId);
-    if (authority?.level !== null && !may(authority, 'workspace.settings')) {
+    if (!authority?.platformAdmin && !may(authority, 'workspace.settings')) {
       return NextResponse.json(
         { error: 'Only Owners can change the workspace settings' },
         { status: 403 }
@@ -200,9 +200,9 @@ export async function DELETE(
       );
     }
 
-    // Only the primary owner deletes. A platform admin who is not a member keeps the answer this route gave before.
+    // Only the primary owner deletes. A platform admin, member or not, keeps the answer this route gave before.
     const authority = await getWorkspaceAuthority(currentUser.id, workspaceId);
-    if (authority?.level !== null && !may(authority, 'workspace.delete')) {
+    if (!authority?.platformAdmin && !may(authority, 'workspace.delete')) {
       return NextResponse.json(
         { error: 'Only the primary owner can delete the workspace' },
         { status: 403 }

@@ -33,9 +33,9 @@ export async function setWorkspaceMembership(input: {
       if (input.active && !member && !actor?.platformAdmin && !await tx.workspace.findFirst({
         where: { AND: [postWorkspaceAccessWhere(input.actorId), postWorkspaceAccessWhere(input.userId)] }, select: { id: true },
       })) return 'not_found';
-      // The rank rule; someone new joins as a standard role. A platform admin who is not a member keeps the answer this path gave before it.
+      // The rank rule; someone new joins as a standard role. A platform admin, member or not, keeps the answer this path gave before it.
       const target = { userId: input.userId, level: member ? levelOfRole(member.role) : 'STANDARD' as const };
-      if (actor?.level !== null && !mayActOn(actor, target, { holdsChangeRoles: false })) return 'rank';
+      if (!actor?.platformAdmin && !mayActOn(actor, target, { holdsChangeRoles: false })) return 'rank';
       if (!!member?.status === input.active) return 'unchanged';
       if (input.active) {
         // A new row is created, never upserted: if another request adds the same person first, this one fails on

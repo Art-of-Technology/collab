@@ -94,9 +94,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid role name or permissions' }, { status: 400 });
     }
 
-    // Owners only. A platform admin who is not a member keeps the answer this route gave before.
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
     const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
-    if (authority?.level !== null && !may(authority, 'roles.edit')) {
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
       return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 
@@ -221,9 +221,9 @@ export async function DELETE(
 
     const { workspaceId, roleId } = await params;
 
-    // Owners only. A platform admin who is not a member keeps the answer this route gave before.
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
     const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
-    if (authority?.level !== null && !may(authority, 'roles.edit')) {
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
       return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 

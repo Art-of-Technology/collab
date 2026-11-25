@@ -19,6 +19,10 @@ export interface MemberRowMember {
   level: WorkspaceLevel;
   agent: boolean;
   mayAct: boolean;
+  /** The status paths accept switching this member on or off from the viewer. */
+  mayManage: boolean;
+  /** The removal accepts removing this member from the viewer. */
+  mayRemove: boolean;
   user: { id: string; name: string | null; email: string | null; useCustomAvatar?: boolean } & Record<string, unknown>;
 }
 
@@ -30,9 +34,7 @@ interface MemberRowProps {
   readonly routeWorkspaceId: string;
   readonly workspaceName: string;
   readonly rolesViewerMayGrant: string[];
-  /** Admin or above: the row menu switches and removes. */
-  readonly viewerManages: boolean;
-  /** A platform admin who is not a member keeps the switch this screen gave them before. */
+  /** A platform admin who is not a member keeps the menu, for the member's other workspaces. */
   readonly platformAdmin: boolean;
   readonly canSeeOtherWorkspaces: boolean;
   /** The screen keeps one row menu open at a time. */
@@ -60,7 +62,7 @@ async function refusal(response: Response, fallback: string) {
 }
 
 export default function MemberRow({
-  member, workspaceId, routeWorkspaceId, workspaceName, rolesViewerMayGrant, viewerManages, platformAdmin, canSeeOtherWorkspaces, open, onOpen, onChange, onMessage,
+  member, workspaceId, routeWorkspaceId, workspaceName, rolesViewerMayGrant, platformAdmin, canSeeOtherWorkspaces, open, onOpen, onChange, onMessage,
 }: MemberRowProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,7 +73,7 @@ export default function MemberRow({
   const name = member.user.name || member.user.email || "This member";
   const primaryOwner = member.level === "PRIMARY_OWNER";
   const editsRole = member.mayAct && member.status && rolesViewerMayGrant.length > 0;
-  const hasMenu = (member.mayAct && viewerManages) || (platformAdmin && !primaryOwner && !member.agent);
+  const hasMenu = member.mayManage || (platformAdmin && member.status && !primaryOwner && !member.agent);
 
   // Keyboard focus follows the inline confirmation in and back out.
   useEffect(() => {
@@ -175,15 +177,17 @@ export default function MemberRow({
       </div>
       {hasMenu && open && (
         <div className="flex flex-wrap items-center gap-2 py-2 pl-12 pr-3 text-sm">
-          <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy} onClick={switchStatus}>
-            {member.status ? "Deactivate" : "Activate"}
-          </Button>
+          {member.mayManage && (
+            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy} onClick={switchStatus}>
+              {member.status ? "Deactivate" : "Activate"}
+            </Button>
+          )}
           {canSeeOtherWorkspaces && member.status && (
             <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
               <Link href={`/workspaces/${routeWorkspaceId}/settings/members/${member.user.id}`}>Other workspaces</Link>
             </Button>
           )}
-          {member.mayAct && member.status && (confirming ? (
+          {member.mayRemove && member.status && (confirming ? (
             <>
               <span>Remove {name} from {workspaceName}?</span>
               <Button variant="destructive" size="sm" className="h-7 text-xs" disabled={busy} onClick={remove}>Remove</Button>

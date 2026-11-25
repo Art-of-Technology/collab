@@ -212,10 +212,53 @@ test("workspace detail carries the viewer's level, each member's level and the r
   assert.ok(result.rolesViewerMayGrant.includes('OWNER'));
   assert.equal(shape(result)['m-alice'][2], true);
 
-  // A platform admin who is not a member has no level and acts on nobody through the module.
+  // A platform admin who is not a member has no level, and is offered every role, as the role route accepts from them.
   const admin = fixture({ id: 'root' });
   result = await admin.actions.getDetailedWorkspaceById('foreign');
   assert.equal(result.viewerLevel, null);
-  assert.deepEqual(Array.from(result.rolesViewerMayGrant), []);
+  assert.ok(result.rolesViewerMayGrant.includes('OWNER') && result.rolesViewerMayGrant.includes('ADMIN'));
   assert.equal(result.canManage, true);
+});
+
+test('a platform admin is offered the controls the member paths accept from them, whatever their membership', async () => {
+  const person = (id, email = `${id}@example.test`) => ({ id, email, role: 'DEVELOPER' });
+  const rows = users => [
+    { id: 'm-bob', userId: 'bob', status: true, role: 'OWNER', user: users[1] },
+    { id: 'm-own', userId: 'own', status: true, role: 'OWNER', user: person('own') },
+    { id: 'm-carol', userId: 'carol', status: true, role: 'ADMIN', user: person('carol') },
+    { id: 'm-dave', userId: 'dave', status: false, role: 'Support', user: person('dave') },
+    { id: 'm-seat', userId: 'seat', status: true, role: 'MEMBER', user: person('seat', null) },
+  ];
+  // [mayAct (role route), mayManage (switch on or off), mayRemove] per row.
+  const shape = result => Object.fromEntries(result.members.map(m => [m.id, [m.mayAct, m.mayManage, m.mayRemove]]));
+  const everyRole = ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER', 'Support'];
+  for (const [membership, self, manage, remove] of [
+    [null, [], false, () => false],
+    ['DEVELOPER', [false, false, false], false, () => false],
+    ['ADMIN', [false, true, false], true, id => id === 'm-dave'],
+  ]) {
+    const f = fixture({ id: 'root' });
+    const joined = f.spaces[1]; // owned by bob
+    joined.members = rows(f.users);
+    if (membership) joined.members.push({ id: 'm-root', userId: 'root', status: true, role: membership, user: f.users[2] });
+    f.customRoles.push({ workspaceId: 'joined', name: 'Support' }, { workspaceId: 'foreign', name: 'Elsewhere' });
+    const result = await f.actions.getDetailedWorkspaceById('joined');
+    for (const role of everyRole) assert.ok(result.rolesViewerMayGrant.includes(role), `${membership}: offers ${role}`);
+    assert.ok(!result.rolesViewerMayGrant.includes('Elsewhere'));
+    const expected = {
+      'm-bob': [false, false, false], 'm-seat': [false, false, false],
+      ...Object.fromEntries(['m-own', 'm-carol', 'm-dave'].map(id => [id, [true, manage, remove(id)]])),
+      ...(membership ? { 'm-root': self } : {}),
+    };
+    assert.deepEqual(shape(result), expected, String(membership));
+  }
+  // The same Admin membership without the platform role keeps today's answer.
+  const f = fixture({ id: 'alice' });
+  f.spaces[1].members = rows(f.users);
+  f.spaces[1].members.push({ id: 'm-alice', userId: 'alice', status: true, role: 'ADMIN', user: f.users[0] });
+  f.grants.push({ workspaceId: 'joined', role: 'ADMIN', permission: 'CHANGE_MEMBER_ROLES' });
+  const result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.ok(!result.rolesViewerMayGrant.includes('OWNER') && !result.rolesViewerMayGrant.includes('ADMIN'));
+  assert.deepEqual(shape(result), { 'm-bob': [false, false, false], 'm-own': [false, false, false], 'm-carol': [false, false, false],
+    'm-dave': [true, true, true], 'm-seat': [false, false, false], 'm-alice': [false, false, false] });
 });

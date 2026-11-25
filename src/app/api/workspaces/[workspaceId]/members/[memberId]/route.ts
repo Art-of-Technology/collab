@@ -58,14 +58,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    // The rank rule, which also keeps the workspace owner's membership on
+    // The rank rule, which also keeps the workspace owner's membership on. A platform admin keeps the
+    // answer this route gave an Admin before it: anyone but the workspace owner.
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { ownerId: true },
     });
     const target = { userId: member.userId, level: member.userId === workspace?.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
 
-    if (!mayActOn(actor, target, { holdsChangeRoles: false })) {
+    if (actor?.platformAdmin ? target.level === 'PRIMARY_OWNER' : !mayActOn(actor, target, { holdsChangeRoles: false })) {
       return NextResponse.json({ error: "You can only switch on or off members below your own level" }, { status: 403 });
     }
 
