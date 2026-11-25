@@ -146,7 +146,8 @@ export async function PUT(
       return NextResponse.json({ error: 'The Owner role has every permission and cannot be changed' }, { status: 403 });
     }
 
-    if (!Object.values(WorkspaceRole).some(value => value === role) &&
+    // A built-in name counts in any letter case, as it does for a member's level.
+    if (!Object.values(WorkspaceRole).some(value => value === role.toUpperCase()) &&
         !(await prisma.customRole.findFirst({ where: { workspaceId, name: role }, select: { id: true } }))) {
       return NextResponse.json({ error: 'The role is neither built-in nor a custom role of this workspace' }, { status: 400 });
     }

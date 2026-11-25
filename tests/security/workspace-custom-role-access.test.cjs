@@ -2,8 +2,8 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 const clone = value => JSON.parse(JSON.stringify(value));
 const root = 'src/app/api/workspaces/[workspaceId]/';
 
-function fixture() {
-  const state = { active: true, owner: false, role: 'OWNER', manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
+function fixture(role = 'OWNER') {
+  const state = { active: true, owner: false, role, manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
     roles: [{ id: 'custom', workspaceId: 'workspace', name: 'Support' }, { id: 'foreign', workspaceId: 'foreign', name: 'Support' }],
     permissions: [{ workspaceId: 'workspace', role: 'Support', permission: 'VIEW_POSTS' }, { workspaceId: 'foreign', role: 'Support', permission: 'VIEW_POSTS' }],
     members: [{ id: 'member', userId: 'target', workspaceId: 'workspace', role: 'Support', status: true }, { id: 'foreign', userId: 'foreign', workspaceId: 'foreign', role: 'Support', status: true }] };
@@ -71,7 +71,7 @@ test('rename without permission payload moves permissions and members only in se
   assert.deepEqual(f.state.members.map(x => [x.workspaceId, x.role]), [['workspace', 'Helpers'], ['foreign', 'Support']]);
 });
 test('member role rejects operator objects before writes', async () => {
-  for (const role of [{ not: 'OWNER' }, { equals: 'Support' }, '', ' ', '__proto__']) { const f = fixture(); assert.equal((await f.invoke('member', 'PUT', { role })).status, 400); assert.deepEqual(f.state.writes, []); }
+  for (const role of [{ not: 'OWNER' }, { equals: 'Support' }, '', ' ', '__proto__']) { const f = fixture('HR'); assert.equal((await f.invoke('member', 'PUT', { role })).status, 400); assert.deepEqual(f.state.writes, []); }
 });
 test('legacy builtin-name collisions cannot mutate builtin grants via update or delete', async () => {
   for (const method of ['PUT', 'DELETE']) { const f = fixture(); f.state.roles[0].name = 'ADMIN'; f.state.members = []; assert.equal((await f.invoke('detail', method, method === 'PUT' ? { permissions: [] } : undefined)).status, 409); assert.deepEqual(f.state.writes, []); }
@@ -89,16 +89,17 @@ test('rename with permissions rolls back all state on insertion error', async ()
 test('active read, revoked caller and foreign ID controls remain', async () => {
   const f = fixture(); assert.equal((await f.invoke('list', 'GET')).status, 200); assert.equal((await f.invoke('detail', 'GET')).status, 200);
   for (const method of ['GET', 'PUT', 'DELETE']) assert.equal((await f.invoke('detail', method, method === 'PUT' ? { name: 'New' } : undefined, { roleId: 'foreign' })).status, 404);
+  f.state.role = 'HR';
   assert.equal((await f.invoke('member', 'PUT', { role: 'Support' }, { memberId: 'foreign' })).status, 404);
   f.state.active = false; assert.equal((await f.invoke('list', 'GET')).status, 403); assert.equal((await f.invoke('detail', 'GET')).status, 403); assert.equal((await f.invoke('detail', 'PUT', { name: 'New' })).status, 403); assert.deepEqual(f.state.writes, []);
 });
 test('member self-downgrade denied; legitimate current member role update succeeds', async () => {
-  const f = fixture(); f.state.members[0].userId = 'actor'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 403); assert.deepEqual(f.state.writes, []);
+  const f = fixture('HR'); f.state.members[0].userId = 'actor'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 403); assert.deepEqual(f.state.writes, []);
   f.state.members[0].userId = 'target'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 200);
 });
 for (const [route, method, body] of [['list', 'GET'], ['list', 'POST', { name: 'New', permissions: [] }], ['detail', 'GET'], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE'], ['member', 'PUT', { role: 'Support' }]]) {
   test(`${route} ${method} uses gateway mapping without legacy fallback and denies revoked mapping`, async () => {
-    const f = fixture(); f.env.env.COLLAB_AUTH_MODE = 'gateway'; if (method === 'DELETE') f.state.members = [];
+    const f = fixture(route === 'member' ? 'HR' : 'OWNER'); f.env.env.COLLAB_AUTH_MODE = 'gateway'; if (method === 'DELETE') f.state.members = [];
     assert.equal((await f.invoke(route, method, body)).status, 200); assert.equal(f.state.legacy, 0);
     f.state.mapping = false; f.state.writes = []; assert.equal((await f.invoke(route, method, body)).status, 401); assert.equal(f.state.legacy, 0); assert.deepEqual(f.state.writes, []);
   });

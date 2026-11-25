@@ -190,5 +190,9 @@ test("the Owner role's permissions cannot be changed or reset, and an unknown ro
     const f = fixture(); setup(f.state);
     assert.equal((await f.invoke('PUT', { role: 'Support', permission: 'VIEW_POSTS', enabled: true })).status, 200, `${why}: an existing custom role`);
     assert.ok(f.state.rows.some(row => row.role === 'Support' && row.permission === 'VIEW_POSTS'));
+    // A built-in role stored in another letter case keeps its rows editable, under the spelling that was sent.
+    const g = fixture(); setup(g.state);
+    assert.equal((await g.invoke('PUT', { role: 'admin', permission: 'VIEW_POSTS', enabled: true })).status, 200, `${why}: a built-in role in another letter case`);
+    assert.ok(g.state.rows.some(row => row.role === 'admin' && row.permission === 'VIEW_POSTS'));
   }
 });

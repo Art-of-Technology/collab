@@ -15,13 +15,14 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
   if (!workspace) return null;
   const seat = await prisma.agentSeat.findFirst({
     where: { id: seatId, workspaceId: workspace.id, retiredAt: null, project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } },
-    select: { id: true, userId: true, name: true, role: true, instructions: true, project: { select: { name: true } }, owner: { select: { id: true, name: true, email: true } } },
+    select: { id: true, userId: true, name: true, role: true, instructions: true, project: { select: { name: true } }, owner: { select: { id: true, name: true, email: true } },
+      customRole: { select: { name: true } } },
   });
   if (!seat) return null;
   const { hasPermission } = await checkUserPermission(userId, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS);
   return {
     workspace, canEdit: hasPermission && seat.userId !== userId,
-    seat: { id: seat.id, name: seat.name, role: seat.role, project: seat.project.name, instructions: seat.instructions ?? '',
+    seat: { id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name, instructions: seat.instructions ?? '',
       owner: seat.owner ? seat.owner.name || seat.owner.email || seat.owner.id : null },
   };
 }
