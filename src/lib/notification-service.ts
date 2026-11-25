@@ -6,6 +6,7 @@ import {
   PushNotificationPayload,
 } from "@/lib/push-notifications";
 import { WorkspaceRole } from "@/lib/permissions";
+import { levelOfRole } from "@/lib/workspace-authority";
 import { format } from "date-fns";
 import { logger } from "@/lib/logger";
 import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
@@ -851,41 +852,44 @@ export class NotificationService {
   // ====== LEAVE REQUEST NOTIFICATION METHODS ======
 
   /**
-   * Find managers in a workspace
+   * Find the people who can approve leave in a workspace: active members whose
+   * role holds MANAGE_LEAVE, every active Owner, and the primary owner.
    * @param workspaceId - The workspace ID
-   * @returns Array of user IDs who are managers
+   * @returns Array of user IDs, each once
    */
   static async findManagersInWorkspace(workspaceId: string): Promise<string[]> {
-    const managers = await prisma.workspaceMember.findMany({
-      where: {
-        workspaceId,
-        status: true,
-        role: {
-          in: [
-            WorkspaceRole.PROJECT_MANAGER,
-            WorkspaceRole.ADMIN,
-            WorkspaceRole.OWNER,
-            WorkspaceRole.HR,
+    return prisma.$transaction(async (tx) => {
+      const grants = await tx.rolePermission.findMany({
+        where: { workspaceId, permission: "MANAGE_LEAVE" },
+        select: { role: true },
+      });
+      const approverRoles = new Set(grants.map((g) => g.role));
+      const members = await tx.workspaceMember.findMany({
+        where: {
+          workspaceId,
+          status: true,
+          OR: [
+            { role: { in: [...approverRoles] } },
+            { role: { equals: WorkspaceRole.OWNER, mode: "insensitive" } },
           ],
         },
-      },
-      select: {
-        userId: true,
-      },
-    });
+        select: { userId: true, role: true },
+      });
+      const workspace = await tx.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { ownerId: true },
+      });
 
-    // Also include the workspace owner
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { ownerId: true },
-    });
+      const managerIds = new Set(
+        members
+          // The Owner level holds every permission, whatever the rows say.
+          .filter((m) => approverRoles.has(m.role) || levelOfRole(m.role) === "OWNER")
+          .map((m) => m.userId)
+      );
+      if (workspace?.ownerId) managerIds.add(workspace.ownerId);
 
-    const managerIds = managers.map((m) => m.userId);
-    if (workspace?.ownerId && !managerIds.includes(workspace.ownerId)) {
-      managerIds.push(workspace.ownerId);
-    }
-
-    return managerIds;
+      return [...managerIds];
+    }, { isolationLevel: "RepeatableRead" });
   }
 
   /**

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });
   const { workspaceId } = await params;
-  const access = await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const access = await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_AGENTS);
   if (!access.hasPermission) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: noStore });
 
   const body = bodySchema.safeParse(await request.json().catch(() => null));

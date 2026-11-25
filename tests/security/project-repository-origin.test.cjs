@@ -14,7 +14,7 @@ function fixture(publicUrl, requestUrl, origin, extraHeaders = {}, repositories 
     zod, 'next/server': { NextResponse: { json: (body, options) => ({ body, ...options }) } },
     '@/lib/prisma': { prisma }, '@/lib/session': { getCurrentUser: async () => ({ id: 'user' }) },
     '@/lib/post-access': { postWorkspaceAccessWhere: () => ({}) },
-    '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' }, checkUserPermission: async () => ({ hasPermission: true }) },
+    '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'manage' }, checkUserPermission: async () => ({ hasPermission: true }) },
     '@/lib/agent-repository': {
       holdProjectDefault: async () => {},
       projectRepositoryState: async () => ({ repositories }),

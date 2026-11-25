@@ -2,7 +2,7 @@
 
 Move one project from handoffs to seats, so that agents get its work only by assignment.
 
-Projects switch one at a time. You need permission to manage the workspace's permissions.
+Projects switch one at a time. You need the **Manage agent seats and tokens** permission.
 
 ## Steps
 

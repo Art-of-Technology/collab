@@ -76,7 +76,7 @@ const PERMISSION_CATEGORIES = {
         'CREATE_NOTE', 'EDIT_SELF_NOTE', 'EDIT_ANY_NOTE', 'DELETE_SELF_NOTE', 'DELETE_ANY_NOTE', 'VIEW_NOTES'
     ],
     'Workspace Management': [
-        'MANAGE_WORKSPACE_SETTINGS', 'MANAGE_WORKSPACE_MEMBERS', 'MANAGE_WORKSPACE_PERMISSIONS',
+        'MANAGE_WORKSPACE_SETTINGS', 'MANAGE_WORKSPACE_MEMBERS', 'MANAGE_WORKSPACE_PERMISSIONS', 'MANAGE_AGENTS',
         'VIEW_WORKSPACE_ANALYTICS', 'INVITE_MEMBERS', 'REMOVE_MEMBERS', 'CHANGE_MEMBER_ROLES',
         'VIEW_MEMBER_LIST', 'MANAGE_INTEGRATIONS', 'EXPORT_DATA', 'IMPORT_DATA', 'VIEW_AUDIT_LOGS',
         'MANAGE_NOTIFICATIONS', 'VIEW_REPORTS'
@@ -190,7 +190,8 @@ export default function CustomRolesManager({ workspaceId }: CustomRolesManagerPr
         const implementedPermissions = [
             'PIN_POST',
             'RESOLVE_BLOCKER',
-            'MANAGE_WORKSPACE_PERMISSIONS'
+            'MANAGE_WORKSPACE_PERMISSIONS',
+            'MANAGE_AGENTS'
         ];
         const implementedInCategory = permissions.filter(p => implementedPermissions.includes(p));
         
@@ -380,7 +381,8 @@ export default function CustomRolesManager({ workspaceId }: CustomRolesManagerPr
                                                         const implementedPermissions = [
                                                             'PIN_POST',
                                                             'RESOLVE_BLOCKER',
-                                                            'MANAGE_WORKSPACE_PERMISSIONS'
+                                                            'MANAGE_WORKSPACE_PERMISSIONS',
+                                                            'MANAGE_AGENTS'
                                                         ];
                                                         const isPermissionImplemented = implementedPermissions.includes(permission);
                                                         

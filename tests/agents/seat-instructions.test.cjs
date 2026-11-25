@@ -30,7 +30,7 @@ test("a seat's own instructions, on the seat's page", async t => {
   const deps = { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), 'next/server': { NextResponse: Response },
     '@/lib/issue-finder': { issueAccessWhere: load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }).issueAccessWhere },
     '@/lib/request-session': { getServerSession: async () => user ? { user: { id: user } } : null }, '@/lib/auth-options': { authOptions: {} },
-    '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'MANAGE_WORKSPACE_PERMISSIONS' }, checkUserPermission: async (userId, workspaceId) => ({ hasPermission: managers.has(userId) && workspaceId === 'w' }) } };
+    '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'MANAGE_AGENTS' }, checkUserPermission: async (userId, workspaceId) => ({ hasPermission: managers.has(userId) && workspaceId === 'w' }) } };
   deps['@/lib/agent-seat-instructions'] = load('src/lib/agent-seat-instructions.ts', deps);
   const { readSeatPage } = deps['@/lib/agent-seat-instructions'];
   const route = load('src/app/api/workspaces/[workspaceId]/agent-seats/[seatId]/instructions/route.ts', deps);

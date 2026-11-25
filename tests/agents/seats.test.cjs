@@ -586,7 +586,7 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
   await t.test('people manage seats with the permission that manages agent tokens', async () => {
     let allowed = true, session = { user: { id: owner } };
     const people = { ...deps, '@/lib/request-session': { getServerSession: async () => session }, '@/lib/auth-options': {},
-      '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' }, checkUserPermission: async () => ({ hasPermission: allowed }) } };
+      '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'manage' }, checkUserPermission: async () => ({ hasPermission: allowed }) } };
     const collection = load('src/app/api/workspaces/[workspaceId]/agent-seats/route.ts', people, globals);
     const single = load('src/app/api/workspaces/[workspaceId]/agent-seats/[seatId]/route.ts', people, globals);
     const post = body => collection.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify(body) }), { params: Promise.resolve({ workspaceId: 'w' }) });

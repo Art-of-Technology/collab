@@ -20,7 +20,7 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
   const workspace = await prisma.workspace.findUnique({ where: { slug: workspaceId }, select: { id: true, name: true } })
     ?? await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true, name: true } });
   if (!workspace) notFound();
-  const { hasPermission } = await checkUserPermission(session.user.id, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission } = await checkUserPermission(session.user.id, workspace.id, Permission.MANAGE_AGENTS);
   if (!hasPermission) notFound();
 
   const tokens = await listAgentTokens(workspace.id);
@@ -37,7 +37,7 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
   ]) : [[], { seats: [], people: [], customRoles: [] }];
   const manageable = [];
   for (const { id, name, slug } of others) {
-    if ((await checkUserPermission(session.user.id, id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission) manageable.push({ id, name, slug });
+    if ((await checkUserPermission(session.user.id, id, Permission.MANAGE_AGENTS)).hasPermission) manageable.push({ id, name, slug });
   }
 
   return (

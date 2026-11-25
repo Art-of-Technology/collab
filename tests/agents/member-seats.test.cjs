@@ -48,7 +48,7 @@ test('a member adds their own seats to a project, once its owner has switched th
     '@/lib/request-session': { getServerSession: async () => user ? { user: { id: user } } : null }, '@/lib/auth-options': { authOptions: {} },
     '@/lib/slug-resolvers': { resolveWorkspaceSlug: async id => id },
     // Only the workspace's owner may manage its permissions here.
-    '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'MANAGE_WORKSPACE_PERMISSIONS' }, checkUserPermission: async userId => ({ hasPermission: userId === owner }) } };
+    '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'MANAGE_AGENTS' }, checkUserPermission: async userId => ({ hasPermission: userId === owner }) } };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
   deps['@/lib/agent-mode'] = load('src/lib/agent-mode.ts', deps, { Date });
   deps['@/lib/agent-seat-setup'] = load('src/lib/agent-seat-setup.ts', deps, { Date });
