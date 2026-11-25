@@ -124,7 +124,7 @@ export const PATCH = withAppAuth(
         return NextResponse.json(
           { 
             error: 'insufficient_permissions', 
-            error_description: 'Only Owners can update workspace settings' 
+            error_description: 'Only Owners can update workspace settings'
           },
           { status: 403 }
         );
