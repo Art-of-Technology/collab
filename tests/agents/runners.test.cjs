@@ -579,6 +579,14 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     // The people an Owner may connect a runner for: themself and active members below Owner with an email.
     assert.deepEqual((await page.readRunnersTab(lvOwner, 'lv-team')).people.map(person => person.id).sort(), [lvOwner, lvAdmin, lvMember, sysAdmin].sort());
     assert.deepEqual((await page.readRunnersTab(primary, 'lv-team')).people.map(person => person.id).sort(), [primary, lvOwner, lvOwner2, lvAdmin, lvMember, sysAdmin].sort());
+
+    // The primary owner is the primary owner by the workspace, whatever their membership row says, or without one.
+    const key = { userId_workspaceId: { userId: primary, workspaceId: 'lv' } };
+    await prisma.workspaceMember.update({ where: key, data: { role: 'MEMBER' } });
+    assert.ok(!(await list(lvOwner))[1].runners.some(row => row.ownerId === primary), 'a member row does not put the primary owner below');
+    assert.ok(!(await page.readRunnersTab(lvOwner, 'lv-team')).people.some(person => person.id === primary));
+    await prisma.workspaceMember.delete({ where: key });
+    assert.ok(!(await list(lvOwner))[1].runners.some(row => row.ownerId === primary), 'no member row does not make the primary owner levelless');
   });
 
   await t.test('a runner whose person left the workspace, or whose pairing ran out, is refused; and pairings are capped', async () => {
