@@ -403,6 +403,15 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
 1. Choose the `outcome`: `done`, `in_review` or `blocked`.
 2. Write the `note` with the four headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. It holds at most 16,000 characters.
 3. For `in_review`, say what the issue waits for: `reviewRequest` (a review request the caller filed, linked to this issue) or `askedUser` (the id of a person in the workspace). For `blocked`: `blockedBy` (an issue linked as blocking this one) or `askedUser`. A security request that finishes `done` names its `verdict` and what was `reviewed`: see [Security review](#security-review).
+
+   With `askedUser`, say what the person is asked in `ask`. It has one of two shapes:
+
+   | `kind` | The person | Fields |
+   | --- | --- | --- |
+   | `decision` | chooses | `questions`: 1 to 5, each with `question`, 2 to 4 `options` and, optionally, the `suggested` one. |
+   | `hands` | does something | `steps` and `doneWord`, the reply that says it is done. |
+
+   The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked).
 4. Give the facts the next session needs as fields, not only inside the note:
 
    | Field | CLI option | What it is | When |
@@ -423,6 +432,9 @@ The reply contains the finished `run` and `statusUnmapped`.
 - The state of the pull request (open, approved, merged) is not a field: it changes after the session ends.
 - A CLI before 0.12.0 cannot send these fields. For `in_review` and `blocked`, the server can take the next step from `## Next`; see the [runner contract](/docs/agents/runner-contract) for the fallback and its limits.
 - `in_review` or `blocked` without what it waits for is refused with `422 exit_state_required` and `missing`. The one exception is a [lead seat](#lead-seat) that waits for its issue's children. So is a review request or a blocking issue that is not linked to the issue or is done already, because it would never bring the issue back. `askedUser` is another person who is an active member, not an agent.
+- `ask` is taken only with `askedUser`: without it the finish is refused with `422 exit_state_required` and `"missing": ["askedUser"]`. A malformed `ask` is refused with `422 exit_note_required`, and `missing` names the place, such as `ask.questions.0.options`.
+- A deployment can require `ask`: with the environment setting `COLLAB_STOP_ASK_REQUIRED=true`, a finish with `askedUser` and no `ask` is refused with `422 exit_state_required` and `"missing": ["ask"]`. The setting is off by default and applies to every workspace of the deployment.
+- The person sees `ask` on their Home page under **Needs you**: one question with a button per reply word, several questions with a link to the issue, or the steps and the done word. Their answer is a comment on the issue. A comment by anyone other than the seat that is later than the seat's last comment of that run brings the issue back with reason `reply`, also if it arrived before the finish.
 - The issue moves to a status of the outcome's group. `status` names it and must be an active status of that group. Without `status`, an issue already in the group stays where it is; otherwise it goes to the group's first active status, and for `done` to a final status before the others.
 - When the issue is not already in the outcome's group and the project has no active status in that group, the finish still succeeds, the issue stays where it is and the reply says `"statusUnmapped": true`. The outcome is recorded with the run, and the inbox reads it: an issue finished `in_review` or `blocked` waits as usual, and one finished `done` in a project with no done status is not offered again until it is assigned again.
 - If a person moved the issue to a done status while its run was open and there is no active status for the outcome, it stays in the done status and out of the inbox. Otherwise the finish follows the status rules above.

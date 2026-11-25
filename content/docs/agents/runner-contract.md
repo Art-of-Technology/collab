@@ -208,6 +208,7 @@ The session that did the work finishes the run. Needs `issues:write`. A `waiting
 | `outcome` | yes | `done`, `in_review` or `blocked`. |
 | `note` | yes | The exit note, up to 16,000 characters, with the headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. |
 | `reviewRequest`, `blockedBy`, `askedUser` | see below | What the issue waits for. |
+| `ask` | only with `askedUser` | What the person is asked: a decision or work for their hands. See [Say what the person is asked](#say-what-the-person-is-asked). |
 | `nextStep` | for `in_review` and `blocked` | The first thing to do next, in one line of at most 300 characters. If absent for those outcomes, the first non-empty line under `## Next` is used, with a leading list mark removed and truncated to 300 characters; a heading is not a next step. `done` does not use this fallback. |
 | `pullRequest`, `headCommit` | no, but together | The pull request as `owner/repository#number`, and the full lowercase 40-character commit it was left at. Neither is taken without the other. |
 | `verdict`, `reviewed` | see below | For a security request that finishes `done`: `passed` or `failed`, and the commit or pull request that was read, up to 200 characters. |
@@ -237,11 +238,47 @@ The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is 
 
 | Status | `error` | Extra key | When |
 | --- | --- | --- | --- |
-| 422 | `exit_note_required` | `missing`: the headings not found, or the fields to correct | The note lacks a heading; `pullRequest` or `headCommit` is malformed or comes without the other; `nextStep` is malformed; or `in_review` or `blocked` has no next step. |
-| 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, a security request finishes `done` without `verdict` or `reviewed`, or the finish names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. |
+| 422 | `exit_note_required` | `missing`: the headings not found, or the fields to correct | The note lacks a heading; `pullRequest` or `headCommit` is malformed or comes without the other; `nextStep` is malformed; `in_review` or `blocked` has no next step; or `ask` is malformed, with the place in `missing`, such as `ask.questions.0.options`. |
+| 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, a security request finishes `done` without `verdict` or `reviewed`, or the finish names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. Also `ask` without `askedUser`, and `askedUser` without `ask` on a deployment that requires it. |
 | 400 | `invalid_request` | | A field has the wrong type, the outcome does not take it, an unknown key is supplied, or `usage` is not complete. |
 | 409 | `run_fenced` | | The run is not the one working the issue any more. If the generation matches and the run had not finished already, the note is kept on the issue's timeline as a late exit note. |
 | 404 | `not_found` | | The run is not the caller's, or its issue is in Trash. |
+
+### Say what the person is asked
+
+A finish that names a person with `askedUser` can say what it asks of them in `ask`. Collab's Home page shows the person the question or the steps from these fields. Without `ask`, Home reads them out of the seat's last comment on the issue.
+
+| `kind` | Use it when | Fields |
+| --- | --- | --- |
+| `decision` | The person has to choose. | `questions`: 1 to 5. Each has `question` (up to 2,000 characters), `options` (2 to 4 different reply words) and, optionally, `suggested` (one of its options). |
+| `hands` | The person has to do something. | `steps` (what to do, up to 4,000 characters) and `doneWord` (the reply word that says it is done). |
+
+A reply word is what the person sends back as a comment on the issue: at most 40 characters, with no line break and no slash.
+
+```json
+{
+  "event": "finish",
+  "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11",
+  "outcome": "blocked",
+  "askedUser": "cmexampleperson0000000001",
+  "nextStep": "Run the migration the way the answer says",
+  "ask": {
+    "kind": "decision",
+    "questions": [
+      { "question": "Run the migration in tonight's window, or split it into two releases?", "options": ["window", "split"], "suggested": "split" }
+    ]
+  },
+  "note": "## Done\n...\n\n## Decisions\n...\n\n## Evidence\n...\n\n## Next\n..."
+}
+```
+
+```json
+"ask": { "kind": "hands", "steps": "1. Open the repository's settings.\n2. Add the pull request event to the webhook.", "doneWord": "webhook added" }
+```
+
+- The reply belongs on the issue that stopped: `ask` names no other issue. One question is answered on Home with a button per reply word; several are shown with their reply words and a link to the issue.
+- A comment by anyone other than the seat brings the issue back to the seat's inbox with reason `reply`. It counts when it is later than the seat's last comment of that run, also if it arrived before the finish. If the seat wrote no comment in the run, it counts when it is later than the finish.
+- `ask` is optional unless the deployment sets `COLLAB_STOP_ASK_REQUIRED=true`. With that setting, a finish with `askedUser` and no `ask` is refused with `422 exit_state_required` and `"missing": ["ask"]`. It is off by default, there is no setting per workspace, and a finish that names no person is not affected.
 
 ### Report usage
 
