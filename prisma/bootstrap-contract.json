@@ -148,6 +148,10 @@
       "sha256": "02166b40543580f3b534542b36ca610b4a8bf35c2d2c32d158df7b1c52bca37c"
     },
     {
+      "name": "20261124000300_workspace_role_normalise",
+      "sha256": "df5d81c612f724b3727f01de88a9d26a30037bf9a88373f90a030128420e304c"
+    },
+    {
       "name": "20261125000100_agent_custom_roles",
       "sha256": "f54fd03ac8b9fbf795021183ff83809bdd4c21d8ec596eee4ce69b6e5e379f8f"
     }
