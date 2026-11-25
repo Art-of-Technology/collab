@@ -26,7 +26,7 @@ const ORDER: Record<string, number> = { resume: 0, in_review: 1, blocked: 2 };
 
 export interface InboxItem {
   issueId: string; issueKey: string | null; title: string; priority: string; category: string;
-  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'child_no_room' | 'assigned'; lastRunAt: string | null;
+  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'child_no_room' | 'other_child_done' | 'assigned'; lastRunAt: string | null;
   /**
    * With `child_no_room`: the child issues to move, each with the seat it sits on and why that seat has no room, and for
    * a child a run has started on the pull request its last run pushed (CLB-809).
@@ -52,6 +52,8 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * has sat with a seat for `CHILD_IDLE_MS` without a run, or one sits on a developer seat that has had no room while another
  * developer seat could take it (`child_no_room`): for `NO_ROOM_MOVE_MS` when no run ever started on it (CLB-780), for
  * `STARTED_MOVE_MS` when its seat's inbox offers it for its next run and its last run pushed its work (`waitsPushed`, CLB-809).
+ * A child that reached done under another issue the lead holds in its project counts as well, for an issue that has a
+ * child the lead may still place (`other_child_done`, CLB-1179).
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   await markLost(context.workspace.id);
@@ -105,7 +107,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   } }) : []).map(detail => [detail.id, detail]));
 
   // Only a lead waits for children, so nobody else pays for this read.
-  const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
+  const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: waiting }, projectId: seat.projectId }, select: {
     id: true, parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
     assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
     helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
@@ -144,6 +146,23 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     return held && due && due.getTime() <= now && due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
   });
 
+  // CLB-1179. A lead may hold a child back until work under another of its issues is done, a rule Collab does not know.
+  // So a child that reaches done under any issue the lead holds in its project is news for its other blocked issues there,
+  // once each as for a child of their own, and only for one with a child `leadPlaces` would let it give out: open, no
+  // request, no assignee, never placed by a lead. A run costs money, and there is nothing to do for an issue without one.
+  const loose = children.filter(child => !isDone(child) && !child.assigneeId && !child.agentRequestRole);
+  const placedBefore = new Set((loose.length ? await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: loose.map(child => child.id) }, action: 'LEAD_ASSIGNED' },
+    select: { itemId: true } }) : []).map(entry => entry.itemId));
+  const toPlace = new Set(loose.filter(child => !placedBefore.has(child.id)).map(child => child.parentId));
+  const looked = candidates.flatMap(({ issue, ranBlocked }) => ranBlocked && toPlace.has(issue.id) ? [ranBlocked.getTime()] : []);
+  // `finishedAt` is when the status became final (the database trigger `track_issue_finish` writes it on every path), so
+  // editing a child that was done long ago wakes nobody here. A child in a done status that is not final has none and
+  // does not count. The issues the lead holds include those it has finished: the one whose last child this was may be done.
+  const mine = seat && looked.length ? await db.issue.findMany({ where: { workspaceId, assigneeId: me, projectId: seat.projectId }, select: { id: true } }) : [];
+  const doneUnder = seat && mine.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: mine.map(issue => issue.id) }, projectId: seat.projectId,
+    finishedAt: { gt: new Date(Math.min(...looked)) }, projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } },
+    select: { parentId: true, finishedAt: true } }) : [];
+
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
     if (stands !== 'in_review' && stands !== 'blocked') return 'assigned';
@@ -179,6 +198,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && unseen(new Date(due)) && due <= now;
     })) return 'child_idle';
     if (noRoomOf(issue.id, ranBlocked).length) return 'child_no_room';
+    if (toPlace.has(issue.id) && doneUnder.some(child => child.parentId !== issue.id && unseen(child.finishedAt))) return 'other_child_done';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
@@ -547,7 +567,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
     if (forChildren) {
       // The children of the lead's project, as its inbox reads them. One that finishes right after this count still
       // brings the issue back: the inbox measures children from when this run started, not from when it ends.
-      if (!await tx.issue.count({ where: { parentId: issue.id, projectId: issue.projectId, ...NOT_DONE } })) {
+      if (!await tx.issue.count({ where: { workspaceId, parentId: issue.id, projectId: issue.projectId, ...NOT_DONE } })) {
         throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}; a lead names neither only while a child issue is not done`, waitsFor);
       }
     }

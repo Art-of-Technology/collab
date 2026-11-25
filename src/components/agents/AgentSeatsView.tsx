@@ -11,6 +11,7 @@ type Shown = NonNullable<Seat['room']>;
 const REASONS: Record<string, string> = {
   resume: 'To resume', review_returned: 'Review returned', reply: 'New reply', blocker_resolved: 'Blocker resolved', assigned: 'Assigned',
   child_done: 'Child done', child_blocked: 'Child blocked', child_idle: 'Child idle', child_no_room: 'Child on a full seat',
+  other_child_done: 'Child done elsewhere',
 };
 
 /** What one line can say for several seats: their room reads the same when this does. */
