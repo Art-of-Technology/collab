@@ -25,7 +25,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     }
     await prisma.app.create({ data: { id: 'agent-app', name: 'collab-agent', slug: 'collab-agent', publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
       scopes: { create: scopes.map(scope => ({ scope })) } } });
-    await prisma.taskLabel.createMany({ data: ['Review request', 'Release request', 'backend'].map(name => ({ id: name, workspaceId: 'w', name, color: '#123456' })) });
+    await prisma.taskLabel.createMany({ data: ['Review request', 'Release request', 'Docs request', 'backend'].map(name => ({ id: name, workspaceId: 'w', name, color: '#123456' })) });
   });
   // The application's client, so Trash is hidden here as it is in production.
   const raw = db.prisma;
@@ -200,6 +200,24 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     await refused(label(person, unheard, ['Review request']), 'no_default_seat', 409);
     assert.deepEqual((await raw.issue.findUniqueOrThrow({ where: { id: unheard.id }, include: { labels: true } })).labels, []);
     assert.deepEqual(await requestsFor(unheard), []);
+  });
+
+  await t.test('docs requests reach the Documentation Manager through the request schema or a label', async () => {
+    const docs = await seat('docs-s', S, 'docs');
+    const source = await issue(S, { assigneeId: devS.userId });
+    const request = requests.requestSchema.parse({ role: 'docs', title: 'Update the docs', body: 'Update the setup page.', fromIssue: source.id });
+    const { issue: filed } = await requests.fileRequest(context(devS.userId), request);
+    assert.deepEqual((await requestsFor(source)).map(row => [row.id, row.agentRequestRole, row.assigneeId, row.labels.map(tag => tag.name)]),
+      [[filed.id, 'docs', docs.userId, ['Docs request']]]);
+
+    const labelled = await issue(S);
+    await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'docs-integration', access: 'write', expiresInDays: 30 });
+    const integration = await raw.user.findFirstOrThrow({ where: { name: 'docs-integration' } });
+    await refused(label(integration.id, labelled, ['Docs request']), 'assign_by_person', 403);
+    assert.deepEqual(await requestsFor(labelled), []);
+    await label(person, labelled, ['Docs request']);
+    assert.deepEqual((await requestsFor(labelled)).map(row => [row.agentRequestRole, row.assigneeId, row.labels.map(tag => tag.name)]),
+      [['docs', docs.userId, ['Docs request']]]);
   });
 
   await t.test('rule 9: a project switches back to handoffs, but not while a run is open in it', async () => {
