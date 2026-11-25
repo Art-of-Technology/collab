@@ -870,9 +870,10 @@ export async function updateWorkspaceMemberStatus(data: {
     throw new Error('Member not found');
   }
   
-  // The rank rule, which also keeps the workspace owner's membership on
+  // The rank rule, which also keeps the workspace owner's membership on. A platform admin keeps the
+  // answer this action gave an Admin before it: anyone but the workspace owner.
   const target = { userId: member.userId, level: member.userId === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role) };
-  if (!mayActOn(actor, target, { holdsChangeRoles: false })) {
+  if (actor?.platformAdmin ? target.level === 'PRIMARY_OWNER' : !mayActOn(actor, target, { holdsChangeRoles: false })) {
     throw new Error('You can only switch on or off members below your own level');
   }
   
