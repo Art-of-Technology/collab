@@ -79,17 +79,20 @@ function detailFixture(sessionUser) {
   };
   const rolePermissions = [{ workspaceId: 'space', role: 'ADMIN', permission: 'INVITE_MEMBERS' }];
   const db = {
-    user: { findUnique: async ({ where, include }) => {
+    user: { findUnique: async ({ where, include, select }) => {
       const user = users.find(row => matches(row, where));
-      if (!user || !include) return user ?? null;
+      // The permission check and the authority module both ask for the viewer's active membership.
+      const relations = include ?? select;
+      if (!user || !relations?.workspaceMemberships) return user ?? null;
       return { ...user,
-        workspaceMemberships: space.members.filter(member => member.userId === user.id && matches({ ...member, workspaceId: space.id }, include.workspaceMemberships.where)),
-        ownedWorkspaces: space.ownerId === user.id && matches(space, include.ownedWorkspaces.where) ? [{ id: space.id }] : [] };
+        workspaceMemberships: space.members.filter(member => member.userId === user.id && matches({ ...member, workspaceId: space.id }, relations.workspaceMemberships.where)),
+        ownedWorkspaces: space.ownerId === user.id && matches(space, relations.ownedWorkspaces?.where ?? {}) ? [{ id: space.id }] : [] };
     } },
     workspace: { findUnique: async ({ where, select }) => {
       if (!matches(space, where)) return null;
-      return select ? { id: space.id } : structuredClone(space);
+      return select ? Object.fromEntries(Object.keys(select).map(key => [key, space[key]])) : structuredClone(space);
     } },
+    customRole: { findMany: async () => [] },
     rolePermission: { findUnique: async ({ where }) => rolePermissions.find(row => matches(row, where.workspaceId_role_permission)) ?? null },
   };
   const deps = { 'next-auth': { getServerSession: async () => ({ user: sessionUser }) },

@@ -4,24 +4,23 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Users, Mail, Bell, Loader2, Shield, UserCheck, UserX, AlertTriangle, KeyRound, ListChecks, Layers } from "lucide-react";
+import { ArrowLeft, Building2, Users, Bell, Loader2, Shield, UserCheck, AlertTriangle, KeyRound, ListChecks, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserAvatar } from "@/components/ui/user-avatar";
 import { Badge } from "@/components/ui/badge";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import WorkspaceDetailsEditor from "@/app/(main)/workspaces/[workspaceId]/WorkspaceDetailsEditor";
 import { InvitationsTab } from "@/components/workspace/components/invitation";
 import { WorkspaceFeatureSettings } from "./WorkspaceFeatureSettings";
-import { useDetailedWorkspaceById } from "@/hooks/queries/useWorkspace";
+import { useDetailedWorkspaceById, workspaceKeys } from "@/hooks/queries/useWorkspace";
+import { workspaceMembersKeys } from "@/hooks/queries/useWorkspaceMembers";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 import { useCanInviteMembers, useCanManageMembers } from "@/hooks/use-permissions";
 import PageHeader from "@/components/layout/PageHeader";
-import MemberStatusToggle from "./MemberStatusToggle";
+import MemberRow from "./MemberRow";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 
@@ -36,6 +35,8 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [memberMessage, setMemberMessage] = useState("");
+  const [openMemberId, setOpenMemberId] = useState<string | null>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -66,33 +67,20 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
     router.push("/workspaces");
   };
 
-  // Handler for member status changes
-  const handleMemberStatusChange = (memberId: string, newStatus: boolean) => {
-    if (!localWorkspace) return;
-
-    // Update local workspace state immediately
-    setLocalWorkspace((prevWorkspace: any) => {
-      if (!prevWorkspace) return prevWorkspace;
-
-      return {
-        ...prevWorkspace,
-        members: prevWorkspace.members.map((member: any) =>
-          member.id === memberId ? { ...member, status: newStatus } : member
-        )
-      };
+  // A member's role or status changed, or the member was removed (null)
+  const handleMemberChange = (memberId: string, patch: Record<string, unknown> | null) => {
+    setLocalWorkspace((prevWorkspace: any) => prevWorkspace && {
+      ...prevWorkspace,
+      members: prevWorkspace.members.flatMap((member: any) =>
+        member.id !== memberId ? [member] : patch ? [{ ...member, ...patch }] : []
+      ),
     });
-
-    // Also update the query cache
-    queryClient.setQueryData(['workspace', workspaceId], (oldData: any) => {
-      if (!oldData) return oldData;
-
-      return {
-        ...oldData,
-        members: oldData.members.map((member: any) =>
-          member.id === memberId ? { ...member, status: newStatus } : member
-        )
-      };
-    });
+    for (const key of new Set([current.id, current.slug])) {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.detailedWorkspace(key) });
+    }
+    if (patch === null || "status" in patch) {
+      queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.byWorkspace(current.id) });
+    }
   };
 
   // Handler for opening delete dialog
@@ -184,7 +172,8 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
   }
 
   // Use the permissions returned from the server action
-  const { isOwner, canManage } = localWorkspace || workspace || workspaceData;
+  const current = localWorkspace || workspace || workspaceData;
+  const { isOwner, canManage } = current;
 
   return (
     <div className="w-full mx-auto">
@@ -219,12 +208,12 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
               <span className="text-sm text-muted-foreground">@{localWorkspace?.slug || workspace?.slug || workspaceData.slug}</span>
               {isOwner && (
                 <Badge variant="outline" className="h-5 px-2 text-xs">
-                  Owner
+                  Primary owner
                 </Badge>
               )}
               {canManage && !isOwner && (
                 <Badge variant="outline" className="h-5 px-2 text-xs bg-blue-50 text-blue-700 border-blue-200">
-                  Admin
+                  Platform admin
                 </Badge>
               )}
             </div>
@@ -284,109 +273,38 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
               <CardDescription className="text-xs">Manage the members of your workspace.</CardDescription>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <div className="space-y-2">
-
-                {/* Members */}
-                {(localWorkspace?.members.filter((member: any) => member.status) || workspace?.members.filter((member: any) => member.status) || workspaceData.members.filter((member: any) => member.status)).map((member: any) => (
-                  <div
-                    key={member.id}
-                    className="p-3 border border-border/20 rounded flex justify-between items-center hover:bg-muted/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {member.user.useCustomAvatar ? (
-                        <CustomAvatar user={member.user} size="lg" className="h-8 w-8 border border-border/30" />
-                      ) : (
-                        <UserAvatar user={member.user} size="lg" className="border border-border/30" />
-                      )}
-                      <div>
-                        <div className="font-medium text-sm">{member.user.name}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Mail className="h-3 w-3" />
-                          {member.user.email}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {canManageMembers && member.user.email && (
-                        <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
-                          <Link href={`/workspaces/${workspaceId}/settings/members/${member.user.id}`}>Workspaces</Link>
-                        </Button>
-                      )}
-                      {member.user.id === (localWorkspace?.ownerId || workspace?.ownerId || workspaceData.ownerId) ? (
-                        <Badge className="bg-primary hover:bg-primary/90 h-5 px-2 text-xs">Owner</Badge>
-                      ) : (
-                        <>
-                          <MemberStatusToggle
-                            memberId={member.id}
-                            workspaceId={workspaceId}
-                            currentStatus={member.status}
-                            memberName={member.user.name || member.user.email}
-                            canManage={canManage}
-                            isOwner={false}
-                            onStatusChange={handleMemberStatusChange}
-                          />
-                          <Badge variant="outline" className="bg-muted/30 h-5 px-2 text-xs">
-                            {member.role}
-                          </Badge>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Show inactive members if there are any and user can manage */}
-              {(localWorkspace?.members.some((member: any) => !member.status) || workspace?.members.some((member: any) => !member.status) || workspaceData.members.some((member: any) => !member.status)) && (
-                <div className="mt-4 pt-4 border-t border-border/20">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                    <UserX className="h-4 w-4" />
-                    Inactive Members
-                  </h4>
-                  <div className="space-y-2">
-                    {(localWorkspace?.members.filter((member: any) => !member.status) || workspace?.members.filter((member: any) => !member.status) || workspaceData.members.filter((member: any) => !member.status)).map((member: any) => (
-                      <div
-                        key={member.id}
-                        className="p-3 border border-border/20 rounded flex justify-between items-center hover:bg-muted/30 transition-colors bg-muted/20"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          {member.user.useCustomAvatar ? (
-                            <CustomAvatar user={member.user} size="lg" className="h-8 w-8 border border-border/30" />
-                          ) : (
-                            <UserAvatar user={member.user} size="lg" className="border border-border/30" />
-                          )}
-                          <div>
-                            <div className="font-medium text-sm">{member.user.name}</div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {member.user.email}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {member.user.id === (localWorkspace?.ownerId || workspace?.ownerId || workspaceData.ownerId) ? (
-                            <Badge className="bg-primary hover:bg-primary/90 h-5 px-2 text-xs">Owner</Badge>
-                          ) : (
-                            <>
-                              <MemberStatusToggle
-                                memberId={member.id}
-                                workspaceId={workspaceId}
-                                currentStatus={member.status}
-                                memberName={member.user.name || member.user.email}
-                                canManage={canManage}
-                                isOwner={false}
-                                onStatusChange={handleMemberStatusChange}
-                              />
-                              <Badge variant="outline" className="bg-muted/30 h-5 px-2 text-xs">
-                                {member.role}
-                              </Badge>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {memberMessage && <p role="status" className="mb-3 rounded border border-collab-700 bg-collab-900 px-3 py-2 text-sm break-words">{memberMessage}</p>}
+              {current.viewerLevel === "STANDARD" && current.rolesViewerMayGrant.length === 0 && (
+                <p className="mb-3 text-sm text-collab-400">You can see who is here. Changing roles needs Admin or above.</p>
               )}
+              {[["People", false], ["Agents", true]].map(([group, agents]) => {
+                const rows = current.members.filter((member: any) => member.agent === agents);
+                if (agents && rows.length === 0) return null;
+                return (
+                  <section key={group as string} aria-label={group as string} className="mb-4">
+                    <h4 className="text-xs font-medium uppercase tracking-wider text-collab-500 mb-2">{group}</h4>
+                    <div className="space-y-2">
+                      {rows.map((member: any) => (
+                        <MemberRow
+                          key={member.id}
+                          member={member}
+                          workspaceId={current.id}
+                          routeWorkspaceId={workspaceId}
+                          workspaceName={current.name}
+                          rolesViewerMayGrant={current.rolesViewerMayGrant}
+                          viewerManages={current.viewerLevel !== null && current.viewerLevel !== "STANDARD"}
+                          platformAdmin={current.viewerLevel === null && canManage}
+                          canSeeOtherWorkspaces={canManageMembers}
+                          open={openMemberId === member.id}
+                          onOpen={(open) => setOpenMemberId(open ? member.id : null)}
+                          onChange={handleMemberChange}
+                          onMessage={setMemberMessage}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </CardContent>
           </Card>
         </TabsContent>

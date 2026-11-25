@@ -8,20 +8,21 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
   }));
   // Owners do not require an active membership row.
   spaces[0].members.push({ id: 'inactive-owner', userId: 'alice', status: false, user: users[0], role: 'owner' });
-  const reads = [];
+  const reads = [], customRoles = [], grants = [];
   let materialized = 0;
   const db = {
-    user: { findUnique: async ({ where, include }) => {
+    user: { findUnique: async ({ where, include, select }) => {
       const user = users.find(row => matches(row, where)) ?? null;
-      // The permission check asks for the viewer's active membership and owned workspace in one workspace.
-      if (!user || !include) return user;
+      // The permission check and the authority module ask for the viewer's active membership (and owned workspace) in one workspace.
+      const relations = include ?? select;
+      if (!user || !relations?.workspaceMemberships) return user;
       return { ...user,
         workspaceMemberships: spaces.flatMap(row => row.members.map(member => ({ ...member, workspaceId: row.id })))
-          .filter(member => member.userId === user.id && matches(member, include.workspaceMemberships.where)),
-        ownedWorkspaces: spaces.filter(row => row.ownerId === user.id && matches(row, include.ownedWorkspaces.where)).map(row => ({ id: row.id })) };
+          .filter(member => member.userId === user.id && matches(member, relations.workspaceMemberships.where)),
+        ownedWorkspaces: spaces.filter(row => row.ownerId === user.id && matches(row, relations.ownedWorkspaces?.where ?? {})).map(row => ({ id: row.id })) };
     } },
-    // No role holds a permission here: only owners and platform admins may invite.
-    rolePermission: { findUnique: async () => null },
+    customRole: { findMany: async ({ where }) => customRoles.filter(row => matches(row, where)) },
+    rolePermission: { findUnique: async ({ where }) => grants.find(row => matches(row, where.workspaceId_role_permission)) ?? null },
     workspace: {
       findMany: async spec => {
         reads.push(spec);
@@ -48,7 +49,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
     '@/lib/auth-options': {}, '@/lib/prisma': { prisma: db }, '@/lib/utils': {} };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
   deps['@/lib/permissions'] = load('src/lib/permissions.ts', { './prisma': { prisma: db } }, { console });
-  return { actions: load('src/actions/workspace.ts', deps), spaces, users, reads, materialized: () => materialized };
+  return { actions: load('src/actions/workspace.ts', deps), spaces, users, reads, customRoles, grants, materialized: () => materialized };
 }
 
 test('workspace lists retain owners and active members only, with by-ID reads bound to the current subject', async () => {
@@ -149,4 +150,72 @@ for (const name of ['getWorkspaceById', 'getDetailedWorkspaceById']) test(`${nam
   collision.spaces[3].slug = 'own';
   await assert.rejects(collision.actions[name]('own'), /You do not have access to this workspace/);
   assert.equal(collision.materialized(), 0);
+});
+
+test("workspace detail carries the viewer's level, each member's level and the roles the viewer may grant, from the authority module", async () => {
+  const f = fixture({ id: 'alice' });
+  const person = (id, email = `${id}@example.test`) => ({ id, email, role: 'DEVELOPER' });
+  const joined = f.spaces[1]; // owned by bob; alice is a member
+  joined.members = [
+    { id: 'm-alice', userId: 'alice', status: true, role: 'OWNER', user: f.users[0] },
+    { id: 'm-bob', userId: 'bob', status: true, role: 'OWNER', user: f.users[1] },
+    { id: 'm-carol', userId: 'carol', status: true, role: 'ADMIN', user: person('carol') },
+    { id: 'm-dave', userId: 'dave', status: false, role: 'Support', user: person('dave') },
+    { id: 'm-seat', userId: 'seat', status: true, role: 'MEMBER', user: person('seat', null) },
+  ];
+  f.customRoles.push({ workspaceId: 'joined', name: 'Support' }, { workspaceId: 'foreign', name: 'Elsewhere' });
+  const shape = result => Object.fromEntries(result.members.map(m => [m.id, [m.level, m.agent, m.mayAct]]));
+
+  // An Owner acts on Admins and below, never on the primary owner, an agent account or themselves; grants everything below Owner.
+  let result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.equal(result.viewerLevel, 'OWNER');
+  assert.deepEqual(shape(result), {
+    'm-alice': ['OWNER', false, false], 'm-bob': ['PRIMARY_OWNER', false, false], 'm-carol': ['ADMIN', false, true],
+    'm-dave': ['STANDARD', false, true], 'm-seat': ['STANDARD', true, false],
+  });
+  assert.ok(!result.rolesViewerMayGrant.includes('OWNER'));
+  assert.ok(result.rolesViewerMayGrant.includes('ADMIN') && result.rolesViewerMayGrant.includes('MEMBER'));
+  assert.ok(result.rolesViewerMayGrant.includes('Support') && !result.rolesViewerMayGrant.includes('Elsewhere'));
+
+  // An Admin whose role lost the change-roles permission is offered no role to grant: the role route would refuse.
+  joined.members[0].role = 'ADMIN';
+  f.grants.push({ workspaceId: 'joined', role: 'ADMIN', permission: 'INVITE_MEMBERS' },
+    { workspaceId: 'foreign', role: 'ADMIN', permission: 'CHANGE_MEMBER_ROLES' });
+  result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.deepEqual(Array.from(result.rolesViewerMayGrant), []);
+  assert.deepEqual(Array.from(result.invitations, row => row.id), ['invite-joined']);
+  assert.equal(shape(result)['m-dave'][2], true, 'switching on or off and removing need no such permission');
+
+  // An Admin does not act on another Admin and grants neither Owner nor Admin.
+  f.grants[0].permission = 'CHANGE_MEMBER_ROLES';
+  result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.deepEqual(Array.from(result.invitations), []);
+  assert.equal(result.viewerLevel, 'ADMIN');
+  assert.equal(shape(result)['m-carol'][2], false);
+  assert.equal(shape(result)['m-dave'][2], true);
+  assert.ok(!result.rolesViewerMayGrant.includes('OWNER') && !result.rolesViewerMayGrant.includes('ADMIN'));
+  assert.ok(result.rolesViewerMayGrant.includes('Support'));
+
+  // A standard role without the change-roles permission grants nothing and acts on nobody.
+  f.grants.length = 0;
+  joined.members[0].role = 'MEMBER';
+  result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.equal(result.viewerLevel, 'STANDARD');
+  assert.deepEqual(Array.from(result.rolesViewerMayGrant), []);
+  assert.ok(result.members.every(m => m.mayAct === false));
+
+  // The primary owner grants Owner too.
+  const owner = fixture({ id: 'bob' });
+  owner.spaces[1].members = joined.members;
+  result = await owner.actions.getDetailedWorkspaceById('joined');
+  assert.equal(result.viewerLevel, 'PRIMARY_OWNER');
+  assert.ok(result.rolesViewerMayGrant.includes('OWNER'));
+  assert.equal(shape(result)['m-alice'][2], true);
+
+  // A platform admin who is not a member has no level and acts on nobody through the module.
+  const admin = fixture({ id: 'root' });
+  result = await admin.actions.getDetailedWorkspaceById('foreign');
+  assert.equal(result.viewerLevel, null);
+  assert.deepEqual(Array.from(result.rolesViewerMayGrant), []);
+  assert.equal(result.canManage, true);
 });
