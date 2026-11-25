@@ -371,6 +371,28 @@ test('a folder or file of someone else is changed by an Admin and above, and by 
   }
 });
 
+test('a file in a project folder is changed by an Admin, and not by a standard member who did not upload it', async () => {
+  const setup = (user) => {
+    const f = fixture(user);
+    f.addFolder('ideation', { projectId: 'project' });
+    return { f, file: f.addFile('theirs', { uploadedById: 'alice' }) };
+  };
+  const { f, file } = setup('carol');
+  assert.equal((await f.call(ONE, 'PATCH', { id: file.id, body: { name: 'mine.pdf' } })).status, 403);
+  assert.equal((await f.call(ONE, 'DELETE', { id: file.id })).status, 403);
+  Object.assign(file, { deletedAt: new Date(), deletedById: 'alice' });
+  assert.equal((await f.call(RESTORE, 'POST', { id: file.id })).status, 403);
+  assert.equal(file.name, 'theirs');
+  assert.equal(f.state.writes, 0);
+
+  const admin = setup('dana');
+  assert.equal((await admin.f.call(ONE, 'PATCH', { id: admin.file.id, body: { name: 'tidied.pdf' } })).status, 200);
+  assert.equal((await admin.f.call(ONE, 'DELETE', { id: admin.file.id })).status, 200);
+  assert.equal((await admin.f.call(RESTORE, 'POST', { id: admin.file.id })).status, 200);
+  assert.equal(admin.file.name, 'tidied.pdf');
+  assert.equal(admin.file.deletedAt, null);
+});
+
 test('a file in Trash is out of the folder until it is restored, and so is one whose folder went', async () => {
   const f = fixture();
   f.addFolder('ideation');

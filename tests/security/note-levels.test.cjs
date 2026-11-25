@@ -68,7 +68,7 @@ function fixture(userId) {
     new Request('https://example.test/api/notes/audit-log'), { params: Promise.resolve({ id }) },
   );
   const access = () => load('src/lib/secrets/access.ts', dependencies, globals);
-  return { pin, auditLog, access, notes, state };
+  return { pin, auditLog, access, notes, state, workspace };
 }
 
 test('pinning and the secret audit log: the author, an Admin, an Owner and the primary owner pass in any letter case of the stored role; a standard member is refused', async () => {
@@ -101,6 +101,16 @@ test('a platform admin who is not a member and a switched-off Admin are refused,
     assert.equal((await fixture(user).access().canAccessNote(user, 'locked')).canAccess, false, user);
   }
   assert.equal((await fixture('carol').auditLog('locked')).status, 200);
+});
+
+test('a platform admin who is a standard member gets no admin line on a note, and none as an outsider', async () => {
+  const member = await fixture('padm').access().canAccessNote('padm', 'plain');
+  assert.equal(member.canAccess, true);
+  assert.deepEqual([member.canEdit, member.canShare, member.canDelete], [false, false, false]);
+  // The same platform admin, no longer a member, is refused a restricted note.
+  const outsider = fixture('padm');
+  outsider.workspace.members = outsider.workspace.members.filter(row => row.userId !== 'padm');
+  assert.equal((await outsider.access().canAccessNote('padm', 'locked')).canAccess, false);
 });
 
 test('the personal-note rule and a note that reaches its workspace through a project are as before', async () => {
