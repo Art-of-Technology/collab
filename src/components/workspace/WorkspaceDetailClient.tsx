@@ -16,6 +16,7 @@ import WorkspaceDetailsEditor from "@/app/(main)/workspaces/[workspaceId]/Worksp
 import { InvitationsTab } from "@/components/workspace/components/invitation";
 import { WorkspaceFeatureSettings } from "./WorkspaceFeatureSettings";
 import { useDetailedWorkspaceById, workspaceKeys } from "@/hooks/queries/useWorkspace";
+import { workspaceMembersKeys } from "@/hooks/queries/useWorkspaceMembers";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
 import { useCanInviteMembers, useCanManageMembers } from "@/hooks/use-permissions";
 import PageHeader from "@/components/layout/PageHeader";
@@ -74,7 +75,12 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
         member.id !== memberId ? [member] : patch ? [{ ...member, ...patch }] : []
       ),
     });
-    queryClient.invalidateQueries({ queryKey: workspaceKeys.detailedWorkspace(workspaceId) });
+    for (const key of new Set([current.id, current.slug])) {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.detailedWorkspace(key) });
+    }
+    if (patch === null || "status" in patch) {
+      queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.byWorkspace(current.id) });
+    }
   };
 
   // Handler for opening delete dialog

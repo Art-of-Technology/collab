@@ -40,6 +40,14 @@ const MemberRow = load('src/components/workspace/MemberRow.tsx', {
   // The action's refusal is an Error from this realm, as it is in the browser.
 }, { fetch, Error });
 
+const { QueryClient } = require('@tanstack/react-query');
+const queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+const cacheKeys = [['workspaces', 'detailed', 'w1'], ['workspaces', 'detailed', 'acme'], ['workspaceMembers', 'w1']];
+function seedMemberCaches() {
+  for (const key of cacheKeys) queryClient.setQueryData(key, []);
+}
+const staleMemberCaches = () => cacheKeys.map(key => queryClient.getQueryState(key).isInvalidated);
+
 let current;
 const Screen = load('src/components/workspace/WorkspaceDetailClient.tsx', {
   ...ui,
@@ -54,10 +62,11 @@ const Screen = load('src/components/workspace/WorkspaceDetailClient.tsx', {
   '@/components/workspace/components/invitation': { InvitationsTab: () => null },
   './WorkspaceFeatureSettings': { WorkspaceFeatureSettings: () => null },
   '@/hooks/queries/useWorkspace': { useDetailedWorkspaceById: () => ({ data: current }), workspaceKeys: { detailedWorkspace: id => ['workspaces', 'detailed', id] } },
+  '@/hooks/queries/useWorkspaceMembers': load('src/hooks/queries/useWorkspaceMembers.ts', { '@tanstack/react-query': require('@tanstack/react-query') }),
   '@/hooks/use-workspace-permissions': { useWorkspacePermissions: () => ({}) },
   '@/hooks/use-permissions': { useCanInviteMembers: () => ({ hasPermission: false }), useCanManageMembers: () => ({ hasPermission: true }) },
   '@/components/layout/PageHeader': { default: () => null },
-  '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries: async () => {} }) },
+  '@tanstack/react-query': { useQueryClient: () => queryClient },
   '@/hooks/use-toast': { toast: () => {} },
 }, { fetch }).default;
 
@@ -116,7 +125,9 @@ test("a row the viewer may act on has a role select with exactly the roles the v
     assert.match(row('Pat Jones').textContent, /Inactive · Support/);
     assert.equal(row('Pat Jones').querySelectorAll('select').length, 0);
 
+    seedMemberCaches();
     await choose(selects[1], 'ADMIN');
+    assert.deepEqual(staleMemberCaches(), [true, true, false]);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/members/m-kim/role', 'PUT', { role: 'ADMIN' }]);
     assert.equal(status(), 'Kim Park is now Admin.');
     assert.equal(document.querySelector('[aria-label="Role of Kim Park"]').value, 'ADMIN');
@@ -165,11 +176,15 @@ test('the row menu switches a member on or off and removes one after an inline c
     assert.equal(menu.getAttribute('aria-expanded'), 'true');
     assert.ok([...row('Kim Park').parentElement.querySelectorAll('a')].some(link => link.getAttribute('href') === '/workspaces/acme/settings/members/kim' && link.textContent === 'Other workspaces'));
 
+    seedMemberCaches();
     await click(button('Deactivate'));
+    assert.deepEqual(staleMemberCaches(), [true, true, true]);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/members/m-kim', 'PATCH', { status: false }]);
     assert.equal(status(), 'Kim Park is now inactive.');
     assert.match(row('Kim Park').textContent, /Inactive · Member/);
+    seedMemberCaches();
     await click(button('Activate'));
+    assert.deepEqual(staleMemberCaches(), [true, true, true]);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/members/m-kim', 'PATCH', { status: true }]);
     assert.equal(status(), 'Kim Park is now active.');
 
@@ -186,8 +201,10 @@ test('the row menu switches a member on or off and removes one after an inline c
     assert.equal(status(), 'Kim Park was not removed. Reload the page to see who is here now.', 'a production build hides the thrown sentence, so the line does not use it');
     assert.ok(row('Kim Park'), 'a refused removal keeps the row');
 
+    seedMemberCaches();
     removal = async () => ({ success: true });
     await click(button('Remove'));
+    assert.deepEqual(staleMemberCaches(), [true, true, true]);
     assert.deepEqual({ ...removals.at(-1) }, { workspaceId: 'w1', userId: 'kim' });
     assert.equal(status(), 'Kim Park was removed from Acme.');
     assert.equal(row('Kim Park'), undefined);
