@@ -28,7 +28,7 @@ export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) 
     where: { OR: [{ id: userId }, { email: { not: null }, workspaceMemberships: { some: { workspaceId: workspace.id, status: true } } }] },
     select: { id: true, name: true, email: true }, orderBy: { name: 'asc' },
   });
-  const others = await runnerPeopleBelow(viewer, workspace.id, people.map(person => person.id));
+  const others = await runnerPeopleBelow(viewer, workspace.id, people.map(person => person.id), 'connect');
   return { workspace: { id: workspace.id, slug: workspace.slug }, people: people.filter(person => person.id === userId || others.has(person.id))
     .map(person => ({ id: person.id, name: person.name || person.email || person.id })) };
 }

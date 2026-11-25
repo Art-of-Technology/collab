@@ -65,7 +65,11 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
   const me = async bearer => (await seatsMe.GET(new Request('https://collab.test/api', { headers: { Authorization: `Bearer ${bearer}` } }), { params: Promise.resolve({}) })).status;
   const refuses = (promise, code, status) => assert.rejects(promise, error => error.code === code && error.status === status, `expected ${code}`);
   const seat = (name, role, ownerId, extra = {}) => seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role, ownerId, name, expiresInDays: 30, ...extra });
-  const pair = async name => (await post(pairRoute.POST, null, { name }))[1];
+  const pair = async name => {
+    const [status, pairing] = await post(pairRoute.POST, null, { name });
+    assert.equal(status, 200, name);
+    return pairing;
+  };
   const admit = (as, sent, workspaceId = 'w', headers) => { signedIn = as; return post(admitRoute.POST, null, sent, { workspaceId }, headers); };
   /** Until another session waits for a lock on this table. */
   const waitsFor = async table => {
@@ -260,7 +264,7 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.deepEqual(states.map(row => [row.name, row.owner, row.runner, !!row.fetchedAt]), [['dev', person, 'mac', true], ['rev', other, 'their-mac', true], ['sec', person, null, false]]);
     const list = async as => { signedIn = as; return (await admitRoute.GET(new Request('https://collab.test/api'), { params: Promise.resolve({ workspaceId: 'w' }) })).json(); };
     assert.deepEqual((await list(person)).runners.map(row => [row.name, row.seats]), [['mac', 2]]);
-    assert.deepEqual((await list(owner)).runners.map(row => row.name).sort(), ['mac', 'their-mac']);
+    assert.deepEqual((await list(owner)).runners.map(row => [row.name, row.seats]).sort(), [['mac', 2], ['their-mac', 1]]);
     assert.equal((await list(stranger)).error, 'Workspace not found');
     await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: third.seat.id });
   });
@@ -478,7 +482,12 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
 
   // A workspace of its own for the levels, with its id unlike its slug, and what its people do there.
   const primary = 'clvprimary1', lvOwner = 'clvowner001', lvAdmin = 'clvadmin001', lvMember = 'clvmember01', sysAdmin = 'clvsysadmin', offOwner = 'clvoffowner', sysOut = 'clvsysout01';
-  const connect = async (as, ownerId) => { const { code } = await pair(`${ownerId ?? as}-box`); return admit(as, { code, ...(ownerId && { ownerId }) }, 'lv'); };
+  const connect = async (as, ownerId) => {
+    const { code, credential } = await pair(`${ownerId ?? as}-box`);
+    const reply = await admit(as, { code, ownerId }, 'lv');
+    if (reply[0] !== 201) assert.equal((await post(goodbyeRoute.POST, credential, {}))[0], 200);
+    return reply;
+  };
   const runnerOf = async ownerId => (await prisma.agentRunner.findFirstOrThrow({ where: { workspaceId: 'lv', ownerId, removedAt: null } })).id;
   const list = async as => { signedIn = as; const reply = await admitRoute.GET(new Request('https://collab.test/api'), { params: Promise.resolve({ workspaceId: 'lv' }) }); return [reply.status, await reply.json()]; };
   const renew = async (as, runnerId) => { signedIn = as; return (await renewRoute.POST(new Request('https://collab.test/api', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://collab.test' } }),
@@ -515,6 +524,7 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     for (const as of [lvOwner, primary]) {
       const [code, view] = await list(as);
       assert.deepEqual([code, view.owner, view.runners.map(row => row.name).sort()], [200, true, everyone], as);
+      assert.ok(view.runners.every(row => row.seats === 0));
     }
     for (const as of [lvAdmin, lvMember, sysAdmin]) {
       const [code, view] = await list(as);
@@ -587,6 +597,35 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.ok(!(await page.readRunnersTab(lvOwner, 'lv-team')).people.some(person => person.id === primary));
     await prisma.workspaceMember.delete({ where: key });
     assert.ok(!(await list(lvOwner))[1].runners.some(row => row.ownerId === primary), 'no member row does not make the primary owner levelless');
+  });
+
+  const afterRead = async (model, method, change, action) => {
+    const read = model[method];
+    model[method] = async (...args) => {
+      const rows = await read.apply(model, args);
+      await change(...args);
+      return rows;
+    };
+    try { return await action(); } finally { model[method] = read; }
+  };
+
+  await t.test('switching a peer Owner on during admission or off during selection never permits a connection', async () => {
+    const membership = { userId_workspaceId: { userId: offOwner, workspaceId: 'lv' } };
+    const setActive = status => prisma.workspaceMember.update({ where: membership, data: { status } });
+    const [status, response] = await afterRead(prisma.user, 'findUnique', async ({ where }) => {
+      if (where.id === offOwner) await setActive(true);
+    }, () => connect(lvOwner, offOwner));
+    assert.deepEqual([status, response.code], [400, 'owner_not_found']);
+    assert.equal(await prisma.agentRunner.count({ where: { workspaceId: 'lv', ownerId: offOwner } }), 0);
+    assert.equal((await prisma.workspaceMember.findUniqueOrThrow({ where: membership })).status, true);
+
+    const view = await afterRead(prisma.user, 'findMany', () => setActive(false), () => page.readRunnersTab(lvOwner, 'lv-team'));
+    assert.ok(!view.people.some(person => person.id === offOwner));
+  });
+
+  await t.test('deleting the workspace during a runner list excludes delegated runners', async () => {
+    const [status, view] = await afterRead(prisma.agentRunner, 'findMany', () => prisma.workspace.delete({ where: { id: 'lv' } }), () => list(lvOwner));
+    assert.ok(status === 404 || (status === 200 && view.runners.every(row => row.ownerId === lvOwner)));
   });
 
   await t.test('a runner whose person left the workspace, or whose pairing ran out, is refused; and pairings are capped', async () => {
