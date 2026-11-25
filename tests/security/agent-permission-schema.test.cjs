@@ -7,6 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
+const { PrismaClient } = require('@prisma/client');
 const { load } = require('./helpers.cjs');
 
 const ENUM = resolve('prisma/migrations/20261125000200_manage_agents_permission/migration.sql');
@@ -59,7 +60,10 @@ after(() => {
   if (directory) rmSync(directory, { recursive: true, force: true });
 });
 
-test('the migration adds MANAGE_AGENTS, gives it to every role that holds MANAGE_WORKSPACE_PERMISSIONS, gives ADMIN MANAGE_LEAVE, and removes no row', () => {
+test('the migration adds MANAGE_AGENTS, gives it to every role that holds MANAGE_WORKSPACE_PERMISSIONS, gives ADMIN MANAGE_LEAVE, and removes no row', async t => {
+  const url = `postgresql://${encodeURIComponent(userInfo().username)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
+  const db = new PrismaClient({ datasourceUrl: url });
+  t.after(() => db.$disconnect());
   const enumSql = readFileSync(ENUM, 'utf8');
   const rowsSql = readFileSync(ROWS, 'utf8');
   const before = permissions();
@@ -69,7 +73,20 @@ test('the migration adds MANAGE_AGENTS, gives it to every role that holds MANAGE
   assert.deepEqual(enumValues(), expectedEnum);
   assert.deepEqual(permissions(), before);
 
+  const retiring = await db.rolePermission.create({
+    data: { workspaceId: 'w4', role: 'Retiring lead', permission: 'MANAGE_WORKSPACE_PERMISSIONS' },
+  });
+  await db.$transaction(async tx => {
+    await tx.rolePermission.delete({ where: { id: retiring.id } });
+    assert.throws(() => psql(`SET lock_timeout = '250ms';\n${rowsSql}`),
+      error => error.stderr.includes('canceling statement due to lock timeout'));
+  });
   psql(rowsSql);
+  const adminGrants = await db.rolePermission.findMany({
+    where: { workspaceId: 'w1', role: 'ADMIN' },
+    select: { permission: true },
+  });
+  assert.ok(adminGrants.some(row => row.permission === 'MANAGE_AGENTS'));
   const first = permissions();
   assert.deepEqual(enumValues(), expectedEnum);
 

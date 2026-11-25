@@ -9,6 +9,7 @@
 -- stopped-app window; apply THIS file only after every replica runs an image that knows MANAGE_AGENTS, and delete the
 -- MANAGE_AGENTS rows before rolling the app back to an older image.
 BEGIN;
+LOCK TABLE "RolePermission" IN SHARE ROW EXCLUSIVE MODE;
 
 -- 1. Every (workspace, role) that may edit permissions today may manage agents: built-in and custom roles alike.
 INSERT INTO "RolePermission" ("id", "workspaceId", "role", "permission", "updatedAt")
