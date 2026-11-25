@@ -52,8 +52,8 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * has sat with a seat for `CHILD_IDLE_MS` without a run, or one sits on a developer seat that has had no room while another
  * developer seat could take it (`child_no_room`): for `NO_ROOM_MOVE_MS` when no run ever started on it (CLB-780), for
  * `STARTED_MOVE_MS` when its seat's inbox offers it for its next run and its last run pushed its work (`waitsPushed`, CLB-809).
- * A child that reached done under another issue the lead holds in its project counts as well, for an issue that has a
- * child the lead may still place (`other_child_done`, CLB-1179).
+ * A child that reached final done under another issue the lead holds in its project counts if it clears a recorded
+ * dependency for a child the lead may place and that child has no open blockers (`other_child_done`, CLB-1196).
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   await markLost(context.workspace.id);
@@ -146,22 +146,40 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     return held && due && due.getTime() <= now && due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
   });
 
-  // CLB-1179. A lead may hold a child back until work under another of its issues is done, a rule Collab does not know.
-  // So a child that reaches done under any issue the lead holds in its project is news for its other blocked issues there,
-  // once each as for a child of their own, and only for one with a child `leadPlaces` would let it give out: open, no
-  // request, no assignee, never placed by a lead. A run costs money, and there is nothing to do for an issue without one.
-  const loose = children.filter(child => !isDone(child) && !child.assigneeId && !child.agentRequestRole);
+  // CLB-1196. Only a recorded dependency can connect a completion elsewhere to work this lead may now place.
+  const waitingForChildren = new Map(candidates.filter(candidate => candidate.ranBlocked).map(({ issue, ranBlocked }) => [issue.id, ranBlocked!]));
+  const loose = children.filter(child => child.parentId && waitingForChildren.has(child.parentId)
+    && !isDone(child) && !child.assigneeId && !child.agentRequestRole && (!child.agentRuns.length || child.agentRuns[0].endedAt));
   const placedBefore = new Set((loose.length ? await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: loose.map(child => child.id) }, action: 'LEAD_ASSIGNED' },
     select: { itemId: true } }) : []).map(entry => entry.itemId));
-  const toPlace = new Set(loose.filter(child => !placedBefore.has(child.id)).map(child => child.parentId));
-  const looked = candidates.flatMap(({ issue, ranBlocked }) => ranBlocked && toPlace.has(issue.id) ? [ranBlocked.getTime()] : []);
-  // `finishedAt` is when the status became final (the database trigger `track_issue_finish` writes it on every path), so
-  // editing a child that was done long ago wakes nobody here. A child in a done status that is not final has none and
-  // does not count. The issues the lead holds include those it has finished: the one whose last child this was may be done.
-  const mine = seat && looked.length ? await db.issue.findMany({ where: { workspaceId, assigneeId: me, projectId: seat.projectId }, select: { id: true } }) : [];
-  const doneUnder = seat && mine.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: mine.map(issue => issue.id) }, projectId: seat.projectId,
-    finishedAt: { gt: new Date(Math.min(...looked)) }, projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } },
-    select: { parentId: true, finishedAt: true } }) : [];
+  const toPlace = loose.filter(child => !placedBefore.has(child.id)).map(child => child.id);
+  const readyEpics = new Set<string>();
+  if (seat && toPlace.length) {
+    const blockerScope = { workspaceId, ...issueReadAccessWhere(me) };
+    const blockerSelect = {
+      projectId: true, projectStatus: statusSelect, finishedAt: true,
+      parent: { where: { workspaceId, projectId: seat.projectId, assigneeId: me }, select: { id: true } },
+    } as const;
+    const linkedChildren = await db.issue.findMany({
+      where: { id: { in: toPlace }, workspaceId, projectId: seat.projectId, assigneeId: null, agentRequestRole: null, ...NOT_DONE },
+      select: {
+        parentId: true,
+        sourceRelations: { where: { relationType: 'BLOCKED_BY', targetIssue: blockerScope }, select: { targetIssue: { select: blockerSelect } } },
+        targetRelations: { where: { relationType: 'BLOCKS', sourceIssue: blockerScope }, select: { sourceIssue: { select: blockerSelect } } },
+      },
+    });
+    for (const child of linkedChildren) {
+      if (!child.parentId) continue;
+      const ranBlocked = waitingForChildren.get(child.parentId);
+      if (!ranBlocked) continue;
+      const blockers = [...child.sourceRelations.map(relation => relation.targetIssue), ...child.targetRelations.map(relation => relation.sourceIssue)];
+      // finishedAt records entry into a final status, so editing an old done blocker does not offer the epic again.
+      if (blockers.every(isDone) && blockers.some(blocker => blocker.projectId === seat.projectId && blocker.parent
+        && blocker.parent.id !== child.parentId && blocker.finishedAt && blocker.finishedAt > ranBlocked)) {
+        readyEpics.add(child.parentId);
+      }
+    }
+  }
 
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
@@ -198,7 +216,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && unseen(new Date(due)) && due <= now;
     })) return 'child_idle';
     if (noRoomOf(issue.id, ranBlocked).length) return 'child_no_room';
-    if (toPlace.has(issue.id) && doneUnder.some(child => child.parentId !== issue.id && unseen(child.finishedAt))) return 'other_child_done';
+    if (readyEpics.has(issue.id)) return 'other_child_done';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);

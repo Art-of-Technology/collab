@@ -6,7 +6,7 @@ const { seatsDatabase } = require('./seats-db.cjs');
 
 // Token-facing routes accept only cuid-shaped ids.
 const owner = 'cowner00001', person = 'cperson0001';
-const A = 'cprojecta001', B = 'cprojectb001';
+const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = minutes => new Date(Date.now() - minutes * 60_000);
 const NOTE = '## Done\nx\n## Decisions\nx\n## Evidence\nx\n## Next\nx';
@@ -19,10 +19,10 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     await prisma.user.createMany({ data: [{ id: owner, name: owner }, { id: person, name: person, email: 'person@collab.test' }] });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
-    for (const id of [A, B]) {
-      await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix: id === A ? 'AA' : 'BB' } });
+    for (const [id, issuePrefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC']]) {
+      await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name, order, isDefault: !order, isFinal: name === 'done' })) });
-      // Both projects have their repository connected, as a project whose seats take issues does. It is `tests/agents/runs-repository.test.cjs` that works it out.
+      // The projects have their repository connected, as a project whose seats take issues does. It is `tests/agents/runs-repository.test.cjs` that works it out.
       await prisma.repository.create({ data: { projectId: id, githubRepoId: id, owner: 'acme', name: id, fullName: `acme/${id}`, webhookSecret: 'secret' } });
     }
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
@@ -356,6 +356,9 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     if (holder) await personGives(epic, holder.userId);
     return [epic, ...await Promise.all(Array.from({ length: kids }, () => issue(projectId, { parentId: epic.id })))];
   };
+  const blocks = (blocker, waiting) => raw.issueRelation.create({ data: {
+    sourceIssueId: blocker.id, targetIssueId: waiting.id, relationType: 'BLOCKS',
+  } });
   /** One session of a lead on an epic: it places what it is given and waits for the children. */
   const waits = async (who, epic, to, ...placed) => {
     const run = await start(who, epic);
@@ -371,11 +374,57 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.deepEqual(await finish(leadB, run, 'blocked'), [422, 'exit_state_required']);
     assert.deepEqual(await finish(leadB, run, 'done'), [200, undefined]);
   });
-  await t.test('a child done under one epic brings back the lead\'s other epics that have a child to place, once (CLB-1179)', async () => {
+  await t.test('ten completions in twenty minutes wake only the owning epic and epics with newly ready children (CLB-1196)', async () => {
+    const leadBurst = await seat('lead-burst', C, 'lead');
+    const [source, ...blockers] = await epicOf(C, leadBurst, 10);
+    const [dependent, first, second] = await epicOf(C, leadBurst);
+    const [unrelated] = await epicOf(C, leadBurst);
+    const [stillBlocked, held] = await epicOf(C, leadBurst);
+    const outside = await issue(B);
+    await raw.issueRelation.createMany({ data: [
+      { sourceIssueId: blockers[0].id, targetIssueId: first.id, relationType: 'BLOCKS' },
+      { sourceIssueId: first.id, targetIssueId: blockers[2].id, relationType: 'BLOCKED_BY' },
+      { sourceIssueId: blockers[7].id, targetIssueId: second.id, relationType: 'BLOCKS' },
+      { sourceIssueId: blockers[0].id, targetIssueId: held.id, relationType: 'BLOCKS' },
+      { sourceIssueId: outside.id, targetIssueId: held.id, relationType: 'BLOCKS' },
+    ] });
+    const epics = [source, dependent, unrelated, stillBlocked];
+    const began = ago(21).getTime();
+    await raw.issueAssignee.updateMany({ where: { issueId: { in: epics.map(epic => epic.id) } },
+      data: { assignedAt: new Date(began), approvedAt: new Date(began) } });
+    const ranAt = async (epic, at, outcome = 'blocked') => {
+      const runId = await start(leadBurst, epic);
+      assert.deepEqual(await finish(leadBurst, runId, outcome), [200, undefined]);
+      await raw.agentRun.update({ where: { id: runId }, data: { startedAt: new Date(at), endedAt: new Date(at + 1) } });
+    };
+    for (const epic of epics) await ranAt(epic, began);
+    assert.deepEqual(await inbox(leadBurst), []);
+
+    // Replay timestamped completions and drain the lead inbox between them, starting and finishing real runs.
+    const repeatRuns = new Map(epics.map(epic => [epic.issueKey, []]));
+    for (const [index, child] of blockers.entries()) {
+      const at = began + (index + 1) * 2 * 60_000;
+      const done = await send(item.PATCH, personToken, 'PATCH', { body: { status: 'done' }, params: { issueIdOrKey: child.issueKey } });
+      assert.equal(done.status, 200, JSON.stringify(done.body));
+      assert.ok((await raw.issue.findUniqueOrThrow({ where: { id: child.id } })).finishedAt);
+      await raw.issue.update({ where: { id: child.id }, data: { updatedAt: new Date(at), finishedAt: new Date(at) } });
+      for (const [key, reason] of await inbox(leadBurst)) {
+        repeatRuns.get(key).push([index + 1, reason]);
+        await ranAt({ issueKey: key }, at + 1, key === source.issueKey && index === 9 ? 'done' : 'blocked');
+      }
+      assert.deepEqual(await inbox(leadBurst), []);
+    }
+    const counts = epics.map(epic => repeatRuns.get(epic.issueKey).length);
+    t.diagnostic(`Lead runs after 10 completions in 20 minutes: ${counts.reduce((sum, count) => sum + count, 0)} (owning, dependent, unrelated, still blocked: ${counts.join(', ')})`);
+    assert.deepEqual(counts, [10, 2, 0, 0]);
+    assert.deepEqual(repeatRuns.get(dependent.issueKey), [[3, 'other_child_done'], [8, 'other_child_done']]);
+  });
+  await t.test('a completed blocker wakes its dependent epic with work the lead may place, once', async () => {
     const moreB = await seat('more-b', B), farDev = await seat('far-a', A);
     // The lead holds four epics: one whose child is at work, one with a child held back, one with nothing left to
     // place, and one whose open children the lead may not place: a person took one from its seat, the other is a request.
-    const [epicA, a1] = await epicOf(B, leadB, 1), [epicB, b1] = await epicOf(B, leadB), [placedOut, p1, p2] = await epicOf(B, leadB), [taken, t1, t2] = await epicOf(B, leadB);
+    const [epicA, a1] = await epicOf(B, leadB, 1), [epicB, b1, b2] = await epicOf(B, leadB), [placedOut, p1, p2] = await epicOf(B, leadB), [taken, t1, t2] = await epicOf(B, leadB);
+    for (const child of [b2, p1, t1, t2]) await blocks(a1, child);
     await raw.issue.update({ where: { id: t2.id }, data: { agentRequestRole: 'review' } });
     await waits(leadB, epicA, devB, a1);
     await waits(leadB, epicB, devB, b1);
@@ -383,14 +432,18 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     await waits(leadB, taken, moreB, t1);
     await personGives(t1, null);
     // Another project's lead waits the same way on an epic with a child held back.
-    const [far, x1] = await epicOf(A, lead);
+    const [far, x1, x2] = await epicOf(A, lead);
+    await blocks(a1, x2);
     await waits(lead, far, farDev, x1);
     const waiting = async who => (await inbox(who)).filter(([key]) => [epicA, epicB, placedOut, taken, far].some(epic => epic.issueKey === key));
     assert.deepEqual(await inbox(leadB), []);
 
     const foreign = await raw.workspace.create({ data: { name: 'Other workspace', slug: 'other', ownerId: owner } });
-    await issue(B, { workspaceId: foreign.id, parentId: placedOut.id });
+    const foreignLoose = await issue(B, { workspaceId: foreign.id, parentId: placedOut.id });
+    await blocks(a1, foreignLoose);
     const foreignChild = await issue(B, { workspaceId: foreign.id, parentId: epicA.id });
+    const loose = await issue(B, { parentId: epicB.id });
+    await blocks(foreignChild, loose);
     await raw.issue.update({ where: { id: foreignChild.id }, data: { statusId: `${B}-done` } });
     assert.deepEqual(await inbox(leadB), []);
 
@@ -398,7 +451,10 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     // project's lead's epic, and an epic of another project that carries this lead's account as assignee.
     const [, u1] = await epicOf(B, null, 1), [stray, s1] = await epicOf(A, leadB, 1);
     const s2 = await issue(B, { parentId: stray.id });
-    for (const [child, projectId] of [[u1, B], [s1, A], [s2, B]]) await raw.issue.update({ where: { id: child.id }, data: { statusId: `${projectId}-done` } });
+    for (const [child, projectId] of [[u1, B], [s1, A], [s2, B]]) {
+      await blocks(child, await issue(B, { parentId: epicB.id }));
+      await raw.issue.update({ where: { id: child.id }, data: { statusId: `${projectId}-done` } });
+    }
     await work(farDev, x1, 'done');
     assert.deepEqual(await inbox(leadB), []);
     assert.deepEqual(await waiting(lead), [[far.issueKey, 'child_done']]);
@@ -415,17 +471,19 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     // Once: the lead looked and still holds the child back. The same done child is not news a second time.
     await waits(leadB, epicB, devB);
     assert.deepEqual(await inbox(leadB), []);
-    // The next child done elsewhere is news again, for B alone.
+    // The next completion is unrelated to B, so only the child's own epic is offered.
     await work(moreB, p1, 'done');
-    assert.deepEqual(await inbox(leadB), [[epicB.issueKey, 'other_child_done'], [placedOut.issueKey, 'child_done']]);
+    assert.deepEqual(await inbox(leadB), [[placedOut.issueKey, 'child_done']]);
   });
 
   await t.test('editing a child that was done before brings back no other epic (CLB-1179)', async () => {
-    const [old, o1] = await epicOf(B, leadB, 1), [held] = await epicOf(B, leadB);
+    const [old, o1] = await epicOf(B, leadB, 1), [held, child] = await epicOf(B, leadB);
+    await blocks(o1, child);
+    await waits(leadB, held, devB);
     await waits(leadB, old, devB, o1);
     await work(devB, o1, 'done');
     await work(leadB, old, 'done');
-    // Every epic that waits has been looked at since, and two of them have a child to place.
+    // Every waiting epic has been looked at since the blocker completed.
     for (const [issueKey] of await inbox(leadB)) await waits(leadB, { issueKey }, devB);
     assert.deepEqual(await inbox(leadB), []);
     assert.ok(await raw.issue.count({ where: { parentId: held.id, assigneeId: null } }));
@@ -436,7 +494,9 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
   });
 
   await t.test('two epics do not wake each other: once the lead has looked, neither comes back until another child is done (CLB-1179)', async () => {
-    const [one, c1, c2] = await epicOf(B, leadB), [two] = await epicOf(B, leadB);
+    const [one, c1, c2] = await epicOf(B, leadB), [two, d1, d2] = await epicOf(B, leadB);
+    await blocks(c1, d1);
+    await blocks(c2, d2);
     await waits(leadB, one, devB, c1);
     const run = await start(leadB, two);
     const back = async () => (await inbox(leadB)).filter(([key]) => [one, two].some(epic => epic.issueKey === key));
@@ -452,7 +512,7 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     }
     for (const [issueKey] of await inbox(leadB)) await waits(leadB, { issueKey }, devB);
     assert.deepEqual(await inbox(leadB), []);
-    // Another child reaches done, this time set by a person through the API: that is news for both again.
+    // A different blocker reaches done through the API and frees a different child.
     const closed = await send(item.PATCH, personToken, 'PATCH', { body: { status: 'done' }, params: { issueIdOrKey: c2.issueKey } });
     assert.equal(closed.status, 200, JSON.stringify(closed.body));
     assert.deepEqual(await back(), [[one.issueKey, 'child_done'], [two.issueKey, 'other_child_done']]);
@@ -460,7 +520,8 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
 
   await t.test('a child in a done status that is not final wakes no other epic until its status is final (CLB-1179)', async () => {
     await raw.projectStatus.create({ data: { id: `${B}-merged`, projectId: B, name: 'merged', displayName: 'merged', order: 6, category: 'done' } });
-    const [one, c1] = await epicOf(B, leadB), [two] = await epicOf(B, leadB);
+    const [one, c1] = await epicOf(B, leadB), [two, child] = await epicOf(B, leadB);
+    await blocks(c1, child);
     await waits(leadB, one, devB, c1);
     await waits(leadB, two, devB);
     const back = async () => (await inbox(leadB)).filter(([key]) => key === two.issueKey);
@@ -474,7 +535,8 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
 
   await t.test('a sibling completion outranks a reply and yields to a child the lead can move (CLB-1179)', async () => {
     const full = await seat('full-b', B), available = await seat('available-b', B);
-    const [waiting, placed] = await epicOf(B, leadB), [, sibling] = await epicOf(B, leadB, 1);
+    const [waiting, placed, child] = await epicOf(B, leadB), [, sibling] = await epicOf(B, leadB, 1);
+    await blocks(sibling, child);
     await waits(leadB, waiting, full, placed);
     const waitingItem = async () => {
       const reply = await send(inboxRoute.GET, leadB.token, 'GET');
