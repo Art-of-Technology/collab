@@ -185,6 +185,10 @@ async function passes(path, actor) {
   const f = fixture();
   const answer = await f.paths[path](actor);
   assert.equal(answer.ok, true, `${path}: ${actor} should pass ${JSON.stringify(answer)}`);
+  if (path === 'installRoute' || path === 'installAction') {
+    const attempts = f.state.audit.filter(([name]) => name === 'attempt');
+    assert.deepEqual(attempts.map(([, workspaceId, userId]) => [workspaceId, userId]), [[W, actor]], `${path}: ${actor} records one install attempt`);
+  }
   // The uninstall event still names the workspace, also for a caller without a membership row.
   if (path === 'uninstallRoute') assert.deepEqual([f.state.events[0]?.[1].workspaceName, f.state.events[0]?.[1].workspaceSlug], ['Alpha Team', 'alpha'], `${path}: ${actor}`);
   if (path === 'testHook') assert.equal(f.state.sent.length, 1, `${path}: ${actor} a delivery is attempted`);
