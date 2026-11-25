@@ -113,7 +113,7 @@ test("a seat with the organisation's own role: created from the form, listed by 
     assert.equal((await create('both-1', { role: 'developer', customRoleId: qa.id }))[0], 400);
     assert.equal((await create('neither-1', {}))[0], 400);
     // The same name as a built-in seat of the same base role is another seat: the name is taken.
-    await refused('qa-1', { role: 'developer' }, 409, 'seat_exists');
+    assert.match((await refused('qa-1', { role: 'developer' }, 409, 'seat_exists')).error, /^qa-1 is already a QA Tester seat;/);
     assert.equal(await raw.agentSeat.count(), before);
     // Nobody but a permission manager makes one.
     actor = person;

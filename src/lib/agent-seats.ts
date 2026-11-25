@@ -129,7 +129,9 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role
     && existing.customRoleId === (input.customRoleId ?? null);
   if (existing && !existing.retiredAt && !same) {
-    throw new HandoffError('seat_exists', `${existing.name} is already a ${existing.role} seat; retire it before giving the name another project or role`, 409);
+    // A seat with the workspace's own role is named by that role, as it is everywhere it is shown.
+    const held = existing.customRoleId ? (await tx.agentCustomRole.findUnique({ where: { id: existing.customRoleId }, select: { name: true } }))?.name ?? existing.role : existing.role;
+    throw new HandoffError('seat_exists', `${existing.name} is already a ${held} seat; retire it before giving the name another project or role`, 409);
   }
   if (same && existing.byRunner !== !!input.byRunner) throw new HandoffError('seat_exists', `${existing.name} is run by hand; retire it before giving the seat to a runner`, 409);
   // Tokens a person once saw, or another person's runner fetched, would work the seat beside its runner's. And a token
