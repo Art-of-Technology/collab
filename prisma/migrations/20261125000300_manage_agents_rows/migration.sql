@@ -4,6 +4,10 @@
 -- unique (workspaceId, role, permission)), so a second run adds nothing.
 -- The app's ids are Prisma cuids made in the client, so the database has no default; a random UUID as text is unique
 -- and fits the TEXT id. createdAt has its own default; updatedAt has none.
+-- NOT invisible to the running version: an app image built before this change cannot read a row that holds
+-- 'MANAGE_AGENTS' (its Prisma client throws on the unknown enum value). 20261125000200 may be applied in the
+-- stopped-app window; apply THIS file only after every replica runs an image that knows MANAGE_AGENTS, and delete the
+-- MANAGE_AGENTS rows before rolling the app back to an older image.
 BEGIN;
 
 -- 1. Every (workspace, role) that may edit permissions today may manage agents: built-in and custom roles alike.
