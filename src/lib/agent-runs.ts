@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
+import { stopBoundaries } from '@/lib/agent-stop-boundary';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -195,20 +196,17 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
 }
 
 /**
- * Declared stops: the issues whose stop was answered before its run finished. A seat writes its question as a comment and
- * finishes a moment later, so a comment by somebody else that is later than the seat's last comment of the run that named
- * a person answers the stop, also when it came before the finish. A run in which the seat wrote no comment keeps the
- * finish as its boundary. `reply` is the issue's latest comment by somebody else: one after the finish is a reply already,
- * so nothing is read unless it came during the run. Home clears its row by the same rule (src/lib/dashboard/needs-you.ts).
+ * Declared stops: the issues whose stop was answered before its run finished, by the rule of `stopBoundaries`, for a run
+ * that named a person. `reply` is the issue's latest comment by somebody else: one after the finish is a reply already,
+ * so nothing is read unless it came during the run.
  */
 async function answeredEarly(db: DB, me: string, stops: { issueId: string; runId: string; startedAt: Date; endedAt: Date; reply?: Date }[]) {
   const during = stops.filter(stop => stop.reply && stop.reply > stop.startedAt && stop.reply <= stop.endedAt);
   if (!during.length) return new Set<string>();
-  const asked = new Map((await db.issueComment.groupBy({ by: ['issueId'], _max: { createdAt: true }, where: { authorId: me,
-    OR: during.map(stop => ({ issueId: stop.issueId, createdAt: { gte: stop.startedAt, lte: stop.endedAt } })) } })).map(row => [row.issueId, row._max.createdAt]));
-  const named = new Set((await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: [...asked.keys()] }, action: 'AGENT_RUN_FINISHED' }, select: { details: true } }))
+  const since = await stopBoundaries(db, during.map(stop => ({ ...stop, seatUserId: me })));
+  const named = new Set((await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: during.map(stop => stop.issueId) }, action: 'AGENT_RUN_FINISHED' }, select: { details: true } }))
     .map(row => JSON.parse(row.details ?? '{}')).filter(facts => typeof facts.askedUser === 'string').map(facts => facts.runId as string));
-  return new Set(during.filter(stop => named.has(stop.runId) && stop.reply! > (asked.get(stop.issueId) ?? stop.endedAt)).map(stop => stop.issueId));
+  return new Set(during.filter(stop => named.has(stop.runId) && stop.reply! > since.get(stop.issueId)!).map(stop => stop.issueId));
 }
 
 export type Pushed = { runId: string; pullRequest: string; headCommit: string };
@@ -717,7 +715,7 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
 export async function runContext(context: Caller, issueIdOrKey: string) {
   const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
-    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
+    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
     sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
     targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
     // shortcut: the first 100 children, oldest first; page them when an epic outgrows that.
@@ -757,7 +755,11 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const elsewhere = !!pushed && (matches.length !== 1 || matches[0].id !== repository?.id);
   const branch = !elsewhere && repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { id: matches[0].id, projectId: issue.projectId, isActive: true } },
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
-  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
+  // A run that named a person was answered by what somebody else wrote after the seat's last comment of that run, also
+  // before the finish (`stopBoundaries`): the session that answer brings back finds it here. The seat wrote nothing in between.
+  const since = last?.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
+    ? (await stopBoundaries(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : last?.endedAt;
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(since && { createdAt: { gt: since } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
@@ -895,11 +897,10 @@ export async function answerStop(userId: string, issueIdOrKey: string, runId: st
     const run = current?.agentRuns[0];
     const entry = await tx.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
     const facts = JSON.parse(entry?.details ?? '{}');
-    // The seat's last comment of the run is its question: what somebody else wrote after it is an answer (`answeredEarly`).
-    const asked = run?.endedAt ? (await tx.issueComment.aggregate({ where: { issueId: issue.id, authorId: run.userId, createdAt: { gte: run.startedAt, lte: run.endedAt } }, _max: { createdAt: true } }))._max.createdAt : null;
+    const since = run?.endedAt ? (await stopBoundaries(tx, [{ issueId: issue.id, seatUserId: run.userId, startedAt: run.startedAt, endedAt: run.endedAt }])).get(issue.id) : undefined;
     if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isDone(current)
       || facts.runId !== runId || typeof facts.askedUser !== 'string'
-      || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: asked ?? run.endedAt } } })) {
+      || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: since } } })) {
       throw new HandoffError('stop_closed', 'Nothing was posted: this is no longer waiting for an answer. Someone has answered it, the issue is done, or its seat has started on it again', 409);
     }
     return tx.issueComment.create({ data: { issueId: issue.id, authorId: userId, content: input.content }, select: { id: true, issueId: true, authorId: true, content: true, createdAt: true } });

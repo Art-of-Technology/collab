@@ -106,6 +106,39 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.deepEqual([third.lastExitNote, said(third)], ['The second note', []]);
   });
 
+  await t.test("declared stops: an answer written after the seat's question and before the finish is in the next run's context", async () => {
+    /** An issue whose run started 90 minutes ago and finished blocked 60 minutes ago, naming the person when `named`. */
+    const stopped = async named => {
+      const target = await issue({ assigneeId: devA.userId });
+      const made = await run(target, 60, { outcome: 'blocked', note: 'Asked which way to run the migration' });
+      if (named) await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: A, itemType: 'ISSUE', itemId: target.id, userId: devA.userId, action: 'AGENT_RUN_FINISHED',
+        details: JSON.stringify({ runId: made.id, outcome: 'blocked', askedUser: person, nextStep: 'Run the migration the way the answer says' }) } });
+      return target;
+    };
+    const question = "Run the migration in tonight's window, or split it? Reply `window` or `split`.";
+    const asked = await stopped(true);
+    // What a person wrote before the seat's question, also between two of the seat's comments, is not an answer to it.
+    await comment(asked, person, 85, 'Is the backup done?');
+    await comment(asked, devA.userId, 80, 'The backup is done.');
+    await comment(asked, owner, 75, 'Thanks.');
+    await comment(asked, devA.userId, 70, question);
+    await comment(asked, person, 65, 'split');
+    await comment(asked, person, 10, 'And keep the old column for one release.');
+    assert.deepEqual(said(await context(asked)), ['split', 'And keep the old column for one release.']);
+
+    // A run that named no person, and one in which the seat wrote nothing: the finish is the boundary, as it was.
+    const unnamed = await stopped(false);
+    await comment(unnamed, devA.userId, 70, 'Filed the release request.');
+    await comment(unnamed, person, 65, 'Seen.');
+    await comment(unnamed, person, 10, 'It is released.');
+    assert.deepEqual(said(await context(unnamed)), ['It is released.']);
+    const silent = await stopped(true);
+    await comment(silent, devA.userId, 100, question);
+    await comment(silent, person, 65, 'Any news?');
+    await comment(silent, person, 10, 'window');
+    assert.deepEqual(said(await context(silent)), ['window']);
+  });
+
   await t.test('what blocks the issue, and the requests filed for it', async () => {
     const target = await issue();
     const open = await issue(), settled = await issue({ statusId: `${A}-done` }), related = await issue(), blocked = await issue();

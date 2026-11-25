@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
+import { stopBoundaries } from '@/lib/agent-stop-boundary';
 import { readForgeBindings } from '@/lib/forge/reader';
 import { repositoryAccessWhere } from '@/lib/github/access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
@@ -291,14 +292,12 @@ export async function loadNeedsYou({
       else if (latest > (during.get(reply.issueId) ?? current.startedAt)) during.set(reply.issueId, latest);
     }
     // A comment by someone else that came during the run answers it when it is later than the seat's last comment of that
-    // run: the seat asks, then finishes a moment later. The seat's inbox offers the issue by the same rule (`answeredEarly`).
-    const asked = [...during.keys()].filter(issueId => !answered.has(issueId)).map(issueId => {
+    // run: the seat asks, then finishes a moment later. The seat's inbox and its next run's context read the same rule.
+    const since = await stopBoundaries(prisma, [...during.keys()].filter(issueId => !answered.has(issueId)).map(issueId => {
       const { seat, startedAt, endedAt } = waiting.get(issueId)!;
-      return { issueId, authorId: seat.userId, createdAt: { gte: startedAt, lte: endedAt } };
-    });
-    for (const row of asked.length ? await prisma.issueComment.groupBy({ by: ['issueId'], where: { issue: readableIssues, OR: asked }, _max: { createdAt: true } }) : []) {
-      if (row._max.createdAt && during.get(row.issueId)! > row._max.createdAt) answered.add(row.issueId);
-    }
+      return { issueId, seatUserId: seat.userId, startedAt, endedAt };
+    }));
+    for (const [issueId, boundary] of since) if (during.get(issueId)! > boundary) answered.add(issueId);
     const factsByIssue = new Map<string, ExitFacts>();
     for (const activity of finishes) {
       const current = waiting.get(activity.itemId);

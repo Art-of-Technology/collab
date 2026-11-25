@@ -131,7 +131,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
 - `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.
-- `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
+- `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments. When that run named a person, it starts after the seat's last comment of that run, so an answer written before the finish is included.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.

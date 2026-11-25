@@ -328,7 +328,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. See [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you). |
-| `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
+| `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. When that run named a person, it starts after the seat's last comment of that run, so an answer written before the finish is included. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
