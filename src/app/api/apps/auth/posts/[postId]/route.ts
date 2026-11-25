@@ -15,6 +15,7 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 // Schema for updating posts
 const UpdatePostSchema = z.object({
@@ -172,17 +173,8 @@ export const PATCH = withAppAuth(
       }
 
       // Check permissions
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: context.user.id,
-            workspaceId: context.workspace.id
-          }
-        }
-      });
-
       const isAuthor = existingPost.authorId === context.user.id;
-      const isAdmin = membership?.status === true && membership.role === 'ADMIN';
+      const isAdmin = may(await getWorkspaceAuthority(context.user.id, context.workspace.id), 'content.manage');
 
       // Only author or admin can update posts
       if (!isAuthor && !isAdmin) {
@@ -337,17 +329,8 @@ export const DELETE = withAppAuth(
       }
 
       // Check permissions
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: context.user.id,
-            workspaceId: context.workspace.id
-          }
-        }
-      });
-
       const isAuthor = existingPost.authorId === context.user.id;
-      const isAdmin = membership?.status === true && membership.role === 'ADMIN';
+      const isAdmin = may(await getWorkspaceAuthority(context.user.id, context.workspace.id), 'content.manage');
 
       // Only author or admin can delete posts
       if (!isAuthor && !isAdmin) {
