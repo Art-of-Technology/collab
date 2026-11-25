@@ -735,11 +735,11 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     session = person;
 
     // An answer written after the seat's question and before its finish has answered the stop: the seat has the issue back.
-    const asking = async (seatSaid, ownerSaid) => {
+    const asking = async (seatSaid, otherSaid, other = owner) => {
       const { target, run } = await started(devA);
       await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(60) } });
       await raw.issueComment.create({ data: { issueId: target.id, authorId: devA.userId, content: ask.questions[0].question, createdAt: ago(seatSaid) } });
-      await raw.issueComment.create({ data: { issueId: target.id, authorId: owner, content: 'Split it: the window is taken tonight.', createdAt: ago(ownerSaid) } });
+      await raw.issueComment.create({ data: { issueId: target.id, authorId: other, content: 'Split it: the window is taken tonight.', createdAt: ago(otherSaid) } });
       assert.equal((await finish(devA, run.id, { outcome: 'blocked', askedUser: person, ask }))[0], 200);
       return { target, run };
     };
@@ -750,14 +750,21 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const before = await asking(20, 30);
     assert.deepEqual(await offered(devA, before.target), []);
     assert.equal((await reply(before.target, before.run.id))[0], 200);
+    // Before the finish only a person answers: what another seat wrote then leaves the stop open for the person.
+    const bySeat = await asking(30, 20, otherA.userId);
+    assert.deepEqual(await offered(devA, bySeat.target), []);
+    assert.equal((await reply(bySeat.target, bySeat.run.id))[0], 200);
 
-    // The issue is done, or went to another seat.
+    // The issue is done, went to another seat, or was given to its seat again since the stop: Home shows none of them.
     const done = await stopped();
     await move(done.target, 'done');
     await closed(done);
     const moved = await stopped();
     await raw.issue.update({ where: { id: moved.target.id }, data: { assigneeId: otherA.userId } });
     await closed(moved);
+    const returned = await stopped();
+    await raw.issueAssignee.updateMany({ where: { issueId: returned.target.id, userId: devA.userId }, data: { approvedAt: new Date(Date.now() + 1000) } });
+    await closed(returned);
 
     // A later run has started: the old row's press posts nothing, also after that run stopped with a question of its own.
     const later = await stopped();

@@ -28,7 +28,8 @@ after(() => db?.stop());
 
 test('seat inbox: only what was assigned, in a fixed order, each with its reason', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
+    // People sign in with an email; a seat's account has none.
+    await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
     await prisma.workspace.create({ data: { id: 'w2', name: 'w2', slug: 'w2', ownerId: person } });
@@ -284,9 +285,24 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
         action: 'AGENT_RUN_FINISHED', details: JSON.stringify({ runId: made.id, outcome, askedUser: person }) } });
     };
     const early = await issue(devA);
+    // Only the last run's finish is read: what an earlier run left on the timeline, readable or not, says nothing here.
+    await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: A, itemType: 'ISSUE', itemId: early.id, userId: devA.userId,
+      action: 'AGENT_RUN_FINISHED', details: '{"runId":"an earlier run","askedUser":', createdAt: ago(200) } });
     await stop(early);
     await comment(early, devA.userId, 70);
     await comment(early, person, 65);
+    // Before the finish only a person answers: what another seat wrote then does not bring the issue back.
+    const bySeat = await issue(devA);
+    await stop(bySeat);
+    await comment(bySeat, devA.userId, 70);
+    await comment(bySeat, otherA.userId, 65);
+    // A finish whose record cannot be read names nobody: no early answer, and the rest of the inbox is still read.
+    const unreadable = await issue(devA);
+    await run(unreadable, devA, { outcome: 'blocked' });
+    await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: A, itemType: 'ISSUE', itemId: unreadable.id, userId: devA.userId,
+      action: 'AGENT_RUN_FINISHED', details: '{"runId":' } });
+    await comment(unreadable, devA.userId, 70);
+    await comment(unreadable, person, 65);
     // The seat's last comment of the run is the question: an earlier one is a progress note.
     const review = await issue(devA);
     await stop(review, 'in_review');
@@ -317,9 +333,11 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     await comment(noted, devA.userId, 30);
     assert.deepEqual((await inbox(devA.token)).map(item => [item.issueKey, item.reason]), [[review.issueKey, 'reply'], [early.issueKey, 'reply'], [noted.issueKey, 'reply']]);
 
-    // A comment after the finish is a reply, as it was.
+    // A comment after the finish is a reply, as it was, whoever but the seat wrote it.
     await comment(before, person, 5);
     assert.equal((await offered(devA.token, before)).reason, 'reply');
+    await comment(bySeat, otherA.userId, 5);
+    assert.equal((await offered(devA.token, bySeat)).reason, 'reply');
     await clear();
   });
 

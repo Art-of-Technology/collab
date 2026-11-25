@@ -15,7 +15,9 @@ let forgeBindings = [];
 
 before(async () => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: ['viewer', 'other', 'seat-user', 'other-seat-user', 'foreign-owner'].map(id => ({ id, name: id })) });
+    // People sign in with an email; a seat's account has none.
+    await prisma.user.createMany({ data: ['viewer', 'other', 'seat-user', 'other-seat-user', 'foreign-owner']
+      .map(id => ({ id, name: id, ...(!id.endsWith('seat-user') && { email: `${id}@example.test` }) })) });
     await prisma.workspace.createMany({ data: [
       { id: 'work', name: 'Work', slug: 'work', ownerId: 'viewer' },
       { id: 'foreign', name: 'Foreign', slug: 'foreign', ownerId: 'foreign-owner' },
@@ -289,9 +291,12 @@ test("declared stops: an answer written after the seat's question clears the row
   // Each run started at date(-2.5) and finished at date(-2).
   const says = (issueId, authorId, days, content) => raw.issueComment.create({ data: { issueId, authorId, content, createdAt: date(days) } });
   const question = 'Run the migration in tonight\'s window, or split it? Reply `window` or `split`.';
-  for (const id of ['early', 'before', 'between', 'silent', 'noted']) await waiting(id);
+  for (const id of ['early', 'before', 'between', 'by-seat', 'silent', 'noted']) await waiting(id);
   await says('early', 'seat-user', -2.2, question);
   await says('early', 'other', -2.1, 'split');
+  // Before the finish only a person answers: what another seat wrote then leaves the question with the person.
+  await says('by-seat', 'seat-user', -2.2, question);
+  await says('by-seat', 'other-seat-user', -2.1, 'The review of this change passed.');
   // Written before the seat's question, also between two of its comments: not an answer to it.
   await says('before', 'other', -2.3, 'Is the backup done?');
   await says('before', 'seat-user', -2.2, question);
@@ -306,8 +311,11 @@ test("declared stops: an answer written after the seat's question clears the row
   await says('noted', 'other', -2.1, 'window');
   await says('noted', 'seat-user', -1, 'Thanks, I will take it from here.');
   const result = await read();
-  assert.deepEqual(result.items.map(row => row.issue.id), ['before', 'between', 'silent']);
-  assert.deepEqual(result.counts, { question: 3, review: 0, failed: 0, due: 0 });
+  assert.deepEqual(result.items.map(row => row.issue.id), ['before', 'between', 'by-seat', 'silent']);
+  assert.deepEqual(result.counts, { question: 4, review: 0, failed: 0, due: 0 });
+  // After the finish any comment but the seat's own clears the row, as it always did.
+  await says('by-seat', 'other-seat-user', -1, 'The review request is done.');
+  assert.deepEqual((await read()).items.map(row => row.issue.id), ['before', 'between', 'silent']);
 });
 
 test('a question of an issue that was reassigned since the run is not listed', async () => {

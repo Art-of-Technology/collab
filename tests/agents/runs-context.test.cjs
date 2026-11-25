@@ -15,7 +15,8 @@ after(() => db?.stop());
 
 test('run context: what a fresh session needs to work an issue, in one read', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
+    // People sign in with an email; a seat's account has none.
+    await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspace.create({ data: { id: 'x', name: 'x', slug: 'x', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
@@ -125,6 +126,12 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     await comment(asked, person, 65, 'split');
     await comment(asked, person, 10, 'And keep the old column for one release.');
     assert.deepEqual(said(await context(asked)), ['split', 'And keep the old column for one release.']);
+    // Before the finish only a person answers: what another seat wrote then is not an answer the next session is handed.
+    const bySeat = await stopped(true);
+    await comment(bySeat, devA.userId, 70, question);
+    await comment(bySeat, devB.userId, 65, 'The review of this change passed.');
+    await comment(bySeat, person, 10, 'window');
+    assert.deepEqual(said(await context(bySeat)), ['window']);
 
     // A run that named no person, and one in which the seat wrote nothing: the finish is the boundary, as it was.
     const unnamed = await stopped(false);

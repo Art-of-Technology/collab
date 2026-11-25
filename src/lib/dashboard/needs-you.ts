@@ -1,7 +1,7 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
-import { stopBoundaries } from '@/lib/agent-stop-boundary';
+import { earlyAnswers, lastAssigned } from '@/lib/agent-stop-boundary';
 import { readForgeBindings } from '@/lib/forge/reader';
 import { repositoryAccessWhere } from '@/lib/github/access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
@@ -253,8 +253,7 @@ export async function loadNeedsYou({
       const done = projectStatus?.category != null ? projectStatus.category === 'done' : projectStatus?.isFinal ?? legacyDone;
       if (done || !seat || assigneeId !== seat.userId || run.userId !== seat.userId || run.state !== 'finished'
         || !run.endedAt || (run.outcome !== 'blocked' && run.outcome !== 'in_review')) continue;
-      const helper = helpers.find(row => row.userId === assigneeId);
-      if (run.endedAt >= (helper?.approvedAt ?? helper?.assignedAt ?? createdAt)) {
+      if (run.endedAt >= lastAssigned({ assigneeId, createdAt, helpers })) {
         waiting.set(id, { issue, seat, runId: run.id, startedAt: run.startedAt, endedAt: run.endedAt });
       }
     }
@@ -281,7 +280,7 @@ export async function loadNeedsYou({
 
     const answered = new Set<string>();
     const commentDates = new Map<string, Date>();
-    const during = new Map<string, Date>();
+    const during = new Set<string>();
     for (const reply of comments) {
       const current = waiting.get(reply.issueId);
       const latest = reply._max.createdAt;
@@ -289,15 +288,14 @@ export async function loadNeedsYou({
       // Seats write their question during the run; only a later comment by someone else answers it.
       if (reply.authorId === current.seat.userId) commentDates.set(reply.issueId, latest);
       else if (latest > current.endedAt) answered.add(reply.issueId);
-      else if (latest > (during.get(reply.issueId) ?? current.startedAt)) during.set(reply.issueId, latest);
+      else during.add(reply.issueId);
     }
-    // A comment by someone else that came during the run answers it when it is later than the seat's last comment of that
-    // run: the seat asks, then finishes a moment later. The seat's inbox and its next run's context read the same rule.
-    const since = await stopBoundaries(prisma, [...during.keys()].filter(issueId => !answered.has(issueId)).map(issueId => {
+    // Somebody else commented during the run: a person's comment that is later than the seat's last comment of that run
+    // answers it, since the seat asks and finishes a moment later. The seat's inbox and its next run's context read the same rule.
+    for (const issueId of (await earlyAnswers(prisma, [...during].filter(issueId => !answered.has(issueId)).map(issueId => {
       const { seat, startedAt, endedAt } = waiting.get(issueId)!;
       return { issueId, seatUserId: seat.userId, startedAt, endedAt };
-    }));
-    for (const [issueId, boundary] of since) if (during.get(issueId)! > boundary) answered.add(issueId);
+    }))).keys()) answered.add(issueId);
     const factsByIssue = new Map<string, ExitFacts>();
     for (const activity of finishes) {
       const current = waiting.get(activity.itemId);

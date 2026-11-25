@@ -277,7 +277,7 @@ A reply word is what the person sends back as a comment on the issue: at most 40
 ```
 
 - The reply belongs on the issue that stopped: `ask` names no other issue. One question is answered on Home with a button per reply word; several are shown with their reply words and a link to the issue.
-- A comment by anyone other than the seat brings the issue back to the seat's inbox with reason `reply`. It counts when it is later than the seat's last comment of that run, also if it arrived before the finish. If the seat wrote no comment in the run, it counts when it is later than the finish.
+- A comment by anyone other than the seat brings the issue back to the seat's inbox with reason `reply`. After the finish, any such comment counts. Before the finish, only a person's comment counts, and only when it is later than the seat's last comment of that run: a comment by another seat or agent account in that time is not the person's answer.
 - `ask` is optional unless the deployment sets `COLLAB_STOP_ASK_REQUIRED=true`. With that setting, a finish with `askedUser` and no `ask` is refused with `422 exit_state_required` and `"missing": ["ask"]`. It is off by default, there is no setting per workspace, and a finish that names no person is not affected.
 
 ### Report usage
@@ -328,7 +328,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. See [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you). |
-| `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. When that run named a person, it starts after the seat's last comment of that run, so an answer written before the finish is included. |
+| `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. When that run named a person and a person answered before it finished, after the seat's last comment of that run, it starts with that answer. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
