@@ -25,7 +25,10 @@ function cliCommands() {
 }
 
 /** Every problem in the docs folder under `root`, one sentence each. An empty list means nothing is wrong. */
-export function checkDocs(root = repo) {
+// Links outside the docs (the app's home page, other sites) point at these headings of the published pages.
+export const PUBLIC_IDS = { cli: ['installation', 'authentication', 'workflow', 'agents', 'commands'] };
+
+export function checkDocs(root = repo, publicIds = {}) {
   // The app's own loader, so a title, a summary and a heading id mean here what they mean on the page.
   const { docPage, docHref } = loadTs(join(repo, 'src/lib/docs.ts'), require, { process: { cwd: () => root } });
   const { lexer, walkTokens } = require('marked');
@@ -75,11 +78,14 @@ export function checkDocs(root = repo) {
       }
     });
   }
+  for (const [slug, ids] of Object.entries(publicIds)) for (const id of ids) {
+    if (!pages.get(slug)?.headings.some(heading => heading.id === id)) problems.push(`content/docs/${slug}.md has no heading with the id "${id}", which links outside the docs point at.`);
+  }
   return problems;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const problems = checkDocs(process.argv[2] ? resolve(process.argv[2]) : repo);
+  const problems = process.argv[2] ? checkDocs(resolve(process.argv[2])) : checkDocs(repo, PUBLIC_IDS);
   for (const problem of problems) console.error(problem);
   console.log(problems.length ? `content/docs: ${problems.length} to fix.` : 'content/docs: nothing wrong.');
   process.exit(problems.length ? 1 : 0);
