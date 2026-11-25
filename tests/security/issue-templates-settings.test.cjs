@@ -6,8 +6,17 @@ const { STANDARD_TEMPLATES } = library;
 const plain = value => JSON.parse(JSON.stringify(value));
 const edited = { sections: [{ title: 'What broke', required: true, guidance: 'One sentence.' }], requiredFields: ['priority', 'labels'] };
 
-// A workspace with its stored templates, one signed-in person, and the real store and settings route.
-function workspace({ user = 'admin', canManage = true, member = true, rows = [], enforced = false } = {}) {
+// The signed-in person's account role and membership role, for the real authority module.
+const LEVEL = { PRIMARY_OWNER: ['DEVELOPER', null], OWNER: ['DEVELOPER', 'OWNER'], ADMIN: ['DEVELOPER', 'ADMIN'], STANDARD: ['DEVELOPER', 'MEMBER'],
+  PLATFORM: ['SYSTEM_ADMIN', null], PLATFORM_MEMBER: ['SYSTEM_ADMIN', 'MEMBER'] };
+
+// A workspace with its stored templates, one signed-in person, and the real store, authority module and settings route.
+function workspace({ user = 'admin', canManage = true, level = canManage ? 'OWNER' : 'STANDARD', member = true, rows = [], enforced = false } = {}) {
+  const [accountRole, memberRole] = LEVEL[level];
+  const authority = load('src/lib/workspace-authority.ts', { './prisma': { prisma: {
+    workspace: { findUnique: async () => ({ ownerId: level === 'PRIMARY_OWNER' ? user : 'someone-else' }) },
+    user: { findUnique: async () => ({ role: accountRole, workspaceMemberships: memberRole ? [{ role: memberRole }] : [] }) },
+  } } });
   const state = { rows: rows.map(row => ({ workspaceId: 'workspace-one', version: 2, ...row })), writes: [], enforced };
   const same = (row, where) => row.workspaceId === where.workspaceId && row.issueType === where.issueType;
   const prisma = {
@@ -38,10 +47,9 @@ function workspace({ user = 'admin', canManage = true, member = true, rows = [],
     '@/lib/request-session': { getServerSession: async () => (user ? { user: { id: user } } : null) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/issue-finder': { userHasWorkspaceAccess: async () => member },
-    '@/lib/permissions': {
-      Permission: { MANAGE_WORKSPACE_SETTINGS: 'MANAGE_WORKSPACE_SETTINGS' },
-      checkUserPermission: async (_user, _workspace, permission) => ({ hasPermission: canManage && permission === 'MANAGE_WORKSPACE_SETTINGS' }),
-    },
+    '@/lib/workspace-authority': authority,
+    // Everyone holds every permission here, so a route that still asked one would let an Admin through.
+    '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_SETTINGS: 'MANAGE_WORKSPACE_SETTINGS' }, checkUserPermission: async () => ({ hasPermission: true }) },
   };
   const store = load('src/lib/issue-template-store.ts', dependencies);
   const route = load('src/app/api/workspaces/[workspaceId]/issue-templates/route.ts', { ...dependencies, '@/lib/issue-template-store': store }, { console });
@@ -135,6 +143,23 @@ test('a template that breaks the rules, or a type without templates, is refused 
   assert.match((await invalid.json()).error, /more than once/);
   for (const type of ['SUBTASK', 'nope', undefined]) assert.equal((await admin.put({ type, ...edited })).status, 400, String(type));
   assert.deepEqual(admin.state.writes, []);
+});
+
+test('an Owner and the primary owner save and switch enforcement; an Admin and a standard role that holds MANAGE_WORKSPACE_SETTINGS are refused; every member still reads', async () => {
+  for (const level of ['PRIMARY_OWNER', 'OWNER', 'PLATFORM', 'PLATFORM_MEMBER']) {
+    const allowed = workspace({ level });
+    assert.equal((await allowed.put({ type: 'BUG', ...edited })).status, 200, level);
+    assert.equal((await allowed.put({ enforced: true })).status, 200, level);
+    assert.deepEqual([allowed.state.writes, allowed.state.enforced], [['save', 'enforce'], true], level);
+    assert.equal((await (await allowed.get()).json()).canManage, true, level);
+  }
+  for (const level of ['ADMIN', 'STANDARD']) {
+    const refused = workspace({ level });
+    for (const body of [{ type: 'BUG', ...edited }, { type: 'BUG', reset: true }, { enforced: true }]) assert.equal((await refused.put(body)).status, 403, level);
+    assert.deepEqual([refused.state.writes, refused.state.enforced], [[], false], level);
+    const read = await refused.get();
+    assert.deepEqual([read.status, (await read.json()).canManage], [200, false], level);
+  }
 });
 
 test('only a manager switches enforcement for agents, and reading the templates shows it', async () => {

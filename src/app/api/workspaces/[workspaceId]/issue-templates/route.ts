@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
-import { Permission, checkUserPermission } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { getWorkspaceTemplates, resetWorkspaceTemplate, saveWorkspaceTemplate, setTemplatesEnforced } from '@/lib/issue-template-store';
 import { TEMPLATED_TYPES, templateFor, validateTemplateInput, withBody, type TemplatedIssueType } from '@/lib/issue-templates';
 
 export const dynamic = 'force-dynamic';
 
-const canManageTemplates = async (userId: string, workspaceId: string) =>
-  (await checkUserPermission(userId, workspaceId, Permission.MANAGE_WORKSPACE_SETTINGS)).hasPermission;
+// Owners change the templates, like the other workspace settings. A platform admin, member or not, keeps the answer this route gave before.
+const canManageTemplates = async (userId: string, workspaceId: string) => {
+  const authority = await getWorkspaceAuthority(userId, workspaceId);
+  return !!authority?.platformAdmin || may(authority, 'workspace.settings');
+};
 
 // GET /api/workspaces/[workspaceId]/issue-templates - the workspace's issue templates, for any member
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ workspaceId: string }> }) {
