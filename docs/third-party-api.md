@@ -406,7 +406,7 @@ GET /api/apps/auth/leave/requests
 
 **Query parameters:**
 - `page`, `limit` - Pagination
-- `userId` - Filter by user (admin only)
+- `userId` - Use your own user ID to list your requests. Filtering by another user's ID requires `MANAGE_LEAVE`.
 - `status` - Filter by status (PENDING, APPROVED, REJECTED, CANCELLED)
 - `type` - Filter by type (VACATION, SICK, PERSONAL, etc.)
 - `startDate` - Filter by start date (ISO 8601)

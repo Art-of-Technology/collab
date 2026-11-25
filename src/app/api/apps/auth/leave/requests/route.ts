@@ -13,6 +13,7 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { checkUserPermission, Permission } from '@/lib/permissions';
 
 // Schema for creating new leave requests
 const CreateLeaveRequestSchema = z.object({
@@ -48,35 +49,21 @@ export const GET = withAppAuth(
         }
       };
 
-      // If userId is not provided, show only current user's requests unless user is admin
+      // If userId is not provided, show only current user's requests unless user may manage leave
       if (!userId) {
-        const membership = await prisma.workspaceMember.findUnique({
-          where: {
-            userId_workspaceId: {
-              userId: context.user.id,
-              workspaceId: context.workspace.id
-            }
-          }
-        });
+        const { hasPermission } = await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_LEAVE);
 
-        // Non-admin users can only see their own requests
-        if (membership?.role !== 'ADMIN') {
+        // Users without MANAGE_LEAVE can only see their own requests
+        if (!hasPermission) {
           where.userId = context.user.id;
         }
       } else {
-        // Check if user can view other users' requests (admin only)
-        const membership = await prisma.workspaceMember.findUnique({
-          where: {
-            userId_workspaceId: {
-              userId: context.user.id,
-              workspaceId: context.workspace.id
-            }
-          }
-        });
+        // Check if user can view other users' requests (MANAGE_LEAVE only)
+        const { hasPermission } = await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_LEAVE);
 
-        if (membership?.role !== 'ADMIN' && userId !== context.user.id) {
+        if (!hasPermission && userId !== context.user.id) {
           return NextResponse.json(
-            { error: 'insufficient_permissions', error_description: 'Admin role required to view other users\' leave requests' },
+            { error: 'insufficient_permissions', error_description: 'Manage leave permission required to view other users\' leave requests' },
             { status: 403 }
           );
         }
