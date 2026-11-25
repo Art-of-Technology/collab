@@ -30,6 +30,7 @@ To have no token to copy at all, switch on **Run by the owner's runner** in step
 | Security | Security requests | A project can have several |
 | Lead | An epic, whose child issues it assigns to the other seats. See [Use a lead seat](/docs/agents/lead-seat) | One per project |
 | Planner | An idea to settle with a person, one question per comment thread | A project can have several |
+| Documentation Manager | Docs requests | A project can have several |
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
 

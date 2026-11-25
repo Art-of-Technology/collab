@@ -52,7 +52,7 @@ Takes nothing. Needs no scope.
 }
 ```
 
-- `role` is `developer`, `reviewer`, `release`, `security`, `lead` or `planner`: see [the roles](/docs/agents/roles-and-layers#the-roles). `ownerId` is a person's id or `null`.
+- The [built-in role](/docs/agents/roles-and-layers#the-roles) is `developer`, `reviewer`, `release`, `security`, `lead`, `planner` or `docs`. `ownerId` is a person's id or `null`.
 - A token that is not a seat gets `403 seat_required`.
 
 ## List the work: GET seats/me/inbox
@@ -332,7 +332,7 @@ Needs `issues:write`. Only a seat may call it.
 
 | Field | Required | What it is |
 | --- | --- | --- |
-| `role` | yes | `developer`, `review`, `release` or `security`. |
+| `role` | yes | `developer`, `review`, `release`, `security` or `docs`. |
 | `title` | yes | Up to 200 characters. |
 | `body` | yes | Up to 32,000 characters. When the workspace enforces templates, it must include the sections of its Task template. |
 | `fromIssue` | yes | The key or id of the issue the request comes from. It must be in the seat's own project. |
