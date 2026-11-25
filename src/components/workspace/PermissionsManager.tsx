@@ -282,7 +282,7 @@ export default function PermissionsManager({ workspaceId, currentUserRole }: Per
   const resetRolePermissions = async (role: WorkspaceRole) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/permissions/reset`, {
+      const response = await fetch(`/api/workspaces/${workspaceId}/permissions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
