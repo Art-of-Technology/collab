@@ -489,21 +489,23 @@ test('a Planner seat is created from the form and reads its project\'s repositor
   } finally { await React.act(async () => root.unmount()); }
 });
 
-test('the create-seat form offers and submits the Documentation Manager role', async () => {
-  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [] });
-  try {
-    await React.act(async () => buttons('New token')[0].click());
-    await type('agent-token-name', 'Docs');
-    await choose(0, 'p1');
-    const options = [...document.querySelectorAll('select')[1].options];
-    assert.ok(options.some(option => option.value === 'docs' && option.textContent === 'Documentation Manager'));
-    await choose(1, 'docs');
-    await shows('From the project acme/app. Nothing to pick, nothing to type.');
-    answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'Docs', token: 'collab_at_seat' } }) };
-    await React.act(async () => buttons('Create seat')[0].click());
-    assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'Docs', projectId: 'p1', role: 'docs', ownerId: null, expiresInDays: 90 }]);
-  } finally { await React.act(async () => root.unmount()); }
-});
+for (const [role, name] of [['docs', 'Documentation Manager'], ['changelog', 'Changelog Manager']]) {
+  test(`the create-seat form offers and submits the ${name} role`, async () => {
+    const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [] });
+    try {
+      await React.act(async () => buttons('New token')[0].click());
+      await type('agent-token-name', name);
+      await choose(0, 'p1');
+      const options = [...document.querySelectorAll('select')[1].options];
+      assert.ok(options.some(option => option.value === role && option.textContent === name));
+      await choose(1, role);
+      await shows('From the project acme/app. Nothing to pick, nothing to type.');
+      answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name, token: 'collab_at_seat' } }) };
+      await React.act(async () => buttons('Create seat')[0].click());
+      assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name, projectId: 'p1', role, ownerId: null, expiresInDays: 90 }]);
+    } finally { await React.act(async () => root.unmount()); }
+  });
+}
 
 test("the organisation's own roles are offered under Your organisation, and a seat with one is listed by its name (CLB-628)", async () => {
   const customRoles = [{ id: 'cr1', name: 'QA Tester', baseRole: 'developer' }, { id: 'cr2', name: 'Night lead', baseRole: 'lead' }];

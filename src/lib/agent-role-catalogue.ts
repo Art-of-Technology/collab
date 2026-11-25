@@ -39,6 +39,11 @@ const documentationWork = `2. Update the docs pages the change touches. Put a pi
 4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
 Never change product code.`;
 
+const changelogWork = `2. Check the release details and draft a changelog entry for what was released, in plain words a customer understands.
+3. Hand the draft to a person in a comment on the request so they can review and publish it. Finish as \`done\` with a link to the draft.
+4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
+Never publish a changelog entry.`;
+
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
 - Look up everything you can first. Ask only for what only that person can decide or do.
 - Do not pass on another seat's or an issue's question as you found it. Say in plain English what is being asked. An issue key or an internal name ("the waiting team", "the release tab") gets a few words saying what it is; if you could not find out what a name stands for, say that.
@@ -77,6 +82,8 @@ export const ROLE_ENTRIES = [
     requests: [], repository: 'read-only', maxPerProject: null },
   { id: 'docs', name: 'Documentation Manager', platformPrompt: documentationWork, takesOrdinaryIssues: false,
     requests: [{ id: 'docs', label: 'Docs request' }], repository: 'yes', maxPerProject: null },
+  { id: 'changelog', name: 'Changelog Manager', platformPrompt: changelogWork, takesOrdinaryIssues: false,
+    requests: [{ id: 'changelog', label: 'Changelog request' }], repository: 'yes', maxPerProject: null },
 ] as const satisfies readonly RoleEntry[];
 
 export function createRoleCatalogue(entries: readonly RoleEntry[]) {
