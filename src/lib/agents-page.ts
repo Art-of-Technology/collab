@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { inboxOf, type InboxItem } from '@/lib/agent-runs';
-import { fetchedBy } from '@/lib/agent-runners';
+import { fetchedBy, runnerPeopleBelow } from '@/lib/agent-runners';
 import { MEMBER_ROLES, seatRoom } from '@/lib/agent-seats';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
@@ -16,18 +16,21 @@ export async function usesHandoffs(workspaceId: string): Promise<boolean> {
 }
 
 /**
- * What the Runners tab needs before it asks for the runners themselves: the workspace, and for an Owner or the primary
- * owner the people a runner can be connected for. Only they connect a runner for someone else, so nobody else gets the
- * list. Null when the workspace is not the person's.
+ * What the Runners tab needs before it asks for the runners themselves: the workspace, and the people the viewer may
+ * connect a runner for: themself and, for an Owner, the people below them, for the primary owner everyone. Nobody else
+ * gets the list. Null when the workspace is not the person's.
  */
 export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) {
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true } });
   if (!workspace) return null;
-  const people = !may(await getWorkspaceAuthority(userId, workspace.id), 'runners.manage') ? [] : await prisma.user.findMany({
+  const viewer = await getWorkspaceAuthority(userId, workspace.id);
+  const people = !may(viewer, 'runners.manage') ? [] : await prisma.user.findMany({
     where: { OR: [{ id: userId }, { email: { not: null }, workspaceMemberships: { some: { workspaceId: workspace.id, status: true } } }] },
     select: { id: true, name: true, email: true }, orderBy: { name: 'asc' },
   });
-  return { workspace: { id: workspace.id, slug: workspace.slug }, people: people.map(person => ({ id: person.id, name: person.name || person.email || person.id })) };
+  const others = await runnerPeopleBelow(viewer, workspace.id, people.map(person => person.id));
+  return { workspace: { id: workspace.id, slug: workspace.slug }, people: people.filter(person => person.id === userId || others.has(person.id))
+    .map(person => ({ id: person.id, name: person.name || person.email || person.id })) };
 }
 
 /**

@@ -476,21 +476,25 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal(await usable(), before);
   });
 
+  // A workspace of its own for the levels, with its id unlike its slug, and what its people do there.
+  const primary = 'clvprimary1', lvOwner = 'clvowner001', lvAdmin = 'clvadmin001', lvMember = 'clvmember01', sysAdmin = 'clvsysadmin', offOwner = 'clvoffowner', sysOut = 'clvsysout01';
+  const connect = async (as, ownerId) => { const { code } = await pair(`${ownerId ?? as}-box`); return admit(as, { code, ...(ownerId && { ownerId }) }, 'lv'); };
+  const runnerOf = async ownerId => (await prisma.agentRunner.findFirstOrThrow({ where: { workspaceId: 'lv', ownerId, removedAt: null } })).id;
+  const list = async as => { signedIn = as; const reply = await admitRoute.GET(new Request('https://collab.test/api'), { params: Promise.resolve({ workspaceId: 'lv' }) }); return [reply.status, await reply.json()]; };
+  const renew = async (as, runnerId) => { signedIn = as; return (await renewRoute.POST(new Request('https://collab.test/api', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://collab.test' } }),
+    { params: Promise.resolve({ workspaceId: 'lv', runnerId }) })).status; };
+  const remove = async (as, runnerId) => { signedIn = as; return (await removeRoute.DELETE(new Request('https://collab.test/api', { method: 'DELETE' }), { params: Promise.resolve({ workspaceId: 'lv', runnerId }) })).status; };
+  const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': {},
+    '@/lib/agent-runs': {}, '@/lib/agent-runners': runners, '@/lib/agent-seats': seats, '@/lib/permissions': {} }, { Date });
+
   await t.test('an Owner and the primary owner admit a runner for someone else, see everyone\'s, renew and remove anyone\'s; an Admin and a standard member only their own, and someone else\'s reads as absent', async () => {
-    // A workspace of its own, one person per level: the primary owner, an Owner, an Admin, a standard member, a platform
+    // One person per level: the primary owner, an Owner, an Admin, a standard member, a platform
     // admin who is an Admin there, a switched-off Owner, and a platform admin who is no member.
-    const primary = 'clvprimary1', lvOwner = 'clvowner001', lvAdmin = 'clvadmin001', lvMember = 'clvmember01', sysAdmin = 'clvsysadmin', offOwner = 'clvoffowner', sysOut = 'clvsysout01';
     await prisma.user.createMany({ data: [primary, lvOwner, lvAdmin, lvMember, sysAdmin, offOwner, sysOut].map(id => ({ id, name: id, email: `${id}@example.test`,
       ...([sysAdmin, sysOut].includes(id) && { role: 'SYSTEM_ADMIN' }) })) });
-    await prisma.workspace.create({ data: { id: 'lv', name: 'lv', slug: 'lv', ownerId: primary } });
+    await prisma.workspace.create({ data: { id: 'lv', name: 'lv', slug: 'lv-team', ownerId: primary } });
     await prisma.workspaceMember.createMany({ data: [[lvOwner, 'OWNER'], [lvAdmin, 'ADMIN'], [lvMember, 'MEMBER'], [sysAdmin, 'ADMIN'], [offOwner, 'OWNER', false]]
       .map(([userId, role, status = true]) => ({ workspaceId: 'lv', userId, role, status })) });
-    const connect = async (as, ownerId) => { const { code } = await pair(`${ownerId ?? as}-box`); return admit(as, { code, ...(ownerId && { ownerId }) }, 'lv'); };
-    const runnerOf = async ownerId => (await prisma.agentRunner.findFirstOrThrow({ where: { workspaceId: 'lv', ownerId, removedAt: null } })).id;
-    const list = async as => { signedIn = as; const reply = await admitRoute.GET(new Request('https://collab.test/api'), { params: Promise.resolve({ workspaceId: 'lv' }) }); return [reply.status, await reply.json()]; };
-    const renew = async (as, runnerId) => { signedIn = as; return (await renewRoute.POST(new Request('https://collab.test/api', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://collab.test' } }),
-      { params: Promise.resolve({ workspaceId: 'lv', runnerId }) })).status; };
-    const remove = async (as, runnerId) => { signedIn = as; return (await removeRoute.DELETE(new Request('https://collab.test/api', { method: 'DELETE' }), { params: Promise.resolve({ workspaceId: 'lv', runnerId }) })).status; };
 
     // Everyone connects their own, as today.
     for (const as of [lvAdmin, lvMember, sysAdmin]) assert.equal((await connect(as))[0], 201, as);
@@ -535,13 +539,46 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal(await prisma.agentRunner.count({ where: { workspaceId: 'lv', removedAt: null } }), 1, `only ${lvOwner}'s is left`);
 
     // The Runners tab gives the people a runner can be connected for to an Owner and the primary owner only.
-    const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': {},
-      '@/lib/agent-runs': {}, '@/lib/agent-runners': runners, '@/lib/agent-seats': seats, '@/lib/permissions': {} }, { Date });
     // The viewer and the active members with an email, as today.
     const members = [lvAdmin, lvMember, lvOwner, sysAdmin];
-    for (const as of [lvOwner, primary]) assert.deepEqual((await page.readRunnersTab(as, 'lv')).people.map(person => person.id).sort(), [...new Set([as, ...members])].sort(), as);
-    for (const as of [lvAdmin, lvMember, sysAdmin]) assert.deepEqual((await page.readRunnersTab(as, 'lv')).people.length, 0, as);
-    for (const as of [offOwner, sysOut]) assert.equal(await page.readRunnersTab(as, 'lv'), null, as);
+    for (const as of [lvOwner, primary]) assert.deepEqual((await page.readRunnersTab(as, 'lv-team')).people.map(person => person.id).sort(), [...new Set([as, ...members])].sort(), as);
+    for (const as of [lvAdmin, lvMember, sysAdmin]) assert.deepEqual((await page.readRunnersTab(as, 'lv-team')).people.length, 0, as);
+    for (const as of [offOwner, sysOut]) assert.equal(await page.readRunnersTab(as, 'lv-team'), null, as);
+  });
+
+  await t.test('an Owner acts on runners of people below Owner only; the primary owner on everyone\'s; a person with no level counts as below', async () => {
+    // A second Owner, a member who will be switched off, and the primary owner with a membership row of its own.
+    const lvOwner2 = 'clvowner002', gone = 'clvgone0001';
+    await prisma.user.createMany({ data: [lvOwner2, gone].map(id => ({ id, name: id, email: `${id}@example.test` })) });
+    await prisma.workspaceMember.createMany({ data: [[lvOwner2, 'OWNER'], [gone, 'MEMBER'], [primary, 'OWNER']].map(([userId, role]) => ({ workspaceId: 'lv', userId, role })) });
+    for (const as of [primary, lvOwner2, lvAdmin, lvMember, gone]) assert.equal((await connect(as))[0], 201, as);
+
+    // Not upward and not sideways: the primary owner's and another Owner's runner are refused, read as absent and are not listed.
+    for (const ownerId of [primary, lvOwner2]) {
+      assert.deepEqual((await connect(lvOwner, ownerId)).slice(0, 2).map(part => part.code ?? part), [403, 'owner_only'], ownerId);
+      assert.equal(await renew(lvOwner, await runnerOf(ownerId)), 404, ownerId);
+      assert.equal(await remove(lvOwner, await runnerOf(ownerId)), 404, ownerId);
+    }
+    const [, seen] = await list(lvOwner);
+    assert.deepEqual([seen.owner, seen.runners.map(row => row.ownerId).sort()], [true, [lvOwner, lvAdmin, lvMember, gone].sort()]);
+    // Downward it works, and the primary owner acts on an Owner's.
+    assert.equal((await connect(lvOwner, lvAdmin))[0], 201);
+    assert.equal(await renew(lvOwner, await runnerOf(lvMember)), 200);
+    assert.equal(await renew(primary, await runnerOf(lvOwner2)), 200);
+    assert.equal((await connect(primary, lvOwner))[0], 201);
+    assert.equal(await remove(primary, await runnerOf(lvOwner2)), 200);
+    assert.deepEqual((await list(primary))[1].runners.map(row => row.ownerId).sort(), [primary, lvOwner, lvAdmin, lvMember, gone].sort());
+
+    // Someone switched off has no level: an Admin still cannot touch their leftover runner, an Owner can.
+    await prisma.workspaceMember.update({ where: { userId_workspaceId: { userId: gone, workspaceId: 'lv' } }, data: { status: false } });
+    assert.equal(await remove(lvAdmin, await runnerOf(gone)), 404);
+    assert.ok((await list(lvOwner))[1].runners.some(row => row.ownerId === gone));
+    assert.equal(await renew(lvOwner, await runnerOf(gone)), 200);
+    assert.equal(await remove(lvOwner, await runnerOf(gone)), 200);
+
+    // The people an Owner may connect a runner for: themself and active members below Owner with an email.
+    assert.deepEqual((await page.readRunnersTab(lvOwner, 'lv-team')).people.map(person => person.id).sort(), [lvOwner, lvAdmin, lvMember, sysAdmin].sort());
+    assert.deepEqual((await page.readRunnersTab(primary, 'lv-team')).people.map(person => person.id).sort(), [primary, lvOwner, lvOwner2, lvAdmin, lvMember, sysAdmin].sort());
   });
 
   await t.test('a runner whose person left the workspace, or whose pairing ran out, is refused; and pairings are capped', async () => {
