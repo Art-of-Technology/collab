@@ -10,15 +10,15 @@ test('app handlers deny bound issue writes before mutation while allowing unconn
   ];
   let writes = 0, bindingReads = 0;
   const mutate = async () => { writes++; return {}; };
+  const workspace = { id: 'workspace', slug: 'workspace', name: 'Workspace', ownerId: 'actor', members: [] };
+  const findWorkspace = async ({ where }) => matches(workspace, where) ? workspace : null;
   const db = {
     issue: { findFirst: async ({ where }) => issues.find(row => matches(row, where)), findUniqueOrThrow: async ({ where }) => issues.find(row => matches(row, where)), findMany: async ({ where }) => issues.filter(row => matches(row, where)), update: mutate, delete: mutate },
     project: { findFirst: async ({ where }) => [{ id: 'c000000000000000000000003', workspaceId: 'workspace' }, { id: 'c000000000000000000000004', workspaceId: 'workspace' }].find(row => matches(row, where)) },
     issueActivity: { create: mutate }, issueAssignee: { deleteMany: mutate },
     $transaction: async operation => operation(db),
-    workspace: { findFirst: async ({ where }) => {
-      const workspace = { id: 'workspace', slug: 'workspace', name: 'Workspace', ownerId: 'actor', members: [] };
-      return matches(workspace, where) ? workspace : null;
-    } },
+    workspace: { findFirst: findWorkspace, findUnique: findWorkspace },
+    user: { findUnique: async ({ where }) => where.id === workspace.ownerId ? { role: 'DEVELOPER', workspaceMemberships: [] } : null },
     issueComment: { create: mutate },
     workLog: { findFirst: async ({ where }) => ({ ...where, timeSpent: 5 }), update: mutate, delete: mutate },
     issueRelation: { findUnique: async () => ({ id: 'relation', sourceIssueId: issues[1].id, targetIssueId: issues[0].id }), delete: mutate },

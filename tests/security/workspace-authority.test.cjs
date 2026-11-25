@@ -32,7 +32,10 @@ test('each stored role maps to one level, whatever its letter case', () => {
     assert.equal(levelOfRole(role), 'STANDARD', role);
     assert.equal(levelOfRole(role.toLowerCase()), 'STANDARD', role);
   }
-  for (const role of ['Release Captain', 'owners', 'administrator', '', 'SYSTEM_ADMIN']) assert.equal(levelOfRole(role), 'STANDARD', role);
+  // Only plain-letter case variants count: no dotless or dotted i, no space or line around the name.
+  for (const role of ['Release Captain', 'owners', 'administrator', '', 'SYSTEM_ADMIN', 'adm\u0131n', 'ADM\u0130N', 'ADMIN ', ' OWNER', 'x\nADMIN', 'ADMIN\n']) {
+    assert.equal(levelOfRole(role), 'STANDARD', JSON.stringify(role));
+  }
 });
 
 test("the workspace's owner is PRIMARY_OWNER with no membership row, an inactive one, or another role on it", async () => {
