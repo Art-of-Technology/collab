@@ -26,8 +26,13 @@ function fixture() {
     return { ...row, tags: row.tags.filter(tag => !t?.where || matches(tag, t.where)) };
   }
   const db = {
-    workspace: { findFirst: async ({ where }) => ws.find(w => matches(w, where)) ?? null },
-    user: { findUnique: async () => ({ id: 'alice' }), findMany: async () => [] },
+    workspace: { findFirst: async ({ where }) => ws.find(w => matches(w, where)) ?? null,
+      findUnique: async ({ where }) => ws.find(w => w.id === where.id) ?? null },
+    // The authority module also reads the caller's active memberships; this fixture's rows are standard members.
+    user: { findUnique: async ({ where, select } = {}) => ({ id: 'alice', role: 'USER',
+      workspaceMemberships: ws.flatMap(w => w.members.map(member => ({ role: 'MEMBER', ...member, workspaceId: w.id })))
+        .filter(member => member.userId === where?.id && matches(member, select?.workspaceMemberships?.where ?? {})) }),
+      findMany: async () => [] },
     project: { findFirst: async ({ where }) => projects.find(p => matches(p, where)) ?? null,
       findUnique: async ({ where }) => projects.find(p => matches(p, where)) ?? null, findMany: async () => [] },
     noteTag: {

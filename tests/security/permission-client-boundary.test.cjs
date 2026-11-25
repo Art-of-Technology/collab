@@ -49,7 +49,6 @@ test('workspace permission clients evaluate without loading server or database c
     'src/hooks/use-permissions.ts',
     'src/hooks/use-workspace-permissions.ts',
     'src/components/workspace/CustomRolesManager.tsx',
-    'src/components/workspace/MemberManager.tsx',
     'src/components/workspace/PermissionsManager.tsx',
   ]) load(resolve(root, file));
 

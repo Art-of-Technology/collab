@@ -50,7 +50,7 @@ function fixture(options={}){
  if (options.role) target.workspace.members.find(m => m.userId === actor.id).role = options.role;
  const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,category:null,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
- const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],sourceRelations:[],createdAt:date(-60),...overrides});
+ const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],sourceRelations:[],agentRequestRole:null,createdAt:date(-60),...overrides});
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
  const visibleParent=issue('visible-parent',{projectId:sibling.id,project:sibling});
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus}),visibleParent];
@@ -253,9 +253,9 @@ function fixture(options={}){
    }
    return selected;
   }},
- workspace:{findFirst:async args=>query(spaces,args)[0]??null},
+ workspace:{findFirst:async args=>query(spaces,args)[0]??null,findUnique:async({where})=>spaces.find(s=>s.id===where.id)??null},
  issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{
-  findUnique:async()=>options.deleted?null:actor,
+  findUnique:async args=>options.deleted?null:{...actor,workspaceMemberships:(spaces.find(s=>s.id===args?.select?.workspaceMemberships?.where.workspaceId)?.members??[]).filter(m=>m.userId===actor.id&&m.status)},
   findMany:async args=>query([agent,{...actor,workspaceMemberships:[{workspaceId:target.workspaceId}]}],args),
  },project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return args.select?.milestoneId ? boundedQuery(issues,args) : query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
@@ -443,7 +443,7 @@ test('Burn attributes the finish transition and recorded merge actor independent
  assert.doesNotMatch(JSON.stringify(burn), /External merger/);
 });
 
-test('Burn and Overview count ten work closures and report the six seat requests in their own table column', async () => {
+test('the Overview counts work alone and Burn keeps its requests handled', async () => {
  const result = await fixture({ overviewHistory: true, requests: true }).call();
  assert.equal(result.status, 200);
  const { burn, overview } = result.body;
@@ -456,7 +456,11 @@ test('Burn and Overview count ten work closures and report the six seat requests
  assert.equal(burn.contributors.find(row => row.agent).requestsHandled, 6);
  assert.equal(overview.closedByAgents, 10);
  assert.equal(overview.closedByAgentsPercent, 100);
- assert.equal(overview.stats.done, 16);
+ assert.equal(overview.stats.done, 10);
+ assert.equal(overview.stats.total, overview.stats.done + overview.stats.open);
+ assert.equal(overview.work.filter(item => item.done).length, 10);
+ assert.deepEqual(plain(overview.work.filter(item => /^closed-(9|1[0-4])$|^open-request$/.test(item.id))), []);
+ assert.equal(result.body.stats.completedIssues, 10);
 });
 
 test('Burn uses the readable linked issue assignee at merge time before the GitHub merge account', async () => {

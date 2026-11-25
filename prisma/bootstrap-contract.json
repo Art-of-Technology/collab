@@ -1,7 +1,7 @@
 {
   "format": "collab-empty-bootstrap-v1",
   "prismaVersion": "6.19.3",
-  "schemaSha256": "0e8eaa3efaa2e0fdaac01842a5c8316fde7896c330bb028a4d432883dac54f17",
+  "schemaSha256": "63e4724bd9e27915e504e34dbf40a1d1d5d345866545b795c93c01fb97595b51",
   "migrations": [
     {
       "name": "20250101000000_remove_task_relations_foreign_key",
@@ -138,6 +138,30 @@
     {
       "name": "20261120000100_project_milestones",
       "sha256": "09965f8c5cd520e32615269fc829307542d00900c25398ded6e07b546b228051"
+    },
+    {
+      "name": "20261124000100_agent_role_instructions",
+      "sha256": "7bcda7fef03ecda9d6472c20aedf4d4d0e0947fd5c87fa719636b9f66dee53ee"
+    },
+    {
+      "name": "20261124000200_agent_platform_prompts",
+      "sha256": "02166b40543580f3b534542b36ca610b4a8bf35c2d2c32d158df7b1c52bca37c"
+    },
+    {
+      "name": "20261124000300_workspace_role_normalise",
+      "sha256": "df5d81c612f724b3727f01de88a9d26a30037bf9a88373f90a030128420e304c"
+    },
+    {
+      "name": "20261125000100_agent_custom_roles",
+      "sha256": "f54fd03ac8b9fbf795021183ff83809bdd4c21d8ec596eee4ce69b6e5e379f8f"
+    },
+    {
+      "name": "20261125000200_manage_agents_permission",
+      "sha256": "3978bf8f11504fc4dcd725001178d646567af13466c5ae604a3ac62c07128693"
+    },
+    {
+      "name": "20261125000300_manage_agents_rows",
+      "sha256": "a70da5d2f9cbaf4dc2ee4786d1833e233a65d97eda3936d16714352ccd9621ad"
     }
   ],
   "unmodeledCatalog": {

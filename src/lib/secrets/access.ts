@@ -7,6 +7,7 @@ import { userHasWorkspaceAccess } from '@/lib/issue-finder';
  */
 
 import { prisma } from '@/lib/prisma';
+import { getWorkspaceAuthority, levelOfRole, may, type WorkspaceLevel } from '@/lib/workspace-authority';
 import { NoteScope, NoteSharePermission, NoteActivityAction, Prisma } from '@prisma/client';
 
 interface NoteWithAccess {
@@ -40,13 +41,13 @@ export interface AccessCheckResult {
  *
  * @param userId - ID of the user trying to access
  * @param note - Note with access-related fields
- * @param workspaceMembership - Verified active membership or workspace ownership; null if inaccessible
+ * @param workspaceMembership - Verified active membership or workspace ownership, with its level when known; null if inaccessible
  * @returns Access check result with permissions
  */
 export async function checkNoteAccess(
   userId: string,
   note: NoteWithAccess,
-  workspaceMembership?: { role: string } | null
+  workspaceMembership?: { role: string | null; level?: WorkspaceLevel | null } | null
 ): Promise<AccessCheckResult> {
   const isOwner = note.authorId === userId;
   const isExpired = note.expiresAt ? new Date() > note.expiresAt : false;
@@ -115,8 +116,9 @@ export async function checkNoteAccess(
     };
   }
 
-  // Workspace admin has full access
-  const isAdmin = workspaceMembership?.role === 'ADMIN' || workspaceMembership?.role === 'OWNER';
+  // Workspace admin has full access; a caller that knows only the stored role gets that role's level.
+  const level = workspaceMembership?.level ?? (workspaceMembership?.role ? levelOfRole(workspaceMembership.role) : null);
+  const isAdmin = may({ level }, 'content.manage');
   if (isAdmin) {
     return {
       canAccess: true,
@@ -310,19 +312,9 @@ export async function canAccessNote(
   const workspaceId = note.workspaceId ?? note.project?.workspaceId;
   let workspaceMembership = null;
   if (workspaceId) {
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }]
-      },
-      select: {
-        ownerId: true,
-        members: { where: { userId, status: true }, select: { role: true } }
-      }
-    });
-    workspaceMembership = workspace?.ownerId === userId
-      ? { role: 'OWNER' }
-      : workspace?.members[0] ?? null;
+    const authority = await getWorkspaceAuthority(userId, workspaceId);
+    // A platform admin who is neither the owner nor an active member has no level, and no membership here.
+    workspaceMembership = authority?.level ? authority : null;
   }
 
   return checkNoteAccess(userId, note, workspaceMembership);

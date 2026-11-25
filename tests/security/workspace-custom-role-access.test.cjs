@@ -2,12 +2,12 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 const clone = value => JSON.parse(JSON.stringify(value));
 const root = 'src/app/api/workspaces/[workspaceId]/';
 
-function fixture() {
-  const state = { active: true, manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
+function fixture(role = 'OWNER') {
+  const state = { active: true, owner: false, admin: false, role, manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
     roles: [{ id: 'custom', workspaceId: 'workspace', name: 'Support' }, { id: 'foreign', workspaceId: 'foreign', name: 'Support' }],
     permissions: [{ workspaceId: 'workspace', role: 'Support', permission: 'VIEW_POSTS' }, { workspaceId: 'foreign', role: 'Support', permission: 'VIEW_POSTS' }],
     members: [{ id: 'member', userId: 'target', workspaceId: 'workspace', role: 'Support', status: true }, { id: 'foreign', userId: 'foreign', workspaceId: 'foreign', role: 'Support', status: true }] };
-  const actor = { id: 'actor', email: 'actor@weezboo.com', role: 'DEVELOPER', ownedWorkspaces: [], get workspaceMemberships() { return state.active ? [{ role: 'HR' }] : []; } };
+  const actor = { id: 'actor', email: 'actor@weezboo.com', get role() { return state.admin ? 'SYSTEM_ADMIN' : 'DEVELOPER'; }, get ownedWorkspaces() { return state.owner ? [{ id: 'workspace' }] : []; }, get workspaceMemberships() { return state.active ? [{ role: state.role }] : []; } };
   function match(row, where) {
     if (where.name?.equals !== undefined) { const { name, ...rest } = where; return row.name.toLowerCase() === name.equals.toLowerCase() && matches(row, rest); }
     return matches(row, where);
@@ -16,6 +16,7 @@ function fixture() {
   const prisma = {
     account: { findUnique: async () => state.mapping ? { user: { ...actor, accounts: [{ id: 'mapping' }] } } : null },
     user: { findUnique: async ({ where }) => where.id === actor.id ? { ...actor } : null },
+    workspace: { findUnique: async () => ({ ownerId: state.owner ? 'actor' : 'owner' }) },
     customRole: {
       findFirst: async ({ where }) => clone(state.roles.find(row => match(row, where)) || null),
       findMany: async ({ where }) => state.roles.filter(row => match(row, where)),
@@ -32,7 +33,7 @@ function fixture() {
       updateMany: async ({ where, data }) => update('permissions', where, data),
     },
     workspaceMember: {
-      findUnique: async ({ where }) => where.userId_workspaceId ? (state.active ? { userId: 'actor', role: 'HR' } : null) : state.members.find(row => match(row, where)) || null,
+      findUnique: async ({ where }) => where.userId_workspaceId ? (state.active ? { userId: 'actor', role: state.role } : null) : (row => row ? { user: { email: 'member@weezboo.com' }, ...row } : null)(state.members.find(row => match(row, where))),
       count: async ({ where }) => state.members.filter(row => match(row, where)).length,
       updateMany: async ({ where, data }) => update('members', where, data),
       update: async ({ where, data }) => { update('members', where, data); return state.members.find(row => match(row, where)); },
@@ -70,7 +71,7 @@ test('rename without permission payload moves permissions and members only in se
   assert.deepEqual(f.state.members.map(x => [x.workspaceId, x.role]), [['workspace', 'Helpers'], ['foreign', 'Support']]);
 });
 test('member role rejects operator objects before writes', async () => {
-  for (const role of [{ not: 'OWNER' }, { equals: 'Support' }, '', ' ', '__proto__']) { const f = fixture(); assert.equal((await f.invoke('member', 'PUT', { role })).status, 400); assert.deepEqual(f.state.writes, []); }
+  for (const role of [{ not: 'OWNER' }, { equals: 'Support' }, '', ' ', '__proto__']) { const f = fixture('HR'); assert.equal((await f.invoke('member', 'PUT', { role })).status, 400); assert.deepEqual(f.state.writes, []); }
 });
 test('legacy builtin-name collisions cannot mutate builtin grants via update or delete', async () => {
   for (const method of ['PUT', 'DELETE']) { const f = fixture(); f.state.roles[0].name = 'ADMIN'; f.state.members = []; assert.equal((await f.invoke('detail', method, method === 'PUT' ? { permissions: [] } : undefined)).status, 409); assert.deepEqual(f.state.writes, []); }
@@ -88,17 +89,56 @@ test('rename with permissions rolls back all state on insertion error', async ()
 test('active read, revoked caller and foreign ID controls remain', async () => {
   const f = fixture(); assert.equal((await f.invoke('list', 'GET')).status, 200); assert.equal((await f.invoke('detail', 'GET')).status, 200);
   for (const method of ['GET', 'PUT', 'DELETE']) assert.equal((await f.invoke('detail', method, method === 'PUT' ? { name: 'New' } : undefined, { roleId: 'foreign' })).status, 404);
+  f.state.role = 'HR';
   assert.equal((await f.invoke('member', 'PUT', { role: 'Support' }, { memberId: 'foreign' })).status, 404);
   f.state.active = false; assert.equal((await f.invoke('list', 'GET')).status, 403); assert.equal((await f.invoke('detail', 'GET')).status, 403); assert.equal((await f.invoke('detail', 'PUT', { name: 'New' })).status, 403); assert.deepEqual(f.state.writes, []);
 });
 test('member self-downgrade denied; legitimate current member role update succeeds', async () => {
-  const f = fixture(); f.state.members[0].userId = 'actor'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 400); assert.deepEqual(f.state.writes, []);
+  const f = fixture('HR'); f.state.members[0].userId = 'actor'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 403); assert.deepEqual(f.state.writes, []);
   f.state.members[0].userId = 'target'; assert.equal((await f.invoke('member', 'PUT', { role: 'Support' })).status, 200);
 });
 for (const [route, method, body] of [['list', 'GET'], ['list', 'POST', { name: 'New', permissions: [] }], ['detail', 'GET'], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE'], ['member', 'PUT', { role: 'Support' }]]) {
   test(`${route} ${method} uses gateway mapping without legacy fallback and denies revoked mapping`, async () => {
-    const f = fixture(); f.env.env.COLLAB_AUTH_MODE = 'gateway'; if (method === 'DELETE') f.state.members = [];
+    const f = fixture(route === 'member' ? 'HR' : 'OWNER'); f.env.env.COLLAB_AUTH_MODE = 'gateway'; if (method === 'DELETE') f.state.members = [];
     assert.equal((await f.invoke(route, method, body)).status, 200); assert.equal(f.state.legacy, 0);
     f.state.mapping = false; f.state.writes = []; assert.equal((await f.invoke(route, method, body)).status, 401); assert.equal(f.state.legacy, 0); assert.deepEqual(f.state.writes, []);
   });
 }
+
+test('creating, editing and deleting a custom role is for Owner and above; listing stays open to members and to the owner without a row', async () => {
+  const writes = [['list', 'POST', { name: 'New', permissions: ['VIEW_POSTS'] }], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE']];
+  for (const [why, setup] of [['primary owner without a row', state => { state.owner = true; state.active = false; }], ['OWNER', state => { state.role = 'OWNER'; }], ['owner', state => { state.role = 'owner'; }]]) {
+    for (const [route, method, body] of [['list', 'GET'], ...writes]) {
+      const f = fixture(); setup(f.state); f.state.members = [];
+      assert.equal((await f.invoke(route, method, body)).status, 200, `${why}: ${route} ${method}`);
+    }
+  }
+  for (const role of ['ADMIN', 'admin', 'HR', 'Support']) {
+    for (const [route, method, body] of writes) {
+      const f = fixture(); f.state.role = role; f.state.members = []; // every role here holds MANAGE_WORKSPACE_PERMISSIONS
+      const response = await f.invoke(route, method, body);
+      assert.equal(response.status, 403, `${role}: ${route} ${method}`);
+      assert.match((await response.json()).error, /^Only Owners [^.]*$/);
+      assert.deepEqual(f.state.writes, []);
+    }
+    const f = fixture(); f.state.role = role;
+    assert.equal((await f.invoke('list', 'GET')).status, 200, `${role} lists custom roles`);
+  }
+  const f = fixture(); f.state.active = false;
+  assert.equal((await f.invoke('list', 'GET')).status, 403, 'someone without an active membership who is not the owner');
+});
+
+test('a platform admin who is a member below Owner creates, edits and deletes custom roles as before', async () => {
+  const writes = [['list', 'POST', { name: 'New', permissions: ['VIEW_POSTS'] }], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE']];
+  for (const role of ['ADMIN', 'HR', 'Support']) {
+    for (const [route, method, body] of [['list', 'GET'], ...writes]) {
+      const f = fixture(); f.state.admin = true; f.state.role = role; f.state.members = []; f.state.manage = false;
+      assert.equal((await f.invoke(route, method, body)).status, 200, `${role}: ${route} ${method}`);
+    }
+    for (const [route, method, body] of writes) {
+      const f = fixture(); f.state.role = role; f.state.members = [];
+      assert.equal((await f.invoke(route, method, body)).status, 403, `${role} without the platform role: ${route} ${method}`);
+      assert.deepEqual(f.state.writes, []);
+    }
+  }
+});

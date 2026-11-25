@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { getWorkspaceAuthority, levelOfRole, mayActOn } from '@/lib/workspace-authority';
 
-export type MembershipChange = 'changed' | 'unchanged' | 'not_found' | 'owner' | 'agent';
+export type MembershipChange = 'changed' | 'unchanged' | 'not_found' | 'owner' | 'agent' | 'rank';
 
 /**
  * Make a person a member of a workspace without an invitation, or switch them off there.
@@ -13,7 +14,7 @@ export async function setWorkspaceMembership(input: {
   const [workspace, user, actor] = await Promise.all([
     prisma.workspace.findUnique({ where: { id: input.workspaceId }, select: { ownerId: true } }),
     prisma.user.findUnique({ where: { id: input.userId }, select: { email: true } }),
-    prisma.user.findUnique({ where: { id: input.actorId }, select: { role: true } }),
+    getWorkspaceAuthority(input.actorId, input.workspaceId),
   ]);
   if (!workspace || !user) return 'not_found';
   // An account with no email is an agent token's service account: the Agent tokens page has its own rules for those.
@@ -26,14 +27,17 @@ export async function setWorkspaceMembership(input: {
       const key = { userId: input.userId, workspaceId: input.workspaceId };
       // The member list can switch the same row at the same moment; holding it keeps what is recorded equal to what changed.
       await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${input.userId} AND "workspaceId" = ${input.workspaceId} FOR UPDATE`;
-      const member = await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } });
+      const member = await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true, role: true } });
+      // Someone new to the workspace must be a person the actor already works with; a stranger needs an
+      // invitation they accept, and reads the same as an account that does not exist.
+      if (input.active && !member && !actor?.platformAdmin && !await tx.workspace.findFirst({
+        where: { AND: [postWorkspaceAccessWhere(input.actorId), postWorkspaceAccessWhere(input.userId)] }, select: { id: true },
+      })) return 'not_found';
+      // The rank rule; someone new joins as a standard role. A platform admin, member or not, keeps the answer this path gave before it.
+      const target = { userId: input.userId, level: member ? levelOfRole(member.role) : 'STANDARD' as const };
+      if (!actor?.platformAdmin && !mayActOn(actor, target, { holdsChangeRoles: false })) return 'rank';
       if (!!member?.status === input.active) return 'unchanged';
       if (input.active) {
-        // Someone new to the workspace must be a person the actor already works with; a stranger needs an
-        // invitation they accept, and reads the same as an account that does not exist.
-        if (!member && actor?.role !== 'SYSTEM_ADMIN' && !await tx.workspace.findFirst({
-          where: { AND: [postWorkspaceAccessWhere(input.actorId), postWorkspaceAccessWhere(input.userId)] }, select: { id: true },
-        })) return 'not_found';
         // A new row is created, never upserted: if another request adds the same person first, this one fails on
         // the unique key instead of recording a change it did not make.
         if (member) await tx.workspaceMember.update({ where: { userId_workspaceId: key }, data: { status: true } });

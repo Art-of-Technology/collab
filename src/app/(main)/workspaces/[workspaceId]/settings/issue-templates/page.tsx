@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
-import { checkUserPermission, Permission } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { TEMPLATED_TYPES } from '@/lib/issue-templates';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,9 @@ export default async function IssueTemplatesPage({ params }: { params: Promise<{
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
-  const { hasPermission } = await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_WORKSPACE_SETTINGS);
-  if (!hasPermission) notFound();
+  // Owners, as on the route. A platform admin, member or not, keeps the answer this page gave before.
+  const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+  if (!authority?.platformAdmin && !may(authority, 'workspace.settings')) notFound();
 
   const { enforced, templates } = await getWorkspaceTemplates(workspaceId);
 

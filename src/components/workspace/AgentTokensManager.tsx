@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -27,8 +27,11 @@ export interface WorkspaceRef {
 export interface AgentTokenRow {
   id: string;
   name: string;
-  /** Set when the token's account is a seat: one project, one role, and the owner whose sign-in runs it. */
-  seat: { id: string; role: string; project: string; isDefault: boolean; retired: boolean; owner: string | null } | null;
+  /**
+   * Set when the token's account is a seat: one project, one role, and the owner whose sign-in runs it. `customRole` is the
+   * name of the workspace's own role the seat has (CLB-628), shown in place of `role`, the built-in role it behaves as.
+   */
+  seat: { id: string; role: string; customRole?: string | null; project: string; isDefault: boolean; retired: boolean; owner: string | null } | null;
   /** Other workspaces the token's agent was let into. */
   workspaces: WorkspaceRef[];
   access: 'read' | 'write';
@@ -46,17 +49,23 @@ interface AgentTokensManagerProps {
   people: { id: string; name: string }[];
   /** null while agent tokens are not set up on this deployment. */
   tokens: AgentTokenRow[] | null;
-  seats?: { id: string; name: string; role: string; project: string; isDefault: boolean; owner: string | null }[];
+  seats?: { id: string; name: string; role: string; customRole?: string | null; project: string; isDefault: boolean; owner: string | null }[];
+  /** The workspace's own roles a new seat can take (CLB-628), each behaving like its base role. */
+  customRoles?: { id: string; name: string; baseRole: string }[];
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
 const roleLabel = (id: string) => ROLE_CATALOGUE.getRole(id)?.name ?? id;
+/** A seat's role as people read it: the workspace's own role by its name, else the built-in one. */
+const seatRoleLabel = (seat: { role: string; customRole?: string | null }) => seat.customRole ?? roleLabel(seat.role);
+// The role select holds a built-in role's id, or one of the workspace's own roles under this prefix.
+const CUSTOM = 'custom:';
 // The select cannot hold an empty value.
 const NONE = 'none';
 // Who pays for the seat's session, which the seat list says next to each seat.
 const ownerLabel = (owner: string | null) => owner ? `Owner: ${owner}` : 'No owner (API key)';
 
-export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [] }: AgentTokensManagerProps) {
+export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [], customRoles = [] }: AgentTokensManagerProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -76,7 +85,10 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   // seat is not created while a role that works in a repository has none to work in.
   const [repositoryId, setRepositoryId] = useState('');
   const repository = useSeatRepository(asSeat ? projectId : null);
-  const needsRepository = (ROLE_CATALOGUE.getRole(role)?.repository ?? 'none') !== 'none';
+  // A role of the workspace's own is sent by its id; what the seat needs is its base role's.
+  const custom = customRoles.find(row => `${CUSTOM}${row.id}` === role);
+  const baseRole = custom?.baseRole ?? role;
+  const needsRepository = (ROLE_CATALOGUE.getRole(baseRole)?.repository ?? 'none') !== 'none';
   const several = (repository.data?.repositories.length ?? 0) > 1;
   const candidate = repositoryId || repository.data?.repository?.id || '';
   const pick = needsRepository && several && repository.data?.repositories.some(item => item.id === candidate) ? candidate : '';
@@ -100,7 +112,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(asSeat
-          ? { name, projectId, role, ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days), ...(byRunner && { byRunner }), ...(pick && { repositoryId: pick }) }
+          ? { name, projectId, ...(custom ? { customRoleId: custom.id } : { role }), ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days), ...(byRunner && { byRunner }), ...(pick && { repositoryId: pick }) }
           : { name, access, expiresInDays: Number(days) }),
       });
       const data = await response.json().catch(() => ({}));
@@ -227,7 +239,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         <CardContent className="px-4 pb-4">
           {orphanSeats.map(seat => (
             <div key={seat.id} className="flex items-center justify-between gap-3 py-2">
-              <span>{seat.name} <span className="text-xs text-muted-foreground">{roleLabel(seat.role)} seat of {seat.project}{seat.isDefault && ', default for its role'} · {ownerLabel(seat.owner)}</span></span>
+              <span>{seat.name} <span className="text-xs text-muted-foreground">{seatRoleLabel(seat)} seat of {seat.project}{seat.isDefault && ', default for its role'} · {ownerLabel(seat.owner)}</span></span>
               <Button variant="outline" size="sm" onClick={() => setRetiring({ name: seat.name, seat: { ...seat, retired: false } })}>Retire seat</Button>
             </div>
           ))}
@@ -251,7 +263,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                       {token.name}
                       {token.seat && (
                         <div className="text-xs font-normal text-muted-foreground">
-                          {token.seat.retired ? 'Retired seat' : `${roleLabel(token.seat.role)} seat`} of {token.seat.project}
+                          {token.seat.retired ? 'Retired seat' : `${seatRoleLabel(token.seat)} seat`} of {token.seat.project}
                           {token.seat.isDefault && ', default for its role'} · {ownerLabel(token.seat.owner)}
                         </div>
                       )}
@@ -321,10 +333,14 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                     <SelectTrigger id="agent-token-role"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {ROLE_CATALOGUE.roles.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+                      {customRoles.length > 0 && <SelectGroup>
+                        <SelectLabel>Your organisation</SelectLabel>
+                        {customRoles.map(row => <SelectItem key={row.id} value={`${CUSTOM}${row.id}`}>{row.name}</SelectItem>)}
+                      </SelectGroup>}
                     </SelectContent>
                   </Select>
                 </div>
-                <SeatRepositoryField key={projectId} projectId={projectId} roleName={roleLabel(role)} needed={needsRepository} query={repository}
+                <SeatRepositoryField key={projectId} projectId={projectId} roleName={custom?.name ?? roleLabel(role)} needed={needsRepository} query={repository}
                   pick={pick} onPick={setRepositoryId} />
                 <div className="space-y-2">
                   <Label htmlFor="agent-token-owner">Owner</Label>
@@ -450,7 +466,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         confirmText="Retire seat"
         isLoading={busy}
         onConfirm={retire}
-        metadata={retiring?.seat ? { title: retiring.name, subtitle: `${roleLabel(retiring.seat.role)} seat of ${retiring.seat.project}` } : undefined}
+        metadata={retiring?.seat ? { title: retiring.name, subtitle: `${seatRoleLabel(retiring.seat)} seat of ${retiring.seat.project}` } : undefined}
       />
 
       <ConfirmDialog

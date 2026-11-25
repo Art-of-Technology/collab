@@ -6,7 +6,9 @@ import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
-import { loadProjectHome } from '@/lib/project-overview';
+import { isDone, legacyStatusLabel, loadProjectHome, resolveLegacyStatus } from '@/lib/project-overview';
+import { withoutRequests } from '@/lib/issue-requests';
+import { NO_STATUS, NO_STATUS_FINISHED } from '@/constants/project-statuses';
 
 export async function GET(
   request: NextRequest,
@@ -42,12 +44,15 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const issueWhere = {
+    // Counts and lists are of work alone: requests to seats stay out.
+    const { where: issueWhere } = withoutRequests({
       projectId,
       workspaceId: project.workspaceId,
       deletedAt: null,
       AND: [issueReadAccessWhere(actor.id)]
-    };
+    }, {});
+    // The counts are the Overview's: milestones are not work issues.
+    const workWhere = { ...issueWhere, type: { not: 'MILESTONE' as const } };
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
@@ -56,37 +61,89 @@ export async function GET(
     const twoDaysFromNow = new Date(now);
     twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
 
-    // Get all statuses to identify final (done) statuses
-    const projectStatuses = await prisma.projectStatus.findMany({
-      where: { projectId, project: projectWhere, isActive: true },
+    // A status taken out of use still decides whether the issues in it are done, as on the Overview.
+    const allStatuses = await prisma.projectStatus.findMany({
+      where: { projectId, project: projectWhere },
       orderBy: [{ order: 'asc' }, { id: 'asc' }],
-      select: { id: true, isFinal: true, name: true, displayName: true, color: true }
+      select: { id: true, isFinal: true, isActive: true, category: true, name: true, displayName: true, color: true }
     });
+    const projectStatuses = allStatuses.filter(status => status.isActive);
 
-    const finalStatusIds = projectStatuses
+    const finalStatusIds = allStatuses
       .filter(s => s.isFinal)
       .map(s => s.id);
 
-    // Get issue counts by status
-    const issueCounts = await prisma.issue.groupBy({
-      by: ['statusId'],
-      where: issueWhere,
-      _count: { id: true }
+    const [issueCounts, legacyCounts] = await Promise.all([
+      prisma.issue.groupBy({
+        by: ['statusId'],
+        where: workWhere,
+        _count: { id: true }
+      }),
+      // Issues saved before project statuses have no status link, only a label. Count them where the
+      // Overview and the Work tab count them.
+      prisma.issue.groupBy({
+        by: ['status', 'statusValue'],
+        where: { ...workWhere, statusId: null },
+        _count: { id: true }
+      }),
+    ]);
+    const legacy = legacyCounts.map(({ status, statusValue, _count }) => {
+      const resolved = resolveLegacyStatus(legacyStatusLabel({ status, statusValue }), projectStatuses);
+      return {
+        where: { statusId: null, status, statusValue },
+        statusId: resolved?.id ?? null,
+        done: isDone({ projectStatus: resolved, statusId: null, status, statusValue }),
+        count: _count.id,
+      };
     });
+    const countIn = (statusId: string) =>
+      (issueCounts.find(c => c.statusId === statusId)?._count.id ?? 0) +
+      legacy.filter(group => group.statusId === statusId).reduce((sum, group) => sum + group.count, 0);
 
-    // Build status distribution
-    const statusDistribution = projectStatuses.map(status => ({
-      id: status.id,
-      name: status.name,
-      displayName: status.displayName,
-      color: status.color,
-      isFinal: status.isFinal,
-      count: issueCounts.find(c => c.statusId === status.id)?._count.id || 0
-    }));
+    // One count per status, so that the counts add up to the total.
+    const statusDistribution: { id: string | null; name: string; displayName: string | null; color: string; isFinal: boolean; count: number }[] =
+      allStatuses.flatMap(status => {
+        const count = countIn(status.id);
+        return status.isActive || count ? [{
+          id: status.id,
+          name: status.name,
+          displayName: status.displayName,
+          color: status.color,
+          isFinal: status.isFinal,
+          count,
+        }] : [];
+      });
 
+    // Calculate summary stats
+    const totalIssues = issueCounts.reduce((sum, c) => sum + c._count.id, 0);
+    const completedIssues = issueCounts
+      .filter(c => finalStatusIds.includes(c.statusId || ''))
+      .reduce((sum, c) => sum + c._count.id, 0) +
+      legacy.filter(group => group.done).reduce((sum, group) => sum + group.count, 0);
+    const openIssues = totalIssues - completedIssues;
+    // Issues in no status are counted apart by whether they are finished, so that the final counts add up to the done count.
+    const withoutStatus = totalIssues - statusDistribution.reduce((sum, status) => sum + status.count, 0);
+    const finishedWithoutStatus = completedIssues - statusDistribution.filter(status => status.isFinal).reduce((sum, status) => sum + status.count, 0);
+    if (finishedWithoutStatus > 0) {
+      statusDistribution.push({
+        id: null, name: NO_STATUS_FINISHED, displayName: 'Finished, no status', color: '#6b7280', isFinal: true, count: finishedWithoutStatus,
+      });
+    }
+    if (withoutStatus - finishedWithoutStatus > 0) {
+      statusDistribution.push({
+        id: null, name: NO_STATUS, displayName: 'No status', color: '#6b7280', isFinal: false, count: withoutStatus - finishedWithoutStatus,
+      });
+    }
+
+    const doneWhere = {
+      OR: [{ statusId: { in: finalStatusIds } }, ...legacy.filter(group => group.done).map(group => group.where)],
+    };
     const openWhere = {
-      ...issueWhere,
-      OR: [{ statusId: { notIn: finalStatusIds } }, { statusId: null }],
+      ...workWhere,
+      OR: [
+        { statusId: { not: null, notIn: finalStatusIds } },
+        ...legacy.filter(group => !group.done).map(group => group.where),
+      ],
     };
     const overdueWhere = { ...openWhere, dueDate: { lt: now } };
     const atRiskWhere = { ...openWhere, dueDate: { gte: now, lte: twoDaysFromNow } };
@@ -174,8 +231,8 @@ export async function GET(
     // Get recently completed issues (completed in last 30 days)
     const recentlyCompletedIssues = await prisma.issue.findMany({
       where: {
-        ...issueWhere,
-        statusId: { in: finalStatusIds },
+        ...workWhere,
+        ...doneWhere,
         updatedAt: { gte: thirtyDaysAgo }
       },
       select: {
@@ -191,35 +248,14 @@ export async function GET(
       take: 10
     });
 
-    // Calculate summary stats
-    const totalIssues = issueCounts.reduce((sum, c) => sum + c._count.id, 0);
-    const completedIssues = issueCounts
-      .filter(c => finalStatusIds.includes(c.statusId || ''))
-      .reduce((sum, c) => sum + c._count.id, 0);
-    const openIssues = totalIssues - completedIssues;
-
     // Get issues with no dates
     const issuesWithoutDates = await prisma.issue.count({
-      where: {
-        ...issueWhere,
-        dueDate: null,
-        OR: [
-          { statusId: { notIn: finalStatusIds } },
-          { statusId: null }
-        ]
-      }
+      where: { ...openWhere, dueDate: null }
     });
 
     // Get unassigned issues count
     const unassignedIssues = await prisma.issue.count({
-      where: {
-        ...issueWhere,
-        assigneeId: null,
-        OR: [
-          { statusId: { notIn: finalStatusIds } },
-          { statusId: null }
-        ]
-      }
+      where: { ...openWhere, assigneeId: null }
     });
 
     // Transform overdue issues

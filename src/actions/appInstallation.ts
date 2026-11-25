@@ -6,7 +6,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { logAppInstallAttempt, logAppInstallSuccess, logAppInstallFailed } from '@/lib/audit';
 import { validateAppManifestSecurity } from '@/lib/security';
-import { checkUserPermission, Permission } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 import { prisma } from '@/lib/prisma';
 
@@ -36,20 +36,15 @@ export async function installApp(formData: FormData) {
 
     const { appSlug, workspaceId, scopes } = InstallAppSchema.parse(data);
 
-    // Log installation attempt
-    await logAppInstallAttempt(workspaceId, session.user.id, appSlug, { scopes });
-
-    // Check if user has permission to install apps
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      Permission.MANAGE_APPS
-    );
-
-    if (!hasPermission.hasPermission) {
+    // Owners install apps. A platform admin, member or not, keeps the answer this action gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'apps.manage')) {
       await logAppInstallFailed(workspaceId, session.user.id, appSlug, 'Insufficient permissions to install apps');
-      throw new Error('Insufficient permissions. Only workspace owners and admins can install apps.');
+      throw new Error('Insufficient permissions. Only Owners can install apps.');
     }
+
+    // Log installation attempt, after the check as the install route does: a refused caller leaves only the failure.
+    await logAppInstallAttempt(workspaceId, session.user.id, appSlug, { scopes });
 
     // Get the app
     const app = await prisma.app.findUnique({
@@ -150,15 +145,10 @@ export async function uninstallApp(formData: FormData) {
 
     const { installationId, workspaceId } = UninstallAppSchema.parse(data);
 
-    // Check if user has permission to install/uninstall apps
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      Permission.MANAGE_APPS
-    );
-
-    if (!hasPermission.hasPermission) {
-      throw new Error('Insufficient permissions. Only workspace owners and admins can uninstall apps.');
+    // Owners uninstall apps. A platform admin, member or not, keeps the answer this action gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'apps.manage')) {
+      throw new Error('Insufficient permissions. Only Owners can uninstall apps.');
     }
 
     // Get installation with app details

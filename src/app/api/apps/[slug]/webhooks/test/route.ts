@@ -3,6 +3,7 @@ import { getAuthSession } from '@/lib/auth';
 import { z } from 'zod';
 import { WebhookEvent } from '@/lib/webhooks';
 import { processWebhookEvent } from '@/lib/webhook-delivery';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 import { prisma } from '@/lib/prisma';
 
@@ -39,18 +40,10 @@ export async function POST(
 
     const { workspaceId, eventType, testData } = validation.data;
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Owners manage webhooks; a platform admin has no pass here.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can manage app webhooks' }, { status: 403 });
     }
 
     // Find the app and installation

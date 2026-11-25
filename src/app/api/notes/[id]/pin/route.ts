@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { getWorkspaceAuthority, may } from "@/lib/workspace-authority";
 import { NoteScope } from "@prisma/client";
 
 // POST /api/notes/[id]/pin - Pin or unpin a note
@@ -36,17 +37,7 @@ export async function POST(
 
     // Fetch the note to check permissions
     const note = await prisma.note.findUnique({
-      where: { id: noteId },
-      include: {
-        workspace: {
-          include: {
-            members: {
-              where: { userId: session.user.id, status: true },
-              select: { role: true }
-            }
-          }
-        }
-      }
+      where: { id: noteId }
     });
 
     if (!note) {
@@ -55,8 +46,8 @@ export async function POST(
 
     // Permission check: Only author or workspace admin can pin notes
     const isAuthor = note.authorId === session.user.id;
-    const isWorkspaceAdmin = note.workspace?.members?.[0]?.role === "ADMIN" ||
-                            note.workspace?.members?.[0]?.role === "OWNER";
+    const isWorkspaceAdmin = !isAuthor && !!note.workspaceId &&
+      may(await getWorkspaceAuthority(session.user.id, note.workspaceId), "content.manage");
 
     if (!isAuthor && !isWorkspaceAdmin) {
       return NextResponse.json(

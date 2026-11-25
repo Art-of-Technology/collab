@@ -551,7 +551,7 @@ Writes: it checks issues out and closes runs.
 collab seat run
 ```
 
-collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.
+collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment, and COLLAB_INSTRUCTIONS_FILE naming a file with the instructions for the run: platform, organisation and seat, in that order. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.
 
 | Flag | Type | Details |
 | --- | --- | --- |
@@ -583,7 +583,7 @@ Reads.
 collab run context ID
 ```
 
-What a fresh session needs to work an issue, in one read: the issue, the last exit note and its checked facts (pull request, head commit, next step), comments since, blockers and requests.
+What a fresh session needs to work an issue, in one read: the issue, its instructions in three layers (platform, organisation, seat), the last exit note and its checked facts (pull request, head commit, next step), comments since, blockers and requests.
 
 ID is the issue ID or key (such as APP-123).
 

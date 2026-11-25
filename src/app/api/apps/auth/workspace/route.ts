@@ -1,7 +1,7 @@
 /**
  * Third-Party App API: Workspace Endpoints
  * GET /api/apps/auth/workspace - Get current workspace information
- * PATCH /api/apps/auth/workspace - Update workspace settings (admin only)
+ * PATCH /api/apps/auth/workspace - Update workspace settings (Owners only)
  * 
  * Required scopes:
  * - workspace:read for GET
@@ -13,6 +13,7 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 // Schema for workspace updates
 const UpdateWorkspaceSchema = z.object({
@@ -111,26 +112,19 @@ export const GET = withAppAuth(
 
 /**
  * PATCH /api/apps/auth/workspace
- * Update workspace settings (requires admin role)
+ * Update workspace settings (Owners only)
  */
 export const PATCH = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
-      // Check if user has admin role in the workspace
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: context.user.id,
-            workspaceId: context.workspace.id
-          }
-        }
-      });
+      // Owners change the settings, as in the app; a platform admin has no pass of its own here.
+      const authority = await getWorkspaceAuthority(context.user.id, context.workspace.id);
 
-      if (!membership || membership.role !== 'ADMIN') {
+      if (!may(authority, 'workspace.settings')) {
         return NextResponse.json(
           { 
             error: 'insufficient_permissions', 
-            error_description: 'Admin role required to update workspace settings' 
+            error_description: 'Only Owners can update workspace settings'
           },
           { status: 403 }
         );

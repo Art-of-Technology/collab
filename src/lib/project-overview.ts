@@ -4,6 +4,7 @@ import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { prisma } from '@/lib/prisma';
 import { burnAccountSelect, calculateProjectBurn, type BurnAccount, type BurnTransition } from '@/lib/project-burn';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 const DAY = 86_400_000;
 const PACE_DAYS = 21;
@@ -41,10 +42,10 @@ const projectHomeStatusSelect = {
 type OverviewIssue = Prisma.IssueGetPayload<{ select: typeof overviewIssueSelect }>;
 type ForecastIssue = OverviewIssue & { parentId: string | null; assignee: { name: string | null } | null };
 type ProjectHomeStatus = Prisma.ProjectStatusGetPayload<{ select: typeof projectHomeStatusSelect }>;
-const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
+export const legacyStatusLabel = (issue: Pick<OverviewIssue, 'status' | 'statusValue'>) =>
   issue.statusValue?.trim() || issue.status?.trim() || '';
 const isLegacyFinal = (label: string) => LEGACY_FINAL_STATUSES.has(label.toLowerCase());
-const isDone = (issue: Pick<OverviewIssue, 'projectStatus' | 'statusId' | 'status' | 'statusValue'>) =>
+export const isDone = (issue: Pick<OverviewIssue, 'projectStatus' | 'statusId' | 'status' | 'statusValue'>) =>
   issue.projectStatus?.isFinal ?? (!issue.statusId && isLegacyFinal(legacyStatusLabel(issue)));
 const normalizeStatus = (label: string) => label.toLowerCase().replace(/[\s_-]+/g, '');
 const issueRef = ({ id, issueKey, title }: Pick<OverviewIssue, 'id' | 'issueKey' | 'title'>) => ({ id, issueKey, title });
@@ -53,7 +54,10 @@ const milestoneTie = (a: OverviewIssue, b: OverviewIssue) =>
 const dateOrder = (a: Date | null, b: Date | null) =>
   (a?.getTime() ?? Infinity) - (b?.getTime() ?? Infinity);
 
-function resolveLegacyStatus(label: string, activeStatuses: ProjectHomeStatus[]) {
+/** The active status an issue saved before project statuses existed is counted in, by the label it was saved with. */
+export function resolveLegacyStatus<Status extends Pick<ProjectHomeStatus, 'name' | 'displayName' | 'isFinal'>>(
+  label: string, activeStatuses: Status[],
+) {
   if (!label) return null;
   const exact = activeStatuses.filter(status => status.name === label || status.displayName === label);
   if (exact.length === 1) return exact[0];
@@ -315,13 +319,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const issueWhere = { ...readableIssue, projectId, workspaceId };
   const projectWhere = { id: projectId, workspaceId, workspace: postWorkspaceAccessWhere(userId) };
   const seatRunWhere = { workspaceId, issue: issueWhere, state: 'finished', seatId: { not: null }, seat: { workspaceId } };
-  const billingWhere = {
-    id: workspaceId,
-    OR: [
-      { ownerId: userId },
-      { members: { some: { userId, status: true, role: { in: ['OWNER', 'ADMIN'], mode: 'insensitive' as const } } } },
-    ],
-  };
+  const mayViewSpend = async () => may(await getWorkspaceAuthority(userId, workspaceId), 'spend.view');
   const dependencySelect = {
     id: true, issueKey: true, title: true, projectId: true, statusId: true, status: true, statusValue: true,
     assigneeId: true, updatedAt: true,
@@ -469,7 +467,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   }
 
   const readRuns = (billing: boolean) => collect(after => prisma.agentRun.findMany({
-    where: { ...seatRunWhere, ...(billing ? { workspace: billingWhere } : {}), id: after ? { gt: after } : undefined },
+    where: { ...seatRunWhere, id: after ? { gt: after } : undefined },
     select: { id: true, startedAt: true, endedAt: true, user: { select: burnAccountSelect }, usage: billing },
     orderBy: pageOrder, take: PAGE_SIZE,
   }));
@@ -480,7 +478,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       { workspaceMemberships: { some: { workspaceId } } },
     ],
   } satisfies Prisma.UserWhereInput;
-  const billingAtStart = !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  const billingAtStart = await mayViewSpend();
   const [baseline, seats, storedMerges, initialRuns, logs] = await Promise.all([
     prisma.projectBaseline.findFirst({
       where: { project: projectWhere },
@@ -571,7 +569,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     },
     select: { name: true },
   });
-  const billingAllowed = billingAtStart && !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  const billingAllowed = billingAtStart && await mayViewSpend();
   // If billing access was revoked while reading, fetch the ordinary run fields
   // again. The billed query may have returned only the pages read before revocation.
   const runs = (billingAtStart && !billingAllowed ? await readRuns(false) : initialRuns).filter(run => run.user.agentSeat);
@@ -580,10 +578,11 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     const amount = usage.estimatedUSD;
     return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 ? [{ userId: user.id, endedAt, amount }] : [];
   }) : undefined;
-  const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now, userId);
+  // The Overview counts work alone. Burn keeps requests for its Requests handled column.
+  const overview = calculateProjectOverview(issues.filter(issue => issue.agentRequestRole == null), baseline?.createdAt ?? null, now, userId);
   const work = issues.filter(issue => issue.type !== 'MILESTONE');
   const milestoneIds = new Set(overview.milestones.map(milestone => milestone.id));
-  const workItems = work.map(issue => {
+  const workItems = work.filter(issue => issue.agentRequestRole == null).map(issue => {
     const status = issue.projectStatus?.projectId === projectId ? issue.projectStatus : null;
     return {
       ...issueRef(issue),

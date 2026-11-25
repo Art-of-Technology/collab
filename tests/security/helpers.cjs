@@ -16,6 +16,7 @@ function load(file, dependencies = {}, globals = {}) {
   if (file === 'src/lib/permissions.ts') {
     dependencies['server-only'] = {};
     dependencies['./permission-types'] = load('src/lib/permission-types.ts');
+    dependencies['./workspace-authority'] ||= load('src/lib/workspace-authority.ts', { './prisma': dependencies['./prisma'] });
   }
   const database = dependencies['@/lib/prisma'];
   if (file === 'src/lib/apps/auth-middleware.ts' && database?.prisma && !database.prisma.agentSeat) {
@@ -108,7 +109,16 @@ function load(file, dependencies = {}, globals = {}) {
       // The status rules are pure, so no fixture has to stand in for them.
       if (!(name in dependencies) && name === '@/constants/project-statuses') return load('src/constants/project-statuses.ts');
       if (!(name in dependencies) && name === '@/lib/issue-requests') return load('src/lib/issue-requests.ts');
+      // The Overview's status rules, read through whatever database the fixture hands the code under test.
+      if (!(name in dependencies) && name === '@/lib/project-overview') {
+        return load('src/lib/project-overview.ts', { ...dependencies, '@/lib/project-burn': load('src/lib/project-burn.ts') }, globals);
+      }
+      if (!(name in dependencies) && name === '@/lib/issue-list-snapshot') {
+        return load('src/lib/issue-list-snapshot.ts', { '@/utils/issueRelations': load('src/utils/issueRelations.ts') });
+      }
       if (!(name in dependencies) && name === '@/lib/agent-label-triggers') return load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });
+      // The real authority module, read through whatever database the fixture hands the code under test.
+      if (!(name in dependencies) && name === '@/lib/workspace-authority') return load('src/lib/workspace-authority.ts', { './prisma': dependencies['@/lib/prisma'] });
       if (!(name in dependencies) && name === '@prisma/client') return require('@prisma/client');
       if (!(name in dependencies) && name === 'crypto') return require('node:crypto');
       if (!(name in dependencies) && name === '@/lib/avatar-settings') return load('src/lib/avatar-settings.ts', { ...dependencies, zod: require('zod') }, globals);

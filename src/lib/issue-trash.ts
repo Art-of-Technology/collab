@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { issueTrashPrisma } from '@/lib/prisma';
 import { assertLegacyIssueDeleteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { canActOnOwnContent, checkUserPermissions, Permission } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { emitIssueCreated, emitIssueDeleted } from '@/lib/event-bus';
 
 export class IssueTrashError extends Error {
@@ -25,14 +26,13 @@ export async function issueTrashScope(userId: string, workspaceId: string | null
   if (!workspaceId || !projectId) throw new IssueTrashError(400, 'Workspace and project are required');
   const workspace = await db.workspace.findFirst({
     where: { AND: [{ OR: [{ id: workspaceId }, { slug: workspaceId }] }, membership(userId)] },
-    select: { id: true, name: true, slug: true, ownerId: true,
-      members: { where: { userId, status: true }, select: { role: true } } },
+    select: { id: true, name: true, slug: true },
   });
   if (!workspace || !await db.project.findFirst({ where: { id: projectId, workspaceId: workspace.id }, select: { id: true } })) {
     throw new IssueTrashError(404, 'Project not found');
   }
-  return { workspace, projectId, canPurge: workspace.ownerId === userId ||
-    workspace.members.some(member => ['ADMIN', 'OWNER'].includes(member.role.toUpperCase())) };
+  // Deleting an issue for good is for the Admin level and above, read on the caller's own client.
+  return { workspace, projectId, canPurge: may(await getWorkspaceAuthority(userId, workspace.id, db), 'content.manage') };
 }
 
 export async function listIssueTrash(userId: string, workspaceId: string | null, projectId: string | null) {

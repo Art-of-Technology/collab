@@ -48,6 +48,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
         {' '}Opening this page changes nothing.</p>
       <div className="flex gap-2">
         <Button asChild variant="outline"><Link href="/docs/agents/overview">About seats</Link></Button>
+        <Button asChild variant="outline"><Link href={`/workspaces/${encodeURIComponent(workspace.id)}/settings/roles`}>Roles</Link></Button>
         {canManage && <Button asChild variant="outline"><Link href={`/workspaces/${encodeURIComponent(workspace.id)}/settings/agent-tokens`}>Create or retire a seat</Link></Button>}
       </div>
     </div>
@@ -77,7 +78,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
       <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
         <thead><tr className="border-b"><th className="w-2/5 p-3">Seat</th><th className="w-1/5 p-3">Project</th><th className="p-3">Works on now</th><th className="w-24 p-3">Waiting</th></tr></thead>
         <tbody>{own.map(seat => <tr key={seat.id} className="border-b last:border-0">
-          <th scope="row" className="space-y-1 p-3 font-medium"><span className="mr-2 rounded border px-2 py-0.5 text-xs font-normal">{seat.role}{seat.isDefault && ' · default'}</span>{seat.name}
+          <th scope="row" className="space-y-1 p-3 font-medium"><span className="mr-2 rounded border px-2 py-0.5 text-xs font-normal">{seat.customRole ?? seat.role}{seat.isDefault && ' · default'}</span><Link className="underline-offset-4 hover:underline" href={`${base}/agents/seats/${encodeURIComponent(seat.id)}`}>{seat.name}</Link>
             {!one && seat.room && <span className="block font-normal">{unknown && seat.room.kind === 'unknown'
               ? <span className="text-xs text-muted-foreground">{seat.room.reason}</span> : <Room room={seat.room} />}</span>}
             {seat.noRunner && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">No runner yet: its work waits until its owner connects a <Link className="underline" href={`${base}/agents/runners`}>runner</Link></span>}
@@ -94,7 +95,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
       <p className="text-sm text-muted-foreground">Room is how much allowance a seat has left before its runner stops taking work. Each runner reports it. {canManage
         ? 'You see every person\'s room; a member sees their own.' : 'You see your own room; other people\'s is private.'}</p>
     </div> : <div className="space-y-4">{seats.map(seat => <section key={seat.id} id={`seat-${seat.id}`} aria-label={seat.name} className="space-y-2 rounded-lg border p-4">
-      <h2 className="font-medium">{seat.name} <span className="text-sm font-normal text-muted-foreground"><span className="capitalize">{seat.role}</span> seat of {seat.project} · {seat.waiting.length} waiting</span></h2>
+      <h2 className="font-medium">{seat.name} <span className="text-sm font-normal text-muted-foreground"><span className={seat.customRole ? undefined : 'capitalize'}>{seat.customRole ?? seat.role}</span> seat of {seat.project} · {seat.waiting.length} waiting</span></h2>
       {seat.waiting.length === 0 ? <p className="text-sm text-muted-foreground">Nothing waits for this seat.</p> : <ol className="divide-y text-sm">
         {seat.waiting.map(item => <li key={item.issueId} className="flex flex-wrap items-center justify-between gap-2 py-2">
           <span className="min-w-0 break-words">{issue(item.issueId, item.issueKey, item.title)}</span>

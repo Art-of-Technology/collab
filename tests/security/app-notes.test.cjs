@@ -19,8 +19,11 @@ function appNotesHarness() {
     workspace: { findFirst: async ({ where, select }) => {
       if (!matches(workspace, where)) return null;
       return { ...workspace, members: workspace.members.filter(member => !select?.members?.where || matches(member, select.members.where)) };
-    } },
-    user: { findUnique: async () => ({ id: 'alice', email: 'alice@example.test', name: 'Alice' }) },
+    }, findUnique: async ({ where }) => (where.id === workspace.id ? workspace : null) },
+    // The authority module also reads the caller's active memberships.
+    user: { findUnique: async ({ where, select } = {}) => ({ id: 'alice', email: 'alice@example.test', name: 'Alice', role: 'USER',
+      workspaceMemberships: workspace.members.filter(member => member.userId === where?.id &&
+        matches({ ...member, workspaceId: workspace.id }, select?.workspaceMemberships?.where ?? {})) }) },
     appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes,
       tokenExpiresAt: state.expiresAt, installation: { id: 'installation', appId: 'app', status: 'ACTIVE',
         workspaceId: 'joined', installedById: 'installer', scopes: ['context:read', 'context:write', 'knowledge:read', 'prompts:read', 'secrets:read'], workspace,

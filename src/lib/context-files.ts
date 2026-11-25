@@ -6,7 +6,7 @@ import {
   contextPreviewKind, csvPreview, decodePreviewText, isInlinePreview, MAX_CONTEXT_PREVIEW_BYTES, PreviewFile,
 } from '@/lib/context-file-preview';
 import {
-  ContextFolderError, contextFolderAccessWhere, inTransaction, isWorkspaceAdmin, requiredId,
+  ContextFolderError, contextFolderAccessWhere, inTransaction, mayManageContent, requiredId,
 } from '@/lib/context-folders';
 
 /**
@@ -47,7 +47,7 @@ type Database = Prisma.TransactionClient | typeof prisma;
 type FolderForFile = { id: string; workspaceId: string; projectId: string | null };
 type LoadedFile = Prisma.ContextFileGetPayload<{ select: typeof FILE_FIELDS }> & {
   storageUrl: string;
-  folder: FolderForFile & { workspace: { ownerId: string; members: { role: string }[] } };
+  folder: FolderForFile;
 };
 
 /** The name is shown and is what a download is called, so it never carries a path or a control character. */
@@ -83,7 +83,7 @@ async function loadFile(db: Database, userId: string, id: unknown, trashed = fal
     },
     select: {
       ...FILE_FIELDS, storageUrl: true,
-      folder: { select: { ...FOLDER_FOR_FILE, workspace: { select: { ownerId: true, members: { where: { userId, status: true }, select: { role: true } } } } } },
+      folder: { select: FOLDER_FOR_FILE },
     },
   });
   if (!file) throw new ContextFolderError(404, 'File not found');
@@ -91,8 +91,8 @@ async function loadFile(db: Database, userId: string, id: unknown, trashed = fal
 }
 
 /** Renaming, moving and deleting stay with whoever uploaded the file and the workspace's administrators. */
-function assertCanManage(file: LoadedFile, userId: string) {
-  if (file.uploadedById !== userId && !isWorkspaceAdmin(file.folder.workspace, userId)) {
+async function assertCanManage(db: Database, file: LoadedFile, userId: string) {
+  if (file.uploadedById !== userId && !await mayManageContent(db, userId, file.folder.workspaceId)) {
     throw new ContextFolderError(403, 'Only the person who uploaded this file or a workspace administrator can change it');
   }
 }
@@ -168,7 +168,7 @@ export async function updateContextFile(userId: string, id: unknown, input: { na
   }
   return inTransaction(async db => {
     const file = await loadFile(db, userId, id);
-    assertCanManage(file, userId);
+    await assertCanManage(db, file, userId);
     const data: Prisma.ContextFileUncheckedUpdateInput = {};
     if (name !== undefined) data.name = name;
     if (folderId !== undefined && folderId !== file.folderId) {
@@ -187,7 +187,7 @@ export async function updateContextFile(userId: string, id: unknown, input: { na
 export async function trashContextFile(userId: string, id: unknown) {
   return inTransaction(async db => {
     const file = await loadFile(db, userId, id);
-    assertCanManage(file, userId);
+    await assertCanManage(db, file, userId);
     const deletedAt = new Date();
     await db.contextFile.update({ where: { id: file.id }, data: { deletedAt, deletedById: userId } });
     return { id: file.id, name: file.name, folderId: file.folderId, deletedAt };
@@ -197,7 +197,7 @@ export async function trashContextFile(userId: string, id: unknown) {
 export async function restoreContextFile(userId: string, id: unknown) {
   return inTransaction(async db => {
     const file = await loadFile(db, userId, id, true);
-    assertCanManage(file, userId);
+    await assertCanManage(db, file, userId);
     await db.contextFile.update({ where: { id: file.id }, data: { deletedAt: null, deletedById: null } });
     return { id: file.id, name: file.name, folderId: file.folderId };
   });

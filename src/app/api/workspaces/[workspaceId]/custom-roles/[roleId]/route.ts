@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { checkUserPermission, WorkspaceRole, Permission as PermissionEnum } from '@/lib/permissions';
+import { WorkspaceRole } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { Permission } from '@prisma/client';
 
 // GET /api/workspaces/[workspaceId]/custom-roles/[roleId] - Get custom role details
@@ -93,18 +94,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid role name or permissions' }, { status: 400 });
     }
 
-    // Check if user has permission to manage workspace permissions
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      PermissionEnum.MANAGE_WORKSPACE_PERMISSIONS
-    );
-
-    if (!hasPermission.hasPermission) {
-      return NextResponse.json(
-        { error: 'You do not have permission to update custom roles' },
-        { status: 403 }
-      );
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
+      return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 
     // Get the existing custom role
@@ -228,18 +221,10 @@ export async function DELETE(
 
     const { workspaceId, roleId } = await params;
 
-    // Check if user has permission to manage workspace permissions
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      PermissionEnum.MANAGE_WORKSPACE_PERMISSIONS
-    );
-
-    if (!hasPermission.hasPermission) {
-      return NextResponse.json(
-        { error: 'You do not have permission to delete custom roles' },
-        { status: 403 }
-      );
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
+      return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 
     // Get the custom role

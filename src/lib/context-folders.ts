@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 /**
  * Context folders.
@@ -97,30 +98,26 @@ export function resolveContextLevel(userId: string, workspaceId: unknown, projec
   return resolveLevel(prisma, userId, workspaceId, projectId);
 }
 
-type LoadedFolder = Prisma.ContextFolderGetPayload<{ select: typeof FOLDER_FIELDS }> & {
-  workspace: { ownerId: string; members: { role: string }[] };
-};
+type LoadedFolder = Prisma.ContextFolderGetPayload<{ select: typeof FOLDER_FIELDS }>;
 
 async function loadFolder(db: Database, userId: string, id: unknown, trashed = false): Promise<LoadedFolder> {
   const folderId = requiredId(id, 'A folder');
   const folder = await db.contextFolder.findFirst({
     where: { AND: [{ id: folderId, deletedAt: trashed ? { not: null } : null }, contextFolderAccessWhere(userId)] },
-    select: { ...FOLDER_FIELDS, workspace: { select: { ownerId: true, members: { where: { userId, status: true }, select: { role: true } } } } },
+    select: FOLDER_FIELDS,
   });
   if (!folder) throw new ContextFolderError(404, 'Folder not found');
-  return folder as LoadedFolder;
+  return folder;
 }
 
-/** The workspace's owner and its administrators, as selected for the caller alone. */
-export function isWorkspaceAdmin(workspace: { ownerId: string; members: { role: string }[] }, userId: string): boolean {
-  return workspace.ownerId === userId ||
-    workspace.members.some(member => ['ADMIN', 'OWNER'].includes(member.role.toUpperCase()));
+/** Someone else's folder or file in this workspace is changed from the Admin level up, read on the caller's own client. */
+export async function mayManageContent(db: Database, userId: string, workspaceId: string): Promise<boolean> {
+  return may(await getWorkspaceAuthority(userId, workspaceId, db), 'content.manage');
 }
 
 /** Renaming, moving, deleting and restoring stay with the folder's author and the workspace's administrators. */
-function assertCanManage(folder: LoadedFolder, userId: string) {
-  const isAdmin = isWorkspaceAdmin(folder.workspace, userId);
-  if (folder.createdById !== userId && !isAdmin) {
+async function assertCanManage(db: Database, folder: LoadedFolder, userId: string) {
+  if (folder.createdById !== userId && !await mayManageContent(db, userId, folder.workspaceId)) {
     throw new ContextFolderError(403, 'Only the folder\'s author or a workspace administrator can change it');
   }
 }
@@ -204,7 +201,7 @@ export async function updateContextFolder(userId: string, id: unknown, input: { 
   }
   return inTransaction(async db => {
     const folder = await loadFolder(db, userId, id);
-    assertCanManage(folder, userId);
+    await assertCanManage(db, folder, userId);
     const data: Prisma.ContextFolderUncheckedUpdateInput = {};
     if (name !== undefined) data.name = name;
     if (parentId !== undefined) {
@@ -225,7 +222,7 @@ export async function previewContextFolderTrash(userId: string, id: unknown) {
 export async function trashContextFolder(userId: string, id: unknown, confirm: boolean) {
   return inTransaction(async db => {
     const folder = await loadFolder(db, userId, id);
-    assertCanManage(folder, userId);
+    await assertCanManage(db, folder, userId);
     const ids = await subtreeIds(db, folder.id, { deletedAt: null });
     const counts = await contentCounts(db, ids, folder.id);
     if (!confirm && (counts.folders || counts.notes || counts.files)) {
@@ -241,7 +238,7 @@ export async function trashContextFolder(userId: string, id: unknown, confirm: b
 export async function restoreContextFolder(userId: string, id: unknown) {
   return inTransaction(async db => {
     const folder = await loadFolder(db, userId, id, true);
-    assertCanManage(folder, userId);
+    await assertCanManage(db, folder, userId);
     if (folder.parentId) {
       const parent = await db.contextFolder.findFirst({ where: { id: folder.parentId }, select: { deletedAt: true } });
       if (!parent || parent.deletedAt) throw new ContextFolderError(409, 'Restore the folder this one is in first');

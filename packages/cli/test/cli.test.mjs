@@ -1099,9 +1099,16 @@ test('interrupted error bodies retain sanitized status and mutation semantics', 
   }
 });
 
+// Test helpers use cmdlets, so drop module paths inherited from PowerShell 7 that Windows PowerShell cannot load.
+function windowsPowerShell(script, input) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.toUpperCase() === 'PSMODULEPATH') delete env[key];
+  return spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input, encoding: 'utf8', env });
+}
+// SetAccessControl writes only the changed DACL; Set-Acl also writes the SACL, which needs SeSecurityPrivilege.
 function grantEveryoneRead(file) {
-  const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
+  const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $item = if ([System.IO.Directory]::Exists($p)) { [System.IO.DirectoryInfo]::new($p) } else { [System.IO.FileInfo]::new($p) }; $acl = $item.GetAccessControl('Access'); $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); $item.SetAccessControl($acl)`;
+  const result = windowsPowerShell(script, file);
   assert.equal(result.status, 0, result.stderr);
 }
 function writeCredentials(file, contents) {
@@ -1723,7 +1730,7 @@ test('Windows credential creation sets the user owner and refuses existing files
   const contents = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_SYNTHETIC', expiresAt: Date.now() + 60000 });
   writeFileSync(file, contents);
   const script = `$ErrorActionPreference = 'Stop'; $acl = Get-Acl -LiteralPath ([Console]::In.ReadToEnd()); @{ user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; sddl = $acl.Sddl } | ConvertTo-Json -Compress`;
-  const inspected = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
+  const inspected = windowsPowerShell(script, file);
   assert.equal(inspected.status, 0, inspected.stderr);
   const acl = JSON.parse(inspected.stdout);
   t.diagnostic(`Node default credential ownership: ${JSON.stringify(acl)}`);
@@ -1744,6 +1751,26 @@ test('Windows credential creation sets the user owner and refuses existing files
   assert.equal(windowsAcl(file, 'file'), false);
   assert.equal(windowsAcl(file), false, 'creation never repairs an unsafe existing ACL');
   assert.equal(readFileSync(file, 'utf8'), contents);
+});
+
+test('Windows credential state can be created and read when the CLI is started from PowerShell 7', { skip: !windows }, async t => {
+  // pwsh prepends its own core modules to PSModulePath, and child processes inherit that value.
+  const pwsh = spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '[Console]::Out.Write($env:PSModulePath)'], { encoding: 'utf8' });
+  if (pwsh.status !== 0) return t.skip('PowerShell 7 is not installed');
+  const f = await fixture(t);
+  const env = { COLLAB_TOKEN: '' };
+  for (const key of Object.keys(process.env)) if (key.toUpperCase() === 'PSMODULEPATH') env[key] = undefined;
+  env.PSModulePath = pwsh.stdout;
+  // Logout saves state like login does, creating the private directory and credential file, without a server.
+  const created = path.join(f.dir, 'created-state');
+  const saved = await f.run(['auth', 'logout'], { env: { ...env, COLLAB_CONFIG_DIR: created } });
+  assert.equal(saved.code, 0, saved.stderr);
+  assert.equal(windowsAcl(created), true);
+  assert.equal(windowsAcl(path.join(created, 'default.json')), true);
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_TOKEN', expiresAt: Date.now() + 60000 }));
+  const result = await f.run(['whoami'], { env });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(f.calls.length, 1);
 });
 
 test('unsafe Windows directory ACLs and junctions refuse credentials before dispatch', { skip: !windows }, async t => {
@@ -2445,7 +2472,7 @@ test('seat and run refusals keep their code and what is missing, and pass on not
 });
 
 // A stand-in for the seat routes that keeps state: an inbox, and runs that are checked out, renewed, finished and closed.
-async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], noDefaultRepository = [], fenceRenew = false, awayPolls = 0, throttled = 0 } = {}) {
+async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], noDefaultRepository = [], fenceRenew = false, awayPolls = 0, throttled = 0, instructions } = {}) {
   const runs = new Map(), log = []; let polls = 0;
   const f = await fixture(t, (req, res, body) => {
     const route = `${req.method} ${req.url.split('?')[0].replace('/api/apps/auth/', '')}`;
@@ -2454,6 +2481,12 @@ async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [],
       if (++polls <= awayPolls) return refuse(503, 'handoff_unavailable');
       log.push(`inbox ${polls}`);
       return res.end(JSON.stringify({ items: inbox(polls).map(key => ({ issueId: `id-${key}`, issueKey: key, title: key, priority: 'medium', category: 'todo', reason: 'assigned', lastRunAt: null })) }));
+    }
+    // The run context, when the test gives the instructions it carries; otherwise the route is unknown, as on an older server.
+    const contextOf = route.match(/^GET issues\/([^/]+)\/run-context$/);
+    if (contextOf && instructions) {
+      log.push(`context ${decodeURIComponent(contextOf[1])}`);
+      return typeof instructions === 'number' ? refuse(instructions, 'server_error') : res.end(JSON.stringify({ instructions }));
     }
     const input = body ? JSON.parse(body) : {};
     if (route === 'POST runs') {
@@ -2643,6 +2676,54 @@ test('collab seat run starts the program after -- with its arguments unchanged, 
   const none = await s.run(['seat', 'run', '--once']);
   assert.equal(none.code, 2); assert.equal(none.error.error, 'required_field');
   assert.equal(s.runs.size, 1);
+});
+
+test('seat run gives the program the run\'s instructions in a file, platform, organisation and seat in that order, and removes it after', async t => {
+  const instructions = [{ layer: 'platform', text: 'Our rules.' }, { layer: 'organisation', text: '' }, { layer: 'seat', text: 'This seat\'s rules.' }];
+  const s = await seatServer(t, { inbox: () => ['APP-1'], instructions });
+  const seen = path.join(s.dir, 'seen.json');
+  const script = "const fs = require('node:fs'), file = process.env.COLLAB_INSTRUCTIONS_FILE; fs.writeFileSync(process.argv[1], JSON.stringify({ file, text: fs.readFileSync(file, 'utf8'), mode: fs.statSync(file).mode & 0o777 }))";
+  const result = await seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', script, seen], once: true });
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: 0 }]);
+  // Read after the checkout and before the program starts.
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'context APP-1', 'close run-1']);
+  const got = JSON.parse(readFileSync(seen, 'utf8'));
+  // Each layer that has text, in order; an empty layer adds nothing.
+  assert.equal(got.text, 'Our rules.\n\nThis seat\'s rules.\n');
+  if (!windows) assert.equal(got.mode, 0o600);
+  assert.equal(existsSync(got.file), false, 'the file is removed when the program has exited');
+});
+
+test('seat run asked to stop while it reads the instructions does not start the program, and closes the run', async () => {
+  const controller = new AbortController(), calls = [];
+  const api = async (method, route) => {
+    calls.push(`${method} ${route}`);
+    if (route === 'seats/me/inbox') return { items: [{ issueId: 'id-one', issueKey: 'APP-1' }] };
+    if (route === 'runs') return { run: { id: 'run-one' } };
+    // The server is away when the stop comes; the read is not tried again after it.
+    if (route === 'issues/APP-1/run-context') { controller.abort(); throw new CliError('transport_failed', 'offline'); }
+    return { run: { state: method === 'GET' ? 'running' : 'stopped' } };
+  };
+  const result = await seatRun({ ...fast, api, signal: controller.signal, program: process.execPath, args: ['-e', 'process.exit(7)'] });
+  assert.equal(result.stopped, true);
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-one', state: 'stopped', exitCode: null }]);
+  assert.deepEqual(calls, ['GET seats/me/inbox', 'POST runs', 'GET issues/APP-1/run-context', 'GET runs/run-one', 'PATCH runs/run-one']);
+});
+
+test('seat run starts the program without the instructions file when the run context cannot be read', async t => {
+  // One named in the runner's own environment is not passed on as this run's.
+  process.env.COLLAB_INSTRUCTIONS_FILE = '/elsewhere/instructions.md';
+  t.after(() => { delete process.env.COLLAB_INSTRUCTIONS_FILE; });
+  for (const instructions of [undefined, 403]) {
+    const events = [];
+    const s = await seatServer(t, { inbox: () => ['APP-1'], instructions });
+    const seen = path.join(s.dir, 'seen.json');
+    const script = "require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ file: process.env.COLLAB_INSTRUCTIONS_FILE ?? null }))";
+    const result = await seatRun({ ...fast, log: event => events.push(event), api: s.api, program: process.execPath, args: ['-e', script, seen], once: true });
+    assert.equal(result.runs[0].exitCode, 0);
+    assert.deepEqual(JSON.parse(readFileSync(seen, 'utf8')), { file: null });
+    assert.deepEqual(events.filter(event => event.event === 'no_instructions').map(event => event.issueKey), ['APP-1']);
+  }
 });
 
 test('seat run: a checkout refused for another reason than a conflict ends the runner with that refusal', async t => {

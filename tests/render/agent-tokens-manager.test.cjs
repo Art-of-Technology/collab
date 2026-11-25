@@ -31,7 +31,8 @@ const ui = {
   '@/components/ui/input': { Input: ({ id, value, onChange, readOnly, 'aria-label': label }) => React.createElement('input', { id, value, onChange, readOnly, 'aria-label': label }) },
   '@/components/ui/label': { Label: el('label') },
   '@/components/ui/select': { Select: ({ value, onValueChange, children }) => React.createElement('select', { value, onChange: event => onValueChange(event.target.value) }, children),
-    SelectContent: ({ children }) => children, SelectItem: ({ value, children }) => React.createElement('option', { value }, children), SelectTrigger: () => null, SelectValue: () => null },
+    SelectContent: ({ children }) => children, SelectItem: ({ value, children }) => React.createElement('option', { value }, children), SelectTrigger: () => null, SelectValue: () => null,
+    SelectGroup: ({ children }) => React.createElement('optgroup', null, children), SelectLabel: ({ children }) => React.createElement('option', { disabled: true }, children) },
 };
 const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
   '@/lib/agent-role-catalogue': extendedCatalogue(),
@@ -470,5 +471,57 @@ test('the create-seat form offers a new catalogue entry', async () => {
     await choose(0, 'p1');
     const options = [...document.querySelectorAll('select')[1].options];
     assert.ok(options.some(option => option.value === extraRole.id && option.textContent === extraRole.name));
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a Planner seat is created from the form and reads its project\'s repository', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'plan');
+    await choose(0, 'p1');
+    await choose(1, 'planner');
+    await shows('From the project acme/app. Nothing to pick, nothing to type.');
+    answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'plan', token: 'collab_at_seat' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'plan', projectId: 'p1', role: 'planner', ownerId: null, expiresInDays: 90 }]);
+    await React.act(async () => buttons('Done')[0].click());
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test("the organisation's own roles are offered under Your organisation, and a seat with one is listed by its name (CLB-628)", async () => {
+  const customRoles = [{ id: 'cr1', name: 'QA Tester', baseRole: 'developer' }, { id: 'cr2', name: 'Night lead', baseRole: 'lead' }];
+  const listed = { id: 's1', name: 'qa', role: 'developer', customRole: 'QA Tester', project: 'Collab', isDefault: false, owner: 'Cem' };
+  const root = await render({ workspaces: [], projects: [{ id: 'p1', name: 'Collab' }], people: [], customRoles, seats: [listed],
+    tokens: [{ ...token('t1', 'qa', []), seat: { id: 's1', role: 'developer', customRole: 'QA Tester', project: 'Collab', isDefault: false, retired: false, owner: 'Cem' } }] });
+  try {
+    assert.match(document.body.textContent, /qa.*QA Tester seat of Collab · Owner: Cem/);
+    assert.doesNotMatch(document.body.textContent, /Developer seat of Collab/);
+
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'qa-2');
+    await choose(0, 'p1');
+    const group = document.querySelectorAll('select')[1].querySelector('optgroup');
+    assert.deepEqual([...group.querySelectorAll('option')].map(option => [option.disabled ? null : option.value, option.textContent]),
+      [[null, 'Your organisation'], ['custom:cr1', 'QA Tester'], ['custom:cr2', 'Night lead']]);
+    // The base role decides what the seat needs: a lead-like role works in no repository.
+    await choose(1, 'custom:cr2');
+    assert.match(document.querySelector('[role=dialog]').textContent, /No repository needed A Night lead decides and writes/);
+    await choose(1, 'custom:cr1');
+    await shows('From the project acme/app. Nothing to pick, nothing to type.');
+    answer = { ok: true, json: async () => ({ seat: { id: 's2' }, token: { name: 'qa-2', token: 'collab_at_seat' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    // The role is the custom one; the server gives the seat its base role.
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'qa-2', projectId: 'p1', customRoleId: 'cr1', ownerId: null, expiresInDays: 90 }]);
+    await React.act(async () => buttons('Done')[0].click());
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('without roles of its own, the form has no Your organisation group', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await choose(0, 'p1');
+    assert.equal(document.querySelectorAll('select')[1].querySelector('optgroup'), null);
   } finally { await React.act(async () => root.unmount()); }
 });

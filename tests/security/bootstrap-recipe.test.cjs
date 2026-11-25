@@ -17,6 +17,14 @@ test('bootstrap contract matches the actual schema and complete migration histor
   for (const migration of contract.migrations) assert.equal(migration.sha256, sha(path.join(root, 'prisma/migrations', migration.name, 'migration.sql')));
 });
 
+test('the bootstrap recipe pins the new migration', () => {
+  const sha = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  const contract = JSON.parse(fs.readFileSync(path.join(root, 'prisma/bootstrap-contract.json'), 'utf8'));
+  for (const name of ['20261125000200_manage_agents_permission', '20261125000300_manage_agents_rows']) {
+    assert.equal(contract.migrations.find(row => row.name === name)?.sha256, sha(path.join(root, 'prisma/migrations', name, 'migration.sql')), name);
+  }
+});
+
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-bootstrap-recipe-'));
   for (const name of ['scripts', 'prisma/migrations']) fs.mkdirSync(path.join(dir, name), { recursive: true });
@@ -69,7 +77,7 @@ test('actual bootstrap CLI emits one guarded schema transaction then ordered nat
   assert.ok(apply.input.indexOf('COLLAB_BOOTSTRAP_DATABASE_NOT_EMPTY') < apply.input.indexOf(schemaSql));
   assert.match(apply.input, /COMMIT;\n$/);
   assert.deepEqual(contract.migrations.slice(-15).map(row => row.name), [
-    '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization', '20261107000100_agent_review_guard', '20261113000100_issue_templates', '20261113000200_app_approved_version', '20261114000100_handoff_claimed_once', '20261116000100_agent_seats', '20261116000200_app_token_hash', '20261116000300_repair_status_flags', '20261116000400_agent_runners', '20261117000100_context_folders', '20261117000200_agent_default_repository', '20261119000100_seat_room_and_repository', '20261120000100_project_milestones',
+    '20261114000100_handoff_claimed_once', '20261116000100_agent_seats', '20261116000200_app_token_hash', '20261116000300_repair_status_flags', '20261116000400_agent_runners', '20261117000100_context_folders', '20261117000200_agent_default_repository', '20261119000100_seat_room_and_repository', '20261120000100_project_milestones', '20261124000100_agent_role_instructions', '20261124000200_agent_platform_prompts', '20261124000300_workspace_role_normalise', '20261125000100_agent_custom_roles', '20261125000200_manage_agents_permission', '20261125000300_manage_agents_rows',
   ]);
   // The seat rules Prisma cannot model reach a fresh database as the migration's own statements.
   const seats = fs.readFileSync(path.join(root, 'prisma/migrations/20261116000100_agent_seats/migration.sql'), 'utf8');

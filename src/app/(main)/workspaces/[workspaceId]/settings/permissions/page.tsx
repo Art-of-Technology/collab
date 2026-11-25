@@ -5,13 +5,13 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission, getUserWorkspaceRole } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import PermissionsManager from '@/components/workspace/PermissionsManager';
-import MemberManager from '@/components/workspace/MemberManager';
 import CustomRolesManager from '@/components/workspace/CustomRolesManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, Users, ArrowLeft, Sparkles } from 'lucide-react';
+import { Shield, ArrowLeft, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface PermissionsPageProps {
@@ -59,6 +59,10 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
     notFound();
   }
 
+  // The permission routes are for Owners and platform admins. A member below Owner reads that here instead of an editor that loads nothing.
+  const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+  const ownersOnly = !authority?.platformAdmin && !may(authority, 'roles.edit');
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="mb-4">
@@ -77,15 +81,14 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
         </p>
       </div>
 
+      {ownersOnly ? (
+        <p className="text-sm text-muted-foreground">Only Owners can manage roles and permissions.</p>
+      ) : (
       <Tabs defaultValue="permissions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="permissions" className="flex items-center gap-1.5 text-sm">
             <Shield className="h-3 w-3" />
             Role Permissions
-          </TabsTrigger>
-          <TabsTrigger value="members" className="flex items-center gap-1.5 text-sm">
-            <Users className="h-3 w-3" />
-            Member Roles
           </TabsTrigger>
           <TabsTrigger value="custom-roles" className="flex items-center gap-1.5 text-sm">
             <Sparkles className="h-3 w-3" />
@@ -113,27 +116,6 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
           </Card>
         </TabsContent>
 
-        <TabsContent value="members" className="space-y-4">
-          <Card className="border border-border/40 bg-card/50">
-            <CardHeader className="pb-3 pt-4 px-4">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-base font-medium">Member Roles</CardTitle>
-              </div>
-              <CardDescription className="text-xs">
-                Assign roles to workspace members. Each role has different permissions that can be customized in the Permissions tab.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <MemberManager 
-                workspaceId={workspaceId}
-                currentUserId={session.user.id}
-                currentUserRole={userRole}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="custom-roles" className="space-y-4">
           <Card className="border border-border/40 bg-card/50">
             <CardHeader className="pb-3 pt-4 px-4">
@@ -151,6 +133,7 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
           </Card>
         </TabsContent>
       </Tabs>
+      )}
     </div>
   );
 }

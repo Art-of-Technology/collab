@@ -5,6 +5,7 @@ import {
   isValidWebhookUrl, 
   validateEventTypes,
 } from '@/lib/webhooks';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 import { prisma } from '@/lib/prisma';
 
@@ -35,18 +36,10 @@ export async function GET(
       return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
     }
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Owners manage webhooks; a platform admin has no pass here.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can manage app webhooks' }, { status: 403 });
     }
 
     // Find webhook
@@ -174,18 +167,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Webhook not found' }, { status: 404 });
     }
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId: webhook.installation.workspaceId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Owners manage webhooks; a platform admin has no pass here.
+    const authority = await getWorkspaceAuthority(session.user.id, webhook.installation.workspaceId);
+    if (!may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can manage app webhooks' }, { status: 403 });
     }
 
     // Check for URL conflicts if URL is being changed
@@ -264,18 +249,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
     }
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Owners manage webhooks; a platform admin has no pass here.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can manage app webhooks' }, { status: 403 });
     }
 
     // Find and verify webhook

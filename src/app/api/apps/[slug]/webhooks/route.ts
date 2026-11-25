@@ -8,6 +8,7 @@ import {
   WEBHOOK_EVENT_TYPES 
 } from '@/lib/webhooks';
 import { encrypt } from '@/lib/apps/crypto';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 import { prisma } from '@/lib/prisma';
 
@@ -80,18 +81,10 @@ export async function GET(
       return NextResponse.json({ error: 'App not installed in this workspace' }, { status: 404 });
     }
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Owners manage webhooks; a platform admin has no pass here.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can manage app webhooks' }, { status: 403 });
     }
 
     return NextResponse.json({
@@ -173,18 +166,10 @@ export async function POST(
       return NextResponse.json({ error: 'App not installed in this workspace' }, { status: 404 });
     }
 
-    // Check workspace membership and admin role
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Owners manage webhooks; a platform admin has no pass here.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can manage app webhooks' }, { status: 403 });
     }
 
     // Check if webhook URL already exists for this installation

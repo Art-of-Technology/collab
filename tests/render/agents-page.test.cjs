@@ -150,6 +150,9 @@ test('Seats tab: a card per person with the runner and the room, and each seat w
   assert.match(html, /<section aria-label="Cem"[^>]*>.*<section aria-label="No owner \(API key\)"/s);
   assert.match(html, /href="\/team\/issues\/CLB-9"/);
   assert.match(html, /<a[^>]*href="\/team\/agents\/inbox#seat-seat-dev"[^>]*>1<\/a>/);
+  // Each seat's name leads to its own page, where its instructions are.
+  assert.match(html, /<a[^>]*href="\/team\/agents\/seats\/seat-dev"[^>]*>Collab Developer<\/a>/);
+  assert.match(html, /<a[^>]*href="\/team\/agents\/seats\/seat-rel"[^>]*>Collab Release<\/a>/);
   // Creating and retiring stays under Settings, and only who may do it is led there.
   assert.doesNotMatch(html, /settings\/agent-tokens|Handoffs/);
   assert.match(await page({ manage: true, handoffs: true }).open(), /href="\/workspaces\/ws\/settings\/agent-tokens"[^>]*>Create or retire a seat<.*Handoffs \(old\)|Handoffs \(old\).*href="\/workspaces\/ws\/settings\/agent-tokens"/s);
@@ -299,4 +302,13 @@ test('the menu is told the page being read, not only the workspace the layout kn
   }).default;
   renderToStaticMarkup(React.createElement(Layout, { pathname: '/weezboo' }, 'page'));
   assert.deepEqual(seen, ['/weezboo/agents/inbox', '/weezboo/agents/inbox']);
+});
+
+test("a seat with the organisation's own role is shown by that role's name on the Seats and Inbox tabs (CLB-628)", async () => {
+  const qa = { ...seats[0], id: 'seat-qa', name: 'QA-1', role: 'developer', customRole: 'QA Tester', isDefault: false, working: [], waiting: [] };
+  const view = { workspace: { id: 'ws', slug: 'team' }, seats: [qa] };
+  const html = await page({ view }).open();
+  assert.match(text(html), /Waiting QA Tester QA-1 Collab Nothing 0/);
+  assert.doesNotMatch(text(html), /developer QA-1/);
+  assert.match(text(await page({ view }).open('inbox')), /QA-1 QA Tester seat of Collab · 0 waiting/);
 });

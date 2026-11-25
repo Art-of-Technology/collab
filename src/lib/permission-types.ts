@@ -120,6 +120,7 @@ export enum Permission {
   PIN_POST = "PIN_POST",
   MANAGE_LEAVE = "MANAGE_LEAVE",
   MANAGE_APPS = "MANAGE_APPS",
+  MANAGE_AGENTS = "MANAGE_AGENTS",
 }
 
 /**
@@ -258,7 +259,8 @@ export function getPermissionDisplayName(permission: Permission): string {
     [Permission.MANAGE_LEAVE]: "Manage Leave",
 
     // App permissions
-    [Permission.MANAGE_APPS]: "Can Install and Manage Apps"
+    [Permission.MANAGE_APPS]: "Can Install and Manage Apps",
+    [Permission.MANAGE_AGENTS]: "Manage agent seats and tokens"
   };
 
   return permissionNames[permission] || permission.replace(/_/g, " ");

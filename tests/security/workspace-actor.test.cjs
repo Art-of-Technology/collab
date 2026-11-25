@@ -14,7 +14,13 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
     !spec.include?.members?.where || matches(member, spec.include.members.where)) };
   const db = {
     issue: { count: async ({ where }) => retainedIssues.filter(issue => matches(issue, where)).length },
-    user: { findUnique: async ({ where }) => { calls.users.push(where); return users.find(row => matches(row, where)) ?? null; } },
+    user: { findUnique: async ({ where, select }) => {
+      calls.users.push(where);
+      const user = users.find(row => matches(row, where)) ?? null;
+      // The workspace authority reads the user's active memberships with the user.
+      return user && select?.workspaceMemberships ? { ...user, workspaceMemberships: spaces.flatMap(row => row.members)
+        .filter(row => row.userId === user.id && matches(row, select.workspaceMemberships.where)) } : user;
+    } },
     workspace: {
       findUnique: async spec => { calls.reads.push(spec); return project(spaces.find(row => matches(row, spec.where)), spec); },
       findFirst: async ({ where }) => { calls.reads.push(where); return spaces.find(row => matches(row, where)) ?? null; },
@@ -38,6 +44,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
     'next/server': { NextResponse: Response },
   };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
+  deps['@/lib/permissions'] = load('src/lib/permissions.ts', { './prisma': { prisma: db } }, { console });
   return { actions: load('src/actions/workspace.ts', deps),
     rest: load('src/app/api/workspaces/[workspaceId]/route.ts', deps, { console }), calls, spaces, users };
 }
@@ -107,12 +114,12 @@ test('workspace REST requires subject ID before reads/writes in all methods', as
 
 test('workspace REST update rejects revoked admins and preserves active-admin/owner rules', async () => {
   const { rest, calls } = fixture({ id: 'alice', email: 'bob@example.test' });
-  for (const id of ['revoked', 'foreign']) {
+  for (const id of ['revoked', 'foreign', 'active']) {
     const response = await rest.PATCH(request('PATCH', id), params(id));
     assert.equal(response.status, 403);
     assert.equal(calls.writes.length, 0);
   }
-  for (const id of ['own', 'active']) {
+  for (const id of ['own']) {
     assert.equal((await rest.PATCH(request('PATCH', id), params(id))).status, 200);
     assert.equal(calls.writes.at(-1).where.id, id);
   }

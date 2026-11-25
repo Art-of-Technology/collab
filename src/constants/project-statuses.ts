@@ -1,6 +1,9 @@
 import type { Prisma } from '@prisma/client';
 
 export const LEGACY_FINAL_STATUSES = new Set(['done', 'complete', 'completed', 'closed', 'resolved', 'cancelled', 'canceled']);
+/** The names of the two status counts for work issues in no project status: finished ones, and the rest. */
+export const NO_STATUS_FINISHED = 'no_status_finished';
+export const NO_STATUS = 'no_status';
 
 export interface DefaultProjectStatus {
   name: string;          // Internal name (database)

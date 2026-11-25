@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { defaultRolePermissions } from '@/lib/role-permission-defaults';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
+import { getWorkspaceAuthority, levelOfRole, may } from '@/lib/workspace-authority';
 
 // GET /api/workspaces/[workspaceId]/permissions - Get permissions for a workspace or user
 export const dynamic = 'force-dynamic';
@@ -62,17 +63,12 @@ export async function GET(
       );
     }
 
-    // Otherwise, get all workspace permissions (for management)
-    // Check if user has permission to manage workspace permissions
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      Permission.MANAGE_WORKSPACE_PERMISSIONS
-    );
-
-    if (!hasPermission.hasPermission) {
+    // Otherwise, get all workspace permissions (for management): Owners only.
+    // A platform admin, member or not, keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
       return NextResponse.json(
-        { error: 'You do not have permission to view workspace permissions' },
+        { error: 'Only Owners can manage roles and permissions' },
         { status: 403, headers: { 'Cache-Control': 'no-store' } }
       );
     }
@@ -140,30 +136,20 @@ export async function PUT(
       );
     }
 
-    // Check if user has permission to manage workspace permissions
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      Permission.MANAGE_WORKSPACE_PERMISSIONS
-    );
-
-    if (!hasPermission.hasPermission) {
-      return NextResponse.json(
-        { error: 'You do not have permission to manage workspace permissions' },
-        { status: 403 }
-      );
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
+      return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 
-    // Prevent users from removing their own MANAGE_WORKSPACE_PERMISSIONS permission
-    if (
-      role === hasPermission.userRole &&
-      permission === Permission.MANAGE_WORKSPACE_PERMISSIONS &&
-      !enabled
-    ) {
-      return NextResponse.json(
-        { error: 'You cannot remove your own permission management access' },
-        { status: 400 }
-      );
+    if (levelOfRole(role) === 'OWNER') {
+      return NextResponse.json({ error: 'The Owner role has every permission and cannot be changed' }, { status: 403 });
+    }
+
+    // A built-in name counts in any letter case, as it does for a member's level.
+    if (!Object.values(WorkspaceRole).some(value => value === role.toUpperCase()) &&
+        !(await prisma.customRole.findFirst({ where: { workspaceId, name: role }, select: { id: true } }))) {
+      return NextResponse.json({ error: 'The role is neither built-in nor a custom role of this workspace' }, { status: 400 });
     }
 
     // Handle permission enable/disable
@@ -234,28 +220,17 @@ export async function POST(
       );
     }
 
-    // Check if user has permission to manage workspace permissions
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      Permission.MANAGE_WORKSPACE_PERMISSIONS
-    );
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
+      return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
+    }
 
-    if (!hasPermission.hasPermission) {
-      return NextResponse.json(
-        { error: 'You do not have permission to manage workspace permissions' },
-        { status: 403 }
-      );
+    if (levelOfRole(role) === 'OWNER') {
+      return NextResponse.json({ error: 'The Owner role has every permission and cannot be reset' }, { status: 403 });
     }
 
     const defaults = defaultRolePermissions[role];
-    if (role === hasPermission.userRole &&
-        !defaults.includes(Permission.MANAGE_WORKSPACE_PERMISSIONS)) {
-      return NextResponse.json(
-        { error: 'You cannot remove your own permission management access' },
-        { status: 400 }
-      );
-    }
 
     await prisma.$transaction(async (tx) => {
       await tx.rolePermission.deleteMany({ where: { workspaceId, role } });
