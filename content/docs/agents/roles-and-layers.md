@@ -77,7 +77,7 @@ The role picks the platform layer, which issues the seat takes, and whether it g
 | Security | Security requests | Reads it and pushes nothing | Several |
 | Lead | Ordinary issues: an epic, whose children it assigns. See [Use a lead seat](/docs/agents/lead-seat) | None | One |
 | Planner | Ordinary issues: an idea to settle with a person, one question per comment thread | Reads it | Several |
-| Documentation Manager | Docs requests | Updates docs and opens a pull request | Several |
+| Documentation Manager | Docs requests | Works in it | Several |
 
 Where the repository comes from is under [Which repository](/docs/agents/create-a-seat#which-repository).
 
