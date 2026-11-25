@@ -254,8 +254,9 @@ export const runActionSchema = z.discriminatedUnion('event', [
 export const runAnswerSchema = z.object({
   questionId: text(128), decision: z.enum(['approved', 'refused']), text: plainText(4000).transform(value => value.trim()).optional(),
 }).strict();
+export const stopAnswerSchema = z.object({ content: plainText(4000).transform(value => value.trim()) }).strict();
 
-type Question = { id: string; text: string; answer: { decision: 'approved' | 'refused'; text: string | null; userId: string; at: string } | null };
+type Question ={ id: string; text: string; answer: { decision: 'approved' | 'refused'; text: string | null; userId: string; at: string } | null };
 // The existing JSON column was nullable and had no writer before questions.
 const questionsOf = (ask: Prisma.JsonValue) => Array.isArray(ask) ? ask as Question[] : [];
 const questionNotOpen = () => new HandoffError('question_not_open', 'This question is no longer open on the run', 409);
@@ -853,4 +854,32 @@ export async function clearRun(userId: string, issueIdOrKey: string, runId: stri
       projectId: issue.projectId, details: JSON.stringify({ runId }) } });
     return { run: { ...await tx.agentRun.findFirstOrThrow({ where: { id: runId }, select: RUN }), ask: null } };
   });
+}
+
+/**
+ * Declared stops: a person's answer from Home is a comment on the issue, posted only while the stop its row showed is
+ * still open. Open: that run is the issue's latest, a seat's, and finished in review or blocked naming a person; the
+ * seat still holds the issue, the issue is not done, and nobody but the seat has commented since the run ended. Anyone
+ * who may read the issue may answer, as with a comment on its page. It is checked and written under the issue's lock,
+ * which a checkout and a second answer take too: two presses post one comment, and a press on an old row posts none.
+ */
+export async function answerStop(userId: string, issueIdOrKey: string, runId: string, input: z.infer<typeof stopAnswerSchema>) {
+  const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
+  if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
+  await forgeGuard(issue.id);
+  const comment = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${issue.id} FOR UPDATE`;
+    const current = await tx.issue.findFirst({ where: { id: issue.id, ...issueReadAccessWhere(userId) }, select: { assigneeId: true, projectStatus: statusSelect,
+      agentRuns: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { id: true, userId: true, seatId: true, state: true, outcome: true, endedAt: true } } } });
+    const run = current?.agentRuns[0];
+    const entry = await tx.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
+    const facts = JSON.parse(entry?.details ?? '{}');
+    if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isDone(current)
+      || facts.runId !== runId || typeof facts.askedUser !== 'string'
+      || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: run.endedAt } } })) {
+      throw new HandoffError('stop_closed', 'Nothing was posted: this is no longer waiting for an answer. Someone has answered it, the issue is done, or its seat has started on it again', 409);
+    }
+    return tx.issueComment.create({ data: { issueId: issue.id, authorId: userId, content: input.content }, select: { id: true, issueId: true, authorId: true, content: true, createdAt: true } });
+  });
+  return { workspaceId: issue.workspaceId, comment };
 }

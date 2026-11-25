@@ -93,8 +93,8 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const answer = seatRow && item.ask === 'here';
-  const runId = item.kind === 'failed' ? item.runId : null;
-  const action = answer ? 'comments' : runId ? `runs/${encodeURIComponent(runId)}/clear` : null;
+  // Both actions name the run the row shows: the server acts only while that run is still what the row says it is.
+  const action = item.runId && (answer || item.kind === 'failed') ? `runs/${encodeURIComponent(item.runId)}/${answer ? 'reply' : 'clear'}` : null;
   const actionable = item.canAct && action && !submitted;
   const showDetails = !actionable && seatRow && !!item.question && !submitted;
   const options = item.suggested ? [item.suggested, ...item.options.filter(option => option !== item.suggested)] : item.options;

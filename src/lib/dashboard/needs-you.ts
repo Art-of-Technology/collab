@@ -337,11 +337,11 @@ export async function loadNeedsYou({
       if (!target.issueKey) continue;
       targetByKey.set(target.issueKey, targetByKey.has(target.issueKey) ? null : { id: target.id, issueKey: target.issueKey });
     }
-    for (const { issue, seat, endedAt, facts, content, options, suggested, destinations } of parsedRows) {
+    for (const { issue, seat, runId, endedAt, facts, content, options, suggested, destinations } of parsedRows) {
       if (facts.ask) {
         const declared = facts.ask;
         // One question is answered here. Several are answered on the issue, and work for the person's hands waits on them.
-        add(facts.pullRequest ? 'review' : 'question', issue, endedAt, { seat: { id: seat.id, name: seat.name }, text: facts.nextStep,
+        add(facts.pullRequest ? 'review' : 'question', issue, endedAt, { seat: { id: seat.id, name: seat.name }, runId, text: facts.nextStep,
           ...(declared.kind === 'hands' ? { question: `${declared.steps}\n\nWhen it is done, reply: ${declared.doneWord}` }
             : declared.questions.length > 1 ? { ask: 'issue', question: declared.questions.map((item, index) =>
               `${index + 1}. ${item.question}\nReply words: ${item.options.join(', ')}.${item.suggested ? ` Suggested: ${item.suggested}.` : ''}`).join('\n\n') }
@@ -355,6 +355,7 @@ export async function loadNeedsYou({
       const visible = (text: string | null) => text && hiddenKeys.length ? redactDestinations(text, hiddenKeys) : text;
       add(facts.pullRequest ? 'review' : 'question', issue, endedAt, {
         seat: { id: seat.id, name: seat.name },
+        runId,
         text: visible(facts.nextStep),
         question: visible(content ?? facts.nextStep)?.slice(0, 2000) ?? null,
         ask,

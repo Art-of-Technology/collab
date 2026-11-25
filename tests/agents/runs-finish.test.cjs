@@ -653,4 +653,108 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     session = person;
     await act(devA, run.id, 'close');
   });
+
+  await t.test('declared stops: an answer from Home is posted only while the stop it was shown for is still open', async () => {
+    const events = [];
+    const replyRoute = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...deps, '@/lib/redis': { publishEvent: async (...sent) => events.push(sent) } }, globals);
+    const reply = async (target, runId, content = 'split') => {
+      const response = await replyRoute.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) }),
+        { params: Promise.resolve({ issueId: target.id, runId }) });
+      return [response.status, await response.json()];
+    };
+    const comments = async target => (await raw.issueComment.findMany({ where: { issueId: target.id }, orderBy: { createdAt: 'asc' } })).map(row => [row.authorId, row.content]);
+    const says = (target, authorId, content) => raw.issueComment.create({ data: { issueId: target.id, authorId, content } });
+    const ask = { kind: 'decision', questions: [{ question: "Run the migration in tonight's window, or split it into two releases?", options: ['window', 'split'], suggested: 'split' }] };
+    /** An issue whose seat stopped and named the person. */
+    const stopped = async (body = { askedUser: person, ask }) => {
+      const { target, run } = await started(devA);
+      assert.equal((await finish(devA, run.id, { outcome: 'blocked', ...body }))[0], 200);
+      return { target, run };
+    };
+    /** The press is refused and leaves the issue's comments as they were. */
+    const closed = async ({ target, run }, runId = run.id) => {
+      const before = await comments(target);
+      await refused(reply(target, runId), 409, 'stop_closed');
+      assert.deepEqual(await comments(target), before);
+    };
+
+    // While the run is open there is no stop to answer.
+    const open = await started(devA);
+    await closed(open);
+    const first = await stopped();
+    // Another issue's run, no login, somebody who may not read the issue, an empty answer, a project that is worked on the Forge board.
+    await closed(first, open.run.id);
+    session = null;
+    assert.equal((await reply(first.target, first.run.id))[0], 401);
+    for (const outsider of ['cstranger001', gone]) {
+      session = outsider;
+      await refused(reply(first.target, first.run.id), 404, 'not_found');
+    }
+    session = person;
+    await refused(reply(first.target, first.run.id, '   '), 400, 'invalid_request');
+    forge = true;
+    try { await refused(reply(first.target, first.run.id), 409, 'forge_connected_project'); } finally { forge = false; }
+    assert.deepEqual([await comments(first.target), events], [[], []]);
+
+    // Two presses at once post one comment, as the person who pressed, and the next press finds the stop answered.
+    // Both are made to wait for the issue, so each checks only after the other has written or been refused.
+    let release, ready;
+    const held = new Promise(resolve => { release = resolve; }), locked = new Promise(resolve => { ready = resolve; });
+    const holding = raw.$transaction(async tx => { await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${first.target.id} FOR UPDATE`; ready(); await held; }, { timeout: 15000 });
+    await locked;
+    const pressing = Promise.all([reply(first.target, first.run.id, '  split '), reply(first.target, first.run.id, 'window')]);
+    try {
+      let waiting = 0;
+      for (const deadline = Date.now() + 5000; waiting < 2 && Date.now() < deadline; await new Promise(resolve => setTimeout(resolve, 20))) {
+        waiting = (await raw.$queryRaw`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%"Issue"%FOR UPDATE%' AND pid <> pg_backend_pid()`).length;
+      }
+      assert.equal(waiting, 2, 'both presses wait for the issue');
+    } finally {
+      release();
+      await holding;
+    }
+    const presses = await pressing;
+    assert.deepEqual(presses.map(([status, body]) => status === 200 ? 200 : body.error).sort(), [200, 'stop_closed']);
+    const [, posted] = presses.find(([status]) => status === 200);
+    assert.deepEqual([posted.authorId, posted.issueId], [person, first.target.id]);
+    assert.deepEqual(await comments(first.target), [[person, posted.content]]);
+    assert.ok(['split', 'window'].includes(posted.content));
+    assert.deepEqual(JSON.parse(JSON.stringify(events)), [['workspace:w:events', { type: 'issue.comments.changed', workspaceId: 'w', issueId: first.target.id }, 1000]]);
+    await closed(first);
+    assert.deepEqual(await offered(devA, first.target), ['reply']);
+
+    // Someone answered on the issue itself; the seat's own later comment is no answer.
+    const answered = await stopped();
+    await says(answered.target, owner, 'Split it: the window is taken tonight.');
+    await closed(answered);
+    const noted = await stopped();
+    await says(noted.target, devA.userId, 'Still waiting for the choice above.');
+    session = owner;
+    assert.equal((await reply(noted.target, noted.run.id, 'window'))[0], 200);
+    assert.deepEqual((await comments(noted.target)).at(-1), [owner, 'window']);
+    session = person;
+
+    // The issue is done, or went to another seat.
+    const done = await stopped();
+    await move(done.target, 'done');
+    await closed(done);
+    const moved = await stopped();
+    await raw.issue.update({ where: { id: moved.target.id }, data: { assigneeId: otherA.userId } });
+    await closed(moved);
+
+    // A later run has started: the old row's press posts nothing, also after that run stopped with a question of its own.
+    const later = await stopped();
+    const again = await checkout(devA, later.target, 'g2');
+    await closed(later);
+    assert.equal((await finish(devA, again.id, { outcome: 'blocked', askedUser: person, ask }, 'g2'))[0], 200);
+    await closed(later);
+    assert.equal((await reply(later.target, again.id))[0], 200);
+
+    // A stop that waits for another issue asks no person.
+    const waits = await started(devA);
+    const blocker = await issue(null);
+    await link(blocker, 'BLOCKS', waits.target);
+    assert.equal((await finish(devA, waits.run.id, { outcome: 'blocked', blockedBy: blocker.issueKey }))[0], 200);
+    await closed(waits);
+  });
 });

@@ -216,6 +216,8 @@ test('declared stops: a finish that says what it asks is shown from its fields, 
     ['unsuggested', 'question', 'here', true, ['keep', 'drop'], null, null],
     ['hands', 'question', 'none', false, [], null, null],
   ]);
+  // Each row carries the finish it shows, which is what an answer from Home is bound to.
+  assert.deepEqual(items.map(row => row.runId), ['one-decision', 'two-decisions', 'unsuggested', 'hands'].map(id => `run-${id}`));
   assert.deepEqual(counts, { question: 3, review: 1, failed: 0, due: 0 });
   const questions = Object.fromEntries(items.map(row => [row.issue.id, row.question]));
   assert.deepEqual(questions, {
@@ -417,7 +419,7 @@ test('canAct follows the permissions the comment and clear routes check', async 
     id: 'question:legacy-question', kind: 'question', since: date(-2).toISOString(),
     issue: { id: 'legacy-question', issueKey: 'LEGACY-QUESTION', title: 'legacy-question',
       project: { id: 'project', slug: 'release', name: 'Release', color: null } },
-    seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: null, canAct: true,
+    seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: 'run-legacy-question', canAct: true,
     question: 'Reply `yes`.', ask: 'here', replyOn: null, options: ['yes'], suggested: null,
   });
 });

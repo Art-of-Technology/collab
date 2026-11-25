@@ -84,7 +84,7 @@ const makeItem = (kind, id, extra = {}) => ({
   issue: { id, issueKey: id.toUpperCase(), title: id, project: { id: 'project', name: 'Release' } },
   seat: { id: 'seat', name: 'Developer' }, question: 'Check the result and tell me whether to continue.',
   ask: kind === 'question' ? 'here' : 'none', options: kind === 'question' ? ['continue'] : [], suggested: null, replyOn: null,
-  runId: kind === 'failed' ? 'old-run' : null,
+  runId: kind === 'failed' ? 'old-run' : kind === 'due' ? null : `stop-of-${id}`,
   ...extra,
 });
 
@@ -129,7 +129,7 @@ async function interact(items, exercise, respond = async () => Response.json({ a
   }
 }
 
-test('sending an answer posts one comment and reloads the rows', async () => {
+test('sending an answer names the stop the row shows, and reloads the rows', async () => {
   for (const { assigneeId, authorId, finishSeatId, namesSeat } of [
     { assigneeId: 'seat-user', authorId: 'viewer', finishSeatId: 'seat', namesSeat: true },
     { assigneeId: 'different-assignee', authorId: 'viewer', finishSeatId: 'seat', namesSeat: false },
@@ -144,7 +144,7 @@ test('sending an answer posts one comment and reloads the rows', async () => {
       await click('Send answer', 0, 2);
       const posts = calls.filter(([, options]) => options?.method === 'POST');
       assert.equal(posts.length, 1);
-      assert.equal(posts[0][0], '/api/issues/q1/comments');
+      assert.equal(posts[0][0], '/api/issues/q1/runs/stop-of-q1/reply');
       assert.deepEqual(JSON.parse(posts[0][1].body), { content: 'Please continue.' });
       assert.equal(refreshes(), 1);
       assert.equal(row(0), undefined);
@@ -174,6 +174,21 @@ test('an empty answer is refused in the row', async () => {
     assert.deepEqual(calls, []);
     assert.equal(refreshes(), 0);
   });
+});
+
+test('a press on a row whose stop is no longer open says that nothing was posted, and a row without its run cannot be answered', async () => {
+  const refusal = 'Nothing was posted: this is no longer waiting for an answer.';
+  await interact([makeItem('question', 'q1', { options: ['window', 'split'] }), makeItem('question', 'q2', { runId: null })], async ({ row, click, calls, refreshes }) => {
+    assert.deepEqual([...row(1).querySelectorAll('a, button')].map(control => control.textContent), ['Open issue', 'Show details']);
+    await click('Answer');
+    // Choosing a reply word only fills the field.
+    await click('window');
+    assert.deepEqual(calls, []);
+    await click('Send answer');
+    assert.deepEqual(calls.map(([url, options]) => [url, options.method, JSON.parse(options.body)]), [['/api/issues/q1/runs/stop-of-q1/reply', 'POST', { content: 'window' }]]);
+    assert.equal(row(0).querySelector('[role="alert"]').textContent, refusal);
+    assert.equal(refreshes(), 0);
+  }, async () => Response.json({ error: 'stop_closed', error_description: refusal }, { status: 409 }));
 });
 
 test('an answer draft survives opening another row and a refused comment', async () => {
