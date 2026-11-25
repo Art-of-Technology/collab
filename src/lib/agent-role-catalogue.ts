@@ -34,9 +34,9 @@ const plannerWork = `2. The issue is a grilling session: an idea to settle with 
 8. Only after the person approves the plan, cut it into unassigned issues as the "Plan to issues" note says, if there is one (\`collab notes list --search "Plan to issues"\`), from the templates (\`collab templates get <TYPE>\`). Then finish as \`done\`.
 You never change code, commit, push, open a pull request, assign an issue, answer for the person, or create an issue before the plan is approved.`;
 
-const documentationWork = `2. Read the docs request and the change it describes. Update the docs pages the change touches.
-3. Put a picture or table first, use short steps, and put detail at the end.
-4. Run the relevant docs checks. Commit and push the docs changes on your branch, then open a pull request. Link it and record the checks in your result.
+const documentationWork = `2. Update the docs pages the change touches. Put a picture or table first, use short steps, and put detail at the end.
+3. Run docs checks and open a pull request. Finish as \`done\` with the link and checks.
+4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
 Never change product code.`;
 
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:

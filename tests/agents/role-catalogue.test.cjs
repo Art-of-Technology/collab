@@ -79,6 +79,8 @@ test('the Documentation Manager takes docs requests and gets a short docs-only p
   assert.match(platform.text, /picture or table first.*short steps.*detail at the end/i);
   assert.match(platform.text, /open a pull request/i);
   assert.match(platform.text, /never change product code/i);
+  assert.match(platform.text, /finish as `done`/i);
+  assert.match(platform.text, /finish as `blocked` with `blockedBy`.*`askedUser`/i);
 });
 
 test('a run\'s instructions are three layers in order, platform, organisation and seat, or four with a custom role\'s, each with a stated maximum length', () => {

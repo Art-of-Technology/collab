@@ -6,7 +6,7 @@ A seat is an agent that works one project in one role and gets work only when so
 
 ## What a seat is
 
-- One project and one role: developer, reviewer, release, security, lead or planner. A project has at most one active release seat and one active lead seat. What each role is told is on [Roles and layers](/docs/agents/roles-and-layers).
+- One project and one [role](/docs/agents/roles-and-layers#the-roles). A project has at most one active release seat and one active lead seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -41,6 +41,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - A reviewer seat takes only review requests, a release seat only release requests, and a security seat only security requests. A label does not make an issue a request.
 - A lead seat takes ordinary issues and no requests. Give it an epic: see [Lead seat](#lead-seat).
 - A planner seat takes ordinary issues and no requests: an idea to settle with a person.
+- A Documentation Manager seat takes docs requests.
 - Moving an issue to another project takes it from its seat. The issue's activity says why.
 
 ## What a seat's token can change
@@ -158,7 +159,7 @@ A seat asks for a review, a release, a security review or work in another projec
 }
 ```
 
-1. Choose the `role`: `review` goes to the reviewer seat, `release` to the release seat, `security` to the security seat, `developer` to the developer seat.
+1. Choose the `role`. Use `review` for the reviewer, `release` for release, `security` for security, `developer` for the developer, or `docs` for the Documentation Manager.
 2. Name the issue the request comes from in `fromIssue`. It must be an issue of the seat's own project.
 3. For another project, add `project`: its id or its issue prefix. Without it the request stays in the seat's own project.
 4. Write the `title` and the `body`. The request is a Task, so the body needs the sections of the workspace's Task template when the workspace enforces templates. State the problem and the evidence, not the fix.
@@ -168,7 +169,7 @@ From the CLI: `collab seat request --from-issue AA-12 --role review --title "Rev
 
 The reply contains `issue` with the request's `id` and `issueKey`. When Collab chose between seats, it also has `placed`: the `seat` that got the request and `why`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
 
-- The request takes the priority of its source issue. A review or release request gets the `Review request` or `Release request` label when the workspace has one. The label is for people; it hands the request to no one.
+- The request takes the priority of its source issue. Collab adds the matching `Review request`, `Release request` or `Docs request` label to filed requests when the workspace has that label.
 - Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
 - A project with no default seat for the role refuses it with `409 no_default_seat`. A request whose default seat is the seat that files it is refused.
 - A request whose body lacks a section the Task template requires is refused with `422 template_required`, which lists the missing sections. The template's required fields do not apply to a request: it gets its priority from its source issue, its assignee and, when available, the role label from the server, and the caller cannot set any other field.
@@ -495,7 +496,7 @@ From then on, in that project:
 
 - Sending, claiming, offering and accepting a handoff are refused with `project_uses_seats`. Old handoffs stay readable, and a claim made before the switch can still be reported on, released or completed.
 - A label no longer hands an issue to the agents subscribed to it.
-- Adding the `Release request` or `Review request` label to an issue files a request for a seat of that role, placed [by room](#placed-by-room) and related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). `Review request` from an agent token that is not a seat is refused with `assign_by_person`; a person or a seat of the project adds it.
+- Adding the `Release request`, `Review request` or `Docs request` label to an issue files a request for a seat of that role, placed [by room](#placed-by-room) and related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). A person or a seat of the project adds `Review request` or `Docs request`. An agent token that is not a seat receives `assign_by_person`.
 - The Agents tab lists agent names that hold claims only in this project. Before retiring one, check its other work and subscriptions across the workspace. If it is no longer needed, use `collab agents retire --agent NAME`.
 
 **Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.
