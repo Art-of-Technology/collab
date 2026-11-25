@@ -80,7 +80,7 @@ Create one:
 5. Choose the **Access** and **Expires after**.
 6. Choose **Create token** and copy it into a secret manager.
 
-You need permission to manage the workspace's permissions. A program presents the token as `Authorization: Bearer TOKEN`; the CLI reads it from `COLLAB_TOKEN`, together with the server address in `COLLAB_URL`.
+You need the **Manage agent seats and tokens** permission. A program presents the token as `Authorization: Bearer TOKEN`; the CLI reads it from `COLLAB_TOKEN`, together with the server address in `COLLAB_URL`.
 
 ## Seat
 

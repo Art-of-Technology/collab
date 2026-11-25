@@ -237,7 +237,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     assert.deepEqual((await rooms(other))['x-dev'], { kind: 'no_room', reason: 'no runner is connected' });
 
     // The rule is the permission that manages the workspace, not the word "owner": a member whose role has it reads everyone's.
-    await raw.rolePermission.create({ data: { workspaceId: 'w', role: 'MEMBER', permission: 'MANAGE_WORKSPACE_PERMISSIONS' } });
+    await raw.rolePermission.create({ data: { workspaceId: 'w', role: 'MEMBER', permission: 'MANAGE_AGENTS' } });
     assert.equal((await page.readSeats(member, 'team')).canManage, true);
     assert.deepEqual((await rooms(member))['o-dev'], same);
     await raw.rolePermission.deleteMany({ where: { workspaceId: 'w' } });

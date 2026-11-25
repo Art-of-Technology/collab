@@ -11,8 +11,7 @@ const noStore = { 'Cache-Control': 'no-store' };
 const bodySchema = z.object({ text: z.string().max(64_000) }).strict();
 
 // PUT /api/workspaces/[workspaceId]/agent-seats/[seatId]/instructions - save a seat's own instructions (CLB-610). Empty text
-// removes them. Only a signed-in person who may manage the workspace's permissions may, never the seat's own account; an
-// agent token is no session, so it gets nothing here.
+// removes them. Requires a signed-in person with MANAGE_AGENTS. The seat's own account cannot edit its instructions.
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ workspaceId: string; seatId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });

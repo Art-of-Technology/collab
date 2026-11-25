@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const actorId = session?.user?.id;
   if (!actorId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });
   const { workspaceId, tokenId } = await params;
-  const manages = async (id: string) => (await checkUserPermission(actorId, id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission;
+  const manages = async (id: string) => (await checkUserPermission(actorId, id, Permission.MANAGE_AGENTS)).hasPermission;
   if (!await manages(workspaceId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: noStore });
 
   const body = accessSchema.safeParse(await request.json().catch(() => null));
@@ -38,7 +38,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });
   const { workspaceId, tokenId } = await params;
-  const access = await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const access = await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_AGENTS);
   if (!access.hasPermission) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: noStore });
 
   const revoked = await revokeAgentToken({ workspaceId, actorId: session.user.id, tokenId });

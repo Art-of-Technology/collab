@@ -35,9 +35,9 @@ export function customRoleRefusal(result: Refusal) {
   return { status, body: { error: 'message' in result ? result.message : error, code: result.error } };
 }
 
-/** Whether `userId` may manage the workspace's roles, and the workspace exists: a system admin passes the check for any id. */
+/** Whether `userId` may manage the workspace's agent roles, and the workspace exists: a system admin passes the check for any id. */
 async function mayManage(userId: string, workspaceId: string) {
-  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_AGENTS);
   if (!hasPermission) return { error: 'forbidden' as const };
   if (!await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } })) return { error: 'not_found' as const };
   return null;
@@ -72,7 +72,7 @@ function nameRace(error: unknown): Refusal {
 
 /**
  * Adds a role of the workspace's own (CLB-626): a name, the built-in role it behaves like, and its instructions, the role
- * layer of its seats' runs. Only someone who may manage the workspace's permissions may.
+ * layer of its seats' runs. Requires MANAGE_AGENTS.
  */
 export async function createCustomRole(userId: string, workspaceId: string, input: { name: string; baseRole: string; instructions: string }) {
   const denied = await mayManage(userId, workspaceId);

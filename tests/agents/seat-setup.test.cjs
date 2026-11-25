@@ -38,7 +38,7 @@ test('seat setup: one command gives an existing project its seats and switches i
   const deps = { zod, '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
     '@/lib/agent-tokens': tokens, '@/lib/agent-runners': runners, 'next/server': { NextResponse: Response }, '@/lib/apps/auth-middleware': {},
     // Only the workspace's owner and `person` may manage its permissions here.
-    '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'MANAGE_WORKSPACE_PERMISSIONS' },
+    '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'MANAGE_AGENTS' },
       checkUserPermission: async userId => ({ hasPermission: [owner, person].includes(userId) }) } };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
   deps['@/lib/agent-mode'] = load('src/lib/agent-mode.ts', deps, { Date });

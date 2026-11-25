@@ -13,7 +13,7 @@ const bodySchema = z.object({ name: z.string().max(1_000).optional(), instructio
 type Params = { params: Promise<{ workspaceId: string; roleId: string }> };
 
 // PATCH /api/workspaces/[workspaceId]/agent-custom-roles/[roleId] - change a role's name or instructions, or retire it so
-// no new seat takes it (CLB-626). Only someone who may manage the workspace's permissions may.
+// no new seat takes it (CLB-626). Requires MANAGE_AGENTS.
 export async function PATCH(request: NextRequest, { params }: Params) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });

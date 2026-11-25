@@ -387,7 +387,7 @@ test('requests: one seat asks another, in its own project or in another one', as
       ...deps,
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: owner } }) },
       '@/lib/auth-options': {},
-      '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' }, checkUserPermission: async () => ({ hasPermission: true }) },
+      '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'manage' }, checkUserPermission: async () => ({ hasPermission: true }) },
     }, globals);
     const create = sent => call(collection.POST, '', { params: { workspaceId: 'w' }, body: {
       name: 'maps', projectId: A, role: extraRole.id, ...sent,
