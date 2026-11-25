@@ -11,7 +11,7 @@ const noStore = { 'Cache-Control': 'no-store' };
 const bodySchema = z.object({ name: z.string().max(1_000), baseRole: z.string().max(100), instructions: z.string().max(64_000) }).strict();
 
 // POST /api/workspaces/[workspaceId]/agent-custom-roles - add a role of the workspace's own that behaves like a built-in
-// one (CLB-626). Only someone who may manage the workspace's permissions may.
+// one (CLB-626). Requires MANAGE_AGENTS.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ workspaceId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });

@@ -21,7 +21,7 @@ async function managedProject({ params }: Params) {
   if (!session?.user?.id) return { refusal: reply({ error: 'Unauthorized' }, 401) };
   const { workspaceId: slugOrId, projectSlug } = await params;
   const workspaceId = await resolveWorkspaceSlug(slugOrId);
-  if (!workspaceId || !(await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission) {
+  if (!workspaceId || !(await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_AGENTS)).hasPermission) {
     return { refusal: reply({ error: 'Forbidden' }, 403) };
   }
   const project = await prisma.project.findFirst({ where: { workspaceId, slug: projectSlug }, select: { id: true } });

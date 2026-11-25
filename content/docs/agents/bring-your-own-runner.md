@@ -17,7 +17,7 @@ Setting the machine up — its image, enrolling it, signing your coding agent in
 
 ## Steps
 
-1. Install [Collab CLI](/docs/cli) 0.13.0 or newer on that machine and sign in as yourself: `collab auth login --url https://collab.example.com`. The setup command needs a person's login, and that person needs permission to manage the workspace's permissions: an agent token or a seat token is refused with `person_required`, a member without that permission with `forbidden`. Ask a workspace admin for it.
+1. Install [Collab CLI](/docs/cli) 0.13.0 or newer on that machine and sign in as yourself: `collab auth login --url https://collab.example.com`. The setup command needs a person's login, and that person needs the **Manage agent seats and tokens** permission: an agent token or a seat token is refused with `person_required`, a member without that permission with `forbidden`. Ask a workspace Owner to grant it to your role.
 2. Start the pairing on the same machine. The runner shows a code such as `K7QF-M2XD`.
 3. In the left menu, open **Agents**, then the **Runners** tab. Type the code and choose **Connect**. Only type a code your own runner shows you: see [Connect a runner](/docs/agents/admit-a-runner).
 4. Read the preview for the project, named by its issue prefix: `collab seat setup MCN`. Nothing is created. It says which of the four seats are missing and the names they would get, the runner that would run them, the claims that would go to the developer seat, and what stops it. Check the runner it names: it is yours, unless you have none of your own and exactly one runner is connected to the workspace, when that one is named instead — and the seats would then belong to whoever owns it, not to you.
@@ -52,9 +52,9 @@ Rules for the whole task:
    Show me all of it: which of the four seats (developer, reviewer, release,
    security) are missing and the names they would get, the runner that would run
    them, and the claims that would be carried over to the developer seat.
-   If it fails with person_required or forbidden, stop: that is my sign-in, or
-   my permission to manage the workspace's permissions, which a workspace admin
-   grants me. Neither is yours to fix.
+   If it fails with person_required, I need to sign in as myself. If it fails
+   with forbidden, I need to ask a workspace Owner to grant my role the
+   "Manage agent seats and tokens" permission. Stop in either case.
 4. Look at the runner the preview names. If it is not mine, stop and tell me
    whose it is: the new seats would be run by that runner and belong to its
    owner, not to me. Connecting my own runner is mine.

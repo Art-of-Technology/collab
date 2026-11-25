@@ -14,7 +14,7 @@ async function access(context: Context) {
   const { projectId } = await context.params;
   const project = await prisma.project.findFirst({ where: { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) }, select: { id: true, workspaceId: true } });
   if (!project) return { error: reply({ error: 'Project not found' }, 404) };
-  const { hasPermission: canManage } = await checkUserPermission(actor.id, project.workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS);
+  const { hasPermission: canManage } = await checkUserPermission(actor.id, project.workspaceId, Permission.MANAGE_AGENTS);
   return { project, canManage };
 }
 export async function GET(_request: NextRequest, context: Context) {

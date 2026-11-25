@@ -34,8 +34,8 @@ async function managingPerson(context: Caller) {
   if (context.app.slug === AGENT_APP_SLUG) {
     throw new HandoffError('person_required', 'A person with permission to manage the workspace sets a project up; an agent token or a seat token cannot', 403);
   }
-  if (!(await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission) {
-    throw new HandoffError('forbidden', "This needs permission to manage the workspace's permissions", 403);
+  if (!(await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_AGENTS)).hasPermission) {
+    throw new HandoffError('forbidden', "This needs permission to manage the workspace's agents", 403);
   }
 }
 

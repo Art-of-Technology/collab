@@ -74,7 +74,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
     where: { workspaceId: workspace.id, ...issueAccessWhere(userId), OR: [{ agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, { agentSeats: { some: own } }] }, orderBy: { name: 'asc' },
     select: { id: true, slug: true, name: true, membersMayAddSeats: true, agentMode: true, isArchived: true, agentSeats: { where: own, orderBy: { role: 'asc' }, select: { role: true } } },
   });
-  const canManage = (await checkUserPermission(userId, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission;
+  const canManage = (await checkUserPermission(userId, workspace.id, Permission.MANAGE_AGENTS)).hasPermission;
   // A person has one runner per workspace; should two ever stand, the one admitted last is the person's.
   const runners = await prisma.agentRunner.findMany({ where: { workspaceId: workspace.id, ownerId: { in: rows.flatMap(seat => seat.ownerId ?? []) }, removedAt: null },
     orderBy: { admittedAt: 'desc' }, select: { ownerId: true, name: true, state: true, lastSeenAt: true } });
