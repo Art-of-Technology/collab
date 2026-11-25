@@ -64,7 +64,7 @@ export default function MemberRow({
   const asked = useRef(false);
   const name = member.user.name || member.user.email || "This member";
   const primaryOwner = member.level === "PRIMARY_OWNER";
-  const editsRole = member.mayAct && member.status;
+  const editsRole = member.mayAct && member.status && rolesViewerMayGrant.length > 0;
   const hasMenu = (member.mayAct && viewerManages) || (platformAdmin && !primaryOwner && !member.agent);
 
   // Keyboard focus follows the inline confirmation in and back out.

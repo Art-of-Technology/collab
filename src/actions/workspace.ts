@@ -715,7 +715,8 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
       return { ...member, level, agent, mayAct: !agent && mayActOn(viewer, { userId: member.user.id, level }, rank) };
     }),
     viewerLevel: viewer?.level ?? null,
-    rolesViewerMayGrant: rolesMayGrant(viewer, [...Object.values(WorkspaceRole), ...customRoles.map((role) => role.name)], rank),
+    // The role route asks for the change-roles permission at every level, so without it there is nothing to offer.
+    rolesViewerMayGrant: holdsChangeRoles ? rolesMayGrant(viewer, [...Object.values(WorkspaceRole), ...customRoles.map((role) => role.name)], rank) : [],
     invitations: canInvite ? workspace.invitations : [],
     isOwner,
     isMember,

@@ -8,7 +8,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
   }));
   // Owners do not require an active membership row.
   spaces[0].members.push({ id: 'inactive-owner', userId: 'alice', status: false, user: users[0], role: 'owner' });
-  const reads = [], customRoles = [];
+  const reads = [], customRoles = [], grants = [];
   let materialized = 0;
   const db = {
     user: { findUnique: async ({ where, include, select }) => {
@@ -23,7 +23,8 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
     } },
     customRole: { findMany: async ({ where }) => customRoles.filter(row => matches(row, where)) },
     // No role holds a permission here: only owners and platform admins may invite.
-    rolePermission: { findUnique: async () => null },
+    // The roles whose permission rows exist; the Owner level needs none.
+    rolePermission: { findUnique: async ({ where }) => (grants.includes(where.workspaceId_role_permission.role) ? { id: 'p' } : null) },
     workspace: {
       findMany: async spec => {
         reads.push(spec);
@@ -50,7 +51,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
     '@/lib/auth-options': {}, '@/lib/prisma': { prisma: db }, '@/lib/utils': {} };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
   deps['@/lib/permissions'] = load('src/lib/permissions.ts', { './prisma': { prisma: db } }, { console });
-  return { actions: load('src/actions/workspace.ts', deps), spaces, users, reads, customRoles, materialized: () => materialized };
+  return { actions: load('src/actions/workspace.ts', deps), spaces, users, reads, customRoles, grants, materialized: () => materialized };
 }
 
 test('workspace lists retain owners and active members only, with by-ID reads bound to the current subject', async () => {
@@ -178,8 +179,14 @@ test("workspace detail carries the viewer's level, each member's level and the r
   assert.ok(result.rolesViewerMayGrant.includes('ADMIN') && result.rolesViewerMayGrant.includes('MEMBER'));
   assert.ok(result.rolesViewerMayGrant.includes('Support') && !result.rolesViewerMayGrant.includes('Elsewhere'));
 
-  // An Admin does not act on another Admin and grants neither Owner nor Admin.
+  // An Admin whose role lost the change-roles permission is offered no role to grant: the role route would refuse.
   joined.members[0].role = 'ADMIN';
+  result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.deepEqual(Array.from(result.rolesViewerMayGrant), []);
+  assert.equal(shape(result)['m-dave'][2], true, 'switching on or off and removing need no such permission');
+
+  // An Admin does not act on another Admin and grants neither Owner nor Admin.
+  f.grants.push('ADMIN');
   result = await f.actions.getDetailedWorkspaceById('joined');
   assert.equal(result.viewerLevel, 'ADMIN');
   assert.equal(shape(result)['m-carol'][2], false);
@@ -188,6 +195,7 @@ test("workspace detail carries the viewer's level, each member's level and the r
   assert.ok(result.rolesViewerMayGrant.includes('Support'));
 
   // A standard role without the change-roles permission grants nothing and acts on nobody.
+  f.grants.length = 0;
   joined.members[0].role = 'MEMBER';
   result = await f.actions.getDetailedWorkspaceById('joined');
   assert.equal(result.viewerLevel, 'STANDARD');
