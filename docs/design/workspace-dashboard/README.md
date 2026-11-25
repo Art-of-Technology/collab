@@ -47,7 +47,7 @@ On a phone it is one column in this order: Needs you, Agents now, Shipped today,
 | 3 | Agents appear as one summary panel that links to the Floor. It is not a second Floor. |
 | 4 | A project with no issue change for 30 days is dormant. Dormant projects are not counted and collapse into one line. |
 | 5 | One fixed layout. No widgets, no per-person arrangement. |
-| 6 | A seat is answered in the row: typed text, sent as a comment on the issue. |
+| 6 | Answer a seat in the row by choosing a reply word or typing an answer, then pressing Send answer. When the seat directs the reply to another issue, open that issue to answer. |
 | 7 | Projects show as cards with a trend line. A Cards / Table switch sits above them; the choice is kept in the browser (`localStorage`), cards first. |
 | 8 | The sentence under the title is assembled from the panels' counts. No model is called. |
 | 9 | Times are relative ("3 h ago", "due tomorrow") with the exact UTC time in `title` and `dateTime`. |
@@ -65,25 +65,29 @@ Home's filters, project search and pagination preserve the current `scope`, `kin
 
 ### Needs you
 
-A row is one issue that cannot go on until a person acts. From all rows the viewer can open in the current scope, compute the counts and project totals and take the seat name and `since` from the oldest `question` (`null` if none). Then apply the chip, sort by kind in the order below and by `since` oldest first, and send at most 20 rows.
+A row is one issue that cannot go on until a person acts. From all rows the viewer can open in the current scope, compute the counts and project totals and take the seat name and `since` from the oldest row whose `ask` is `here` or `elsewhere` (`null` if none). Then apply the chip and send at most 20 rows. Questions come first, followed by Waiting on you, Failed run and Due rows, oldest first within each group.
 
-For both questions and reviews, the unfinished issue must still be assigned to the user of the seat that ran it, in that seat's project. Its latest run must be a seat's run, must have finished `in_review` or `blocked`, and must have named a person (`askedUser`). Match the finish facts to that run's id. As in `inboxOf`, the run must have ended on or after the current assignment time (the assignee's helper record's `approvedAt`, then `assignedAt`, then the issue's creation). A later comment by anyone other than the seat's user answers the question.
+For both seat kinds, the unfinished issue must still be assigned to the user of the seat that ran it, in that seat's project. Its latest run must be a seat's run, must have finished `in_review` or `blocked`, and must have named a person (`askedUser`). Match the finish facts to that run's id. As in `inboxOf`, the run must have ended on or after the current assignment time (the assignee's helper record's `approvedAt`, then `assignedAt`, then the issue's creation). A comment by anyone other than the seat's user after the run ends takes the row out of the list.
 
-| Kind | Is in the list when | Leaves the list when | Button |
-| --- | --- | --- | --- |
-| `question` | The seat's current question is unanswered and its run gave no pull request | It is answered, the assignment changes, a newer run starts or the issue is done | Answer |
-| `review` | The same current, unanswered question, with a pull request from that run | The same | Open pull request when `pullRequestUrl` is present |
-| `failed` | As in `readSeats`, the run is open (`endedAt` is null) and either its state is `lost` or its non-null `leaseUntil` is earlier than now | The run ends or no longer meets that test | Session has stopped: clear run |
-| `due` | The issue is assigned to the viewer, not done, due before now plus 7 days, and in an active project (see Projects) | It is done or its date moves | Open issue |
+| Kind | Is in the list when | Leaves the list when |
+| --- | --- | --- |
+| `question` | A seat run waits on a person and gave no pull request | It is answered, the assignment changes, a newer run starts or the issue is done |
+| `review` | A seat run waits on a person and gave a pull request | The same |
+| `failed` | As in `readSeats`, the run is open (`endedAt` is null) and either its state is `lost` or its non-null `leaseUntil` is earlier than now | The run ends or no longer meets that test |
+| `due` | The issue is assigned to the viewer, is unfinished, is due before now plus 7 days and belongs to an active project (see Projects) | It is done or its date moves |
 
-- For a review, the Needs you loader resolves the run's `OWNER/REPO#NUMBER` against repositories the viewer can access in the issue's project, using the matched repository's host and provider. If it cannot identify one authorized destination, the review stays in the list with no link.
-- **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. `due` rows are the viewer's own in both.
-- `waitingSeats` is the one value that ignores the scope: it covers every question and review the viewer may read, also in My work. A seat that waits for somebody else is still waiting, and must not be shown as idle.
+- For both seat kinds, the loader reads the seat account's latest comment on the readable issue at or after the start of the run that named the person, in one batch. Seats write their question seconds before the run ends, so the end of the run is not the bound; a comment by anyone else still counts only after the run ends. The panel displays the first 2,000 characters as plain text. It uses the run's next step when there is no matching comment.
+- The reply instructions at the end of that comment supply up to four distinct backticked options in written order. A reply word is at most 40 characters and has no line break or slash. Bare issue keys and commit hashes are excluded. The first option marked recommended or suggested in its own line or list item appears first, labelled “Suggested”.
+- The row reads “Question” when the seat gave reply words and the destination is available. “Answer” opens the inline form when the viewer can comment here. An option fills the field, which can also be edited directly. “Send answer” posts one comment through the existing issue route, reloads the data and names the seat that will pick up the answer if it still holds the issue.
+- The reply belongs on another issue when the comment says “reply on KEY”, “as a comment on KEY” or “comment `word` on KEY”, or when its reply instructions say “comment on KEY”. A remark such as “I left a comment on KEY” before the reply instructions does not move the reply.
+- “Open <KEY>” takes the viewer to the unique readable reply issue in the same workspace. A row without reply words or without a readable destination reads “Waiting on you”. It has an “Open issue” link and can expand to show the seat text. A destination key the viewer cannot read is masked.
+- For a review, the Needs you loader resolves the run's `OWNER/REPO#NUMBER` against repositories the viewer can access in the issue's project, using the matched repository's host and provider. A unique authorized destination provides a separate “Open pull request” link.
+- **All work** shows all eligible rows. **My work** keeps those where the viewer is the named person, owns the row's seat, or is the issue's assignee. `due` rows are the viewer's own in both and link to the issue.
 - Only `due` rows are held to the active-project rule. A seat that asks, or a run that is lost, is itself the sign that the project is being worked on.
-- The shell takes the selected chip from the request. The All link omits `kind`; Questions, Reviews, Failed runs and Due set it to `question`, `review`, `failed` or `due`. Each link keeps `scope` and shows its exact count. Under the rows: "Showing 20 of N" when there are more.
-- A `question` row opens in place with the seat's next step and a text field. Sending posts a comment through the existing issue comment route, with that route's own checks. Empty text is refused in the row. After a successful send the page reloads its rows and counts, and the panel names the seat that will pick the reply up, if it still holds the issue.
+- `waitingSeats` ignores the scope. It covers every seat row the viewer may read, including in My work, so a seat waiting on somebody else still appears as waiting.
+- The shell takes the selected chip from the request. The All link omits `kind`. From seats, Reviews, Failed runs and Due set it to `question`, `review`, `failed` or `due`. Each link keeps `scope` and shows its exact count. Under the rows, “Showing 20 of N” appears when there are more.
+
 - Only viewers with the permission to assign issues see "Session has stopped: clear run", the label the issue page already uses. A missed lease alone does not prove that the old process stopped, and clearing lets another session take the issue. So pressing the button first asks, in the row, for the person's confirmation that they checked the session is gone; only then is `POST /api/issues/:issueId/runs/:runId/clear` called. The route checks the permission and the run's state again. On success the page reloads its rows and counts.
-- The mockup shows two suggested answers per question and a one-press "Retry run". Seats do not record suggestions, and a lost run needs the confirmation above, so neither is built.
 
 ### Agents now
 
@@ -153,9 +157,14 @@ type NeedsYouItem = {
   seat: { id: string; name: string } | null;   // the assigned seat for questions and reviews, the run's seat for failed, null for due
   since: string;              // ISO: run end for questions and reviews, leaseUntil (or startedAt) for failed, the due date for due
   text: string | null;        // the run's next step, for `question` and `review`
+  question: string | null;    // the seat's plain comment, or the run's next step
+  ask: 'here' | 'elsewhere' | 'none';
+  replyOn: { id: string; issueKey: string } | null; // the readable destination for 'elsewhere'
+  options: string[];          // reply words in written order
+  suggested: string | null;   // an option explicitly recommended by the seat
   pullRequestUrl: string | null;
   runId: string | null;       // for `failed`
-  canAct: boolean;            // may answer (question) or may clear the run (failed); false for review and due
+  canAct: boolean;            // may answer here or clear a failed run
 };
 type NeedsYouOverview = Panel<{
   generatedAt: string;
@@ -211,7 +220,7 @@ In wave 1, the list and the projects issue are handed out first. Each issue is r
 
 ## Not in this work
 
-- Suggested answers for a seat's question, and a one-press retry of a lost run.
+- Structured question, reply options and destination fields recorded at run finish, sending an answer before pressing Send answer, and one-press retry of a lost run.
 - A merge button, or anything else that writes to a Git provider.
 - Refreshing repository data, deployment events, and the state of runners.
 - Charts beyond the one line per project.

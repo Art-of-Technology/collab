@@ -76,6 +76,127 @@ async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finish
   return run;
 }
 
+const seatComment = (issueId, content, data = {}) => raw.issueComment.create({ data: {
+  issueId, content, authorId: 'seat-user', createdAt: date(-2), ...data,
+} });
+
+test("the question is the seat's own last comment since its run ended, and nobody else's", async () => {
+  await waiting('current');
+  await waiting('fallback');
+  await waiting('read-denied', { statusId: 'foreign-status' });
+  const question = '<strong>Check the result</strong> ' + 'x'.repeat(2000) + '\nExpected reply: `yes`.';
+  await seatComment('current', 'Earlier request', { id: 'earlier', createdAt: date(-3) });
+  await seatComment('current', 'Same time, older comment', { id: 'first' });
+  await seatComment('current', question, { id: 'last' });
+  await seatComment('current', 'Somebody else at the cutoff', { id: 'newest', authorId: 'other' });
+  // Seats write their question seconds before the run ends; the run started at date(-2.5).
+  await waiting('before-end');
+  await seatComment('before-end', 'Asked during the run. Reply `ship` (recommended) or `hold`.', { createdAt: new Date(date(-2).getTime() - 5000) });
+  await seatComment('before-end', 'Somebody else during the run', { authorId: 'other', createdAt: date(-2.2) });
+  await seatComment('fallback', 'Reply `stale`.', { createdAt: date(-3) });
+  await seatComment('read-denied', 'Reply `private`.');
+  const { items } = await read();
+  assert.deepEqual(Object.fromEntries(items.map(row => [row.issue.id, row.question])), {
+    current: question.slice(0, 2000), fallback: 'Read the result.',
+    'before-end': 'Asked during the run. Reply `ship` (recommended) or `hold`.',
+  });
+  assert.deepEqual(items.find(row => row.issue.id === 'before-end').options, ['ship', 'hold']);
+  assert.deepEqual(items.find(row => row.issue.id === 'current').options, ['yes']);
+  await seatComment('current', 'Later reply by somebody else', { authorId: 'other', createdAt: date(-1) });
+  assert.deepEqual((await read()).items.map(row => row.issue.id).sort(), ['before-end', 'fallback']);
+});
+
+test('a row is a question only when that comment has reply words; otherwise it waits on the person', async () => {
+  await waiting('no-comment', { days: -6 });
+  await waiting('note', { days: -5 });
+  await waiting('real-question', { days: -3 });
+  await waiting('real-review', { days: -4, pullRequest: 'team/repo#7' });
+  await seatComment('note', 'No new assignment. The next slice follows the agreed order.');
+  await seatComment('real-question', 'Expected reply after the check: `CLB-938 used`.');
+  await seatComment('real-review', 'Reply `yes` or `wait`.');
+  const result = await read();
+  assert.deepEqual(result.items.map(row => [row.issue.id, row.ask, row.canAct]), [
+    ['real-review', 'here', true], ['real-question', 'here', true],
+    ['no-comment', 'none', false], ['note', 'none', false],
+  ]);
+  assert.deepEqual(result.oldestQuestion, { seatName: 'Developer', since: date(-4).toISOString() });
+  assert.deepEqual(result.counts, { question: 3, review: 1, failed: 0, due: 0 });
+});
+
+test('a reply that belongs on another issue names that issue, and only one the viewer may read', async () => {
+  await issue('visible-target', { issueKey: 'ADS-52', projectId: 'dormant' });
+  await issue('hidden-target', { issueKey: 'CLB-933', statusId: 'foreign-status' });
+  await issue('foreign-target', { issueKey: 'FOR-5', workspaceId: 'foreign', projectId: 'foreign-project' });
+  await issue('trashed-target', { issueKey: 'CLB-15', deletedAt: date(-1) });
+  const destinations = [
+    ['visible', 'Reply on ADS-52 with `yes`.'],
+    ['hidden', 'Give `CLB-933 used` as a comment on CLB-933.'],
+    ['foreign', 'Reply on FOR-5 with `yes`.'],
+    ['trashed', 'Reply on `CLB-15` with `yes`.'],
+    ['missing', 'Comment `yes` on CLB-12.\nExpected reply: `yes`.'],
+    ['ambiguous', 'Reply on ADS-52 or CLB-933 with `yes`.'],
+    ['own', 'Reply on CLB-20 with `yes`.'],
+    ['aside', 'I left a comment on ADS-52 about the schema.\nReply `yes` to merge this pull request, or `wait`.'],
+    ['in-reply', 'Please decide.\nReply with `yes` or `wait` in a comment on ADS-52.'],
+  ];
+  for (const [id, content] of destinations) {
+    await waiting(id, { issueKey: id === 'own' ? 'CLB-20' : id.toUpperCase() });
+    await seatComment(id, content);
+  }
+  const rows = new Map((await read()).items.map(row => [row.issue.id, row]));
+  assert.equal(rows.get('visible').ask, 'elsewhere');
+  assert.equal(rows.get('visible').canAct, false);
+  assert.deepEqual(rows.get('visible').replyOn, { id: 'visible-target', issueKey: 'ADS-52' });
+  assert.equal(rows.get('own').ask, 'here');
+  assert.equal(rows.get('aside').ask, 'here');
+  assert.equal(rows.get('aside').replyOn, null);
+  assert.deepEqual(rows.get('aside').options, ['yes', 'wait']);
+  assert.deepEqual(rows.get('in-reply').replyOn, { id: 'visible-target', issueKey: 'ADS-52' });
+  for (const [id, key] of [['hidden', 'CLB-933'], ['foreign', 'FOR-5'], ['trashed', 'CLB-15'], ['missing', 'CLB-12'],
+    ['ambiguous', 'CLB-933']]) {
+    const row = rows.get(id);
+    assert.equal(row.ask, 'none', id);
+    assert.equal(row.replyOn, null, id);
+    assert.deepEqual(row.options, [], id);
+    assert.ok(!JSON.stringify(row).includes(key), id);
+  }
+});
+
+test('reply words in backticks become options, at most four, and a bare key or a path does not', async () => {
+  await waiting('options');
+  await seatComment('options', [
+    'Compare the `background` before choosing.',
+    'Expected reply: `CLB-933`, `src/lib/dashboard/needs-you.ts`, `src\\file.ts`, `f2343285`, `' + 'x'.repeat(41) + '`.',
+    '`CLB-938 used`, `CLB-938 used`, `yes`, `no`, `later`, or `extra`.',
+  ].join('\n'));
+  assert.deepEqual((await read()).items[0].options, ['CLB-938 used', 'yes', 'no', 'later']);
+});
+
+test('the reply word the seat marked as recommended or suggested is the suggested answer', async () => {
+  await waiting('listed');
+  await waiting('inline');
+  await waiting('none');
+  await waiting('bare-list');
+  await seatComment('bare-list', 'Please choose.\n1. `wait`\n\n2. `go` (suggested)');
+  await seatComment('listed', [
+    'Please choose how to resolve the contract gap.',
+    '',
+    '1. **classify** (recommended, 2 minutes). Reply `classify` to approve expanding the work card.',
+    '2. **revise** (2 minutes). Reply `revise` to approve revising contract 4.',
+    '',
+    'The next developer session can take the selected path.',
+  ].join('\n'));
+  await seatComment('inline', 'Reply `revise` or `classify` (suggested).');
+  await seatComment('none', 'Expected reply after the check: `CLB-938 used`.');
+  const rows = Object.fromEntries((await read()).items.map(row => [row.issue.id, [row.options, row.suggested]]));
+  assert.deepEqual(rows, {
+    listed: [['classify', 'revise'], 'classify'],
+    inline: [['revise', 'classify'], 'classify'],
+    none: [['CLB-938 used'], null],
+    'bare-list': [['wait', 'go'], 'go'],
+  });
+});
+
 function failed(id, { assigneeId, leaseUntil = date(-1), state = 'running', ...data } = {}) {
   return issue(id, { assigneeId, ...data, agentRuns: { create: {
     id: `run-${id}`, workspaceId: 'work', userId: 'other-seat-user', seatId: 'other-seat',
@@ -151,6 +272,7 @@ test("My work keeps rows that name the viewer, the viewer's seats or the viewer'
 
 test('the chosen kind is applied before the 20 rows are taken, and counts stay exact', async () => {
   for (let i = 0; i < 21; i++) await waiting(`question-${i}`, { days: -30 + i });
+  await seatComment('question-0', 'Reply `yes`.');
   await waiting('review', { pullRequest: 'team/repo#7' });
   await failed('lease-expired', { projectId: 'dormant' });
   await failed('state-lost', { state: 'lost', leaseUntil: null, projectId: 'dormant' });
@@ -191,7 +313,9 @@ test('canAct follows the permissions the comment and clear routes check', async 
   const grant = permission => raw.rolePermission.create({ data: { workspaceId: 'work', role: 'VIEWER', permission } });
   await grant('VIEW_TASKS');
   await waiting('legacy-question');
+  await seatComment('legacy-question', 'Reply `yes`.');
   await waiting('forge-question', { projectId: 'dormant', assigneeId: 'other-seat-user' });
+  await seatComment('forge-question', 'Reply `yes`.', { authorId: 'other-seat-user' });
   await waiting('review', { pullRequest: 'team/repo#7' });
   await failed('lost-run');
   await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
@@ -219,8 +343,8 @@ test('canAct follows the permissions the comment and clear routes check', async 
     const openIssue = [['a', 'Open issue']];
     assert.deepEqual(controls, {
       'legacy-question': [['button', 'Answer']],
-      'forge-question': openIssue,
-      review: openIssue,
+      'forge-question': [['a', 'Open issue'], ['button', 'Show details']],
+      review: [['a', 'Open issue'], ['button', 'Show details']],
       'lost-run': canAssign ? [['button', 'Session has stopped: clear run']] : openIssue,
       'due-item': openIssue,
     });
@@ -236,6 +360,7 @@ test('canAct follows the permissions the comment and clear routes check', async 
     issue: { id: 'legacy-question', issueKey: 'LEGACY-QUESTION', title: 'legacy-question',
       project: { id: 'project', slug: 'release', name: 'Release', color: null } },
     seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: null, canAct: true,
+    question: 'Reply `yes`.', ask: 'here', replyOn: null, options: ['yes'], suggested: null,
   });
 });
 

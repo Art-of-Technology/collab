@@ -71,6 +71,11 @@ export type NeedsYouItem = {
   seat: { id: string; name: string } | null;
   since: string; // Run end for questions and reviews, lease or start for failed runs, due date for due issues.
   text: string | null;
+  question: string | null;
+  ask: 'here' | 'elsewhere' | 'none';
+  replyOn: { id: string; issueKey: string } | null;
+  options: string[];
+  suggested: string | null;
   pullRequestUrl: string | null;
   runId: string | null;
   canAct: boolean;
