@@ -471,4 +471,30 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     await raw.issue.update({ where: { id: c1.id }, data: { statusId: `${B}-done` } });
     assert.deepEqual(await back(), [[two.issueKey, 'other_child_done']]);
   });
+
+  await t.test('a sibling completion outranks a reply and yields to a child the lead can move (CLB-1179)', async () => {
+    const full = await seat('full-b', B), available = await seat('available-b', B);
+    const [waiting, placed] = await epicOf(B, leadB), [, sibling] = await epicOf(B, leadB, 1);
+    await waits(leadB, waiting, full, placed);
+    const waitingItem = async () => {
+      const reply = await send(inboxRoute.GET, leadB.token, 'GET');
+      assert.equal(reply.status, 200);
+      return reply.body.items.find(entry => entry.issueKey === waiting.issueKey);
+    };
+
+    const comment = await send(comments.POST, personToken, 'POST', { body: { content: 'Ready to continue' }, params: { issueIdOrKey: waiting.issueKey } });
+    assert.equal(comment.status, 201);
+    assert.equal((await waitingItem()).reason, 'reply');
+    await raw.issue.update({ where: { id: sibling.id }, data: { statusId: `${B}-done` } });
+    const completed = await waitingItem();
+    assert.equal(completed.reason, 'other_child_done');
+    assert.equal('noRoom' in completed, false);
+
+    await raw.agentSeat.update({ where: { id: full.id }, data: { byRunner: true, ownerId: owner, createdAt: ago(10) } });
+    await raw.agentRunner.create({ data: { workspaceId: 'w', ownerId: person, name: 'available', credentialHash: 'available', admittedAt: new Date(), lastSeenAt: new Date() } });
+    await raw.agentSeat.update({ where: { id: available.id }, data: { byRunner: true, room: 50, roomAt: new Date() } });
+    const movable = await waitingItem();
+    assert.equal(movable.reason, 'child_no_room');
+    assert.deepEqual(movable.noRoom, [{ issueKey: placed.issueKey, seat: full.name, reason: 'no runner is connected' }]);
+  });
 });
