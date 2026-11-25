@@ -21,7 +21,7 @@ const ui = {
   'next/link': { default: ({ href, children }) => React.createElement('a', { href }, children) },
   'lucide-react': new Proxy({}, { get: () => () => null }),
   '@/components/ui/button': { Button },
-  '@/components/ui/badge': { Badge: plain('span') },
+  '@/components/ui/badge': { Badge: ({ title, children }) => React.createElement('span', { title }, children) },
   '@/components/ui/user-avatar': { UserAvatar: () => null },
   '@/components/ui/custom-avatar': { CustomAvatar: () => null },
   // The shared select, as a native one named by its trigger.
@@ -126,6 +126,34 @@ test("a row the viewer may act on has a role select with exactly the roles the v
     assert.equal(status(), 'Only an Owner can grant the Admin role');
     assert.equal(document.querySelector('[aria-label="Role of Robin Lee"]').value, 'ADMIN', 'a refused change keeps the row as it was');
   } finally { answer = { ok: true, json: async () => ({}) }; await React.act(async () => root.unmount()); }
+});
+
+test('editable rows select the stored built-in or exact custom role', async () => {
+  const members = [
+    person('sam', 'Sam Roe', 'owner', 'OWNER', { mayAct: true }),
+    person('pat', 'Pat Jones', 'Support Team', 'STANDARD', { mayAct: true }),
+  ];
+  const root = await render(workspace({ members, viewerLevel: 'PRIMARY_OWNER', rolesViewerMayGrant: ['MEMBER', 'OWNER', 'Support Team'] }));
+  try {
+    assert.equal(row('Sam Roe').querySelector('select').selectedOptions[0].textContent, 'Owner');
+    assert.equal(row('Pat Jones').querySelector('select').value, 'Support Team');
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('active read-only and inactive badges expose their full role label on hover', async () => {
+  const role = 'International Customer Support and Escalations Coordinator';
+  const members = [
+    person('sam', 'Sam Roe', role, 'STANDARD'),
+    person('pat', 'Pat Jones', role, 'STANDARD', { status: false, mayAct: true }),
+  ];
+  const root = await render(workspace({ members }));
+  try {
+    for (const [name, label] of [['Sam Roe', role], ['Pat Jones', `Inactive · ${role}`]]) {
+      const badge = row(name).querySelector('[title]');
+      assert.equal(badge?.title, label);
+      assert.equal(badge.textContent, label);
+    }
+  } finally { await React.act(async () => root.unmount()); }
 });
 
 test('the row menu switches a member on or off and removes one after an inline confirmation', async () => {

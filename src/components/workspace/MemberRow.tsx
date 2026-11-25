@@ -9,13 +9,14 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WorkspaceRole, getRoleDisplayName } from "@/lib/permission-types";
+import type { WorkspaceLevel } from "@/lib/workspace-authority";
 import { removeWorkspaceMember } from "@/actions/workspace";
 
 export interface MemberRowMember {
   id: string;
   role: string;
   status: boolean;
-  level: "PRIMARY_OWNER" | "OWNER" | "ADMIN" | "STANDARD";
+  level: WorkspaceLevel;
   agent: boolean;
   mayAct: boolean;
   user: { id: string; name: string | null; email: string | null; useCustomAvatar?: boolean } & Record<string, unknown>;
@@ -41,11 +42,16 @@ interface MemberRowProps {
   readonly onMessage: (message: string) => void;
 }
 
+function builtInRole(role: string): WorkspaceRole | undefined {
+  const name = role.toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(WorkspaceRole, name)) return name as WorkspaceRole;
+}
+
 /** A role's display name: built-in roles in any letter case by their name, custom roles as written. */
 export function roleName(role: string): string {
-  const name = role.toUpperCase();
-  if (!Object.prototype.hasOwnProperty.call(WorkspaceRole, name)) return role;
-  return name === WorkspaceRole.ADMIN ? "Admin" : getRoleDisplayName(name as WorkspaceRole);
+  const name = builtInRole(role);
+  if (!name) return role;
+  return name === WorkspaceRole.ADMIN ? "Admin" : getRoleDisplayName(name);
 }
 
 async function refusal(response: Response, fallback: string) {
@@ -118,16 +124,21 @@ export default function MemberRow({
   let role: React.ReactNode;
   if (primaryOwner) role = <Badge className="bg-blue-500 text-white h-5 px-2 text-xs">Primary owner</Badge>;
   else if (member.agent) role = <Badge variant="outline" className="h-5 px-2 text-xs text-collab-500">no role</Badge>;
-  else if (!member.status) role = <Badge variant="outline" className="h-5 px-2 text-xs text-collab-500">Inactive · {roleName(member.role)}</Badge>;
-  else if (editsRole) role = (
-    <Select value={member.role} onValueChange={changeRole} disabled={busy}>
+  else if (!member.status) {
+    const label = `Inactive · ${roleName(member.role)}`;
+    role = <Badge variant="outline" title={label} className="min-w-0 h-5 px-2 text-xs text-collab-500"><span className="truncate">{label}</span></Badge>;
+  } else if (editsRole) role = (
+    <Select value={builtInRole(member.role) ?? member.role} onValueChange={changeRole} disabled={busy}>
       <SelectTrigger aria-label={`Role of ${name}`} className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
       <SelectContent>
         {rolesViewerMayGrant.map((grant) => <SelectItem key={grant} value={grant}>{roleName(grant)}</SelectItem>)}
       </SelectContent>
     </Select>
   );
-  else role = <Badge variant="outline" className="h-5 px-2 text-xs">{roleName(member.role)}</Badge>;
+  else {
+    const label = roleName(member.role);
+    role = <Badge variant="outline" title={label} className="min-w-0 h-5 px-2 text-xs"><span className="truncate">{label}</span></Badge>;
+  }
 
   return (
     <div onKeyDown={(event) => { if (event.key === "Escape" && open) { onOpen(false); menuRef.current?.focus(); } }}>
@@ -152,7 +163,7 @@ export default function MemberRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 ml-auto whitespace-nowrap">
+        <div className="flex items-center gap-2 ml-auto whitespace-nowrap max-w-full min-w-0">
           {role}
           {hasMenu && (
             <Button ref={menuRef} variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={`More actions for ${name}`} aria-expanded={open}
