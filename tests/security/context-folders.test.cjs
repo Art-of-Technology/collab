@@ -12,7 +12,8 @@ function fixture(userId = 'alice') {
     { id: 'project', workspaceId: 'joined', workspace },
     { id: 'other-workspace-project', workspaceId: 'foreign', workspace: ws[1] },
   ];
-  const state = { writes: 0, created: 0, transactions: 0 };
+  const state = { writes: 0, created: 0, transactions: 0, authorityReads: { global: 0, transaction: 0 } };
+  const platformAdmins = [];
   const folders = [];
   function addFolder(id, fields = {}) {
     const row = {
@@ -44,11 +45,21 @@ function fixture(userId = 'alice') {
     return row;
   }
   const files = [];
+  const findWorkspace = async ({ where }) => ws.find(item => item.id === where.id) ?? null;
+  const findUser = async ({ where, select }) => ({ id: where.id, role: platformAdmins.includes(where.id) ? 'SYSTEM_ADMIN' : 'USER',
+    workspaceMemberships: ws.flatMap(item => item.members.map(member => ({ ...member, workspaceId: item.id })))
+      .filter(member => member.userId === where.id && matches(member, select?.workspaceMemberships?.where ?? {})) });
+  // The authority's reads, counted per client: the global one, or the transaction's own.
+  const authorityRead = (client, read) => args => { state.authorityReads[client]++; return read(args); };
   const db = {
     // Every rule that reads the tree before writing to it does both in one transaction.
-    $transaction: async (work) => { state.transactions++; return work(db); },
-    workspace: { findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null },
-    user: { findUnique: async () => ({ id: userId }) },
+    $transaction: async (work) => { state.transactions++; return work(transaction); },
+    workspace: {
+      findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null,
+      findUnique: authorityRead('global', findWorkspace),
+    },
+    // The authority module reads the caller's platform role and active memberships.
+    user: { findUnique: authorityRead('global', findUser) },
     project: {
       findFirst: async ({ where }) => projects.find(item => matches(item, where)) ?? null,
       findUnique: async ({ where }) => projects.find(item => matches(item, where)) ?? null,
@@ -83,6 +94,11 @@ function fixture(userId = 'alice') {
       },
     },
   };
+  // The transaction's own client: the same rows as the global one.
+  const transaction = Object.assign(Object.create(db), {
+    workspace: { ...db.workspace, findUnique: authorityRead('transaction', findWorkspace) },
+    user: { findUnique: authorityRead('transaction', findUser) },
+  });
   const dependencies = {
     'next/server': { NextResponse: Response },
     'next-auth': { getServerSession: async () => ({ user: { id: userId } }) },
@@ -104,7 +120,7 @@ function fixture(userId = 'alice') {
     }),
     { params: Promise.resolve({ id }) },
   );
-  return { ws, projects, folders, notes, files, state, addFolder, addNote, call };
+  return { ws, projects, folders, notes, files, state, platformAdmins, addFolder, addNote, call };
 }
 
 const LIST = 'src/app/api/context/folders/route.ts';
@@ -193,6 +209,42 @@ test('a folder is renamed and moved, but never into itself or into one of its ow
   stranger.ws[0].ownerId = 'dave';
   assert.equal((await stranger.call(ONE, 'PATCH', { id: theirs.id, body: { name: 'Mine' } })).status, 403);
   assert.equal(theirs.name, 'theirs');
+});
+
+test('a folder or file of someone else is changed by an Admin and above, and by nobody below', async () => {
+  // olivia is the workspace's primary owner; carol wrote the folder.
+  const join = (user, role, { status = true, platformAdmin = false } = {}) => {
+    const f = fixture(user);
+    f.ws[0].ownerId = 'olivia';
+    if (role) f.ws[0].members.push({ userId: user, status, role });
+    if (platformAdmin) f.platformAdmins.push(user);
+    return { f, folder: f.addFolder('theirs', { createdById: 'carol' }) };
+  };
+  for (const [user, role] of [['adam', 'ADMIN'], ['adal', 'admin'], ['otto', 'OWNER'], ['ola', 'Owner'], ['olivia', null], ['olivia', 'MEMBER']]) {
+    const { f, folder } = join(user, role);
+    assert.equal((await f.call(ONE, 'PATCH', { id: folder.id, body: { name: 'Tidied' } })).status, 200, `${user} renames`);
+    assert.equal(folder.name, 'Tidied', user);
+    assert.equal((await f.call(ONE, 'DELETE', { id: folder.id })).status, 200, `${user} deletes`);
+    assert.equal((await f.call(RESTORE, 'POST', { id: folder.id })).status, 200, `${user} restores`);
+    assert.equal(folder.deletedAt, null, user);
+  }
+  // A non-author's level is read on the transaction's own connection, never a second one from the pool.
+  const { f: reads, folder: read } = join('adam', 'ADMIN');
+  assert.equal((await reads.call(ONE, 'PATCH', { id: read.id, body: { name: 'Tidied' } })).status, 200);
+  assert.deepEqual(reads.state.authorityReads, { global: 0, transaction: 2 });
+
+  // A standard role, custom ones and a platform admin's included, is refused; a switched-off Admin and a
+  // platform admin who is not a member do not reach the folder at all.
+  for (const [user, role, expected, options] of [['sam', 'MEMBER', 403], ['dev', 'Developer', 403],
+    ['padm', 'MEMBER', 403, { platformAdmin: true }], ['off', 'ADMIN', 404, { status: false }], ['root', null, 404, { platformAdmin: true }]]) {
+    const { f, folder } = join(user, role, options);
+    assert.equal((await f.call(ONE, 'PATCH', { id: folder.id, body: { name: 'Mine' } })).status, expected, `${user} renames`);
+    assert.equal((await f.call(ONE, 'DELETE', { id: folder.id })).status, expected, `${user} deletes`);
+    Object.assign(folder, { deletedAt: new Date(), deletedById: 'carol' });
+    assert.equal((await f.call(RESTORE, 'POST', { id: folder.id })).status, expected, `${user} restores`);
+    assert.equal(folder.name, 'theirs', user);
+    assert.equal(f.state.writes, 0, user);
+  }
 });
 
 test('deleting a folder that is not empty asks first, then takes its contents to Trash and back', async () => {

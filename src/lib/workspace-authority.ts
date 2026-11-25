@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
 /**
@@ -66,10 +67,14 @@ export function levelOfRole(role: string): "OWNER" | "ADMIN" | "STANDARD" {
  * Who the user is in the workspace. The workspace's `ownerId` is the primary
  * owner whatever its membership row says. Null for anyone without access.
  */
-export async function getWorkspaceAuthority(userId: string, workspaceId: string): Promise<WorkspaceAuthority | null> {
+export async function getWorkspaceAuthority(
+  userId: string,
+  workspaceId: string,
+  db: Pick<Prisma.TransactionClient | typeof prisma, "workspace" | "user"> = prisma,
+): Promise<WorkspaceAuthority | null> {
   const [workspace, user] = await Promise.all([
-    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
-    prisma.user.findUnique({
+    db.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
+    db.user.findUnique({
       where: { id: userId },
       select: { role: true, workspaceMemberships: { where: { workspaceId, status: true }, select: { role: true } } },
     }),

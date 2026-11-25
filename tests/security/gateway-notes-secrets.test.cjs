@@ -28,7 +28,12 @@ function fixture([path, method]) {
     workspace: { findFirst: async args => {
       record('workspace-read', args); const row = { id: 'workspace', ownerId: state.owner, members: [] };
       return matches(row, args.where) ? row : null;
+    }, findUnique: async args => {
+      record('workspace-read', args); const row = { id: 'workspace', ownerId: state.owner };
+      return matches(row, args.where) ? row : null;
     } },
+    // The authority module's other read: the caller has no membership row in this fixture.
+    user: { findUnique: async args => { record('workspace-read', args); return { role: 'USER', workspaceMemberships: [] }; } },
     workspaceMember: { findUnique: async args => { record('member-read', args); return null; } },
     noteActivityLog: {
       create: async args => { record('audit-create', args); return { id: 'log', ...args.data }; },
@@ -65,7 +70,8 @@ function fixture([path, method]) {
     const response = await invoke(); assert.equal(response.status, 200); const result = await response.json();
     if (path === 'audit-log') {
       assert.equal(result.total, 1); assert.equal(result.hasMore, false); assert.equal(result.logs[0].user.id, actor);
-      assert.equal(state.effects.find(([name]) => name === 'member-read')[1].where.userId_workspaceId.userId, actor);
+      // The level is read for the mapped actor, not for anyone the session layer replaced.
+      assert.ok(state.effects.some(([name, args]) => name === 'workspace-read' && args.where.id === actor && args.select?.workspaceMemberships));
     } else {
       const audit = state.effects.find(([name]) => name === 'audit-create')[1].data;
       assert.equal(audit.noteId, 'note'); assert.equal(audit.userId, actor); assert.equal(audit.action, path.toUpperCase());

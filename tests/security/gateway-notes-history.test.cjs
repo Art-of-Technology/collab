@@ -31,7 +31,12 @@ function fixture([path, method]) {
     workspace: { findFirst: async args => {
       record('workspace-read', args); const row = { id: 'workspace', ownerId: state.owner, members: [] };
       return matches(row, args.where) ? row : null;
+    }, findUnique: async args => {
+      record('workspace-read', args); const row = { id: 'workspace', ownerId: state.owner };
+      return matches(row, args.where) ? row : null;
     } },
+    // The authority module's other read: the caller has no membership row in this fixture.
+    user: { findUnique: async args => { record('workspace-read', args); return { role: 'USER', workspaceMemberships: [] }; } },
     note: {
       findUnique: async args => { record('note-read', args); return matches(note(), args.where) ? note() : null; },
       findFirst: async args => { record('note-read', args); return matches(note(), args.where) ? note() : null; },

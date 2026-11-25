@@ -19,6 +19,7 @@ function fixture(userId = 'alice', environment = STORE, logger = console) {
     { id: 'foreign', slug: 'foreign', ownerId: 'bob', members: [] },
   ];
   const state = { writes: 0, created: 0, transactions: 0, failCreate: null, failUpload: false };
+  const platformAdmins = [];
   const folders = [];
   function addFolder(id, fields = {}) {
     const row = {
@@ -57,7 +58,14 @@ function fixture(userId = 'alice', environment = STORE, logger = console) {
 
   const db = {
     $transaction: async (work) => { state.transactions++; return work(db); },
-    workspace: { findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null },
+    workspace: {
+      findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null,
+      findUnique: async ({ where }) => ws.find(item => item.id === where.id) ?? null,
+    },
+    // The authority module reads the caller's platform role and active memberships.
+    user: { findUnique: async ({ where, select }) => ({ id: where.id, role: platformAdmins.includes(where.id) ? 'SYSTEM_ADMIN' : 'USER',
+      workspaceMemberships: ws.flatMap(item => item.members.map(member => ({ ...member, workspaceId: item.id })))
+        .filter(member => member.userId === where.id && matches(member, select?.workspaceMemberships?.where ?? {})) }) },
     contextFolder: { findFirst: async ({ where }) => folders.find(item => matches(item, where)) ?? null },
     contextFile: {
       findFirst: async args => { const row = files.find(item => matches(item, args.where)); return row ? projectFile(row, args) : null; },
@@ -132,7 +140,7 @@ function fixture(userId = 'alice', environment = STORE, logger = console) {
     if (length) headers['content-length'] = String(declared ?? raw.length);
     return call(FILES, 'POST', { raw, headers });
   }
-  return { ws, folders, files, state, addFolder, addFile, call, upload, stored, requests, fetched };
+  return { ws, folders, files, state, platformAdmins, addFolder, addFile, call, upload, stored, requests, fetched };
 }
 
 const FILES = 'src/app/api/context/files/route.ts';
@@ -329,6 +337,38 @@ test('a file is renamed, moved and sent to Trash by whoever put it there', async
   admin.addFolder('ideation');
   const managed = admin.addFile('managed', { uploadedById: 'alice' });
   assert.equal((await admin.call(ONE, 'PATCH', { id: managed.id, body: { name: 'tidied.pdf' } })).status, 200);
+});
+
+test('a folder or file of someone else is changed by an Admin and above, and by nobody below', async () => {
+  // olivia is the workspace's primary owner; alice put the file there.
+  const join = (user, role, { status = true, platformAdmin = false } = {}) => {
+    const f = fixture(user);
+    f.ws[0].ownerId = 'olivia';
+    if (role) f.ws[0].members.push({ userId: user, status, role });
+    if (platformAdmin) f.platformAdmins.push(user);
+    f.addFolder('ideation');
+    return { f, file: f.addFile('theirs', { uploadedById: 'alice' }) };
+  };
+  for (const [user, role] of [['adam', 'ADMIN'], ['adal', 'admin'], ['otto', 'OWNER'], ['ola', 'Owner'], ['olivia', null], ['olivia', 'MEMBER']]) {
+    const { f, file } = join(user, role);
+    assert.equal((await f.call(ONE, 'PATCH', { id: file.id, body: { name: 'tidied.pdf' } })).status, 200, `${user} renames`);
+    assert.equal(file.name, 'tidied.pdf', user);
+    assert.equal((await f.call(ONE, 'DELETE', { id: file.id })).status, 200, `${user} deletes`);
+    assert.equal((await f.call(RESTORE, 'POST', { id: file.id })).status, 200, `${user} restores`);
+    assert.equal(file.deletedAt, null, user);
+  }
+  // A standard role, custom ones and a platform admin's included, is refused; a switched-off Admin and a
+  // platform admin who is not a member do not reach the file at all.
+  for (const [user, role, expected, options] of [['sam', 'MEMBER', 403], ['dev', 'Developer', 403],
+    ['padm', 'MEMBER', 403, { platformAdmin: true }], ['off', 'ADMIN', 404, { status: false }], ['root', null, 404, { platformAdmin: true }]]) {
+    const { f, file } = join(user, role, options);
+    assert.equal((await f.call(ONE, 'PATCH', { id: file.id, body: { name: 'mine.pdf' } })).status, expected, `${user} renames`);
+    assert.equal((await f.call(ONE, 'DELETE', { id: file.id })).status, expected, `${user} deletes`);
+    Object.assign(file, { deletedAt: new Date(), deletedById: 'alice' });
+    assert.equal((await f.call(RESTORE, 'POST', { id: file.id })).status, expected, `${user} restores`);
+    assert.equal(file.name, 'theirs', user);
+    assert.equal(f.state.writes, 0, user);
+  }
 });
 
 test('a file in Trash is out of the folder until it is restored, and so is one whose folder went', async () => {

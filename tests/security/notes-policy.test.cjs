@@ -89,14 +89,10 @@ test('note authorization resolves project workspace and requires active membersh
   for (const workspace of workspaces) {
     const db = {
       note: { findUnique: async () => ({ ...note, workspaceId: null, projectId: 'project', project: { workspaceId: workspace.id } }) },
-      workspace: { findFirst: async ({ where, select }) => {
-        if (!matchesWorkspace(workspace, where)) return null;
-        return {
-          ownerId: workspace.ownerId,
-          members: workspace.members.filter(member => member.userId === select.members.where.userId &&
-            (!select.members.where.status || member.status)).map(() => ({ role: 'MEMBER' })),
-        };
-      } },
+      // The authority module's reads: the workspace's owner, and the caller's active memberships.
+      workspace: { findUnique: async ({ where }) => (where.id === workspace.id ? { ownerId: workspace.ownerId } : null) },
+      user: { findUnique: async ({ where }) => ({ role: 'USER',
+        workspaceMemberships: workspace.members.filter(member => member.userId === where.id && member.status).map(() => ({ role: 'MEMBER' })) }) },
     };
     const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess } });
     assert.equal((await canAccessNote('alice', 'note')).canAccess, ['own', 'joined'].includes(workspace.id));
@@ -127,7 +123,8 @@ test('collection predicates match the single-note read policy across scope and m
     '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
   });
   for (const scope of Object.values(enums.NoteScope))
-  for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER'])
+  // A stored role in another letter case gives the same level in both reads.
+  for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER', 'admin'])
   for (const isRestricted of [false, true])
   for (const isEncrypted of [false, true])
   for (const authorId of ['alice', 'bob'])

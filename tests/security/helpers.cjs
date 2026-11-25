@@ -141,7 +141,8 @@ function matches(row, where) {
     if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
     if ('has' in value) return Array.isArray(actual) && actual.includes(value.has);
     if ('hasSome' in value) return Array.isArray(actual) && value.hasSome.some(item => actual.includes(item));
-    if ('in' in value) return value.in.includes(actual);
+    if ('in' in value) return value.mode === 'insensitive'
+      ? value.in.some(item => String(item).toLowerCase() === String(actual).toLowerCase()) : value.in.includes(actual);
     if ('notIn' in value) return !value.notIn.includes(actual);
     if ('not' in value) return actual !== value.not;
     if ('contains' in value) return typeof actual === 'string' && actual.toLowerCase().includes(value.contains.toLowerCase());
