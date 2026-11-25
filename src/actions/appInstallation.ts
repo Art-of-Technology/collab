@@ -36,15 +36,15 @@ export async function installApp(formData: FormData) {
 
     const { appSlug, workspaceId, scopes } = InstallAppSchema.parse(data);
 
-    // Log installation attempt
-    await logAppInstallAttempt(workspaceId, session.user.id, appSlug, { scopes });
-
     // Owners install apps. A platform admin, member or not, keeps the answer this action gave before.
     const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
     if (!authority?.platformAdmin && !may(authority, 'apps.manage')) {
       await logAppInstallFailed(workspaceId, session.user.id, appSlug, 'Insufficient permissions to install apps');
       throw new Error('Insufficient permissions. Only Owners can install apps.');
     }
+
+    // Log installation attempt, after the check as the install route does: a refused caller leaves only the failure.
+    await logAppInstallAttempt(workspaceId, session.user.id, appSlug, { scopes });
 
     // Get the app
     const app = await prisma.app.findUnique({

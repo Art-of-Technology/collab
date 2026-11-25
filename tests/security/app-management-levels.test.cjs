@@ -206,6 +206,7 @@ async function refused(path, actor) {
   assert.equal(f.snapshot(), before, `${why}: stored nothing`);
   assert.equal(f.state.sent.length, 0, `${why}: delivered nothing`);
   if (path.startsWith('install')) assert.ok(f.state.audit.some(([name]) => name === 'failed'), `${why}: the failure is still audited`);
+  if (path.startsWith('install')) assert.ok(!f.state.audit.some(([name]) => name === 'attempt'), `${why}: no attempt is recorded for a refused caller`);
 }
 
 test('an Owner and the primary owner install, uninstall and manage webhooks through the routes and the server actions; an Admin and a standard role are refused on each', async () => {
