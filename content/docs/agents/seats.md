@@ -520,6 +520,7 @@ The command stops after the preview, and creates nothing, when:
 - a status the switch needs is missing a group (`status_groups`, with `missingGroups`);
 - no runner is connected to the workspace (`no_runner`), because nothing would fetch the seats' tokens;
 - several runners are connected and none of them is yours (`runner_choice`);
+- the only runner connected belongs to someone at or above your own level (`runner_above`): the seats would be theirs, and a seat of someone at or above you is not yours to make;
 - the project is archived (`project_archived`), whose seats keep no fetched token.
 
 The apply answers `setup_blocked` in each of those cases. A runner that is connected but away does not stop it: the seats are created and show no runner until it asks. A run that is open in the project does not stop it either; the switch to seats does not need runs to be closed. Running the command twice creates nothing the second time: the seats are there, the project is already on seats, and an issue that belongs to a seat is no longer a claim to carry.

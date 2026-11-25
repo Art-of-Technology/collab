@@ -8,6 +8,7 @@ import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { issueAccessWhere } from '@/lib/issue-finder';
 import { Permission, checkUserPermission } from '@/lib/permissions';
+import { seatOwnerAccess } from '@/lib/workspace-authority';
 
 export { HandoffError };
 type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
@@ -20,6 +21,7 @@ const STOPS = {
   status_groups: 'Before this project uses seats, put a status in the in progress group and one in the done group: a run moves its issue there when it starts and when it is done',
   no_runner: "No runner is connected to this workspace, so nothing would fetch the seats' tokens. Start the pairing on the machine that runs the seats and type its code under Agents, Runners",
   runner_choice: 'Several runners are connected here and none of them is yours. Connect a runner for yourself, or create the seats in the web app',
+  runner_above: 'The only runner connected here belongs to someone at or above your own level, and the seats would be theirs. Connect a runner for yourself, or ask them to set the project up',
 } as const;
 
 export const setupSchema = z.object({
@@ -69,8 +71,10 @@ export async function seatSetupState(context: Caller, projectRef: string) {
   const missingGroups = state.mode === 'seats' ? []
     : (['in_progress', 'done'] as const).filter(group => !state.statuses.some(status => status.category === group));
   const missing = seats.filter(seat => !seat.exists);
+  // The seats would be the runner's person's, and someone else's seat follows the rank rule (CLB-1185): the apply would refuse.
+  const above = !!missing.length && !!runner && (await seatOwnerAccess(context.user.id, workspaceId, [runner.ownerId]))(runner.ownerId) === 'refused';
   const blocked = project.isArchived ? 'project_archived' : missingGroups.length ? 'status_groups'
-    : !missing.length || runner ? null : runners.length ? 'runner_choice' : 'no_runner';
+    : !missing.length ? null : !runner ? runners.length ? 'runner_choice' : 'no_runner' : above ? 'runner_above' : null;
 
   return {
     project: { id: project.id, name: project.name, issuePrefix: project.issuePrefix, mode: state.mode },
