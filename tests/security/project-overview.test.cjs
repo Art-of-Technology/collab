@@ -370,11 +370,19 @@ test('agentSpendUsd is in the answer for an Admin, an Owner and the primary owne
 
   for (const world of [
     { membership: 'admin' }, { membership: 'Owner' }, { ownerId: 'reader' }, { ownerId: 'reader', membership: 'MEMBER' },
-  ]) sees(await home({ ...world, filterSays: false }));
+  ]) {
+    const allowed = await home({ ...world, filterSays: false });
+    assert.deepEqual(allowed.runReads, [true]);
+    sees(allowed);
+  }
 
   for (const world of [
     { membership: 'MEMBER' }, {}, { platformAdmin: true, membership: 'MEMBER' }, { platformAdmin: true },
-  ]) seesNone(await home({ ...world, filterSays: true }));
+  ]) {
+    const denied = await home({ ...world, filterSays: true });
+    assert.deepEqual(denied.runReads, [false]);
+    seesNone(denied);
+  }
 
   // The Admin is made a standard member once the billed runs are read: the runs are read again without spend.
   const dropped = await home({ membership: 'ADMIN', filterSays: true }, { dropAfterBilledRead: true });
