@@ -49,7 +49,7 @@ Checked against commit `26b8bf6c1` of `main`.
 - `sendEmail` in `src/lib/email.ts` is used for workspace invitations and nothing else. `NotificationPreferences` has `emailNotificationsEnabled`.
 - The app has no job that runs at a time of day.
 - The seat texts tell a seat how to ask a person (`askingAPerson` in `src/lib/agent-role-catalogue.ts`). Nothing checks that it did.
-- CLB-1034 (pull request #798, not merged) reads the question, the reply words and the suggested answer out of the seat's last comment. It names this note's first slice as "the proper fix … planned as the work after this".
+- CLB-1034 (pull request #798, merged on 25 November 2026, after the commit above) reads the question, the reply words and the suggested answer out of the seat's last comment. It names this note's first slice as "the proper fix … planned as the work after this".
 
 ## Decisions
 
