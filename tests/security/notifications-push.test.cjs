@@ -67,7 +67,8 @@ test('push delivery uses global subscriptions for direct, bulk and leave callers
       updateMany: async ({ where, data }) => rows.filter(row => matches(row, where)).forEach(row => Object.assign(row, data)),
     },
     notification: { groupBy: async () => [], create: async () => {}, createMany: async () => {} },
-    workspaceMember: { findMany: async ({ where }) => [{ userId: typeof where.role === 'string' ? 'hr' : 'manager' }] },
+    workspaceMember: { findMany: async ({ where }) => [{ userId: typeof where.role === 'string' ? 'hr' : 'manager', role: 'MANAGER' }] },
+    rolePermission: { findMany: async () => [{ role: 'MANAGER' }] },
     workspace: { findUnique: async () => null },
   };
   const push = load('src/lib/push-notifications.ts', {
