@@ -155,13 +155,20 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const toPlace = loose.filter(child => !placedBefore.has(child.id)).map(child => child.id);
   const readyEpics = new Set<string>();
   if (seat && toPlace.length) {
-    const blockerScope = { workspaceId, ...issueReadAccessWhere(me) };
+    const readAccess = issueReadAccessWhere(me);
+    const blockerScope = { workspaceId, ...readAccess };
+    // A blocker in this workspace can only count as resolved if the lead can read it.
+    const hiddenBlocker = { workspaceId, NOT: { AND: [readAccess] } };
     const blockerSelect = {
       projectId: true, projectStatus: statusSelect, finishedAt: true,
       parent: { where: { workspaceId, projectId: seat.projectId, assigneeId: me }, select: { id: true } },
     } as const;
     const linkedChildren = await db.issue.findMany({
-      where: { id: { in: toPlace }, workspaceId, projectId: seat.projectId, assigneeId: null, agentRequestRole: null, ...NOT_DONE },
+      where: {
+        id: { in: toPlace }, workspaceId, projectId: seat.projectId, assigneeId: null, agentRequestRole: null, ...NOT_DONE,
+        sourceRelations: { none: { relationType: 'BLOCKED_BY', targetIssue: hiddenBlocker } },
+        targetRelations: { none: { relationType: 'BLOCKS', sourceIssue: hiddenBlocker } },
+      },
       select: {
         parentId: true,
         sourceRelations: { where: { relationType: 'BLOCKED_BY', targetIssue: blockerScope }, select: { targetIssue: { select: blockerSelect } } },
