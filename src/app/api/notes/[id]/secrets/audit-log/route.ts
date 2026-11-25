@@ -10,6 +10,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { canAccessNote, getNoteAuditLog } from '@/lib/secrets/access';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 export async function GET(
   request: NextRequest,
@@ -49,21 +50,8 @@ export async function GET(
 
     // Check if user is owner or admin
     const isOwner = note.authorId === session.user.id;
-    let isAdmin = false;
-
-    if (note.workspaceId) {
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: session.user.id,
-            workspaceId: note.workspaceId
-          }
-        },
-        select: { role: true, status: true }
-      });
-
-      isAdmin = membership?.status === true && (membership.role === 'ADMIN' || membership.role === 'OWNER');
-    }
+    const isAdmin = !isOwner && !!note.workspaceId &&
+      may(await getWorkspaceAuthority(session.user.id, note.workspaceId), 'content.manage');
 
     if (!isOwner && !isAdmin) {
       return NextResponse.json(

@@ -19,7 +19,7 @@ function fixture({ users = [], members = [], workspaces = [{ id: 'workspace', ow
       },
     },
   };
-  return { reads, authority: load('src/lib/workspace-authority.ts', { './prisma': { prisma } }) };
+  return { reads, prisma, authority: load('src/lib/workspace-authority.ts', { './prisma': { prisma } }) };
 }
 const pure = () => fixture().authority;
 const actor = (level, userId = 'actor') => ({ userId, level, role: null, platformAdmin: false });
@@ -59,6 +59,17 @@ test("the workspace's owner is PRIMARY_OWNER with no membership row, an inactive
   assert.equal(await authority.getWorkspaceAuthority('missing', 'workspace'), null);
   assert.equal(await authority.getWorkspaceAuthority('a', 'nowhere'), null);
   assert.equal((await authority.getWorkspaceAuthority('o', 'foreign')).level, 'PRIMARY_OWNER');
+});
+
+test('the authority is read through a database client handed to it, such as a transaction', async () => {
+  const users = [{ id: 'a', role: 'DEVELOPER' }];
+  const members = [{ userId: 'a', workspaceId: 'workspace', role: 'admin', status: true }];
+  const { authority, reads } = fixture({ users, members });
+  const handed = fixture({ users, members });
+  const result = await authority.getWorkspaceAuthority('a', 'workspace', { workspace: handed.prisma.workspace, user: handed.prisma.user });
+  assert.equal(result.level, 'ADMIN');
+  assert.deepEqual(reads, []);
+  assert.deepEqual(handed.reads.map(([model]) => model).sort(), ['user', 'workspace']);
 });
 
 test('each action answers yes from its minimum level and no below it', () => {
