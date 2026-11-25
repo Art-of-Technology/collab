@@ -83,6 +83,8 @@ export default function MemberRow({
       if (!response.ok) return onMessage(await refusal(response, "The role was not changed."));
       onChange(member.id, { role });
       onMessage(`${name} is now ${roleName(role)}.`);
+    } catch {
+      onMessage("Could not confirm the role change. Reload the page to check.");
     } finally { setBusy(false); }
   };
 
@@ -96,6 +98,8 @@ export default function MemberRow({
       if (!response.ok) return onMessage(await refusal(response, "The member was not switched."));
       onChange(member.id, { status });
       onMessage(`${name} is now ${status ? "active" : "inactive"}.`);
+    } catch {
+      onMessage("Could not confirm the status change. Reload the page to check.");
     } finally { setBusy(false); }
   };
 

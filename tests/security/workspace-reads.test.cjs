@@ -22,9 +22,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }, onMet
         ownedWorkspaces: spaces.filter(row => row.ownerId === user.id && matches(row, relations.ownedWorkspaces?.where ?? {})).map(row => ({ id: row.id })) };
     } },
     customRole: { findMany: async ({ where }) => customRoles.filter(row => matches(row, where)) },
-    // No role holds a permission here: only owners and platform admins may invite.
-    // The roles whose permission rows exist; the Owner level needs none.
-    rolePermission: { findUnique: async ({ where }) => (grants.includes(where.workspaceId_role_permission.role) ? { id: 'p' } : null) },
+    rolePermission: { findUnique: async ({ where }) => grants.find(row => matches(row, where.workspaceId_role_permission)) ?? null },
     workspace: {
       findMany: async spec => {
         reads.push(spec);
@@ -181,13 +179,17 @@ test("workspace detail carries the viewer's level, each member's level and the r
 
   // An Admin whose role lost the change-roles permission is offered no role to grant: the role route would refuse.
   joined.members[0].role = 'ADMIN';
+  f.grants.push({ workspaceId: 'joined', role: 'ADMIN', permission: 'INVITE_MEMBERS' },
+    { workspaceId: 'foreign', role: 'ADMIN', permission: 'CHANGE_MEMBER_ROLES' });
   result = await f.actions.getDetailedWorkspaceById('joined');
   assert.deepEqual(Array.from(result.rolesViewerMayGrant), []);
+  assert.deepEqual(Array.from(result.invitations, row => row.id), ['invite-joined']);
   assert.equal(shape(result)['m-dave'][2], true, 'switching on or off and removing need no such permission');
 
   // An Admin does not act on another Admin and grants neither Owner nor Admin.
-  f.grants.push('ADMIN');
+  f.grants[0].permission = 'CHANGE_MEMBER_ROLES';
   result = await f.actions.getDetailedWorkspaceById('joined');
+  assert.deepEqual(Array.from(result.invitations), []);
   assert.equal(result.viewerLevel, 'ADMIN');
   assert.equal(shape(result)['m-carol'][2], false);
   assert.equal(shape(result)['m-dave'][2], true);

@@ -9,7 +9,7 @@ const { createRoot } = require('react-dom/client');
 
 const calls = [], removals = [];
 let answer = { ok: true, json: async () => ({}) }, removal = async () => ({ success: true });
-const fetch = async (url, options) => { calls.push([url, options.method, JSON.parse(options.body)]); return answer; };
+const fetch = async (url, options) => { calls.push([url, options.method, JSON.parse(options.body)]); if (answer instanceof Error) throw answer; return answer; };
 
 const plain = tag => ({ children }) => React.createElement(tag, null, children);
 const parts = names => Object.fromEntries(names.map(name => [name, plain('div')]));
@@ -164,6 +164,25 @@ test('the row menu switches a member on or off and removes one after an inline c
     assert.equal(status(), 'Kim Park was removed from Acme.');
     assert.equal(row('Kim Park'), undefined);
   } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a lost connection keeps the last confirmed role and status and leaves controls usable', async () => {
+  const root = await render(workspace());
+  try {
+    answer = new TypeError('Failed to fetch');
+    const select = row('Kim Park').querySelector('select');
+    await choose(select, 'ADMIN');
+    assert.match(status(), /could not confirm.*role/i);
+    assert.equal(select.value, 'MEMBER');
+    assert.equal(select.disabled, false);
+
+    for (const [name, action] of [['Kim Park', 'Deactivate'], ['Pat Jones', 'Activate']]) {
+      await click(button(`More actions for ${name}`));
+      await click(button(action));
+      assert.match(status(), /could not confirm.*status/i);
+      assert.equal(button(action).disabled, false);
+    }
+  } finally { answer = { ok: true, json: async () => ({}) }; await React.act(async () => root.unmount()); }
 });
 
 test('one row menu is open at a time, and Escape closes it and gives the focus back', async () => {
