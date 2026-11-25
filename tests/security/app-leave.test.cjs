@@ -69,6 +69,22 @@ function fixture({ rows = ['ADMIN', 'HR'] } = {}) {
 
 const ids = body => body.leaveRequests.map(r => r.id).sort();
 
+test("an update that changes nothing shows nobody someone else's request", async () => {
+  // An empty update, or one that repeats the current status, on a request of someone else.
+  for (const body of [{}, { status: 'PENDING' }]) {
+    const refused = await fixture().call.patch('member', 'r-admin', body);
+    assert.equal(refused.status, 403, JSON.stringify(body));
+    assert.equal(refused.body.error, 'insufficient_permissions');
+    assert.ok(!JSON.stringify(refused.body).includes('Away'), 'the answer carries none of the request');
+    const f = fixture();
+    assert.equal((await f.call.patch('member', 'r-admin', body)).status, 403);
+    assert.deepEqual(f.state.writes, []);
+    // Their own request, and a holder on someone else's, still get the answer they got before.
+    assert.equal((await fixture().call.patch('member', 'r-member', body)).status, 200, 'their own');
+    assert.equal((await fixture().call.patch('hr', 'r-member', body)).status, 200, 'a holder');
+  }
+});
+
 test("a token of someone who holds MANAGE_LEAVE lists, reads, approves and rejects other people's requests; a token without it sees and changes only its own", async t => {
   // An Owner, the primary owner (no membership row), an Admin and HR whose roles hold the row, and a platform admin, as in the app.
   for (const actor of ['owner', 'primary', 'admin', 'hr', 'root']) await t.test(`${actor} holds MANAGE_LEAVE`, async () => {

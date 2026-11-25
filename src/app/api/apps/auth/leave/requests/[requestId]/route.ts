@@ -132,10 +132,13 @@ export const PATCH = withAppAuth(
       }
 
       const isOwner = existingRequest.userId === context.user.id;
+      // Asked at most once, and only when the answer is needed.
+      let holds: boolean | undefined;
+      const managesLeave = async () => holds ??= (await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_LEAVE)).hasPermission;
 
       // Status changes (approve/reject) require MANAGE_LEAVE
       if (updateData.status && updateData.status !== existingRequest.status) {
-        if (!(await checkUserPermission(context.user.id, context.workspace.id, Permission.MANAGE_LEAVE)).hasPermission) {
+        if (!await managesLeave()) {
           return NextResponse.json(
             { error: 'insufficient_permissions', error_description: 'Manage leave permission required to approve/reject leave requests' },
             { status: 403 }
@@ -163,6 +166,14 @@ export const PATCH = withAppAuth(
         return NextResponse.json(
           { error: 'invalid_update', error_description: 'Can only update notes for pending requests' },
           { status: 400 }
+        );
+      }
+
+      // Someone else's request is changed, and answered with, only for someone who may manage leave, whatever the update holds.
+      if (!isOwner && !await managesLeave()) {
+        return NextResponse.json(
+          { error: 'insufficient_permissions', error_description: 'Manage leave permission required to update other users\' leave requests' },
+          { status: 403 }
         );
       }
 
