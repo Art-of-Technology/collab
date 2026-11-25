@@ -212,10 +212,17 @@ test('an Admin whose role has no manage-members permission row gets the same ans
 });
 
 test('an agent account is not given the Owner or the Admin role', async () => {
-  const f = fixture();
-  for (const role of ['OWNER', 'ADMIN']) refused(await f.role('prim', 'agent', role), `the primary owner gives an agent ${role}`);
-  assert.equal(f.row('agent').role, 'MEMBER');
-  assert.equal((await f.role('prim', 'agent', 'DEVELOPER')).ok, true, 'a standard role is fine');
+  for (const actor of ['prim', 'pas', 'root']) {
+    const f = fixture();
+    for (const role of ['OWNER', 'ADMIN']) {
+      assert.deepEqual(await f.role(actor, 'agent', role), {
+        ok: false, status: 403, error: 'An agent account cannot be an Owner or an Admin',
+      }, `${actor} grants ${role}`);
+      assert.equal(f.row('agent').role, 'MEMBER');
+    }
+    assert.equal((await f.role(actor, 'agent', 'DEVELOPER')).status, 200);
+    assert.equal(f.row('agent').role, 'DEVELOPER');
+  }
 });
 
 test('an Admin removes a member below Admin, and anyone but the primary owner may leave', async () => {
