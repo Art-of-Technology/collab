@@ -30,7 +30,7 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     prisma = new PrismaClient({ datasources: { db: { url } } });
     await seed(prisma);
     // Back to the shape before the migration, with the seeded rows kept, then the migration as production gets it.
-    psql(`DROP TABLE "AgentRun", "AgentSeat", "AgentRunner";
+    psql(`DROP TABLE "AgentRoutine", "AgentRun", "AgentSeat", "AgentRunner";
       ALTER TABLE "AppToken" DROP COLUMN "runnerId";
       ALTER TABLE "ProjectStatus" DROP COLUMN "category";
       ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt", DROP COLUMN "agentRepositoryUrl", DROP COLUMN "membersMayAddSeats";
@@ -50,6 +50,7 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     // The remade seats table has no custom role column yet either: the migration that adds it makes the custom roles table too.
     psql('DROP TABLE "AgentCustomRole";');
     psql(readFileSync(resolve('prisma/migrations/20261125000100_agent_custom_roles/migration.sql'), 'utf8'));
+    psql(readFileSync(resolve('prisma/migrations/20261125000400_agent_routines/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();

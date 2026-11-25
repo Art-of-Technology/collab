@@ -14,6 +14,7 @@ model User {
   agentSeatsOwned        AgentSeat[]         @relation("AgentSeatOwner")
   agentRunners           AgentRunner[]
   agentRuns              AgentRun[]
+  agentRoutinesCreated   AgentRoutine[]
   agentRoleInstructionsEdited AgentRoleInstructions[]
   agentPlatformPromptsEdited AgentPlatformPrompt[]
   agentCustomRolesCreated AgentCustomRole[]
@@ -396,6 +397,7 @@ model Workspace {
   agentSeats          AgentSeat[]
   agentRunners        AgentRunner[]
   agentRuns           AgentRun[]
+  agentRoutines       AgentRoutine[]
   agentRoleInstructions AgentRoleInstructions[]
   agentCustomRoles AgentCustomRole[]
   id                  String                @id @default(cuid())
@@ -513,6 +515,7 @@ model Project {
   agentRepositoryUrl String? // an https address typed for a project with no repository connected; every seat of the project gets it
   membersMayAddSeats Boolean @default(false) // the owner's switch: a member may add their own seats to this project
   agentSeats       AgentSeat[]
+  agentRoutines    AgentRoutine[]
 
   // Relationships
   workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -3092,8 +3095,34 @@ model AgentSeat {
   owner       User?      @relation("AgentSeatOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   customRole  AgentCustomRole? @relation(fields: [customRoleId], references: [id], onDelete: NoAction)
   runs        AgentRun[]
+  routines    AgentRoutine[]
 
   @@index([projectId, role])
+}
+
+model AgentRoutine {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  projectId    String
+  seatId       String
+  title        String
+  body         String    @db.Text
+  everyMinutes Int
+  dailyCap     Int       @default(3)
+  spendCapUSD  Decimal?
+  nextDueAt    DateTime
+  enabled      Boolean   @default(true)
+  pausedReason String?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  seat         AgentSeat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  createdBy    User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([seatId])
+  @@index([enabled, nextDueAt])
 }
 
 // A workspace's own instructions for one role of the catalogue: the organisation layer of every run of a seat with that
