@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { z } from 'zod';
 import { emitAppUninstalled } from '@/lib/event-bus';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 import { prisma } from '@/lib/prisma';
 
@@ -66,27 +67,20 @@ export async function POST(
       return NextResponse.json({ error: 'App not installed in this workspace' }, { status: 404 });
     }
 
-    // Check workspace membership and admin role
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      },
-      include: {
-        workspace: {
-          select: {
-            name: true,
-            slug: true
-          }
-        }
+    // Owners uninstall apps. A platform admin, member or not, passes as on the uninstall action.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.platformAdmin && !may(authority, 'apps.manage')) {
+      return NextResponse.json({ error: 'Only Owners can uninstall apps' }, { status: 403 });
+    }
+
+    // The primary owner and a platform admin may have no membership row, so the event's names come from the workspace.
+    const workspace = await prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: {
+        name: true,
+        slug: true
       }
     });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
 
     // Perform uninstallation in a transaction
     await prisma.$transaction(async (tx) => {
@@ -147,8 +141,8 @@ export async function POST(
         {
           userId: session.user.id,
           workspaceId,
-          workspaceName: membership.workspace.name,
-          workspaceSlug: membership.workspace.slug,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
           source: 'api'
         },
         { async: true }

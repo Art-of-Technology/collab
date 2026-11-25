@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { checkUserPermission, Permission } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,15 +43,9 @@ async function AppsPageContent({ workspaceId }: { workspaceId: string }) {
   }
 
   
-  // Check if user has permission to manage workspace apps
-  const hasPermission = await checkUserPermission(
-    session.user.id,
-    workspace.id,
-    Permission.MANAGE_WORKSPACE_PERMISSIONS // Using existing permission, could create MANAGE_APPS later
-  );
-
-  console.log("hasPermission", hasPermission);
-  if (!hasPermission.hasPermission) {
+  // Owners manage the workspace's apps. A platform admin, member or not, keeps the answer this page gave before.
+  const authority = await getWorkspaceAuthority(session.user.id, workspace.id);
+  if (!authority?.platformAdmin && !may(authority, 'apps.manage')) {
     notFound();
   }
 
