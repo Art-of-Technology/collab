@@ -34,6 +34,11 @@ const plannerWork = `2. The issue is a grilling session: an idea to settle with 
 8. Only after the person approves the plan, cut it into unassigned issues as the "Plan to issues" note says, if there is one (\`collab notes list --search "Plan to issues"\`), from the templates (\`collab templates get <TYPE>\`). Then finish as \`done\`.
 You never change code, commit, push, open a pull request, assign an issue, answer for the person, or create an issue before the plan is approved.`;
 
+const documentationWork = `2. Read the docs request and the change it describes. Update the docs pages the change touches.
+3. Put a picture or table first, use short steps, and put detail at the end.
+4. Run the relevant docs checks. Commit and push the docs changes on your branch, then open a pull request. Link it and record the checks in your result.
+Never change product code.`;
+
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
 - Look up everything you can first. Ask only for what only that person can decide or do.
 - Do not pass on another seat's or an issue's question as you found it. Say in plain English what is being asked. An issue key or an internal name ("the waiting team", "the release tab") gets a few words saying what it is; if you could not find out what a name stands for, say that.
@@ -70,6 +75,8 @@ export const ROLE_ENTRIES = [
     requests: [], repository: 'none', maxPerProject: 1 },
   { id: 'planner', name: 'Planner', platformPrompt: plannerWork, takesOrdinaryIssues: true,
     requests: [], repository: 'read-only', maxPerProject: null },
+  { id: 'docs', name: 'Documentation Manager', platformPrompt: documentationWork, takesOrdinaryIssues: false,
+    requests: [{ id: 'docs', label: 'Docs request' }], repository: 'yes', maxPerProject: null },
 ] as const satisfies readonly RoleEntry[];
 
 export function createRoleCatalogue(entries: readonly RoleEntry[]) {

@@ -13,6 +13,7 @@ test('the built-in roles have platform instructions that end with the Asking a p
   const roles = Array.from(ROLE_CATALOGUE.roles);
   assert.deepEqual(roles.map(role => [role.id, role.repository, role.maxPerProject]), [
     ['developer', 'yes', null], ['reviewer', 'yes', null], ['release', 'yes', 1], ['security', 'read-only', null], ['lead', 'none', 1], ['planner', 'read-only', null],
+    ['docs', 'yes', null],
   ]);
   for (const role of roles) {
     assert.ok(role.platformPrompt.endsWith(askingAPerson), role.id);
@@ -59,6 +60,25 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
   // The method's source and licence.
   assert.match(own, /mattpocock\/skills/);
   assert.match(own, /MIT/);
+});
+
+test('the Documentation Manager takes docs requests and gets a short docs-only platform prompt', () => {
+  const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+  const role = ROLE_CATALOGUE.getRole('docs');
+  assert.ok(role, 'the catalogue has a Documentation Manager role');
+  assert.equal(role.name, 'Documentation Manager');
+  assert.equal(role.repository, 'yes');
+  assert.deepEqual(Array.from(role.issueKinds), ['docs']);
+  assert.deepEqual({ ...ROLE_CATALOGUE.getRequest('docs') }, { id: 'docs', label: 'Docs request', seat: role.id });
+
+  const [platform] = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: null });
+  assert.equal(platform.layer, 'platform');
+  assert.equal(platform.text, role.platformPrompt);
+  assert.ok(platform.text.split(/\s+/).length <= 280);
+  assert.match(platform.text, /update the docs pages .* change touches/i);
+  assert.match(platform.text, /picture or table first.*short steps.*detail at the end/i);
+  assert.match(platform.text, /open a pull request/i);
+  assert.match(platform.text, /never change product code/i);
 });
 
 test('a run\'s instructions are three layers in order, platform, organisation and seat, or four with a custom role\'s, each with a stated maximum length', () => {
