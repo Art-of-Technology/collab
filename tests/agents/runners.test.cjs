@@ -612,8 +612,9 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
   await t.test('switching a peer Owner on during admission or off during selection never permits a connection', async () => {
     const membership = { userId_workspaceId: { userId: offOwner, workspaceId: 'lv' } };
     const setActive = status => prisma.workspaceMember.update({ where: membership, data: { status } });
-    const [status, response] = await afterRead(prisma.user, 'findUnique', async ({ where }) => {
-      if (where.id === offOwner) await setActive(true);
+    // Right after the levels are read, in their one batch, the peer is switched back on.
+    const [status, response] = await afterRead(prisma, '$transaction', async batch => {
+      if (Array.isArray(batch)) await setActive(true);
     }, () => connect(lvOwner, offOwner));
     assert.deepEqual([status, response.code], [400, 'owner_not_found']);
     assert.equal(await prisma.agentRunner.count({ where: { workspaceId: 'lv', ownerId: offOwner } }), 0);
@@ -621,6 +622,28 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
 
     const view = await afterRead(prisma.user, 'findMany', () => setActive(false), () => page.readRunnersTab(lvOwner, 'lv-team'));
     assert.ok(!view.people.some(person => person.id === offOwner));
+  });
+
+  await t.test("the actor's level and the other person's are read in one snapshot", async () => {
+    const peer = 'clvowner002';
+    const setRole = (userId, role) => prisma.workspaceMember.update({ where: { userId_workspaceId: { userId, workspaceId: 'lv' } }, data: { role } });
+    const demoteBoth = async () => { await setRole(lvOwner, 'ADMIN'); await setRole(peer, 'MEMBER'); };
+    const restore = async () => { await setRole(lvOwner, 'OWNER'); await setRole(peer, 'OWNER'); };
+    assert.equal((await connect(peer))[0], 201);
+    const peerRunner = await runnerOf(peer);
+    // Both are Owners when the levels are read and both are demoted right after: at no instant was one above the other.
+    let demoted = false;
+    assert.equal(await afterRead(prisma, '$transaction', async batch => {
+      if (Array.isArray(batch) && !demoted) { demoted = true; await demoteBoth(); }
+    }, () => remove(lvOwner, peerRunner)), 404);
+    assert.equal(demoted, true);
+    assert.equal(await runnerOf(peer), peerRunner, "the peer's runner is still connected");
+    await restore();
+    // A list that was widened by a level the viewer no longer holds shows nothing of a former peer's.
+    const [status, view] = await afterRead(prisma.agentRunner, 'findMany', demoteBoth, () => list(lvOwner));
+    assert.equal(status, 200);
+    assert.ok(!view.runners.some(row => row.ownerId === peer));
+    await restore();
   });
 
   await t.test('deleting the workspace during a runner list excludes delegated runners', async () => {

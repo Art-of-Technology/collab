@@ -50,37 +50,39 @@ export async function startPairing(name: string) {
 }
 
 /** Someone else's runner: an actor holding `runners.manage` acts on it when its person is strictly below them; no level counts as below everyone. */
-function runnerAccess(actor: WorkspaceAuthority | null, person: Pick<WorkspaceAuthority, 'userId' | 'level'> | null) {
+function runnerAccess(actor: Pick<WorkspaceAuthority, 'userId' | 'level'>, person: Pick<WorkspaceAuthority, 'userId' | 'level'>) {
   if (!may(actor, 'runners.manage')) return 'denied';
-  if (!person?.level) return 'inactive';
+  if (!person.level) return 'inactive';
   return mayActOn(actor, person, { holdsChangeRoles: false }) ? 'below' : 'denied';
 }
 
-/** Whether the actor may act on `personId`'s runner. Read outside any transaction: it takes connections of its own. */
-const readRunnerAccess = async (actorId: string, workspaceId: string, personId: string) => {
-  const actor = await getWorkspaceAuthority(actorId, workspaceId);
-  if (!may(actor, 'runners.manage')) return 'denied';
-  return runnerAccess(actor, await getWorkspaceAuthority(personId, workspaceId));
-};
-
 /**
- * Of these people, those whose runners the actor may act on besides their own, with their levels read in one
- * go the way `getWorkspaceAuthority` reads them: the workspace's owner is the primary owner, an active membership gives its role's level.
+ * The actor's verdict on each of these people's runners. The actor's level and theirs come from ONE snapshot, so a
+ * verdict is always one that was true at some instant, and are read the way `getWorkspaceAuthority` reads one person:
+ * the workspace's owner is the primary owner, an active membership gives its role's level. Read outside any transaction:
+ * it takes a connection of its own. With no workspace nobody acts on anyone.
  */
-export async function runnerPeopleBelow(actor: WorkspaceAuthority | null, workspaceId: string, personIds: string[], purpose: 'connect' | 'existing') {
-  if (!may(actor, 'runners.manage')) return new Set<string>();
+async function runnerAccessFor(actorId: string, workspaceId: string, personIds: string[]) {
   const [workspace, members] = await prisma.$transaction([
     prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
-    prisma.workspaceMember.findMany({ where: { workspaceId, status: true, userId: { in: personIds } }, select: { userId: true, role: true } }),
+    prisma.workspaceMember.findMany({ where: { workspaceId, status: true, userId: { in: [actorId, ...personIds] } }, select: { userId: true, role: true } }),
   ], { isolationLevel: 'RepeatableRead' });
-  if (!workspace) return new Set<string>();
   const rolesByUserId = new Map(members.map(member => [member.userId, member.role]));
-  return new Set(personIds.filter(userId => {
+  const levelOf = (userId: string): WorkspaceLevel | null => {
     const role = rolesByUserId.get(userId);
-    const level: WorkspaceLevel | null = userId === workspace.ownerId ? 'PRIMARY_OWNER' : role === undefined ? null : levelOfRole(role);
-    const access = runnerAccess(actor, { userId, level });
-    return access === 'below' || (purpose === 'existing' && access === 'inactive');
-  }));
+    return userId === workspace?.ownerId ? 'PRIMARY_OWNER' : role === undefined ? null : levelOfRole(role);
+  };
+  const actor = { userId: actorId, level: levelOf(actorId) };
+  return (personId: string) => workspace ? runnerAccess(actor, { userId: personId, level: levelOf(personId) }) : 'denied';
+}
+
+/** Whether the actor may act on `personId`'s runner. */
+const readRunnerAccess = async (actorId: string, workspaceId: string, personId: string) => (await runnerAccessFor(actorId, workspaceId, [personId]))(personId);
+
+/** Of these people, those whose runners the actor may act on besides their own: to connect one, an active person below them; an existing one also when its person has no level any more. */
+export async function runnerPeopleBelow(actorId: string, workspaceId: string, personIds: string[], purpose: 'connect' | 'existing') {
+  const access = await runnerAccessFor(actorId, workspaceId, personIds);
+  return new Set(personIds.filter(userId => access(userId) === 'below' || (purpose === 'existing' && access(userId) === 'inactive')));
 }
 
 /** End a runner inside a transaction: its credential is refused from now on and the tokens it fetched are revoked. */
@@ -197,7 +199,8 @@ export async function listRunners(workspaceId: string, viewerId: string) {
   const owner = may(viewer, 'runners.manage');
   const listed = await prisma.agentRunner.findMany({ where: { workspaceId, removedAt: null, ...(!owner && { ownerId: viewerId }) }, orderBy: { admittedAt: 'desc' },
     select: { id: true, name: true, ownerId: true, admittedAt: true, lastSeenAt: true, owner: { select: { name: true } } } });
-  const others = await runnerPeopleBelow(viewer, workspaceId, listed.map(runner => runner.ownerId!), 'existing');
+  // The viewer's own level is read again with theirs, in one snapshot; `owner` above only widened what was listed.
+  const others = owner ? await runnerPeopleBelow(viewerId, workspaceId, listed.map(runner => runner.ownerId!), 'existing') : new Set<string>();
   const runners = listed.filter(runner => runner.ownerId === viewerId || others.has(runner.ownerId!));
   const seats = await prisma.agentSeat.groupBy({ by: ['ownerId'], where: { workspaceId, byRunner: true, retiredAt: null, ownerId: { in: runners.map(runner => runner.ownerId!) } }, _count: true });
   const seatCounts = new Map(seats.map(row => [row.ownerId, row._count]));
