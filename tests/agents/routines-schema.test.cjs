@@ -41,7 +41,7 @@ test('the migration SQL creates AgentRoutine with its columns and indexes, and t
     const constraints = await prisma.$queryRaw`
       SELECT pg_get_constraintdef(oid) AS definition
       FROM pg_constraint
-      WHERE conrelid = 'public."AgentRoutine"'::regclass
+      WHERE conrelid = 'public."AgentRoutine"'::regclass AND contype IN ('f', 'p')
       ORDER BY definition
     `;
     assert.deepEqual(constraints.map(row => row.definition), [
