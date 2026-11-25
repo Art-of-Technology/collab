@@ -1,11 +1,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { z } = require('zod');
-const { load } = require('../security/helpers.cjs');
+const { load, matches } = require('../security/helpers.cjs');
 
 // Workspace `w` is the one under test. In `home` every person but the platform admin is at the Owner level, so a
 // check made there always passes and the check of `w` behind it is the one that decides.
-const ROLE_IN_W = { admin: 'ADMIN', keeper: 'Keeper', member: 'MEMBER', owner: 'OWNER' };
+const ROLE_IN_W = { admin: 'ADMIN', keeper: 'Keeper', member: 'MEMBER', owner: 'OWNER', root: 'MEMBER' };
 const ROWS = [
   { workspaceId: 'w', role: 'ADMIN', permission: 'MANAGE_AGENTS' },
   // A role that may edit the permission editor and nothing about agents.
@@ -16,21 +16,34 @@ const REFUSED = ['keeper', 'member'];
 
 function fixture() {
   const writes = [];
-  const role = (userId, workspaceId) => workspaceId === 'home' ? (userId === 'root' ? null : 'OWNER') : workspaceId === 'w' ? ROLE_IN_W[userId] ?? null : null;
-  const idOf = where => ({ team: 'w', w: 'w', home: 'home' })[where.slug ?? where.id];
+  const mutation = (name, result) => async () => {
+    writes.push(name);
+    return result;
+  };
+  const members = Object.entries(ROLE_IN_W).map(([userId, role]) => ({ userId, role, status: true }));
+  const team = { id: 'w', slug: 'team', name: 'Team', ownerId: 'primary', members };
+  const home = { id: 'home', slug: 'home', name: 'Home', ownerId: 'primary',
+    members: members.filter(member => member.userId !== 'root').map(member => ({ ...member, role: 'OWNER' })) };
+  const workspaces = [team, home];
+  const project = { id: 'p', slug: 'p', name: 'P', workspaceId: team.id, workspace: team, agentMode: 'seats', isArchived: false, agentSeats: [] };
+  const seatRow = { id: 's', workspaceId: team.id, projectId: project.id, project, userId: 'seat-account', name: 'Seat',
+    retiredAt: null, role: 'developer', instructions: null, ownerId: null, owner: null, customRole: null, runs: [] };
+  const lookups = rows => {
+    const findFirst = async ({ where }) => rows.find(row => matches(row, where)) ?? null;
+    return { findUnique: findFirst, findFirst, findMany: async ({ where }) => rows.filter(row => matches(row, where)) };
+  };
   const models = {
-    user: { findUnique: async ({ where, include }) => ({ id: where.id, role: where.id === 'root' ? 'SYSTEM_ADMIN' : 'DEVELOPER',
-      workspaceMemberships: role(where.id, include.workspaceMemberships.where.workspaceId) ? [{ role: role(where.id, include.workspaceMemberships.where.workspaceId) }] : [],
-      ownedWorkspaces: where.id === 'primary' && include.ownedWorkspaces.where.id === 'w' ? [{ id: 'w' }] : [] }) },
+    user: { findUnique: async ({ where, include }) => {
+      const { workspaceId, status } = include.workspaceMemberships.where;
+      const workspace = workspaces.find(row => row.id === workspaceId);
+      return { id: where.id, role: where.id === 'root' ? 'SYSTEM_ADMIN' : 'DEVELOPER',
+        workspaceMemberships: workspace?.members.filter(member => member.userId === where.id && member.status === status) ?? [],
+        ownedWorkspaces: workspaces.filter(row => row.ownerId === where.id && matches(row, include.ownedWorkspaces.where)) };
+    } },
     rolePermission: { findUnique: async ({ where: { workspaceId_role_permission: key } }) => ROWS.find(row => row.workspaceId === key.workspaceId && row.role === key.role && row.permission === key.permission) ?? null },
-    // The page looks a workspace up with its name; the agent libraries' own existence check (id only) finds nothing,
-    // so a call that passes the permission stops right after it with `not_found`.
-    workspace: { findUnique: async ({ where, select }) => select?.name && idOf(where) ? { id: idOf(where), name: 'Team' } : null,
-      findFirst: async () => ({ id: 'w', slug: 'team', name: 'Team' }),
-      findMany: async () => [{ id: 'w', name: 'Team', slug: 'team' }] },
-    // Seat setup looks its project up by id or prefix: not found, so a passing call stops there.
-    project: { findFirst: async ({ where }) => where.OR ? null : { id: 'p', workspaceId: 'w' } },
-    agentSeat: { findFirst: async () => ({ id: 's', userId: 'seat-account', name: 'Seat', role: 'developer', instructions: null, project: { name: 'P' }, owner: null, customRole: null }) },
+    workspace: lookups(workspaces),
+    project: lookups([project]),
+    agentSeat: lookups([seatRow]),
   };
   const prisma = new Proxy({}, { get: (_, model) => model === '$transaction' ? async run => run(prisma) : new Proxy({}, { get: (__, op) => async args => {
     if (/^(create|update|upsert|delete)/.test(op)) writes.push(`${String(model)}.${String(op)}`);
@@ -51,14 +64,13 @@ function fixture() {
     // The real permission rule, on the stubbed database.
     '@/lib/permissions': load('src/lib/permissions.ts', { './prisma': { prisma } }, globals),
     '@/lib/post-access': load('src/lib/post-access.ts'),
-    '@/lib/issue-finder': { issueAccessWhere: () => ({}), issueReadAccessWhere: () => ({}) },
     '@/lib/agent-handoffs': { HandoffError },
     '@/lib/agent-seats': { HandoffError, SEAT_ROLES: ['developer'], MEMBER_ROLES: [], seatRoom: () => null,
-      createSeat: async () => ({ seat: 's' }), retireSeat: async () => ({ released: [] }), lockMemberSeatProject: async () => {} },
-    '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent', createAgentToken: async () => ({ token: 't' }), revokeAgentToken: async () => true,
-      setAgentWorkspaceAccess: async () => true, listSeatOwnerChoices: async () => ({ seats: [], people: [], customRoles: [] }),
+      createSeat: mutation('createSeat', { seat: 's' }), retireSeat: mutation('retireSeat', { released: [] }), lockMemberSeatProject: async () => {} },
+    '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent', createAgentToken: mutation('createAgentToken', { token: 't' }), revokeAgentToken: mutation('revokeAgentToken', true),
+      setAgentWorkspaceAccess: mutation('setAgentWorkspaceAccess', true), listSeatOwnerChoices: async () => ({ seats: [], people: [], customRoles: [] }),
       listAgentTokens: async () => [{ id: 't', name: 'T', seat: null, workspaces: [], access: 'read', createdAt: new Date(), expiresAt: null, expired: false }] },
-    '@/lib/agent-mode': { HandoffError, agentModeSchema: z.any(), agentModeState: async () => ({ mode: 'seats' }), setAgentMode: async () => ({}) },
+    '@/lib/agent-mode': { HandoffError, agentModeSchema: z.any(), agentModeState: async () => ({ mode: 'seats' }), setAgentMode: mutation('setAgentMode', {}) },
     '@/lib/agent-runners': { RUNNER_TOKEN_DAYS: 90, runnerSeats: async () => [], fetchedBy: async () => new Map(), runnerPeopleBelow: async () => new Set() },
     '@/lib/agent-runs': { inboxOf: async () => ({ items: [] }) },
     '@/lib/workspace-authority': {},
@@ -102,23 +114,36 @@ function fixture() {
     'mint a token': () => tokens.POST(body({ name: 'Claude' }), params({ workspaceId: 'w' })).then(status(201)),
     'revoke a token': () => token.DELETE(body(), params({ workspaceId: 'w', tokenId: 't' })).then(status(200)),
     'let a token into the workspace': () => token.PATCH(body({ workspaceId: 'w', allowed: true }), params({ workspaceId: 'home', tokenId: 't' })).then(status(200)),
+    'let a workspace token into another workspace': () => token.PATCH(body({ workspaceId: 'home', allowed: true }), params({ workspaceId: 'w', tokenId: 't' })).then(status(200)),
+    'withdraw a workspace token from another workspace': () => token.PATCH(body({ workspaceId: 'home', allowed: false }), params({ workspaceId: 'w', tokenId: 't' })).then(status(200)),
     'open the agent tokens page': async () => (await rendered('team')) ? 'passed' : 'refused',
     'the agent tokens page offers the workspace': async () => flag((await rendered('home')).workspaces.some(row => row.id === 'w')),
     'read agent mode': () => mode.GET(body(), params({ workspaceId: 'w', projectSlug: 'p' })).then(status(200)),
     'change agent mode': () => mode.PATCH(body({}), params({ workspaceId: 'w', projectSlug: 'p' })).then(status(200)),
     'read the agent repository': async () => flag((await repository.GET(body(), params({ projectId: 'p' }))).body.canManage),
     'set the agent repository': () => repository.PATCH(body({ url: 'https://github.com/org/repo' }), params({ projectId: 'p' })).then(status(200)),
-    'set a project up with seats': () => setup.seatSetupState({ user: session.user, app: { slug: 'collab-cli' }, workspace: { id: 'w' } }, 'p')
+    'set a project up with seats': () => setup.seatSetupState({ user: session.user, app: { slug: 'collab-cli' }, workspace: { id: 'w' } }, 'missing-project')
       .then(() => 'unexpected return', error => error.code === 'forbidden' ? 'refused' : error.code === 'project_not_found' ? 'passed' : error.code),
     'manage seats on the Agents page': async () => flag((await agentsPage.readSeats(session.user.id, 'team')).canManage),
     'delete a custom role': () => customRoles.deleteCustomRole(session.user.id, 'w', 'r').then(refusal),
     'edit role instructions on the Roles page': async () => flag((await roleInstructions.readRoleInstructions(session.user.id, 'team')).canEdit),
-    'save role instructions': () => roleInstructions.saveRoleInstructions(session.user.id, 'w', 'developer', 'Text').then(refusal),
+    'save role instructions': () => roleInstructions.saveRoleInstructions(session.user.id, 'w', 'developer', 'Text')
+      .then(result => result.error === 'forbidden' ? 'refused' : result.role === 'developer' && result.text === 'Text' ? 'passed' : `unexpected ${JSON.stringify(result)}`),
     "edit a seat's instructions on its page": async () => flag((await seatInstructions.readSeatPage(session.user.id, 'team', 's')).canEdit),
     "save a seat's instructions": () => seatInstructions.saveSeatInstructions(session.user.id, 'w', 's', 'Text').then(result => result.seat === 's' ? 'passed' : refusal(result)),
   };
-  return { paths, writes, as: userId => { session = { user: { id: userId } }; } };
+  return { paths, writes, team, as: userId => { session = { user: { id: userId } }; } };
 }
+
+test('an inactive platform-admin membership hides the project and the token picker destination', async () => {
+  const f = fixture();
+  f.team.members.find(member => member.userId === 'root').status = false;
+  f.as('root');
+  assert.equal(await f.paths['open the agent tokens page'](), 'passed');
+  assert.equal(await f.paths['the agent tokens page offers the workspace'](), 'refused');
+  assert.equal(await f.paths['set the agent repository'](), 'status 404');
+  assert.deepEqual(f.writes, []);
+});
 
 test('every seat, token, agent-mode, agent-repository and instruction path asks MANAGE_AGENTS: an Admin passes, a role with MANAGE_WORKSPACE_PERMISSIONS but without MANAGE_AGENTS is refused, a platform admin passes', async () => {
   const f = fixture();

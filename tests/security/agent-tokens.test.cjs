@@ -195,17 +195,23 @@ test('an admin role holding the permission and a system admin may mint', async (
   }
 });
 
-test('the existing token tests pass on the new permission', async () => {
+test('a role with only MANAGE_WORKSPACE_PERMISSIONS cannot mint or revoke a live token', async () => {
   // The fixture's Admin row is MANAGE_AGENTS, which every test here runs on. An Admin row of only the permission editor's
   // permission manages no token, and the refusal writes nothing.
   const f = fixture();
   f.prisma.rolePermission.findUnique = async ({ where: { workspaceId_role_permission: key } }) =>
     key.workspaceId === 'w1' && key.role === 'ADMIN' && key.permission === 'MANAGE_WORKSPACE_PERMISSIONS' ? key : null;
+  f.as('alice');
+  const minted = await f.mint();
+  assert.equal(minted.status, 201);
+  const { id, token } = minted.body;
+  assert.equal((await f.auth(token)).success, true);
   f.as('carol');
   const before = f.writes();
   assert.equal((await f.mint()).status, 403);
-  assert.equal((await f.revoke('token-0')).status, 403);
+  assert.equal((await f.revoke(id)).status, 403);
   assert.equal(f.writes(), before);
+  assert.equal((await f.auth(token)).success, true);
 });
 
 test('invalid input is rejected and writes nothing', async () => {
