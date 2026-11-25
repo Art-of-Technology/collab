@@ -1,5 +1,6 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { setTimeout: delay } = require('node:timers/promises');
 const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
 
@@ -150,27 +151,11 @@ test('a refused call writes nothing, and a platform admin keeps today\'s answer'
     let once = false;
     model[method] = async (...args) => {
       const rows = await read.apply(model, args);
-      if (!once && (once = true)) await change(...args);
+      if (!once && (once = true)) await change();
       return rows;
     };
     try { return await action(); } finally { model[method] = read; }
   };
-  // Two Owners, levels read in one batch, both demoted right after: at no instant was the actor above the seat's person.
-  const owners = { workspaceId: 'w', userId: { in: [O, O2] } };
-  const peer = await seatFor(O2);
-  const refusedBefore = await written();
-  for (const [path, act] of [
-    ['instructions', () => call(O, routes.instructions.PUT, 'PUT', { seatId: peer.id }, { text: 'x' })],
-    ['revoke', () => call(O, routes.token.DELETE, 'DELETE', { tokenId: peer.tokenId })],
-    ['retire', () => call(O, routes.seat.DELETE, 'DELETE', { seatId: peer.id })],
-    ['token', () => call(O, routes.tokens.POST, 'POST', {}, { name: peer.name, access: 'write' })],
-  ]) {
-    const [status] = await afterRead(prisma, '$transaction', batch => Array.isArray(batch) && prisma.workspaceMember.updateMany({ where: owners, data: { role: 'ADMIN' } }), act);
-    assert.equal(status, 403, path);
-    await prisma.workspaceMember.updateMany({ where: owners, data: { role: 'OWNER' } });
-  }
-  assert.equal(await written(), refusedBefore);
-
   // The seat's person changes between the read and the write: the seat reads as not found and nothing is written.
   for (const [path, model, method, act] of [
     ['retire', prisma.agentSeat, 'findFirst', seat => call(O, routes.seat.DELETE, 'DELETE', { seatId: seat.id })],
@@ -183,6 +168,50 @@ test('a refused call writes nothing, and a platform admin keeps today\'s answer'
     assert.equal(status, 404, path);
     await prisma.agentSeat.update({ where: { id: seat.id }, data: { ownerId: M } });
     assert.equal(await written(), unchanged, path);
+  }
+});
+
+test('an Owner cannot act on a peer who becomes primary owner between rank reads', async () => {
+  const { prisma, seatFor, written, create, call, routes } = await setUp();
+  const peer = await seatFor(O2);
+  const before = await written();
+  const setPeerRank = (db, ownerId, role) => db.workspace.update({
+    where: { id: 'w' },
+    data: { ownerId, members: { update: { where: { userId_workspaceId: { userId: O2, workspaceId: 'w' } }, data: { role } } } },
+    select: { ownerId: true, members: { where: { userId: O2 }, select: { role: true } } },
+  });
+  for (const [path, act] of [
+    ['create', () => create(O, O2)],
+    ['request again', () => call(O, routes.seats.POST, 'POST', {}, { name: peer.name, projectId: 'p', role: 'developer', ownerId: O2 })],
+    ['instructions', () => call(O, routes.instructions.PUT, 'PUT', { seatId: peer.id }, { text: 'x' })],
+    ['token', () => call(O, routes.tokens.POST, 'POST', {}, { name: peer.name, access: 'write' })],
+    ['grant access', () => call(O, routes.token.PATCH, 'PATCH', { tokenId: peer.tokenId }, { workspaceId: 'w2', allowed: true })],
+    ['remove access', () => call(O, routes.token.PATCH, 'PATCH', { tokenId: peer.tokenId }, { workspaceId: 'w2', allowed: false })],
+    ['revoke', () => call(O, routes.token.DELETE, 'DELETE', { tokenId: peer.tokenId })],
+    ['retire', () => call(O, routes.seat.DELETE, 'DELETE', { seatId: peer.id })],
+  ]) {
+    const locked = Promise.withResolvers();
+    try {
+      const [committed, [status, body]] = await Promise.all([
+        prisma.$transaction(async tx => {
+          await tx.$executeRaw`LOCK TABLE "WorkspaceMember" IN ACCESS EXCLUSIVE MODE`;
+          locked.resolve();
+          const deadline = Date.now() + 4000;
+          while (!(await tx.$queryRaw`SELECT pid FROM pg_locks WHERE relation = '"WorkspaceMember"'::regclass
+            AND mode = 'AccessShareLock' AND NOT granted`).length) {
+            assert.ok(Date.now() < deadline, `${path}: timed out waiting for the membership read`);
+            await delay(10);
+          }
+          return setPeerRank(tx, O2, 'ADMIN');
+        }),
+        locked.promise.then(act),
+      ]);
+      assert.deepEqual(committed, { ownerId: O2, members: [{ role: 'ADMIN' }] }, path);
+      assert.deepEqual([status, body.error], [403, REFUSAL], path);
+    } finally {
+      await setPeerRank(prisma, P, 'OWNER');
+    }
+    assert.equal(await written(), before, path);
   }
 });
 
