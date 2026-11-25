@@ -214,6 +214,7 @@ export async function loadNeedsYou({
       issue: NeedsYouItem['issue'];
       seat: { id: string; name: string; ownerId: string | null; userId: string };
       runId: string;
+      startedAt: Date;
       endedAt: Date;
     }>();
     const due: Array<{ issue: NeedsYouItem['issue']; since: Date }> = [];
@@ -243,13 +244,13 @@ export async function loadNeedsYou({
         || !run.endedAt || (run.outcome !== 'blocked' && run.outcome !== 'in_review')) continue;
       const helper = helpers.find(row => row.userId === assigneeId);
       if (run.endedAt >= (helper?.approvedAt ?? helper?.assignedAt ?? createdAt)) {
-        waiting.set(id, { issue, seat, runId: run.id, endedAt: run.endedAt });
+        waiting.set(id, { issue, seat, runId: run.id, startedAt: run.startedAt, endedAt: run.endedAt });
       }
     }
 
     const waitingIds = [...waiting.keys()];
     const dueProjects = [...new Set(due.map(row => row.issue.project.id))];
-    const oldestFinish = [...waiting.values()].reduce((earliest, row) => Math.min(earliest, row.endedAt.getTime()), now.getTime());
+    const oldestStart = [...waiting.values()].reduce((earliest, row) => Math.min(earliest, row.startedAt.getTime()), now.getTime());
     const [finishes, comments, activeProjects] = await Promise.all([
       waitingIds.length ? prisma.issueActivity.findMany({
         where: { workspaceId, itemType: 'ISSUE', itemId: { in: waitingIds }, action: 'AGENT_RUN_FINISHED' },
@@ -258,7 +259,7 @@ export async function loadNeedsYou({
       }) : [],
       waitingIds.length ? prisma.issueComment.groupBy({
         by: ['issueId', 'authorId'],
-        where: { issueId: { in: waitingIds }, issue: readableIssues, createdAt: { gte: new Date(oldestFinish) } },
+        where: { issueId: { in: waitingIds }, issue: readableIssues, createdAt: { gte: new Date(oldestStart) } },
         _max: { createdAt: true },
       }) : [],
       dueProjects.length ? prisma.issue.groupBy({
@@ -272,7 +273,8 @@ export async function loadNeedsYou({
     for (const reply of comments) {
       const current = waiting.get(reply.issueId);
       const latest = reply._max.createdAt;
-      if (!current || !latest || latest < current.endedAt) continue;
+      if (!current || !latest || latest < current.startedAt) continue;
+      // Seats write their question during the run; only a later comment by someone else answers it.
       if (reply.authorId === current.seat.userId) commentDates.set(reply.issueId, latest);
       else if (latest > current.endedAt) answered.add(reply.issueId);
     }

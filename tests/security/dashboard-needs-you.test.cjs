@@ -89,15 +89,21 @@ test("the question is the seat's own last comment since its run ended, and nobod
   await seatComment('current', 'Same time, older comment', { id: 'first' });
   await seatComment('current', question, { id: 'last' });
   await seatComment('current', 'Somebody else at the cutoff', { id: 'newest', authorId: 'other' });
+  // Seats write their question seconds before the run ends; the run started at date(-2.5).
+  await waiting('before-end');
+  await seatComment('before-end', 'Asked during the run. Reply `ship` (recommended) or `hold`.', { createdAt: new Date(date(-2).getTime() - 5000) });
+  await seatComment('before-end', 'Somebody else during the run', { authorId: 'other', createdAt: date(-2.2) });
   await seatComment('fallback', 'Reply `stale`.', { createdAt: date(-3) });
   await seatComment('read-denied', 'Reply `private`.');
   const { items } = await read();
   assert.deepEqual(Object.fromEntries(items.map(row => [row.issue.id, row.question])), {
     current: question.slice(0, 2000), fallback: 'Read the result.',
+    'before-end': 'Asked during the run. Reply `ship` (recommended) or `hold`.',
   });
+  assert.deepEqual(items.find(row => row.issue.id === 'before-end').options, ['ship', 'hold']);
   assert.deepEqual(items.find(row => row.issue.id === 'current').options, ['yes']);
   await seatComment('current', 'Later reply by somebody else', { authorId: 'other', createdAt: date(-1) });
-  assert.deepEqual((await read()).items.map(row => row.issue.id), ['fallback']);
+  assert.deepEqual((await read()).items.map(row => row.issue.id).sort(), ['before-end', 'fallback']);
 });
 
 test('a row is a question only when that comment has reply words; otherwise it waits on the person', async () => {
