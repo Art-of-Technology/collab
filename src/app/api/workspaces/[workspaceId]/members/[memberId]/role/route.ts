@@ -93,14 +93,15 @@ export async function PUT(
       return NextResponse.json({ error: "The primary owner's role cannot be changed" }, { status: 403 });
     }
 
-    // The rank rule. A platform admin who is not a member keeps the answer this route gave before it.
+    if (member.userId === session.user.id) {
+      return NextResponse.json({ error: 'Nobody can change their own role' }, { status: 403 });
+    }
+
+    // The rank rule. A platform admin, member or not, keeps the answer this route gave before it.
     const actor = await getWorkspaceAuthority(session.user.id, workspaceId);
-    if (actor?.level !== null) {
+    if (!actor?.platformAdmin) {
       const target = { userId: member.userId, level: levelOfRole(member.role) };
       const holdsChangeRoles = { holdsChangeRoles: true }; // checked above
-      if (member.userId === session.user.id) {
-        return NextResponse.json({ error: 'Nobody can change their own role' }, { status: 403 });
-      }
       if (!member.user.email && levelOfRole(role) !== 'STANDARD') {
         return NextResponse.json({ error: 'An agent account cannot be an Owner or an Admin' }, { status: 403 });
       }
