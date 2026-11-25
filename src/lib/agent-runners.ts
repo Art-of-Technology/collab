@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { createAgentToken } from '@/lib/agent-tokens';
 import { markNoRoom, saysNoRoom } from '@/lib/agent-seats';
+import { getWorkspaceAuthority, levelOfRole, may, mayActOn, type WorkspaceAuthority, type WorkspaceLevel } from '@/lib/workspace-authority';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -48,6 +49,42 @@ export async function startPairing(name: string) {
   });
 }
 
+/** Someone else's runner: an actor holding `runners.manage` acts on it when its person is strictly below them; no level counts as below everyone. */
+function runnerAccess(actor: Pick<WorkspaceAuthority, 'userId' | 'level'>, person: Pick<WorkspaceAuthority, 'userId' | 'level'>) {
+  if (!may(actor, 'runners.manage')) return 'denied';
+  if (!person.level) return 'inactive';
+  return mayActOn(actor, person, { holdsChangeRoles: false }) ? 'below' : 'denied';
+}
+
+/**
+ * The actor's verdict on each of these people's runners. The actor's level and theirs come from ONE snapshot, so a
+ * verdict is always one that was true at some instant, and are read the way `getWorkspaceAuthority` reads one person:
+ * the workspace's owner is the primary owner, an active membership gives its role's level. Read outside any transaction:
+ * it takes a connection of its own. With no workspace nobody acts on anyone.
+ */
+async function runnerAccessFor(actorId: string, workspaceId: string, personIds: string[]) {
+  const [workspace, members] = await prisma.$transaction([
+    prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
+    prisma.workspaceMember.findMany({ where: { workspaceId, status: true, userId: { in: [actorId, ...personIds] } }, select: { userId: true, role: true } }),
+  ], { isolationLevel: 'RepeatableRead' });
+  const rolesByUserId = new Map(members.map(member => [member.userId, member.role]));
+  const levelOf = (userId: string): WorkspaceLevel | null => {
+    const role = rolesByUserId.get(userId);
+    return userId === workspace?.ownerId ? 'PRIMARY_OWNER' : role === undefined ? null : levelOfRole(role);
+  };
+  const actor = { userId: actorId, level: levelOf(actorId) };
+  return (personId: string) => workspace ? runnerAccess(actor, { userId: personId, level: levelOf(personId) }) : 'denied';
+}
+
+/** Whether the actor may act on `personId`'s runner. */
+const readRunnerAccess = async (actorId: string, workspaceId: string, personId: string) => (await runnerAccessFor(actorId, workspaceId, [personId]))(personId);
+
+/** Of these people, those whose runners the actor may act on besides their own: to connect one, an active person below them; an existing one also when its person has no level any more. */
+export async function runnerPeopleBelow(actorId: string, workspaceId: string, personIds: string[], purpose: 'connect' | 'existing') {
+  const access = await runnerAccessFor(actorId, workspaceId, personIds);
+  return new Set(personIds.filter(userId => access(userId) === 'below' || (purpose === 'existing' && access(userId) === 'inactive')));
+}
+
 /** End a runner inside a transaction: its credential is refused from now on and the tokens it fetched are revoked. */
 async function end(tx: Prisma.TransactionClient, workspaceId: string, actorId: string, runner: { id: string; name: string }, reason: 'removed' | 'replaced' | 'goodbye') {
   // The row first: a fetch that is making a token holds it, so this waits for that token and revokes it too.
@@ -61,19 +98,21 @@ async function end(tx: Prisma.TransactionClient, workspaceId: string, actorId: s
 }
 
 /**
- * A person admits the runner that shows `code`. A member admits a runner for themselves; only the workspace's owner
- * admits one for someone else. A person has one runner per workspace: admitting another ends the one before, the way
+ * A person admits the runner that shows `code`. A member admits a runner for themselves; an Owner admits one for someone
+ * below their own level, the primary owner for anyone. A person has one runner per workspace: admitting another ends the one before, the way
  * a rebuilt machine replaces a lost one.
  */
 export async function admitRunner(input: { workspaceId: string; actorId: string; code: string; ownerId?: string | null }) {
   const { workspaceId, actorId } = input, ownerId = input.ownerId ?? actorId;
+  // Read before the transaction, which must not wait for a second connection, and only for someone else's runner.
+  const access = ownerId === actorId ? 'self' : await readRunnerAccess(actorId, workspaceId, ownerId);
   return prisma.$transaction(async tx => {
-    const workspace = await tx.workspace.findFirst({ where: inWorkspace(workspaceId, actorId), select: { ownerId: true } });
+    const workspace = await tx.workspace.findFirst({ where: inWorkspace(workspaceId, actorId), select: { id: true } });
     if (!workspace) throw new HandoffError('not_found', 'Workspace not found', 404);
-    if (ownerId !== actorId) {
-      if (workspace.ownerId !== actorId) throw new HandoffError('owner_only', "Only the workspace's owner connects a runner for someone else", 403);
+    if (access !== 'self') {
+      if (access === 'denied') throw new HandoffError('owner_only', "Only a workspace Owner connects a runner for someone below their own level", 403);
       // A person: an agent's service account has no email and no logins a runner could run under.
-      if (!await tx.user.findFirst({ where: { id: ownerId, email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspaceId } } },
+      if (access === 'inactive' || !await tx.user.findFirst({ where: { id: ownerId, email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspaceId } } },
         { workspaceMemberships: { some: { workspaceId, status: true } } }] }, select: { id: true } })) {
         throw new HandoffError('owner_not_found', "The runner's person is not an active member of this workspace");
       }
@@ -92,12 +131,15 @@ export async function admitRunner(input: { workspaceId: string; actorId: string;
   });
 }
 
-/** Remove a runner: a person their own, the workspace's owner anyone's. Someone else's runner reads as absent. */
+/** Remove a runner: a person their own, an Owner that of someone below them, the primary owner anyone's. Someone else's runner reads as absent. */
 export async function removeRunner(input: { workspaceId: string; actorId: string; runnerId: string }) {
+  // Decided before the transaction, which must not wait for a second connection, on the runner's person as read now; inside it a runner of anyone else reads as absent.
+  const person = (await prisma.agentRunner.findFirst({ where: { id: input.runnerId, workspaceId: input.workspaceId, removedAt: null }, select: { ownerId: true } }))?.ownerId;
+  const manages = !!person && person !== input.actorId && (await readRunnerAccess(input.actorId, input.workspaceId, person)) !== 'denied';
   return prisma.$transaction(async tx => {
-    const workspace = await tx.workspace.findUnique({ where: { id: input.workspaceId }, select: { ownerId: true } });
+    const workspace = await tx.workspace.findUnique({ where: { id: input.workspaceId }, select: { id: true } });
     const runner = await tx.agentRunner.findFirst({ where: { id: input.runnerId, workspaceId: input.workspaceId, removedAt: null }, select: { id: true, name: true, ownerId: true } });
-    if (!workspace || !runner || (runner.ownerId !== input.actorId && workspace.ownerId !== input.actorId)) throw new HandoffError('not_found', 'Runner not found', 404);
+    if (!workspace || !runner || (runner.ownerId !== input.actorId && !(manages && runner.ownerId === person))) throw new HandoffError('not_found', 'Runner not found', 404);
     return { revokedTokens: await end(tx, input.workspaceId, input.actorId, runner, 'removed') };
   });
 }
@@ -106,13 +148,16 @@ export async function removeRunner(input: { workspaceId: string; actorId: string
  * The owner asks for a renewal now, as when a token may have leaked: every token this runner fetched is revoked at
  * once, and its next ask gets a new one for each of its seats. The seats' agents stay on, so nothing has to be made
  * again by hand; until the runner asks, the seats have no usable token and their work waits.
- * A person renews their own runner, the workspace's owner anyone's. Someone else's runner reads as absent.
+ * A person renews their own runner, an Owner that of someone below them, the primary owner anyone's. Someone else's runner reads as absent.
  */
 export async function renewRunnerTokens(input: { workspaceId: string; actorId: string; runnerId: string }) {
+  // Decided before the transaction, which must not wait for a second connection, on the runner's person as read now; inside it a runner of anyone else reads as absent.
+  const person = (await prisma.agentRunner.findFirst({ where: { id: input.runnerId, workspaceId: input.workspaceId, removedAt: null }, select: { ownerId: true } }))?.ownerId;
+  const manages = !!person && person !== input.actorId && (await readRunnerAccess(input.actorId, input.workspaceId, person)) !== 'denied';
   return prisma.$transaction(async tx => {
-    const workspace = await tx.workspace.findUnique({ where: { id: input.workspaceId }, select: { ownerId: true } });
+    const workspace = await tx.workspace.findUnique({ where: { id: input.workspaceId }, select: { id: true } });
     const found = await tx.agentRunner.findFirst({ where: { id: input.runnerId, workspaceId: input.workspaceId, removedAt: null }, select: { id: true, name: true, ownerId: true } });
-    if (!workspace || !found || (found.ownerId !== input.actorId && workspace.ownerId !== input.actorId)) throw new HandoffError('not_found', 'Runner not found', 404);
+    if (!workspace || !found || (found.ownerId !== input.actorId && !(manages && found.ownerId === person))) throw new HandoffError('not_found', 'Runner not found', 404);
     // The row first, as removing does: a fetch that is making a token holds it, so this waits for that token and revokes it too.
     await tx.$queryRaw`SELECT "id" FROM "AgentRunner" WHERE "id" = ${found.id} FOR UPDATE`;
     if (!await tx.agentRunner.count({ where: { id: found.id, removedAt: null } })) throw new HandoffError('not_found', 'Runner not found', 404);
@@ -143,16 +188,24 @@ export async function runnerGoodbye(credential: string) {
   return prisma.$transaction(async tx => ({ revokedTokens: await end(tx, workspaceId, ownerId, runner, 'goodbye') }));
 }
 
-/** The runners a person may see: their own, and for the workspace's owner everyone's. Null when the workspace is not the person's. */
+/**
+ * The runners a person may see: their own, and those of the people they may act on (`runnerPeopleBelow`). `owner` says
+ * the viewer holds `runners.manage`. Null when the workspace is not the person's.
+ */
 export async function listRunners(workspaceId: string, viewerId: string) {
-  const workspace = await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, viewerId), select: { ownerId: true } });
+  const workspace = await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, viewerId), select: { id: true } });
   if (!workspace) return null;
-  const owner = workspace.ownerId === viewerId;
-  const runners = await prisma.agentRunner.findMany({ where: { workspaceId, removedAt: null, ...(!owner && { ownerId: viewerId }) }, orderBy: { admittedAt: 'desc' },
+  const viewer = await getWorkspaceAuthority(viewerId, workspaceId);
+  const owner = may(viewer, 'runners.manage');
+  const listed = await prisma.agentRunner.findMany({ where: { workspaceId, removedAt: null, ...(!owner && { ownerId: viewerId }) }, orderBy: { admittedAt: 'desc' },
     select: { id: true, name: true, ownerId: true, admittedAt: true, lastSeenAt: true, owner: { select: { name: true } } } });
+  // The viewer's own level is read again with theirs, in one snapshot; `owner` above only widened what was listed.
+  const others = owner ? await runnerPeopleBelow(viewerId, workspaceId, listed.map(runner => runner.ownerId!), 'existing') : new Set<string>();
+  const runners = listed.filter(runner => runner.ownerId === viewerId || others.has(runner.ownerId!));
   const seats = await prisma.agentSeat.groupBy({ by: ['ownerId'], where: { workspaceId, byRunner: true, retiredAt: null, ownerId: { in: runners.map(runner => runner.ownerId!) } }, _count: true });
+  const seatCounts = new Map(seats.map(row => [row.ownerId, row._count]));
   return { owner, runners: runners.map(({ owner: person, ...runner }) => ({ ...runner, ownerName: person?.name ?? null,
-    seats: seats.find(row => row.ownerId === runner.ownerId)?._count ?? 0 })) };
+    seats: seatCounts.get(runner.ownerId) ?? 0 })) };
 }
 
 /** How a seat account stands with its runner: `held` with a usable token, `renewing` when a renewal was not picked up yet, `expired` when its last token ran out. */

@@ -11,7 +11,21 @@ import type { DashboardScope, NeedsYouItem, NeedsYouKind, NeedsYouOverview } fro
 
 const day = 86_400_000;
 const projectSelect = { id: true, slug: true, name: true, color: true } as const;
-const kindOrder = { question: 0, review: 1, failed: 2, due: 3 };
+const kindOrder = { question: 0, review: 0, failed: 1, due: 2 };
+const issueKeyPattern = '[A-Z][A-Z0-9]*-\\d+';
+const issueKey = new RegExp(`^${issueKeyPattern}$`, 'i');
+const listItem = /^[ \t]*(?:\d+[.)]|[-*+])[ \t]+/;
+const replyListItem = /^[ \t]*(?:\d+[.)]|[-*+])[ \t]+`([^`]+)`/;
+const replyMarker = /\brepl(?:y|ies)\b|\bas a comment on\b|\b(?:reply|comment)\s+`[^`]+`\s+on\b/i;
+const recommendation = /\b(?:recommend(?:ed)?|suggest\w*)\b/i;
+const replyLead = '(?:repl(?:y|ies)(?:\\s+belongs?)?|(?:as a )?comment)';
+// "Reply on", "as a comment on" and "comment `word` on" name a destination anywhere in the comment;
+// a bare "comment on" does so only in the reply part, so a remark like "I left a comment on X" is not one.
+const destinationLead = new RegExp(`\\b(?:${replyLead}\\s+\`[^\`]+\`|repl(?:y|ies)(?:\\s+belongs?)?|as a comment)\\s+on\\s+`, 'gi');
+const replyPartLead = new RegExp(`\\b${replyLead}(?:\\s+\`[^\`]+\`)?\\s+on\\s+`, 'gi');
+const destinationKey = new RegExp(
+  `^(?:\`?(${issueKeyPattern})\\b|\\[[^\\]\\r\\n]*\\]\\([^\\s)]*/(${issueKeyPattern})\\b[^\\s)]*\\))`, 'i',
+);
 
 type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null };
 type Repository = { provider: string; baseUrl: string; repositoryPath: string };
@@ -29,6 +43,68 @@ function readFinish(details: string | null) {
   } catch {
     return null;
   }
+}
+
+function isReplyWord(word: string) {
+  return !!word && word.length <= 40 && !/[/\\]/.test(word) && !issueKey.test(word) && !/^[a-f0-9]{7,40}$/i.test(word);
+}
+
+function replyDetails(content: string) {
+  const lines = content.split(/\r\n?|\n/);
+  // Include instructions written as a list, even when each item repeats "Reply".
+  let start = lines.findLastIndex(line => {
+    const listedWord = replyListItem.exec(line)?.[1].trim();
+    return replyMarker.test(line) || (listedWord && isReplyWord(listedWord));
+  });
+  if (start >= 0 && listItem.test(lines[start])) {
+    for (let i = start - 1; i >= 0 && (listItem.test(lines[i]) || !lines[i].trim()); i--) {
+      if (listItem.test(lines[i])) start = i;
+    }
+  }
+
+  const options: string[] = [];
+  let suggested: string | null = null;
+  const replyPart = start < 0 ? '' : lines.slice(start).join('\n');
+  for (const item of start < 0 ? [] : replyPart.split(/\n(?=\s*(?:\d+[.)]|[-*+])\s+)/)) {
+    const matches = [...item.matchAll(/(?<!`)`([^`\r\n]+)`(?!`)/g)];
+    for (const [index, match] of matches.entries()) {
+      const word = match[1].trim();
+      if (!isReplyWord(word)) continue;
+      if (!options.includes(word) && options.length < 4) options.push(word);
+      if (suggested || !options.includes(word)) continue;
+      const offset = match.index;
+      const lineStart = item.lastIndexOf('\n', offset - 1) + 1;
+      const nextLine = item.indexOf('\n', offset);
+      const lineEnd = nextLine < 0 ? item.length : nextLine;
+      const previous = matches[index - 1];
+      const next = matches[index + 1];
+      const prefix = item.slice(Math.max(lineStart, previous ? previous.index + previous[0].length : 0), offset);
+      const suffix = item.slice(offset + match[0].length, Math.min(lineEnd, next?.index ?? item.length));
+      if ((matches.length === 1 && listItem.test(item) && recommendation.test(item))
+        || recommendation.test(prefix.split(/\b(?:or|and)\b|,/i).at(-1) ?? '')
+        || recommendation.test(suffix.split(/\b(?:or|and)\b|,/i)[0])) suggested = word;
+    }
+  }
+
+  const destinations = new Set<string>();
+  const leads = [
+    ...[...content.matchAll(destinationLead)].map(lead => content.slice(lead.index + lead[0].length)),
+    ...[...replyPart.matchAll(replyPartLead)].map(lead => replyPart.slice(lead.index + lead[0].length)),
+  ];
+  for (let rest of leads) {
+    for (let match = destinationKey.exec(rest); match; match = destinationKey.exec(rest)) {
+      destinations.add((match[1] || match[2]).toUpperCase());
+      rest = rest.slice(match[0].length).replace(/^`/, '');
+      const separator = /^(?:[ \t]+(?:or|and)[ \t]+|,[ \t]*)/i.exec(rest);
+      if (!separator) break;
+      rest = rest.slice(separator[0].length);
+    }
+  }
+  return { options, suggested, destinations: [...destinations] };
+}
+
+function redactDestinations(text: string, keys: string[]) {
+  return text.replace(new RegExp(`\\b(?:${keys.join('|')})\\b`, 'gi'), '[issue unavailable]');
 }
 
 // Apply the repository overview's HTTP(S) and credential checks to the configured instance.
@@ -138,12 +214,14 @@ export async function loadNeedsYou({
       issue: NeedsYouItem['issue'];
       seat: { id: string; name: string; ownerId: string | null; userId: string };
       runId: string;
+      startedAt: Date;
       endedAt: Date;
     }>();
     const due: Array<{ issue: NeedsYouItem['issue']; since: Date }> = [];
     const add = (kind: NeedsYouKind, issue: NeedsYouItem['issue'], since: Date, details: Partial<NeedsYouItem> = {}) => {
       rows.push({ kind, id: `${kind}:${issue.id}`, issue, since: since.toISOString(), seat: null,
-        text: null, pullRequestUrl: null, runId: null, canAct: false, ...details });
+        text: null, question: null, ask: 'none', replyOn: null, options: [], suggested: null,
+        pullRequestUrl: null, runId: null, canAct: false, ...details });
     };
 
     for (const { id, issueKey, title, project, assigneeId, createdAt, dueDate, status, statusValue, projectStatus, helpers, agentRuns } of issues) {
@@ -166,13 +244,13 @@ export async function loadNeedsYou({
         || !run.endedAt || (run.outcome !== 'blocked' && run.outcome !== 'in_review')) continue;
       const helper = helpers.find(row => row.userId === assigneeId);
       if (run.endedAt >= (helper?.approvedAt ?? helper?.assignedAt ?? createdAt)) {
-        waiting.set(id, { issue, seat, runId: run.id, endedAt: run.endedAt });
+        waiting.set(id, { issue, seat, runId: run.id, startedAt: run.startedAt, endedAt: run.endedAt });
       }
     }
 
     const waitingIds = [...waiting.keys()];
     const dueProjects = [...new Set(due.map(row => row.issue.project.id))];
-    const oldestFinish = [...waiting.values()].reduce((earliest, row) => Math.min(earliest, row.endedAt.getTime()), now.getTime());
+    const oldestStart = [...waiting.values()].reduce((earliest, row) => Math.min(earliest, row.startedAt.getTime()), now.getTime());
     const [finishes, comments, activeProjects] = await Promise.all([
       waitingIds.length ? prisma.issueActivity.findMany({
         where: { workspaceId, itemType: 'ISSUE', itemId: { in: waitingIds }, action: 'AGENT_RUN_FINISHED' },
@@ -181,7 +259,7 @@ export async function loadNeedsYou({
       }) : [],
       waitingIds.length ? prisma.issueComment.groupBy({
         by: ['issueId', 'authorId'],
-        where: { issueId: { in: waitingIds }, issue: readableIssues, createdAt: { gt: new Date(oldestFinish) } },
+        where: { issueId: { in: waitingIds }, issue: readableIssues, createdAt: { gte: new Date(oldestStart) } },
         _max: { createdAt: true },
       }) : [],
       dueProjects.length ? prisma.issue.groupBy({
@@ -191,10 +269,14 @@ export async function loadNeedsYou({
     ]);
 
     const answered = new Set<string>();
+    const commentDates = new Map<string, Date>();
     for (const reply of comments) {
       const current = waiting.get(reply.issueId);
       const latest = reply._max.createdAt;
-      if (current && latest && latest > current.endedAt && reply.authorId !== current.seat.userId) answered.add(reply.issueId);
+      if (!current || !latest || latest < current.startedAt) continue;
+      // Seats write their question during the run; only a later comment by someone else answers it.
+      if (reply.authorId === current.seat.userId) commentDates.set(reply.issueId, latest);
+      else if (latest > current.endedAt) answered.add(reply.issueId);
     }
     const factsByIssue = new Map<string, ExitFacts>();
     for (const activity of finishes) {
@@ -207,13 +289,58 @@ export async function loadNeedsYou({
 
     const waitingSeats = new Map<string, { seatId: string; issueKey: string | null }>();
     const orderedWaiting = [...waiting.values()].sort((a, b) => a.endedAt.getTime() - b.endedAt.getTime() || a.issue.id.localeCompare(b.issue.id));
-    for (const { issue, seat, endedAt } of orderedWaiting) {
+    const seatRows = orderedWaiting.flatMap(row => {
+      const { issue, seat } = row;
       const facts = factsByIssue.get(issue.id);
-      if (!facts) continue;
+      if (!facts) return [];
       if (!waitingSeats.has(seat.id)) waitingSeats.set(seat.id, { seatId: seat.id, issueKey: issue.issueKey });
-      if (scope === 'all' || facts.askedUser === actorId || seat.ownerId === actorId || seat.userId === actorId) {
-        add(facts.pullRequest ? 'review' : 'question', issue, endedAt, { seat: { id: seat.id, name: seat.name }, text: facts.nextStep });
-      }
+      return scope === 'all' || facts.askedUser === actorId || seat.ownerId === actorId || seat.userId === actorId
+        ? [{ ...row, facts }] : [];
+    });
+
+    // The grouped read supplies the exact timestamps, so we fetch no comment history.
+    const latestCommentWhere = seatRows.flatMap(({ issue, seat }) => {
+      const createdAt = commentDates.get(issue.id);
+      return createdAt ? [{ issueId: issue.id, authorId: seat.userId, createdAt }] : [];
+    });
+    const latestComments = latestCommentWhere.length ? await prisma.issueComment.findMany({
+      where: { issue: readableIssues, OR: latestCommentWhere },
+      select: { issueId: true, content: true },
+      orderBy: { id: 'desc' },
+      distinct: ['issueId'],
+    }) : [];
+    const commentByIssue = new Map(latestComments.map(comment => [comment.issueId, comment.content]));
+    const parsedRows = seatRows.map(row => {
+      const content = commentByIssue.get(row.issue.id);
+      const { options, suggested, destinations } = replyDetails(content ?? '');
+      return { ...row, content, options, suggested,
+        destinations: destinations.filter(key => key !== row.issue.issueKey?.toUpperCase()) };
+    });
+    const targetKeys = [...new Set(parsedRows.flatMap(row => row.destinations))];
+    const targets = targetKeys.length ? await prisma.issue.findMany({
+      where: { workspaceId, project: { workspaceId }, AND: [issueReadAccessWhere(actorId)], issueKey: { in: targetKeys } },
+      select: { id: true, issueKey: true },
+    }) : [];
+    const targetByKey = new Map<string, NeedsYouItem['replyOn']>();
+    for (const target of targets) {
+      if (!target.issueKey) continue;
+      targetByKey.set(target.issueKey, targetByKey.has(target.issueKey) ? null : { id: target.id, issueKey: target.issueKey });
+    }
+    for (const { issue, seat, endedAt, facts, content, options, suggested, destinations } of parsedRows) {
+      const [destination] = destinations;
+      const target = destinations.length === 1 ? targetByKey.get(destination) : null;
+      const ask = !options.length || (destinations.length > 0 && !target) ? 'none' : target ? 'elsewhere' : 'here';
+      const hiddenKeys = destinations.filter(key => !targetByKey.get(key));
+      const visible = (text: string | null) => text && hiddenKeys.length ? redactDestinations(text, hiddenKeys) : text;
+      add(facts.pullRequest ? 'review' : 'question', issue, endedAt, {
+        seat: { id: seat.id, name: seat.name },
+        text: visible(facts.nextStep),
+        question: visible(content ?? facts.nextStep)?.slice(0, 2000) ?? null,
+        ask,
+        replyOn: ask === 'elsewhere' ? target ?? null : null,
+        options: ask === 'none' ? [] : options,
+        suggested: ask === 'none' ? null : suggested,
+      });
     }
     const activeIds = new Set(activeProjects.map(project => project.projectId));
     for (const row of due) if (activeIds.has(row.issue.project.id)) add('due', row.issue, row.since);
@@ -225,9 +352,10 @@ export async function loadNeedsYou({
       const projectId = row.issue.project.id;
       byProject.set(projectId, (byProject.get(projectId) ?? 0) + 1);
     }
-    const oldest = rows.find(row => row.kind === 'question');
+    const oldest = rows.find(row => row.ask !== 'none');
     const items = rows.filter(row => !kind || row.kind === kind)
-      .sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || a.since.localeCompare(b.since) || a.id.localeCompare(b.id)).slice(0, 20);
+      .sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || Number(a.ask === 'none') - Number(b.ask === 'none')
+        || a.since.localeCompare(b.since) || a.id.localeCompare(b.id)).slice(0, 20);
     const reviewProjects = [...new Set(items.filter(item => item.kind === 'review').map(item => item.issue.project.id))];
     const repoProjects = { ...projectWhere, id: { in: reviewProjects } } satisfies Prisma.ProjectWhereInput;
     const [connections, github, assign, forgeBindings] = await Promise.all([
@@ -240,13 +368,13 @@ export async function loadNeedsYou({
         select: { projectId: true, fullName: true },
       }) : [],
       items.some(item => item.kind === 'failed') ? checkUserPermission(actorId, workspaceId, Permission.ASSIGN_TASK) : null,
-      items.some(item => item.kind === 'question') ? readForgeBindings() : [],
+      items.some(item => item.ask === 'here') ? readForgeBindings() : [],
     ]);
     const repositories = [...github.map(row => ({ projectId: row.projectId, provider: 'github',
       baseUrl: 'https://github.com', repositoryPath: row.fullName })), ...connections];
     const forgeProjects = new Set(forgeBindings.map(binding => binding.projectId));
     for (const item of items) {
-      if (item.kind === 'question') item.canAct = !forgeProjects.has(item.issue.project.id);
+      if (item.ask === 'here') item.canAct = !forgeProjects.has(item.issue.project.id);
       if (item.kind === 'failed') item.canAct = assign?.hasPermission ?? false;
       const reference = factsByIssue.get(item.issue.id)?.pullRequest;
       if (item.kind === 'review' && reference) {

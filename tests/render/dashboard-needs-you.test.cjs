@@ -30,7 +30,7 @@ test('each chip is a link that keeps the scope and shows its exact count', () =>
   const item = {
     id: 'review:r1', kind: 'review', issue: { id: 'r1', issueKey: 'REL-1', title: 'Check release',
       project: { id: 'project', slug: 'release', name: 'Release', color: null } },
-    seat: { id: 'seat', name: 'Developer' }, since, pullRequestUrl: 'https://forge.example.test/team/repo/pulls/7',
+    seat: { id: 'seat', name: 'Developer' }, since, ask: 'none', pullRequestUrl: 'https://forge.example.test/team/repo/pulls/7',
   };
   const document = JSDOM.fragment(renderToStaticMarkup(React.createElement(overview, {
     workspaceSlug: 'work', scope: 'mine', kind: 'review', q: 'release plans', dormant: true, page: 2, now, updatedAt: now,
@@ -41,7 +41,7 @@ test('each chip is a link that keeps the scope and shows its exact count', () =>
   const section = document.querySelector('#needs-you');
   assert.match(section.querySelector('h2').textContent, /Needs you\s+79/);
   const chips = [...section.querySelectorAll('nav a')];
-  assert.deepEqual(chips.map(link => link.textContent.trim()), ['All 79', 'Questions 53', 'Reviews 24', 'Failed runs 0', 'Due 2']);
+  assert.deepEqual(chips.map(link => link.textContent.trim()), ['All 79', 'From seats 53', 'Reviews 24', 'Failed runs 0', 'Due 2']);
   const urls = chips.map(link => new URL(link.getAttribute('href'), 'https://collab.example.test'));
   assert.deepEqual(urls.map(url => url.searchParams.get('kind')), [null, 'question', 'review', 'failed', 'due']);
   for (const { searchParams } of urls) {
@@ -52,10 +52,10 @@ test('each chip is a link that keeps the scope and shows its exact count', () =>
   }
   assert.equal(chips[2].getAttribute('aria-current'), 'page');
   const [first, second] = section.querySelectorAll('li');
-  assert.match(first.textContent, /Review.*Check release.*REL-1.*Release.*Developer.*2 h ago/);
+  assert.match(first.textContent, /Waiting on you.*Check release.*REL-1.*Release.*Developer.*2 h ago/);
   assert.equal(first.querySelector('time').getAttribute('datetime'), since);
   assert.equal(first.querySelector('time').getAttribute('title'), since);
-  assert.equal(first.querySelector('a').getAttribute('href'), item.pullRequestUrl);
+  assert.equal(first.querySelector('a[target="_blank"]').getAttribute('href'), item.pullRequestUrl);
   assert.equal(second.querySelector('a').getAttribute('href'), '/work/issues/REL-1');
   assert.match(section.textContent, /Showing 20 of 24/);
 });
@@ -82,7 +82,8 @@ const now = '2026-11-21T12:00:00.000Z';
 const makeItem = (kind, id, extra = {}) => ({
   id: `${kind}:${id}`, kind, canAct: true, since: now,
   issue: { id, issueKey: id.toUpperCase(), title: id, project: { id: 'project', name: 'Release' } },
-  seat: { id: 'seat', name: 'Developer' }, text: 'Check the result and tell me whether to continue.',
+  seat: { id: 'seat', name: 'Developer' }, question: 'Check the result and tell me whether to continue.',
+  ask: kind === 'question' ? 'here' : 'none', options: kind === 'question' ? ['continue'] : [], suggested: null, replyOn: null,
   runId: kind === 'failed' ? 'old-run' : null,
   ...extra,
 });
@@ -147,7 +148,7 @@ test('sending an answer posts one comment and reloads the rows', async () => {
       assert.deepEqual(JSON.parse(posts[0][1].body), { content: 'Please continue.' });
       assert.equal(refreshes(), 1);
       assert.equal(row(0), undefined);
-      assert.match(container.querySelector('nav').textContent, /Questions 0/);
+      assert.match(container.querySelector('nav').textContent, /From seats 0/);
       assert.match(container.querySelector('[role="status"]').textContent, /Answer sent/);
       assert.equal(container.querySelector('[role="status"]').textContent.includes('Developer'), namesSeat);
     }, async (url, options) => {
@@ -229,8 +230,53 @@ test('actions fall back to links for rows the viewer cannot act on', async () =>
     makeItem('review', 'r1', { canAct: false, pullRequestUrl: 'https://forge.example.test/team/repo/pulls/1' }),
     makeItem('due', 'd1', { canAct: false }),
   ], async ({ container }) => {
-    assert.equal(container.querySelector('li button'), null);
+    assert.ok(![...container.querySelectorAll('li button')].some(button => button.textContent === 'Answer'));
     assert.deepEqual([...container.querySelectorAll('li a')].map(link => link.textContent),
-      ['Open issue', 'Open issue', 'Open pull request', 'Open issue']);
+      ['Open issue', 'Open issue', 'Open issue', 'Open pull request', 'Open issue']);
   });
+});
+
+
+test('only a question that is answered here has the Answer button', async () => {
+  await interact([
+    makeItem('question', 'q1'),
+    makeItem('question', 'q2', { ask: 'elsewhere', replyOn: { id: 'target', issueKey: 'ADS-52' } }),
+    makeItem('review', 'r1', { ask: 'none', options: [], question: '<strong>Read the result.</strong>' }),
+    makeItem('question', 'q3', { canAct: false }),
+  ], async ({ container, row, click, calls }) => {
+    assert.equal([...container.querySelectorAll('li button')].filter(button => button.textContent === 'Answer').length, 1);
+    assert.deepEqual([...container.querySelectorAll('li > span')].map(label => label.textContent),
+      ['Question', 'Question', 'Waiting on you', 'Question']);
+    const link = row(1).querySelector('a');
+    assert.equal(link.textContent, 'Open ADS-52');
+    assert.equal(link.getAttribute('href'), '/work/issues/target');
+    await click('Show details', 1);
+    assert.equal(row(1).querySelector('form'), null);
+    await click('Show details', 2);
+    assert.match(row(2).textContent, /<strong>Read the result\.<\/strong>/);
+    assert.equal(row(2).querySelector('input'), null);
+    assert.equal(row(2).querySelector('strong')?.textContent, 'From Developer');
+    assert.equal(row(2).querySelector('a').textContent, 'Open issue');
+    assert.deepEqual(calls, []);
+  });
+});
+
+test('the suggested answer is first and labelled, and pressing it fills the field and sends nothing', async () => {
+  await interact([makeItem('question', 'q1', { options: ['revise', 'classify'], suggested: 'classify' })],
+    async ({ row, click, type, calls, refreshes }) => {
+      await click('Answer');
+      const choices = [...row(0).querySelectorAll('form button[type="button"]')];
+      const input = row(0).querySelector('input');
+      assert.deepEqual(choices.map(button => button.textContent.trim()), ['classify Suggested', 'revise']);
+      assert.equal(input.value, '');
+      await type('some typed text');
+      await click('classify Suggested');
+      assert.equal(input.value, 'classify');
+      assert.equal(choices[0].getAttribute('aria-pressed'), 'true');
+      await type('different typed text');
+      assert.equal(input.value, 'different typed text');
+      assert.equal(choices[0].getAttribute('aria-pressed'), 'false');
+      assert.deepEqual(calls, []);
+      assert.equal(refreshes(), 0);
+    });
 });

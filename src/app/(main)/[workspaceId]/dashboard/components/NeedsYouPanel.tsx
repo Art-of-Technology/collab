@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import type { NeedsYouItem, NeedsYouKind, NeedsYouOverview } from '@/types/workspace-dashboard';
 
 const chips = [
-  ['all', 'All'], ['question', 'Questions'], ['review', 'Reviews'], ['failed', 'Failed runs'], ['due', 'Due'],
+  ['all', 'All'], ['question', 'From seats'], ['review', 'Reviews'], ['failed', 'Failed runs'], ['due', 'Due'],
 ] as const;
 const labels = {
   question: { text: 'Question', color: 'text-blue-300' },
-  review: { text: 'Review', color: 'text-violet-300' },
+  waiting: { text: 'Waiting on you', color: 'text-collab-400' },
   failed: { text: 'Failed run', color: 'text-red-300' },
   due: { text: 'Due', color: 'text-amber-300' },
 };
@@ -78,7 +78,9 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
   const issueHref = `/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(issue.issueKey || issue.id)}`;
   const issueApi = `/api/issues/${encodeURIComponent(issue.id)}`;
   const review = item.kind === 'review' && pullRequestUrl;
-  const label = labels[item.kind];
+  const seatRow = item.kind === 'question' || item.kind === 'review';
+  const label = seatRow ? (item.ask === 'none' ? labels.waiting : labels.question) : item.kind === 'failed' ? labels.failed : labels.due;
+  const replyHref = item.replyOn ? `/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(item.replyOn.id)}` : null;
   const timestamp = new Date(item.since);
   const utc = Number.isNaN(timestamp.getTime()) ? null : timestamp.toISOString();
 
@@ -90,10 +92,15 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const answer = item.kind === 'question';
+  const answer = seatRow && item.ask === 'here';
   const runId = item.kind === 'failed' ? item.runId : null;
   const action = answer ? 'comments' : runId ? `runs/${encodeURIComponent(runId)}/clear` : null;
   const actionable = item.canAct && action && !submitted;
+  const showDetails = !actionable && seatRow && !!item.question && !submitted;
+  const options = item.suggested ? [item.suggested, ...item.options.filter(option => option !== item.suggested)] : item.options;
+  const question = item.question && <p className="whitespace-pre-wrap break-words text-sm text-collab-50">
+    {seat && <strong className="block">From {seat.name}</strong>}{item.question}
+  </p>;
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
@@ -125,7 +132,7 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
     onComplete(answer ? await answerStatus(issueApi, item, workspaceSlug, response) : 'Run cleared.');
   }
 
-  return <li className={`grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center ${actionable && open ? 'bg-blue-950/20' : ''}`}>
+  return <li className={`grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center ${(actionable || showDetails) && open ? 'bg-blue-950/20' : ''}`}>
     <span className={`text-xs font-medium ${label.color}`}>{label.text}</span>
     <div className="min-w-0">
       <p className="break-words text-sm font-medium text-collab-50">{issue.title}</p>
@@ -141,14 +148,31 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
         className={answer ? `col-start-2 sm:col-start-auto ${primaryStyle}` : rowActionStyle} onClick={onToggle}>
         {answer ? (open ? 'Close' : 'Answer') : 'Session has stopped: clear run'}
       </button>
-      : <a href={review || issueHref} target={review ? '_blank' : undefined} rel={review ? 'noopener noreferrer' : undefined} className={rowActionStyle}>
-        {review ? 'Open pull request' : 'Open issue'}
-      </a>}
+      : <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-auto sm:justify-end">
+        <a href={replyHref ?? issueHref} className={actionStyle}>
+          {item.replyOn ? `Open ${item.replyOn.issueKey}` : 'Open issue'}
+        </a>
+        {showDetails && <button type="button" className={actionStyle} aria-expanded={open}
+          aria-controls={open ? actionId : undefined} onClick={onToggle}>
+          {open ? 'Hide details' : 'Show details'}
+        </button>}
+      </div>}
+    {review && <a href={review} target="_blank" rel="noopener noreferrer" className={`col-start-2 text-xs text-blue-300 hover:underline ${focus}`}>
+      Open pull request
+    </a>}
+    {showDetails && open && <div id={actionId} className={formStyle}>{question}</div>}
     {actionable && open && <form id={actionId} className={formStyle} onSubmit={submit}>
       {answer ? <>
-        {item.text && <p className="whitespace-pre-wrap break-words text-sm text-collab-50">
-          {seat && <strong className="block">From {seat.name}</strong>}{item.text}
-        </p>}
+        {question}
+        <div className="flex flex-wrap gap-2">
+          {options.map(option => <button key={option} type="button" aria-pressed={draft === option} disabled={pending}
+            className={`${actionStyle} aria-pressed:border-blue-400 aria-pressed:bg-blue-950/40`} onClick={() => {
+              setDraft(option);
+              setError('');
+            }}>
+            {option}{option === item.suggested && <span className="ml-1 text-collab-300"> Suggested</span>}
+          </button>)}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={input} type="text" name="answer" aria-label="Your answer" placeholder="Type your answer"
             className={`min-w-0 flex-1 basis-36 rounded-md border border-collab-600 bg-collab-800 px-3 py-1.5 text-sm text-collab-50 ${focus}`}
