@@ -4,6 +4,7 @@ import { assertLegacyWorkspaceDeleteAllowed, ForgeProjectWriteError } from '@/li
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 // GET /api/workspaces/[workspaceId] - Get workspace details
 export async function GET(
@@ -132,15 +133,6 @@ export async function PATCH(
     // Check if workspace exists
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
-      include: {
-        members: {
-          where: {
-            userId: currentUser.id,
-            status: true,
-            role: { in: ['owner', 'admin'] }
-          }
-        }
-      }
     });
 
     if (!workspace) {
@@ -150,15 +142,11 @@ export async function PATCH(
       );
     }
 
-    // Check if user is owner, admin in the workspace, or a system admin
-    const isOwnerOrAdmin = 
-      workspace.ownerId === currentUser.id ||
-      workspace.members.length > 0 || 
-      currentUser.role === 'SYSTEM_ADMIN';
-
-    if (!isOwnerOrAdmin) {
+    // Owners change the settings. A platform admin who is not a member keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(currentUser.id, workspaceId);
+    if (authority?.level !== null && !may(authority, 'workspace.settings')) {
       return NextResponse.json(
-        { error: 'You do not have permission to update this workspace' },
+        { error: 'Only Owners can change the workspace settings' },
         { status: 403 }
       );
     }
@@ -212,10 +200,11 @@ export async function DELETE(
       );
     }
 
-    // Allow owner or system admin to delete workspace
-    if (workspace.ownerId !== currentUser.id && currentUser.role !== 'SYSTEM_ADMIN') {
+    // Only the primary owner deletes. A platform admin who is not a member keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(currentUser.id, workspaceId);
+    if (authority?.level !== null && !may(authority, 'workspace.delete')) {
       return NextResponse.json(
-        { error: 'Only the workspace owner or system admin can delete it' },
+        { error: 'Only the primary owner can delete the workspace' },
         { status: 403 }
       );
     }

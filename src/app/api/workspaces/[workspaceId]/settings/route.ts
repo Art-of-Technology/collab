@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { z } from 'zod';
 
 const workspaceSettingsSchema = z.object({
@@ -66,19 +67,16 @@ export async function PATCH(
     // Validate the request body
     const validatedData = workspaceSettingsSchema.parse(body);
 
-    // Check if user is workspace owner or admin
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        ownerId: session.user.id // Only workspace owners can change settings
-      }
-    });
-
-    if (!workspace) {
+    // Owners change the settings. Anyone without a membership, a platform admin included, gets the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.level) {
       return NextResponse.json(
         { error: 'Workspace not found or insufficient permissions' },
         { status: 404 }
       );
+    }
+    if (!may(authority, 'workspace.settings')) {
+      return NextResponse.json({ error: 'Only Owners can change the workspace settings' }, { status: 403 });
     }
 
     // Update workspace settings

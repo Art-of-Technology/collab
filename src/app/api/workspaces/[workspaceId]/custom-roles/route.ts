@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { checkUserPermission, WorkspaceRole, Permission as PermissionEnum } from '@/lib/permissions';
+import { WorkspaceRole } from '@/lib/permissions';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { Permission } from '@prisma/client';
 
 // GET /api/workspaces/[workspaceId]/custom-roles - List custom roles
@@ -18,18 +19,9 @@ export async function GET(
 
     const { workspaceId } = await params;
 
-    // Check if user is a member of the workspace
-    const member = await prisma.workspaceMember.findUnique({
-      where: {
-        status: true,
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
-    });
-
-    if (!member) {
+    // Every active member and the owner may list them; a platform admin who is not a member may not, as before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (!authority?.level) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
     }
 
@@ -96,18 +88,10 @@ export async function POST(
       );
     }
 
-    // Check if user has permission to manage workspace permissions
-    const hasPermission = await checkUserPermission(
-      session.user.id,
-      workspaceId,
-      PermissionEnum.MANAGE_WORKSPACE_PERMISSIONS
-    );
-
-    if (!hasPermission.hasPermission) {
-      return NextResponse.json(
-        { error: 'You do not have permission to create custom roles' },
-        { status: 403 }
-      );
+    // Owners only. A platform admin who is not a member keeps the answer this route gave before.
+    const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
+    if (authority?.level !== null && !may(authority, 'roles.edit')) {
+      return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 
     // Check if role name already exists in this workspace
