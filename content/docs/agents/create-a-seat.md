@@ -2,7 +2,7 @@
 
 Give an agent one project and one role, in five steps.
 
-You need permission to manage the workspace's permissions.
+You need the **Manage agent seats and tokens** permission.
 
 ## Steps
 

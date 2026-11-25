@@ -13,8 +13,8 @@ const takes = (role: (typeof ROLE_CATALOGUE.roles)[number]) => [
 /**
  * The Roles page of a workspace (CLB-608): each role of the catalogue with its platform layer in force (CLB-916), as a run
  * gets it with no one owner named, and the organisation's own text; then the workspace's own roles (CLB-626), retired
- * ones too, by name. Every member reads it, as every member sees the seats; `canEdit` is true for those who may manage the
- * workspace's permissions. Null when the person is not in the workspace.
+ * ones too, by name. Every member reads it, as every member sees the seats; `canEdit` is true for those with
+ * MANAGE_AGENTS. Null when the person is not in the workspace.
  */
 export async function readRoleInstructions(userId: string, workspaceIdOrSlug: string) {
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true, name: true } });
@@ -38,8 +38,8 @@ export async function readRoleInstructions(userId: string, workspaceIdOrSlug: st
 }
 
 /**
- * Saves the organisation layer of one role for the workspace, trimmed. Empty text removes it. Only someone who may manage
- * the workspace's permissions may; the role must be in the catalogue and the text within the layer's limit.
+ * Saves the organisation layer of one role for the workspace, trimmed. Empty text removes it. Requires MANAGE_AGENTS,
+ * a role in the catalogue and text within the layer's limit.
  */
 export async function saveRoleInstructions(userId: string, workspaceId: string, roleId: string, text: string) {
   const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_AGENTS);

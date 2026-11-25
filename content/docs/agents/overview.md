@@ -51,7 +51,7 @@ Room is the percent of allowance a seat has left before its runner stops taking 
 | **unknown** and why | No figure was reported, the figure is older than 15 minutes, or the seat is run by hand. Work is placed as it was before room. |
 | **Room private** | The seats are another person's. |
 
-- You see the room of your own seats. Someone who may manage workspace permissions sees everyone's.
+- You see the room of your own seats. Someone with the **Manage agent seats and tokens** permission sees everyone's.
 - When a person's seats do not read the same, each seat shows its own figure instead of one bar.
 - A runner sends the figure: see [Report room](/docs/agents/runner-contract#report-room). Until a runner does, seats read **unknown** or **no room**.
 

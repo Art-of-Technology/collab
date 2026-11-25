@@ -8,7 +8,6 @@ const { load, matches } = require('../security/helpers.cjs');
 const ROLE_IN_W = { admin: 'ADMIN', keeper: 'Keeper', member: 'MEMBER', owner: 'OWNER', root: 'MEMBER' };
 const ROWS = [
   { workspaceId: 'w', role: 'ADMIN', permission: 'MANAGE_AGENTS' },
-  // A role that may edit the permission editor and nothing about agents.
   { workspaceId: 'w', role: 'Keeper', permission: 'MANAGE_WORKSPACE_PERMISSIONS' },
 ];
 const PASS = ['admin', 'owner', 'primary', 'root'];
@@ -74,7 +73,9 @@ function fixture() {
     '@/lib/agent-runners': { RUNNER_TOKEN_DAYS: 90, runnerSeats: async () => [], fetchedBy: async () => new Map(), runnerPeopleBelow: async () => new Set() },
     '@/lib/agent-runs': { inboxOf: async () => ({ items: [] }) },
     '@/lib/workspace-authority': {},
-    '@/lib/slug-resolvers': { resolveWorkspaceSlug: async slug => slug },
+    '@/lib/slug-resolvers': load('src/lib/slug-resolvers.ts', {
+      '@/lib/prisma': { prisma }, '@/lib/url-utils': load('src/lib/url-utils.ts'),
+    }, globals),
     '@/lib/agent-repository': { holdProjectDefault: async () => {}, projectRepositoryState: async () => ({ repositories: [] }), repositoryAddress: url => ({ href: url }) },
     '@/lib/agent-custom-roles': { CUSTOM_ROLE_SELECT: {}, customRoleView: row => row },
     // The page, as the element tree it returns.
@@ -117,8 +118,8 @@ function fixture() {
     'withdraw a workspace token from another workspace': () => token.PATCH(body({ workspaceId: 'home', allowed: false }), params({ workspaceId: 'w', tokenId: 't' })).then(status(200)),
     'open the agent tokens page': async () => (await rendered('team')) ? 'passed' : 'refused',
     'the agent tokens page offers the workspace': async () => flag((await rendered('home')).workspaces.some(row => row.id === 'w')),
-    'read agent mode': () => mode.GET(body(), params({ workspaceId: 'w', projectSlug: 'p' })).then(status(200)),
-    'change agent mode': () => mode.PATCH(body({}), params({ workspaceId: 'w', projectSlug: 'p' })).then(status(200)),
+    'read agent mode': () => mode.GET(body(), params({ workspaceId: 'team', projectSlug: 'p' })).then(status(200)),
+    'change agent mode': () => mode.PATCH(body({ mode: 'handoffs' }), params({ workspaceId: 'team', projectSlug: 'p' })).then(status(200)),
     'read the agent repository': async () => flag((await repository.GET(body(), params({ projectId: 'p' }))).body.canManage),
     'set the agent repository': () => repository.PATCH(body({ url: 'https://github.com/org/repo' }), params({ projectId: 'p' })).then(status(200)),
     'set a project up with seats': () => setup.seatSetupState({ user: session.user, app: { slug: 'collab-cli' }, workspace: { id: 'w' } }, 'missing-project')

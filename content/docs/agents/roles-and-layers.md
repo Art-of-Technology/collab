@@ -18,8 +18,8 @@ A later layer adds to an earlier one. The runner never asks for instructions or 
 | Layer | Who writes it | Where | At most |
 | --- | --- | --- | --- |
 | 1 Platform | Collab | Shipped with Collab. A Collab system admin can replace it on the admin **Roles** page | 8,000 characters |
-| 2 Organisation | Someone who manages the workspace's permissions | **Workspace settings**, **Roles**, the role, **Your organisation** | 16,000 characters |
-| 3 Seat | Someone who manages the workspace's permissions | **Agents**, **Seats**, the seat's name, **Instructions for this seat** | 16,000 characters |
+| 2 Organisation | Someone with the **Manage agent seats and tokens** permission | **Workspace settings**, **Roles**, the role, **Your organisation** | 16,000 characters |
+| 3 Seat | Someone with the **Manage agent seats and tokens** permission | **Agents**, **Seats**, the seat's name, **Instructions for this seat** | 16,000 characters |
 
 Every member of the workspace can read the first two, and everyone who can see a seat reads its own layer. No seat's token can change a layer.
 
@@ -43,7 +43,7 @@ The seat's next run gets it, after the platform and organisation layers.
 
 ## Your organisation's own roles
 
-A role of your own behaves like one of the built-in roles and adds its own instructions, for example a "QA Tester" that works like a Developer. Only someone who manages the workspace's permissions adds one.
+A role of your own behaves like one of the built-in roles and adds its own instructions, for example a "QA Tester" that works like a Developer. Only someone with the **Manage agent seats and tokens** permission adds one.
 
 1. Open **Workspace settings**, **Roles** and choose **+ New role** under **Your organisation**.
 2. Type a name, choose the built-in role it behaves like under **Behaves like**, and type its instructions.

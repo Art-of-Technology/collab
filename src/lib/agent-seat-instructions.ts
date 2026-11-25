@@ -6,7 +6,7 @@ import { layerText } from '@/lib/agent-role-catalogue';
 
 /**
  * A seat's own page (CLB-610): the seat, with its own instructions, the seat layer of its runs. Whoever sees the seat on the
- * Seats tab reads it. `canEdit` is true for someone who may manage the workspace's permissions, as for creating and
+ * Seats tab reads it. `canEdit` is true for someone with MANAGE_AGENTS, as for creating and
  * retiring a seat, unless the reader is the seat's own account: a seat never writes its own instructions. Null when the
  * workspace is not the person's or the seat is not a live seat there that the person may see.
  */
@@ -28,9 +28,8 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
 }
 
 /**
- * Saves a seat's own instructions, trimmed; empty text removes them. Only someone who may manage the workspace's
- * permissions may, and never the seat's own account; the seat must be a live seat of the workspace and the text within
- * the seat layer's limit.
+ * Saves a seat's own instructions, trimmed; empty text removes them. Requires MANAGE_AGENTS and a live seat in the
+ * workspace. The seat's own account cannot edit it. The text must fit within the seat layer's limit.
  */
 export async function saveSeatInstructions(userId: string, workspaceId: string, seatId: string, text: string) {
   const { hasPermission } = await checkUserPermission(userId, workspaceId, Permission.MANAGE_AGENTS);

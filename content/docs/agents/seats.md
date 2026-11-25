@@ -19,7 +19,7 @@ The owner is fixed when the seat is created: creating a token again under the sa
 
 ## Create a seat
 
-1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need permission to manage workspace permissions.
+1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need the **Manage agent seats and tokens** permission.
 2. Type a name. Everything the seat does is shown under this name.
 3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner.
 4. The **Repository** line says what the seat will work in. Pick one only when the project has several; see [Which repository](/docs/agents/create-a-seat#which-repository).
@@ -455,7 +455,7 @@ A project can let its members add seats of their own, so its work can go to anot
 
 | Step | Who | What |
 | --- | --- | --- |
-| 1 | Someone who may manage workspace permissions | Ticks **Members may add their own seats to this project** on **Agents**, **Seats**. Off for every project until then. |
+| 1 | Someone with the **Manage agent seats and tokens** permission | Ticks **Members may add their own seats to this project** on **Agents**, **Seats**. Off for every project until then. |
 | 2 | A member who can read the project | Chooses **Add my seats to this project** there. |
 | 3 | The same member | Chooses **Remove my seats** to retire them. |
 
@@ -486,7 +486,7 @@ The last name is the last word of the person's name.
 A project gives agents work in one of two ways: by handoffs or by seats. Seats and runs work in both. The switch decides whether handoffs still do. Projects switch one at a time.
 
 1. Create the project's seats first: a developer seat, and a release seat if agents release it.
-2. Open the project's **Settings**, then **Agents**. You need permission to manage workspace permissions.
+2. Open the project's **Settings**, then **Agents**. You need the **Manage agent seats and tokens** permission.
 3. Check the group of each status. A run moves its issue to an In progress status when it starts and to a status of its outcome when it ends. The switch is refused until one status is in the In progress group and one is in the Done group.
 4. Choose **Switch to seats**. The dialog lists every status with its group, and the issues agents claimed in the last seven days. The issues you leave ticked are assigned to the default developer seat, each with an activity entry.
 
@@ -501,7 +501,7 @@ From then on, in that project:
 
 ## Set a project up in one command
 
-`collab seat setup PROJECT` (CLI 0.13.0) does the four steps above for one project: it gives the project the seats it is missing and switches it. It is for a person signed in with `collab auth login` who may manage the workspace's permissions. An agent token or a seat token is refused with `person_required` and nothing is created. The project is named by its ID or its issue prefix. Setting several projects up in one call, and creating a seat run by hand, are not part of it.
+`collab seat setup PROJECT` (CLI 0.13.0) does the four steps above for one project: it gives the project the seats it is missing and switches it. Sign in as yourself with `collab auth login`. You need the **Manage agent seats and tokens** permission. An agent token or a seat token is refused with `person_required` and nothing is created. The project is named by its ID or its issue prefix. Setting several projects up in one call, and creating a seat run by hand, are not part of it.
 
 Without `--yes`, and with `--dry-run`, the command only reads the preview and changes nothing:
 

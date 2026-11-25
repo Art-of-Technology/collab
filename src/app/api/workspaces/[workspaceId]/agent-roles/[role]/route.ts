@@ -11,7 +11,7 @@ const noStore = { 'Cache-Control': 'no-store' };
 const bodySchema = z.object({ text: z.string().max(64_000) }).strict();
 
 // PUT /api/workspaces/[workspaceId]/agent-roles/[role] - save the organisation's own instructions for one role (CLB-608).
-// Empty text removes them. Only someone who may manage the workspace's permissions may.
+// Empty text removes them. Requires MANAGE_AGENTS.
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ workspaceId: string; role: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });
