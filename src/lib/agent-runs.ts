@@ -276,7 +276,7 @@ export const runAnswerSchema = z.object({
 }).strict();
 export const stopAnswerSchema = z.object({ content: plainText(4000).transform(value => value.trim()) }).strict();
 
-type Question ={ id: string; text: string; answer: { decision: 'approved' | 'refused'; text: string | null; userId: string; at: string } | null };
+type Question = { id: string; text: string; answer: { decision: 'approved' | 'refused'; text: string | null; userId: string; at: string } | null };
 // The existing JSON column was nullable and had no writer before questions.
 const questionsOf = (ask: Prisma.JsonValue) => Array.isArray(ask) ? ask as Question[] : [];
 const questionNotOpen = () => new HandoffError('question_not_open', 'This question is no longer open on the run', 409);
@@ -880,9 +880,9 @@ export async function clearRun(userId: string, issueIdOrKey: string, runId: stri
  * Declared stops: a person's answer from Home is a comment on the issue, posted only while the stop its row showed is
  * still open. Open: that run is the issue's latest, a seat's, and finished in review or blocked naming a person; the
  * seat still holds the issue, the issue is not done, and nobody but the seat has commented since the seat's last comment
- * of that run, or since the run ended when it wrote none. Anyone
- * who may read the issue may answer, as with a comment on its page. It is checked and written under the issue's lock,
- * which a checkout and a second answer take too: two presses post one comment, and a press on an old row posts none.
+ * of that run, or since the run ended when it wrote none. Anyone who may read the issue may answer, as with a comment on
+ * its page. It is checked and written under the issue's lock, which a checkout and a second answer take too: two presses
+ * post one comment, and a press on an old row posts none.
  */
 export async function answerStop(userId: string, issueIdOrKey: string, runId: string, input: z.infer<typeof stopAnswerSchema>) {
   const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
