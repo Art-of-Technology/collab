@@ -704,19 +704,27 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
     prisma.customRole.findMany({ where: { workspaceId: workspace.id }, select: { name: true } }),
   ]);
   const rank = { holdsChangeRoles };
+  const manages = may(viewer, 'members.manage');
+  const roleNames = [...Object.values(WorkspaceRole), ...customRoles.map((role) => role.name)];
 
   return {
     ...workspace,
     // The Members screen renders these as they are: it compares no role and no owner itself.
+    // A platform admin gets what the role and status paths accept from them: anyone but the workspace owner.
     members: workspace.members.map((member) => {
       // An account with no email is an agent token's service account, which the Agent tokens page manages.
       const agent = !member.user.email;
       const level = member.user.id === workspace.ownerId ? 'PRIMARY_OWNER' as const : levelOfRole(member.role);
-      return { ...member, level, agent, mayAct: !agent && mayActOn(viewer, { userId: member.user.id, level }, rank) };
+      const target = { userId: member.user.id, level };
+      const mayRemove = !agent && manages && mayActOn(viewer, target, { holdsChangeRoles: false });
+      return viewer?.platformAdmin
+        ? { ...member, level, agent, mayAct: !agent && level !== 'PRIMARY_OWNER' && member.user.id !== viewer.userId,
+          mayManage: !agent && manages && level !== 'PRIMARY_OWNER', mayRemove }
+        : { ...member, level, agent, mayAct: !agent && mayActOn(viewer, target, rank), mayManage: mayRemove, mayRemove };
     }),
     viewerLevel: viewer?.level ?? null,
     // The role route asks for the change-roles permission at every level, so without it there is nothing to offer.
-    rolesViewerMayGrant: holdsChangeRoles ? rolesMayGrant(viewer, [...Object.values(WorkspaceRole), ...customRoles.map((role) => role.name)], rank) : [],
+    rolesViewerMayGrant: viewer?.platformAdmin ? roleNames : holdsChangeRoles ? rolesMayGrant(viewer, roleNames, rank) : [],
     invitations: canInvite ? workspace.invitations : [],
     isOwner,
     isMember,

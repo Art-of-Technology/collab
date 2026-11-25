@@ -292,7 +292,6 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                           routeWorkspaceId={workspaceId}
                           workspaceName={current.name}
                           rolesViewerMayGrant={current.rolesViewerMayGrant}
-                          viewerManages={current.viewerLevel !== null && current.viewerLevel !== "STANDARD"}
                           platformAdmin={current.viewerLevel === null && canManage}
                           canSeeOtherWorkspaces={canManageMembers}
                           open={openMemberId === member.id}

@@ -271,7 +271,7 @@ test('agents are listed in their own group with no role and no control', async (
 });
 
 test('a viewer below Admin sees the list and no control', async () => {
-  const members = people().map(member => ({ ...member, mayAct: false }));
+  const members = people().map(member => ({ ...member, mayAct: false, mayManage: false, mayRemove: false }));
   const root = await render(workspace({ viewerLevel: 'STANDARD', rolesViewerMayGrant: [], members }));
   try {
     assert.match(document.body.textContent, /You can see who is here\. Changing roles needs Admin or above\./);
@@ -283,7 +283,7 @@ test('a viewer below Admin sees the list and no control', async () => {
 
 test("a platform admin's header badge reads Platform admin", async () => {
   // Not a member: no level, and the module gives them no row.
-  const members = people().map(member => ({ ...member, mayAct: false }));
+  const members = people().map(member => ({ ...member, mayAct: false, mayManage: false, mayRemove: false }));
   const root = await render(workspace({ viewerLevel: null, canManage: true, isMember: false, rolesViewerMayGrant: [], members }));
   try {
     const badges = [...document.querySelector('h1').parentElement.querySelectorAll('span')].map(el => el.textContent);
@@ -307,22 +307,23 @@ test('a platform admin sees the controls the server accepts from them, whatever 
     person('sam', 'Sam Roe', 'owner', 'OWNER', { mayAct: true, mayManage: manage }),
     person('robin', 'Robin Lee', 'ADMIN', 'ADMIN', { mayAct: true, mayManage: manage }),
     person('kim', 'Kim Park', 'MEMBER', 'STANDARD', { mayAct: true, mayManage: manage, mayRemove: manage }),
-    person('root', 'Root Admin', self, self === 'ADMIN' ? 'ADMIN' : 'STANDARD', { mayManage: manage }),
+    ...(self ? [person('root', 'Root Admin', self, self === 'ADMIN' ? 'ADMIN' : 'STANDARD', { mayManage: manage })] : []),
   ];
-  for (const [self, viewerLevel, manage] of [['MEMBER', 'STANDARD', false], ['ADMIN', 'ADMIN', true]]) {
+  for (const [self, viewerLevel, manage] of [[null, null, false], ['MEMBER', 'STANDARD', false], ['ADMIN', 'ADMIN', true]]) {
     const root = await render(workspace({ viewerLevel, canManage: true, rolesViewerMayGrant: everyRole, members: members(manage, self) }));
     try {
       assert.deepEqual([...document.querySelectorAll('select')].map(el => el.getAttribute('aria-label')), ['Role of Sam Roe', 'Role of Robin Lee', 'Role of Kim Park'], self);
       assert.deepEqual([...row('Sam Roe').querySelector('select').options].map(option => option.value), everyRole);
       assert.equal(!!button('More actions for Alex Kay'), false);
       assert.doesNotMatch(document.body.textContent, /Changing roles needs Admin or above/);
-      for (const name of ['Sam Roe', 'Robin Lee', 'Kim Park', 'Root Admin']) {
+      for (const name of ['Sam Roe', 'Robin Lee', 'Kim Park', ...(self ? ['Root Admin'] : [])]) {
+        // Not a member: the menu stays for the member's other workspaces, without a switch the server refuses.
         const menu = button(`More actions for ${name}`);
-        assert.equal(!!menu, manage, `${self}: menu on ${name}`);
+        assert.equal(!!menu, manage || self === null, `${self}: menu on ${name}`);
         if (!menu) continue;
         await click(menu);
-        assert.equal(!!button('Deactivate'), true, `${self}: ${name}`);
-        assert.equal(!!button('Remove from workspace…'), name === 'Kim Park', `${self}: Remove on ${name}`);
+        assert.equal(!!button('Deactivate'), manage, `${self}: ${name}`);
+        assert.equal(!!button('Remove from workspace…'), manage && name === 'Kim Park', `${self}: Remove on ${name}`);
       }
     } finally { await React.act(async () => root.unmount()); }
   }

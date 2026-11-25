@@ -59,9 +59,9 @@ async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) 
     notFound();
   }
 
-  // The permission routes are for Owners. A member below Owner reads that here instead of an editor that loads nothing.
+  // The permission routes are for Owners and platform admins. A member below Owner reads that here instead of an editor that loads nothing.
   const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
-  const ownersOnly = authority?.level !== null && !may(authority, 'roles.edit');
+  const ownersOnly = !authority?.platformAdmin && !may(authority, 'roles.edit');
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">

@@ -138,7 +138,29 @@ function fixture() {
     resetOwnerRole: call('permissions', 'POST', { role: 'OWNER' }),
   };
   const snapshot = () => JSON.stringify(db);
-  return { paths, db, snapshot, workspace: () => db.workspaces[0] ?? null };
+  // The Permissions & Roles page, with its client parts replaced so the tree can be read.
+  const React = require('react');
+  const PermissionsManager = () => null;
+  const page = load('src/app/(main)/workspaces/[workspaceId]/settings/permissions/page.tsx', {
+    ...deps, react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': { notFound() { throw new Error('NOT_FOUND'); }, redirect(url) { throw new Error(`REDIRECT ${url}`); } },
+    'next/link': { default: 'a' }, 'lucide-react': new Proxy({}, { get: (_, name) => name }),
+    '@/components/workspace/PermissionsManager': { default: PermissionsManager },
+    '@/components/workspace/CustomRolesManager': { default: () => null },
+    '@/components/ui/tabs': Object.fromEntries(['Tabs', 'TabsContent', 'TabsList', 'TabsTrigger'].map(name => [name, 'div'])),
+    '@/components/ui/card': Object.fromEntries(['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle'].map(name => [name, 'div'])),
+    '@/components/ui/button': { Button: 'button' }, '@/components/ui/skeleton': { Skeleton: 'div' },
+  }, globals).default;
+  const nodes = node => !node || typeof node !== 'object' ? [node] : [node, ...[].concat(node.props?.children ?? []).flatMap(nodes)];
+  // What the page shows: the editor, or the sentence that the routes are for Owners.
+  const permissionsPage = async actor => {
+    state.userId = actor;
+    const suspense = await page({ params: Promise.resolve({ workspaceId: 'w' }) });
+    const tree = nodes(await suspense.props.children.type(suspense.props.children.props));
+    if (tree.some(node => node?.type === PermissionsManager)) return 'editor';
+    return tree.find(node => typeof node === 'string' && /Only Owners/.test(node));
+  };
+  return { paths, db, snapshot, permissionsPage, workspace: () => db.workspaces[0] ?? null };
 }
 
 // A refusal on a route is a 403 whose error is one sentence; an action throws one sentence.
@@ -283,4 +305,13 @@ test('someone without access to the workspace is refused on every workspace path
     assert.equal((await f.paths[path]('out')).ok, false, path);
     assert.equal(f.snapshot(), before, path);
   }
+});
+
+test('Permissions & Roles shows a platform admin who is a member the editor, and an Admin the sentence', async () => {
+  const f = fixture();
+  for (const actor of ['prim', 'own1', 'pas', 'paa']) assert.equal(await f.permissionsPage(actor), 'editor', actor);
+  // The page itself needs a membership or ownership, as it did before.
+  await assert.rejects(f.permissionsPage('root'), /NOT_FOUND/);
+  // Admin rows hold the permissions permission here, so the page opens for them, with the sentence.
+  assert.equal(await f.permissionsPage('adm1'), 'Only Owners can manage roles and permissions.');
 });
