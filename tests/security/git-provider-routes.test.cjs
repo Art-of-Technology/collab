@@ -15,7 +15,10 @@ function fixture(options = {}) {
   const workspace = { id: 'workspace', ownerId, members: members.map(m => ({ workspaceId: 'workspace', status: true, ...m })) };
   const project = { id: 'project', workspaceId: 'workspace', workspace: { ownerId } };
   const connectionStore = {
-    findMany: async args => { calls.push(['read', args]); return [{ ...saved, credentials: undefined, activity }]; },
+    findMany: async args => {
+      calls.push(['read', args]);
+      return (options.listedConnections ?? [saved]).map(connection => ({ ...connection, credentials: undefined, activity }));
+    },
     findFirst: async ({ where }) => where.projectId === 'project' && where.id === 'connection' ? saved : null,
     findUnique: async () => options.existing ? saved : null,
     update: async args => { writes.push(['update', args]); if (!mutate(args)) throw Error('Record changed'); return stored; },
@@ -36,12 +39,15 @@ function fixture(options = {}) {
     'next/server': { NextResponse: { json: (body, options) => ({ body, ...options }) } },
     zod: z, '@/lib/prisma': { prisma }, '@/lib/session': { getCurrentUser: async () => options.absent ? null : { id: actor } },
     '@/lib/post-access': options.realAccess ? load('src/lib/post-access.ts') : { postWorkspaceAccessWhere: id => ({ ownerId: id }) },
-    '@/lib/encryption': { EncryptionService: { encrypt: value => { calls.push(['encrypt']); assert.equal(value.token, 'secret'); return 'ciphertext'; }, decrypt: () => ({ token: 'secret' }) } },
+    '@/lib/encryption': { EncryptionService: {
+      encrypt: value => { calls.push(['encrypt']); assert.equal(value.token, 'secret'); return 'ciphertext'; },
+      decrypt: value => { calls.push(['decrypt', value]); return { token: 'stored-secret' }; },
+    } },
     '@/lib/git-providers/client': {
       providerSchema: z.enum(['github', 'forgejo', 'gitlab', 'bitbucket', 'bitbucket-dc']), ProviderError,
       instances: () => [], resolveInstance: (provider, baseUrl) => ({ provider, baseUrl }),
       listRepositories: async () => { calls.push(['remoteList']); return { repositories: [] }; },
-      getRepository: async () => { calls.push(['remoteRepo']); if (options.revoked) throw new ProviderError('Access denied'); return { id: options.changedIdentity ? 'different' : 'repo-1', path: 'team/repo', name: 'repo', url: 'https://forge.test/team/repo' }; },
+      getRepository: async (_instance, credentials) => { calls.push(['remoteRepo', credentials.token]); if (options.revoked) throw new ProviderError('Access denied'); return { id: options.changedIdentity ? 'different' : 'repo-1', path: 'team/repo', name: 'repo', url: 'https://forge.test/team/repo' }; },
       getActivity: async () => { calls.push(['remoteActivity']); return activity; },
     },
   };
@@ -64,7 +70,7 @@ test('GET selects public fields only and scopes reads to the authorized project'
 });
 test('connect validates provider repository and activity before encrypting and persisting', async () => {
   const f = fixture(); const r = await f.post(connect); assert.equal(r.status, 200);
-  assert.deepEqual(f.calls.filter(([name]) => name.startsWith('remote') || name === 'encrypt').map(([name]) => name), ['remoteRepo', 'remoteActivity', 'encrypt']);
+  assert.deepEqual(f.calls.filter(([name]) => name.startsWith('remote') || name === 'encrypt' || name === 'decrypt'), [['remoteRepo', connect.credentials.token], ['remoteActivity'], ['encrypt']]);
   const data = f.writes.find(([kind]) => kind === 'create')[1].data;
   assert.equal(data.credentials, 'ciphertext'); assert.equal(data.externalId, 'repo-1'); assert.equal(data.projectId, 'project');
   assert.equal(JSON.stringify(r).includes('secret'), false); assert.equal(f.writes.filter(([kind]) => kind === 'activity').length, 1);
@@ -95,6 +101,7 @@ test('refresh checks concurrent changes before writing activity', async () => {
 test('workspace owner may disconnect and ordinary refresh retains activity', async () => {
   const owner = fixture({ foreignOwner: true, workspaceOwner: true }); assert.equal((await owner.post({ action: 'disconnect', id: 'connection' })).status, 200);
   const f = fixture(); assert.equal((await f.post({ action: 'refresh', id: 'connection' })).status, 200); assert.equal(f.writes.filter(([kind]) => kind === 'activity').length, 1);
+  assert.deepEqual(f.calls.filter(([name]) => name === 'decrypt' || name === 'remoteRepo'), [['decrypt', 'encrypted'], ['remoteRepo', 'stored-secret']]);
 });
 
 test('stale disconnect, refresh and reconnect preserve replacement credentials and ownership', async () => {
@@ -126,22 +133,34 @@ test("refresh, disconnect and reconnect of someone else's connection: an Owner a
     for (const body of [{ action: 'refresh', id: 'connection' }, { action: 'disconnect', id: 'connection' }, connect]) {
       const f = fixture(options); const response = await f.post(body);
       assert.equal(response.status, expected, `${actor} ${body.action}`);
-      assert.ok(f.calls.filter(([name]) => name === 'authority').length <= (actor === 'other' ? 0 : 1), `${actor} ${body.action} asks the authority at most once`);
+      assert.equal(f.calls.filter(([name]) => name === 'authority').length, actor === 'other' || expected === 404 ? 0 : 1, `${actor} ${body.action} authority lookups`);
       if (expected !== 200) {
         assert.equal(f.writes.length, 0); assert.equal(f.stored.connectedById, 'other'); assert.equal(f.stored.credentials, 'encrypted');
         // A reconnect reads the repository with the caller's own token to learn its identity; stored credentials are never used.
-        assert.deepEqual(f.calls.filter(([name]) => name.startsWith('remote') || name === 'encrypt').map(([name]) => name), body.action === 'connect' && expected === 403 ? ['remoteRepo'] : [], `${actor} ${body.action}`);
+        const credentialCalls = f.calls.filter(([name]) => name.startsWith('remote') || name === 'encrypt' || name === 'decrypt');
+        assert.deepEqual(credentialCalls, body.action === 'connect' && expected === 403 ? [['remoteRepo', connect.credentials.token]] : [], `${actor} ${body.action}`);
       }
     }
-    const read = await fixture({ foreignOwner: true, realAccess: true, members, actor, ...extra }).get();
-    if (expected === 404) assert.equal(read.status, 404);
-    else assert.equal(read.body.connections[0].canManage, expected === 200, `${actor} canManage`);
+    const list = fixture({ ...options, listedConnections: [
+      { id: 'first', connectedById: 'first-connector' }, { id: 'own', connectedById: actor }, { id: 'last', connectedById: 'last-connector' },
+    ] });
+    const read = await list.get();
+    assert.equal(read.status, expected === 404 ? 404 : 200);
+    assert.equal(list.calls.filter(([name]) => name === 'authority').length, expected === 404 ? 0 : 1, `${actor} list authority lookups`);
+    if (read.status === 200) {
+      const managesForeign = actor === 'owner' || actor === 'olivia';
+      assert.deepEqual(read.body.connections.map(c => c.canManage), [managesForeign, true, managesForeign], `${actor} canManage`);
+    }
   }
   // A switched-off Owner who reaches the project another way still holds no Owner level.
   const off = fixture({ foreignOwner: true, members, actor: 'off' });
   assert.equal((await off.post({ action: 'disconnect', id: 'connection' })).status, 403); assert.equal(off.writes.length, 0);
   assert.equal((await fixture({ foreignOwner: true, members, actor: 'off' }).get()).body.connections[0].canManage, false);
   // The connector's own GET and calls never ask the authority.
-  const own = fixture({ members }); await own.get(); await own.post({ action: 'disconnect', id: 'connection' });
+  const own = fixture({ members }); assert.deepEqual((await own.get()).body.connections.map(c => c.canManage), [true]);
+  await own.post({ action: 'disconnect', id: 'connection' });
   assert.equal(own.calls.some(([name]) => name === 'authority'), false);
+  const empty = fixture({ realAccess: true, members, actor: 'sam', listedConnections: [] });
+  assert.deepEqual((await empty.get()).body.connections, []);
+  assert.equal(empty.calls.some(([name]) => name === 'authority'), false);
 });
