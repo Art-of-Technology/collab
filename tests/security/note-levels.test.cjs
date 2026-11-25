@@ -22,17 +22,21 @@ function fixture(userId) {
     note('secret', { isEncrypted: true }),
     note('locked', { isEncrypted: true, isRestricted: true }),
     note('personal', { scope: 'PERSONAL' }),
-    note('in-project', { workspaceId: null, projectId: 'p', project: { workspaceId: 'w' } }),
+    note('in-project', { scope: 'PROJECT', workspaceId: null, projectId: 'p', project: { workspaceId: 'w' } }),
   ];
   const state = { updates: 0 };
   const membersWhere = (where) => workspace.members.filter(member => matches(member, where));
   const prisma = {
     note: {
-      findUnique: async ({ where, include }) => {
+      findUnique: async ({ where, select, include }) => {
         const row = notes.find(item => item.id === where.id);
-        if (!row || !include?.workspace) return row ?? null;
-        return { ...row, workspace: row.workspaceId === 'w'
-          ? { ...workspace, members: membersWhere(include.workspace.include.members.where) } : null };
+        if (!row) return null;
+        const { project, ...fields } = row;
+        const selection = select?.project ?? include?.project;
+        if (selection) fields.project = project && (selection.select && !selection.select.workspaceId ? {} : project);
+        if (include?.workspace) fields.workspace = row.workspaceId === 'w'
+          ? { ...workspace, members: membersWhere(include.workspace.include.members.where) } : null;
+        return fields;
       },
       update: async ({ where, data }) => { state.updates++; const row = notes.find(item => item.id === where.id); Object.assign(row, data); return row; },
     },
@@ -119,9 +123,16 @@ test('the personal-note rule and a note that reaches its workspace through a pro
   assert.equal((await fixture('carol').pin('personal')).status, 200);
   // A note with no workspace of its own has no admin line on these paths: only its author passes.
   for (const user of ['adam', 'olivia']) {
-    assert.equal((await fixture(user).pin('in-project')).status, 403, user);
-    assert.equal((await fixture(user).auditLog('in-project')).status, 403, user);
+    const f = fixture(user);
+    for (const value of [true, false]) assert.equal((await f.pin('in-project', value)).status, 403, user);
+    assert.equal(f.state.updates, 0, user);
+    assert.equal((await f.auditLog('in-project')).status, 403, user);
   }
-  assert.equal((await fixture('carol').pin('in-project')).status, 200);
-  assert.equal((await fixture('carol').auditLog('in-project')).status, 200);
+  const author = fixture('carol');
+  for (const value of [true, false]) {
+    const response = await author.pin('in-project', value);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).isPinned, value);
+  }
+  assert.equal((await author.auditLog('in-project')).status, 200);
 });

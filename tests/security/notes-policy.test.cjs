@@ -88,7 +88,11 @@ test('note history sanitizes stored HTML before rendering while retaining normal
 test('note authorization resolves project workspace and requires active membership', async () => {
   for (const workspace of workspaces) {
     const db = {
-      note: { findUnique: async () => ({ ...note, workspaceId: null, projectId: 'project', project: { workspaceId: workspace.id } }) },
+      note: { findUnique: async ({ select, include }) => {
+        const project = select?.project ?? include?.project;
+        return { ...note, scope: 'PROJECT', workspaceId: null, projectId: 'project',
+          ...(project && { project: project.select && !project.select.workspaceId ? {} : { workspaceId: workspace.id } }) };
+      } },
       // The authority module's reads: the workspace's owner, and the caller's active memberships.
       workspace: { findUnique: async ({ where }) => (where.id === workspace.id ? { ownerId: workspace.ownerId } : null) },
       user: { findUnique: async ({ where }) => ({ role: 'USER',

@@ -56,10 +56,8 @@ function fixture(userId = 'alice', environment = STORE, logger = console) {
     return picked;
   }
 
-  const db = {
-    $transaction: async (work) => { state.transactions++; return work(db); },
+  const transaction = {
     workspace: {
-      findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null,
       findUnique: async ({ where }) => ws.find(item => item.id === where.id) ?? null,
     },
     // The authority module reads the caller's platform role and active memberships.
@@ -82,6 +80,11 @@ function fixture(userId = 'alice', environment = STORE, logger = console) {
         return projectFile(row, { select });
       },
     },
+  };
+  const db = {
+    contextFolder: transaction.contextFolder,
+    contextFile: transaction.contextFile,
+    $transaction: async (work) => { state.transactions++; return work(transaction); },
   };
 
   // Storage: a bucket that keeps what it is sent, and every request this server made to it.

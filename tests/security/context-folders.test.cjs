@@ -53,7 +53,15 @@ function fixture(userId = 'alice') {
   const authorityRead = (client, read) => args => { state.authorityReads[client]++; return read(args); };
   const db = {
     // Every rule that reads the tree before writing to it does both in one transaction.
-    $transaction: async (work) => { state.transactions++; return work(transaction); },
+    $transaction: async (work) => {
+      state.transactions++;
+      const globalReads = state.authorityReads.global;
+      try {
+        return await work(transaction);
+      } finally {
+        assert.equal(state.authorityReads.global, globalReads, 'folder writes must read authority on the transaction');
+      }
+    },
     workspace: {
       findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null,
       findUnique: authorityRead('global', findWorkspace),
@@ -227,11 +235,8 @@ test('a folder or file of someone else is changed by an Admin and above, and by 
     assert.equal((await f.call(ONE, 'DELETE', { id: folder.id })).status, 200, `${user} deletes`);
     assert.equal((await f.call(RESTORE, 'POST', { id: folder.id })).status, 200, `${user} restores`);
     assert.equal(folder.deletedAt, null, user);
+    assert.deepEqual(f.state.authorityReads, { global: 0, transaction: 6 }, user);
   }
-  // A non-author's level is read on the transaction's own connection, never a second one from the pool.
-  const { f: reads, folder: read } = join('adam', 'ADMIN');
-  assert.equal((await reads.call(ONE, 'PATCH', { id: read.id, body: { name: 'Tidied' } })).status, 200);
-  assert.deepEqual(reads.state.authorityReads, { global: 0, transaction: 2 });
 
   // A standard role, custom ones and a platform admin's included, is refused; a switched-off Admin and a
   // platform admin who is not a member do not reach the folder at all.
