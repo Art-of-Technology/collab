@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (result.error) {
       const [status, error] = ({
         ...agentMintErrors,
-        paused: [409, 'This agent was switched off or removed and still has usable tokens. Revoke them, or switch its member back on, before creating a seat.'],
+        paused: [409, 'This agent was switched off or removed and still has usable tokens. Revoke them before creating a seat.'],
       } as const)[result.error];
       return NextResponse.json({ error }, { status, headers: noStore });
     }
