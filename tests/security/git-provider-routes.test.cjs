@@ -11,7 +11,9 @@ function fixture(options = {}) {
     return true;
   };
   const activity = [{ id: 'sha', kind: 'commit', title: 'Work', url: 'https://forge.test/team/repo/commit/sha', date: '2026-10-21T10:00:00Z' }];
-  const project = { id: 'project', workspace: { ownerId: options.workspaceOwner ? 'alice' : 'owner' } };
+  const ownerId = options.workspaceOwner ? 'alice' : 'owner', actor = options.actor || 'alice', members = options.members || [];
+  const workspace = { id: 'workspace', ownerId, members: members.map(m => ({ workspaceId: 'workspace', status: true, ...m })) };
+  const project = { id: 'project', workspaceId: 'workspace', workspace: { ownerId } };
   const connectionStore = {
     findMany: async args => { calls.push(['read', args]); return [{ ...saved, credentials: undefined, activity }]; },
     findFirst: async ({ where }) => where.projectId === 'project' && where.id === 'connection' ? saved : null,
@@ -21,7 +23,10 @@ function fixture(options = {}) {
     create: async args => { writes.push(['create', args]); return saved; },
   };
   const prisma = {
-    project: { findFirst: async ({ where }) => { calls.push(['project', where]); return options.denied || where.id !== 'project' ? null : project; } },
+    project: { findFirst: async ({ where }) => { calls.push(['project', where]); return options.denied || where.id !== 'project' || (options.realAccess && !matches(workspace, where.workspace)) ? null : project; } },
+    // The authority module's two reads; the workspace read counts how often the route asks it.
+    workspace: { findUnique: async ({ where }) => { calls.push(['authority']); return where.id === 'workspace' ? { ownerId } : null; } },
+    user: { findUnique: async ({ where, select }) => ({ role: where.id === options.platformAdmin ? 'SYSTEM_ADMIN' : 'USER', workspaceMemberships: workspace.members.filter(m => m.userId === where.id && matches(m, select.workspaceMemberships.where)).map(m => ({ role: m.role })) }) },
     gitConnection: connectionStore,
     gitConnectionActivity: { upsert: async args => { writes.push(['activity', args]); } },
     $transaction: async callback => callback(prisma),
@@ -29,8 +34,8 @@ function fixture(options = {}) {
   class ProviderError extends Error {}
   const deps = {
     'next/server': { NextResponse: { json: (body, options) => ({ body, ...options }) } },
-    zod: z, '@/lib/prisma': { prisma }, '@/lib/session': { getCurrentUser: async () => options.absent ? null : { id: 'alice' } },
-    '@/lib/post-access': { postWorkspaceAccessWhere: id => ({ ownerId: id }) },
+    zod: z, '@/lib/prisma': { prisma }, '@/lib/session': { getCurrentUser: async () => options.absent ? null : { id: actor } },
+    '@/lib/post-access': options.realAccess ? load('src/lib/post-access.ts') : { postWorkspaceAccessWhere: id => ({ ownerId: id }) },
     '@/lib/encryption': { EncryptionService: { encrypt: value => { calls.push(['encrypt']); assert.equal(value.token, 'secret'); return 'ciphertext'; }, decrypt: () => ({ token: 'secret' }) } },
     '@/lib/git-providers/client': {
       providerSchema: z.enum(['github', 'forgejo', 'gitlab', 'bitbucket', 'bitbucket-dc']), ProviderError,
@@ -109,4 +114,34 @@ test('stale disconnect, refresh and reconnect preserve replacement credentials a
       assert.equal(f.writes.some(([kind]) => kind === 'activity'), false);
     }
   }
+});
+
+test("refresh, disconnect and reconnect of someone else's connection: an Owner and the primary owner pass, an Admin and a standard member are refused, the connector always passes; canManage says the same", async () => {
+  // 'other' made the connection. The real authority module decides; access to the project is the real check too.
+  const members = [{ userId: 'olivia', role: 'OWNER' }, { userId: 'adam', role: 'ADMIN' }, { userId: 'sam', role: 'MEMBER' }, { userId: 'other', role: 'MEMBER' },
+    { userId: 'pat', role: 'MEMBER' }, { userId: 'off', role: 'OWNER', status: false }];
+  const cases = [['owner', 200], ['olivia', 200], ['other', 200], ['adam', 403], ['sam', 403], ['pat', 403, { platformAdmin: 'pat' }], ['off', 404]];
+  for (const [actor, expected, extra] of cases) {
+    const options = { foreignOwner: true, existing: true, realAccess: true, members, actor, ...extra };
+    for (const body of [{ action: 'refresh', id: 'connection' }, { action: 'disconnect', id: 'connection' }, connect]) {
+      const f = fixture(options); const response = await f.post(body);
+      assert.equal(response.status, expected, `${actor} ${body.action}`);
+      assert.ok(f.calls.filter(([name]) => name === 'authority').length <= (actor === 'other' ? 0 : 1), `${actor} ${body.action} asks the authority at most once`);
+      if (expected !== 200) {
+        assert.equal(f.writes.length, 0); assert.equal(f.stored.connectedById, 'other'); assert.equal(f.stored.credentials, 'encrypted');
+        // A reconnect reads the repository with the caller's own token to learn its identity; stored credentials are never used.
+        assert.deepEqual(f.calls.filter(([name]) => name.startsWith('remote') || name === 'encrypt').map(([name]) => name), body.action === 'connect' && expected === 403 ? ['remoteRepo'] : [], `${actor} ${body.action}`);
+      }
+    }
+    const read = await fixture({ foreignOwner: true, realAccess: true, members, actor, ...extra }).get();
+    if (expected === 404) assert.equal(read.status, 404);
+    else assert.equal(read.body.connections[0].canManage, expected === 200, `${actor} canManage`);
+  }
+  // A switched-off Owner who reaches the project another way still holds no Owner level.
+  const off = fixture({ foreignOwner: true, members, actor: 'off' });
+  assert.equal((await off.post({ action: 'disconnect', id: 'connection' })).status, 403); assert.equal(off.writes.length, 0);
+  assert.equal((await fixture({ foreignOwner: true, members, actor: 'off' }).get()).body.connections[0].canManage, false);
+  // The connector's own GET and calls never ask the authority.
+  const own = fixture({ members }); await own.get(); await own.post({ action: 'disconnect', id: 'connection' });
+  assert.equal(own.calls.some(([name]) => name === 'authority'), false);
 });
