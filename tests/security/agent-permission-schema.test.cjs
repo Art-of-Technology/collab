@@ -38,7 +38,8 @@ before(() => {
   psql(`
     INSERT INTO "User" (id, "updatedAt") VALUES ('o', '${OLD}');
     INSERT INTO "Workspace" (id, name, slug, "ownerId", "updatedAt") VALUES
-      ('w1', 'w1', 'w1', 'o', '${OLD}'), ('w2', 'w2', 'w2', 'o', '${OLD}'), ('w3', 'w3', 'w3', 'o', '${OLD}'), ('w4', 'w4', 'w4', 'o', '${OLD}');
+      ('w1', 'w1', 'w1', 'o', '${OLD}'), ('w2', 'w2', 'w2', 'o', '${OLD}'), ('w3', 'w3', 'w3', 'o', '${OLD}'),
+      ('w4', 'w4', 'w4', 'o', '${OLD}'), ('w5', 'w5', 'w5', 'o', '${OLD}');
     INSERT INTO "RolePermission" (id, "workspaceId", role, permission, "createdAt", "updatedAt") VALUES
       ${row('w1-owner-mwp', 'w1', 'OWNER', 'MANAGE_WORKSPACE_PERMISSIONS')},
       ${row('w1-admin-mwp', 'w1', 'ADMIN', 'MANAGE_WORKSPACE_PERMISSIONS')},
@@ -48,7 +49,8 @@ before(() => {
       ${row('w2-admin-leave', 'w2', 'ADMIN', 'MANAGE_LEAVE')},
       ${row('w2-admin-post', 'w2', 'ADMIN', 'CREATE_POST')},
       ${row('w3-custom-mwp', 'w3', 'reviewer', 'MANAGE_WORKSPACE_PERMISSIONS')},
-      ${row('w3-member-post', 'w3', 'MEMBER', 'VIEW_POSTS')};
+      ${row('w3-member-post', 'w3', 'MEMBER', 'VIEW_POSTS')},
+      ${row('w5-admin-post', 'w5', 'ADMIN', 'CREATE_POST')};
   `);
 });
 
@@ -58,13 +60,18 @@ after(() => {
 });
 
 test('the migration adds MANAGE_AGENTS, gives it to every role that holds MANAGE_WORKSPACE_PERMISSIONS, gives ADMIN MANAGE_LEAVE, and removes no row', () => {
-  const run = () => { psql(readFileSync(ENUM, 'utf8')); psql(readFileSync(ROWS, 'utf8')); };
+  const enumSql = readFileSync(ENUM, 'utf8');
+  const rowsSql = readFileSync(ROWS, 'utf8');
   const before = permissions();
-  assert.ok(!enumValues().includes('MANAGE_AGENTS'));
-  run();
-  const first = permissions();
+  const expectedEnum = [...enumValues(), 'MANAGE_AGENTS'];
+  psql(enumSql);
   // Appended last, where Prisma puts it for a database built from the schema.
-  assert.equal(enumValues().at(-1), 'MANAGE_AGENTS');
+  assert.deepEqual(enumValues(), expectedEnum);
+  assert.deepEqual(permissions(), before);
+
+  psql(rowsSql);
+  const first = permissions();
+  assert.deepEqual(enumValues(), expectedEnum);
 
   // Every row that was there is there byte for byte.
   const byId = new Map(first.map(item => [item.id, item]));
@@ -74,12 +81,16 @@ test('the migration adds MANAGE_AGENTS, gives it to every role that holds MANAGE
   const added = first.filter(item => !before.some(old => old.id === item.id));
   assert.deepEqual(added.map(key).sort(), [
     'w1/ADMIN/MANAGE_AGENTS', 'w1/ADMIN/MANAGE_LEAVE', 'w1/OWNER/MANAGE_AGENTS', 'w1/Team Lead/MANAGE_AGENTS',
-    'w3/reviewer/MANAGE_AGENTS',
+    'w3/reviewer/MANAGE_AGENTS', 'w5/ADMIN/MANAGE_LEAVE',
   ]);
   assert.ok(added.every(item => item.id && item.updatedAt));
 
   // A second run changes nothing.
-  run();
+  psql(enumSql);
+  assert.deepEqual(enumValues(), expectedEnum);
+  assert.deepEqual(permissions(), first);
+  psql(rowsSql);
+  assert.deepEqual(enumValues(), expectedEnum);
   assert.deepEqual(permissions(), first);
 });
 
