@@ -1,7 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
-import { earlyAnswers, lastAssigned } from '@/lib/agent-stop-boundary';
+import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
 import { readForgeBindings } from '@/lib/forge/reader';
 import { repositoryAccessWhere } from '@/lib/github/access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
@@ -237,8 +236,8 @@ export async function loadNeedsYou({
 
     for (const { id, issueKey, title, project, assigneeId, createdAt, dueDate, status, statusValue, projectStatus, helpers, agentRuns } of issues) {
       const issue = { id, issueKey, title, project };
-      const legacyDone = LEGACY_FINAL_STATUSES.has((statusValue?.trim() || status?.trim() || '').toLowerCase());
-      if (!(projectStatus?.isFinal ?? legacyDone) && assigneeId === actorId && dueDate && dueDate < dueBefore) {
+      const done = isStopIssueDone({ projectStatus, statusValue, status });
+      if (!(projectStatus?.isFinal ?? done) && assigneeId === actorId && dueDate && dueDate < dueBefore) {
         due.push({ issue, since: dueDate });
       }
       const run = agentRuns[0];
@@ -250,7 +249,6 @@ export async function loadNeedsYou({
         }
       }
 
-      const done = projectStatus?.category != null ? projectStatus.category === 'done' : projectStatus?.isFinal ?? legacyDone;
       if (done || !seat || assigneeId !== seat.userId || run.userId !== seat.userId || run.state !== 'finished'
         || !run.endedAt || (run.outcome !== 'blocked' && run.outcome !== 'in_review')) continue;
       if (run.endedAt >= lastAssigned({ assigneeId, createdAt, helpers })) {

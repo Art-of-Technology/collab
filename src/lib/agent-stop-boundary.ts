@@ -1,8 +1,15 @@
 import type { Prisma } from '@prisma/client';
+import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
 import type { prisma } from '@/lib/prisma';
 
 /** An account a person signs in with: it has an email and is no seat's. An agent's account has no email. */
 const PERSON = { email: { not: null }, agentSeat: { is: null } } as const;
+
+export function isStopIssueDone(issue: { projectStatus: { category: string | null; isFinal: boolean } | null; statusValue: string | null; status: string | null }) {
+  const { projectStatus, statusValue, status } = issue;
+  if (projectStatus) return projectStatus.category == null ? projectStatus.isFinal : projectStatus.category === 'done';
+  return LEGACY_FINAL_STATUSES.has((statusValue?.trim() || status?.trim() || '').toLowerCase());
+}
 
 /**
  * Declared stops: the runs that stopped naming a person and were answered before they finished, each with the time of

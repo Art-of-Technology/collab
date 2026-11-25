@@ -608,9 +608,21 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     // A person asks another person; a batch is a release seat's.
     await refused(finish(personToken, run.id, { outcome: 'in_review', askedUser: person }), 422, 'exit_state_required');
     await refused(finish(personToken, run.id, { outcome: 'done', alsoFinish: ['K-1'] }), 422, 'role_mismatch');
+    await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(60) } });
+    await raw.issueComment.createMany({ data: [
+      { issueId: target.id, authorId: person, content: 'Proceed?', createdAt: ago(30) },
+      { issueId: target.id, authorId: owner, content: 'Yes', createdAt: ago(20) },
+    ] });
     const [status, body] = await finish(personToken, run.id, { outcome: 'in_review', askedUser: owner });
     assert.deepEqual([status, body.run.state, body.run.outcome, await statusOf(target)], [200, 'finished', 'in_review', `${A}-in_review`]);
     assert.deepEqual(JSON.parse((await activities(target, 'AGENT_RUN_FINISHED'))[0].details), { runId: run.id, seatId: null, outcome: 'in_review', content: note(), nextStep: 'What there is to say under Next.', askedUser: owner });
+    assert.deepEqual(await offered(me, target), []);
+    await raw.issueComment.create({ data: { issueId: target.id, authorId: owner, content: 'I can review it now.', createdAt: new Date(Date.parse(body.run.endedAt) + 1) } });
+    assert.deepEqual(await offered(me, target), ['reply']);
+    const response = await contextRoute.GET(new Request('https://collab.test/api', { headers: { Authorization: `Bearer ${personToken}` } }),
+      { params: Promise.resolve({ issueIdOrKey: target.issueKey }) });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).commentsSince.map(comment => comment.content), ['I can review it now.']);
   });
 
   await t.test('a run on an issue in Trash is out of reach, so a finish writes nothing until the issue is restored', async () => {
@@ -762,6 +774,15 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const done = await stopped();
     await move(done.target, 'done');
     await closed(done);
+    const legacyStops = { id: { in: [done.target.id, early.target.id] } };
+    for (const fields of [{ statusValue: ' Resolved ', status: 'open' }, { statusValue: ' ', status: ' CLOSED ' }]) {
+      await raw.issue.updateMany({ where: legacyStops, data: { statusId: null, ...fields } });
+      await closed(done);
+      assert.deepEqual(await offered(devA, early.target), []);
+    }
+    await raw.issue.updateMany({ where: legacyStops, data: { statusValue: 'open' } });
+    assert.equal((await reply(done.target, done.run.id))[0], 200);
+    assert.deepEqual(await offered(devA, early.target), ['reply']);
     const moved = await stopped();
     await raw.issue.update({ where: { id: moved.target.id }, data: { assigneeId: otherA.userId } });
     await closed(moved);

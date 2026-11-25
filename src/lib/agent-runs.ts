@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
-import { earlyAnswers, lastAssigned } from '@/lib/agent-stop-boundary';
+import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -75,10 +75,10 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
     },
     select: {
-      id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
+      id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, status: true, statusValue: true, projectStatus: statusSelect,
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
-      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { id: true, outcome: true, startedAt: true, endedAt: true } },
+      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { id: true, seatId: true, userId: true, outcome: true, startedAt: true, endedAt: true } },
     },
   });
   // A run that finished done leaves the issue to its status, so a reopened issue is offered again. A project with no
@@ -88,7 +88,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     OR: [{ category: 'done' }, { category: null, isFinal: true }] }, select: { projectId: true }, distinct: ['projectId'] }) : []).map(status => status.projectId));
   const candidates = issues.flatMap(issue => {
     const last = issue.agentRuns[0];
-    if (last && !last.endedAt) return [];
+    if ((last && !last.endedAt) || isStopIssueDone(issue)) return [];
     const category = categoryOf(issue.projectStatus);
     // Every path that assigns writes this row and stamps it again on a later assignment.
     const assigned = issue.helpers[0]?.approvedAt ?? issue.helpers[0]?.assignedAt ?? issue.createdAt;
@@ -107,7 +107,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
   // `since` is the end of the last run only when that run still says where the issue stands.
-  const early = await answeredEarly(db, me, candidates.flatMap(({ issue, last, since }) => last?.endedAt && last.endedAt >= since
+  const early = await answeredEarly(db, me, candidates.flatMap(({ issue, last, since }) => last?.seatId && last.userId === me && last.endedAt && last.endedAt >= since
     ? [{ issueId: issue.id, runId: last.id, startedAt: last.startedAt, endedAt: last.endedAt, reply: details.get(issue.id)?.comments[0]?.createdAt }] : []));
 
   // Only a lead waits for children, so nobody else pays for this read.
@@ -792,7 +792,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   // A run that named a person may have been answered before it finished (`earlyAnswers`): the session that answer brings
   // back finds it here, with what was said from then on. The seat itself wrote nothing between that answer and its finish.
-  const answer = last?.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
+  const answer = last?.seat && last.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
     ? (await earlyAnswers(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
@@ -927,11 +927,11 @@ export async function answerStop(userId: string, issueIdOrKey: string, runId: st
   await forgeGuard(issue.id);
   const comment = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${issue.id} FOR UPDATE`;
-    const current = await tx.issue.findFirst({ where: { id: issue.id, ...issueReadAccessWhere(userId) }, select: { assigneeId: true, createdAt: true, projectStatus: statusSelect,
+    const current = await tx.issue.findFirst({ where: { id: issue.id, ...issueReadAccessWhere(userId) }, select: { assigneeId: true, createdAt: true, status: true, statusValue: true, projectStatus: statusSelect,
       helpers: { select: { userId: true, approvedAt: true, assignedAt: true } },
       agentRuns: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { id: true, userId: true, seatId: true, state: true, outcome: true, startedAt: true, endedAt: true } } } });
     const run = current?.agentRuns[0];
-    if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isDone(current)
+    if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isStopIssueDone(current)
       || run.endedAt < lastAssigned(current) || (await runsNamingPerson(tx, [issue.id])).get(issue.id) !== runId
       || (await earlyAnswers(tx, [{ issueId: issue.id, seatUserId: run.userId, startedAt: run.startedAt, endedAt: run.endedAt }])).size
       || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: run.endedAt } } })) {
