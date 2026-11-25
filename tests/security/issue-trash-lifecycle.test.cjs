@@ -17,6 +17,7 @@ function select(row, fields) {
 function fixture(options = {}) {
   const workspace = { id: 'w1', slug: 'workspace-one', name: 'Workspace One', ownerId: 'owner', members: [
     { userId: 'admin', role: 'ADMIN', status: true }, { userId: 'member', role: 'MEMBER', status: true },
+    { userId: 'platform-admin', role: 'MEMBER', status: true },
     { userId: 'revoked', role: 'ADMIN', status: false },
     { userId: 'co-owner', role: 'OWNER', status: true }, { userId: 'lower', role: 'admin', status: true },
     // A leftover custom role spelled with a dotless i is a standard role, not Admin.
@@ -58,13 +59,18 @@ function fixture(options = {}) {
     return {
       workspace: {
         findFirst: async ({ where, select: fields }) => select(current.workspaces.find(row => matches(row, where)) || null, fields),
-        findUnique: async ({ where, select: fields }) => select(current.workspaces.find(row => row.id === where.id) || null, fields),
+        findUnique: async ({ where, select: fields }) => {
+          assert.equal(transactional, insideTransaction, 'workspace authority read must use the active client');
+          return select(current.workspaces.find(row => row.id === where.id) || null, fields);
+        },
       },
       // The authority module's read: the account's role and its active memberships in one workspace.
       user: { findUnique: async ({ where, select: fields }) => {
+        assert.equal(transactional, insideTransaction, 'user authority read must use the active client');
         const wanted = fields.workspaceMemberships.where;
         const members = current.workspaces.find(row => row.id === wanted.workspaceId)?.members || [];
-        return { role: 'DEVELOPER', workspaceMemberships: members.filter(member => member.userId === where.id && member.status === wanted.status).map(member => ({ role: member.role })) };
+        const role = where.id === 'platform-admin' ? 'SYSTEM_ADMIN' : 'DEVELOPER';
+        return { role, workspaceMemberships: members.filter(member => member.userId === where.id && member.status === wanted.status).map(member => ({ role: member.role })) };
       } },
       project: { findFirst: async ({ where, select: fields }) => select(current.projects.find(row => matches(row, where)) || null, fields) },
       issue: {
@@ -284,12 +290,12 @@ test('an Admin, an Owner and the primary owner purge; a standard member does not
     assert.equal((await purge(f)).status, 200, userId);
     assert.equal(f.state().issues.some(issue => issue.id === 'issue-one'), false, userId);
   }
-  for (const userId of ['member', 'dotless']) {
+  for (const userId of ['member', 'dotless', 'platform-admin']) {
     const f = fixture({ trashed: true, userId });
     assert.equal((await f.route('browserList')).body.canPurge, false, userId);
     assert.equal((await purge(f)).status, 403, userId);
     assert.deepEqual(f.effects, [], userId);
-    assert.equal(f.state().issues.some(issue => issue.id === 'issue-one'), true, userId);
+    assert.deepEqual(f.state().issues.find(issue => issue.id === 'issue-one')?.deletedAt, initialTime, userId);
   }
 });
 
