@@ -362,6 +362,15 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     for (const child of placed) assert.deepEqual(await give(who.token, child, to.userId), [200, undefined]);
     assert.deepEqual(await finish(who, run, 'blocked'), [200, undefined]);
   };
+  await t.test('a lead cannot wait for a foreign-workspace child after its last local child moves away', async () => {
+    const [epic, local] = await epicOf(B, leadB, 1);
+    const foreign = await raw.workspace.create({ data: { name: 'Foreign', slug: 'foreign', ownerId: owner } });
+    await issue(B, { workspaceId: foreign.id, parentId: epic.id });
+    const run = await start(leadB, epic);
+    await raw.issue.update({ where: { id: local.id }, data: { parentId: null } });
+    assert.deepEqual(await finish(leadB, run, 'blocked'), [422, 'exit_state_required']);
+    assert.deepEqual(await finish(leadB, run, 'done'), [200, undefined]);
+  });
   await t.test('a child done under one epic brings back the lead\'s other epics that have a child to place, once (CLB-1179)', async () => {
     const moreB = await seat('more-b', B), farDev = await seat('far-a', A);
     // The lead holds four epics: one whose child is at work, one with a child held back, one with nothing left to

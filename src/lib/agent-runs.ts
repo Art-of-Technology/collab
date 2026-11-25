@@ -567,7 +567,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
     if (forChildren) {
       // The children of the lead's project, as its inbox reads them. One that finishes right after this count still
       // brings the issue back: the inbox measures children from when this run started, not from when it ends.
-      if (!await tx.issue.count({ where: { parentId: issue.id, projectId: issue.projectId, ...NOT_DONE } })) {
+      if (!await tx.issue.count({ where: { workspaceId, parentId: issue.id, projectId: issue.projectId, ...NOT_DONE } })) {
         throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}; a lead names neither only while a child issue is not done`, waitsFor);
       }
     }
