@@ -69,8 +69,9 @@ export async function runnerPeopleBelow(actor: WorkspaceAuthority | null, worksp
     prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true } }),
     prisma.workspaceMember.findMany({ where: { workspaceId, status: true, userId: { in: personIds } }, select: { userId: true, role: true } }),
   ]);
+  const rolesByUserId = new Map(members.map(member => [member.userId, member.role]));
   return new Set(personIds.filter(userId => {
-    const role = members.find(member => member.userId === userId)?.role;
+    const role = rolesByUserId.get(userId);
     const level: WorkspaceLevel | null = userId === workspace?.ownerId ? 'PRIMARY_OWNER' : role === undefined ? null : levelOfRole(role);
     return below(actor, { userId, level });
   }));
