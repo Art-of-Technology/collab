@@ -26,7 +26,7 @@ const ORDER: Record<string, number> = { resume: 0, in_review: 1, blocked: 2 };
 
 export interface InboxItem {
   issueId: string; issueKey: string | null; title: string; priority: string; category: string;
-  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'child_no_room' | 'assigned'; lastRunAt: string | null;
+  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'child_no_room' | 'other_child_done' | 'assigned'; lastRunAt: string | null;
   /**
    * With `child_no_room`: the child issues to move, each with the seat it sits on and why that seat has no room, and for
    * a child a run has started on the pull request its last run pushed (CLB-809).
@@ -52,6 +52,8 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * has sat with a seat for `CHILD_IDLE_MS` without a run, or one sits on a developer seat that has had no room while another
  * developer seat could take it (`child_no_room`): for `NO_ROOM_MOVE_MS` when no run ever started on it (CLB-780), for
  * `STARTED_MOVE_MS` when its seat's inbox offers it for its next run and its last run pushed its work (`waitsPushed`, CLB-809).
+ * A child that reached done under another issue the lead holds in its project counts as well, for an issue that has a
+ * child the lead may still place (`other_child_done`, CLB-1179).
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   await markLost(context.workspace.id);
@@ -144,6 +146,18 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     return held && due && due.getTime() <= now && due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
   });
 
+  // CLB-1179. A lead may hold a child back until work under another of its issues is done, a rule Collab does not know.
+  // So a child done under any issue the lead holds in its project is news for its other blocked issues there, once each
+  // as for a child of their own, and only for one with a child `leadPlaces` would let it give out: open, no request,
+  // no assignee, never placed by a lead. A run costs money, and there is nothing to do for an issue without one.
+  const loose = children.filter(child => !isDone(child) && !child.assigneeId && !child.agentRequestRole);
+  const placedBefore = new Set((loose.length ? await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: loose.map(child => child.id) }, action: 'LEAD_ASSIGNED' },
+    select: { itemId: true } }) : []).map(entry => entry.itemId));
+  const toPlace = new Set(loose.filter(child => !placedBefore.has(child.id)).map(child => child.parentId));
+  const lastDone = seat && toPlace.size ? (await db.issue.findFirst({ where: { workspaceId, projectId: seat.projectId,
+    parent: { workspaceId, projectId: seat.projectId, assigneeId: me }, projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } },
+    orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }))?.updatedAt : null;
+
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
     if (stands !== 'in_review' && stands !== 'blocked') return 'assigned';
@@ -179,6 +193,8 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && unseen(new Date(due)) && due <= now;
     })) return 'child_idle';
     if (noRoomOf(issue.id, ranBlocked).length) return 'child_no_room';
+    // A child of this issue that is done was told above, so what is left here was done under another.
+    if (toPlace.has(issue.id) && unseen(lastDone)) return 'other_child_done';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);

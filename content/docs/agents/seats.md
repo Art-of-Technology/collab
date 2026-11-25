@@ -62,7 +62,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
 4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
 
-A lead seat's blocked issue is also offered with `child_done`, `child_blocked`, `child_idle` or `child_no_room`: see [Lead seat](#lead-seat).
+A lead seat's blocked issue is also offered with `child_done`, `child_blocked`, `child_idle`, `child_no_room` or `other_child_done`: see [Lead seat](#lead-seat).
 
 From the CLI: `collab seat inbox`. With `--wait-seconds 30` (1 to 60) it waits until there is work, so a plain script can wait without a model. `collab seat show` names the seat behind the token.
 
@@ -352,7 +352,7 @@ A lead seat decides which seat works which issue. It is a seat like the others: 
 | 2 | The lead | Reads the [run context](#start-from-the-run-context): the epic, its `children` and the project's seats under `lead`, the seats of a role [with the most room first](#what-the-lead-is-given). |
 | 3 | The lead | Assigns child issues to seats: `PATCH /api/apps/auth/issues/<key>` with `{ "assigneeId": "<the seat's userId>" }`, or `collab issues update <key> --assignee-id <the seat's userId>`. |
 | 4 | The lead | Finishes its run `blocked` with nothing named: it waits for the children. |
-| 5 | Collab | Offers the epic to the lead again when something happens to a child. |
+| 5 | Collab | Offers the epic to the lead again when something happens to a child, or when a child is done under another epic the lead holds and this one has a child to place. |
 | 6 | The lead | Assigns the next children, or finishes the epic `done` when every child is done. |
 
 What the lead may assign:
@@ -370,6 +370,7 @@ What brings the epic back, each as the `reason` in the lead's inbox:
 - `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
 - `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
 - `child_no_room`: a child issue the lead placed sits on a developer seat without room, and another developer seat has a number and is under its limit. Either no run ever started on it and the seat has had [no room for 10 minutes](#when-a-seat-has-had-no-room-for-10-minutes), or it is [started work](#started-work) that may move after 30 minutes. The item has `noRoom`: a list of `{ issueKey, seat, reason }`, one per such child, and a started child's entry also has the `pullRequest` its last run pushed. Offered once per time the seat is without room: after the lead's next run it is not offered again until the seat has had room and lost it again.
+- `other_child_done`: a child issue of another issue the lead holds in its project reached a done status after the lead's last run on this one started, and this one has a child the lead may place: open, not a request, with no assignee, and never placed by a lead. So an epic whose next child waited for work under another epic comes back when that work is done, also when no relation links the two. An epic with nothing to place is not offered, and an issue of another project or one the lead does not hold neither comes back nor counts.
 - `reply`, as for any blocked issue: someone else commented on the epic.
 
 When two of these hold, the first in this list is the reason given.

@@ -42,6 +42,7 @@ The epic returns to the lead's inbox with a reason:
 | `child_blocked` | A run on a child issue finished blocked. |
 | `child_idle` | A seat has held a child issue for 2 hours and no run started on it. Told once per assignment. |
 | `child_no_room` | A child issue the lead placed sits on a seat without room, and another developer seat has room: 10 minutes for a child no run has started on, 30 minutes for started work between runs whose last run pushed. The lead moves it and writes one comment. Told once each time the seat is without room. |
+| `other_child_done` | A child issue of another epic the lead holds in the project reached a done status, and this epic has an open child with no assignee that the lead may place. Told once per run of the lead on this epic. |
 | `reply` | Someone commented on the epic. |
 
 ## Overrule the lead

@@ -350,4 +350,58 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     const context = (await send(contextRoute.GET, devB.token, 'GET', { params: { issueIdOrKey: parent.issueKey } })).body;
     assert.deepEqual([context.children.length, context.lead], [1, undefined]);
   });
+
+  await t.test('a child done under one epic brings back the lead\'s other epics that have a child to place, once (CLB-1179)', async () => {
+    const epicOf = async (projectId, holder, kids = 2) => {
+      const epic = await issue(projectId, { type: 'EPIC' });
+      if (holder) await personGives(epic, holder.userId);
+      return [epic, ...await Promise.all(Array.from({ length: kids }, () => issue(projectId, { parentId: epic.id })))];
+    };
+    /** One session of a lead on an epic: it places what it is given and waits for the children. */
+    const waits = async (who, epic, to, ...placed) => {
+      const run = await start(who, epic);
+      for (const child of placed) assert.deepEqual(await give(who.token, child, to.userId), [200, undefined]);
+      assert.deepEqual(await finish(who, run, 'blocked'), [200, undefined]);
+    };
+    const moreB = await seat('more-b', B), farDev = await seat('far-a', A);
+    // The lead holds four epics: one whose child is at work, one with a child held back, one with nothing left to
+    // place, and one whose open children the lead may not place: a person took one from its seat, the other is a request.
+    const [epicA, a1] = await epicOf(B, leadB, 1), [epicB, b1] = await epicOf(B, leadB), [placedOut, p1, p2] = await epicOf(B, leadB), [taken, t1, t2] = await epicOf(B, leadB);
+    await raw.issue.update({ where: { id: t2.id }, data: { agentRequestRole: 'review' } });
+    await waits(leadB, epicA, devB, a1);
+    await waits(leadB, epicB, devB, b1);
+    await waits(leadB, placedOut, moreB, p1, p2);
+    await waits(leadB, taken, moreB, t1);
+    await personGives(t1, null);
+    // Another project's lead waits the same way on an epic with a child held back.
+    const [far, x1] = await epicOf(A, lead);
+    await waits(lead, far, farDev, x1);
+    const waiting = async who => (await inbox(who)).filter(([key]) => [epicA, epicB, placedOut, taken, far].some(epic => epic.issueKey === key));
+    assert.deepEqual(await inbox(leadB), []);
+
+    // Work that is not under an epic this lead holds in its project brings nothing back: an epic nobody holds, another
+    // project's lead's epic, and an epic of another project that carries this lead's account as assignee.
+    const [, u1] = await epicOf(B, null, 1), [stray, s1] = await epicOf(A, leadB, 1);
+    const s2 = await issue(B, { parentId: stray.id });
+    for (const [child, projectId] of [[u1, B], [s1, A], [s2, B]]) await raw.issue.update({ where: { id: child.id }, data: { statusId: `${projectId}-done` } });
+    await work(farDev, x1, 'done');
+    assert.deepEqual(await inbox(leadB), []);
+    assert.deepEqual(await waiting(lead), [[far.issueKey, 'child_done']]);
+    await waits(lead, far, farDev);
+
+    // A's child is done. A comes back as it always did; B comes back too, under its own name. The two others do not,
+    // and neither does the other project's epic.
+    await work(devB, a1, 'done');
+    assert.deepEqual(await inbox(leadB), [[epicA.issueKey, 'child_done'], [epicB.issueKey, 'other_child_done']]);
+    assert.deepEqual(await waiting(lead), []);
+    // It does not hang on A staying open.
+    await work(leadB, epicA, 'done');
+    assert.deepEqual(await inbox(leadB), [[epicB.issueKey, 'other_child_done']]);
+    // Once: the lead looked and still holds the child back. The same done child is not news a second time.
+    await waits(leadB, epicB, devB);
+    assert.deepEqual(await inbox(leadB), []);
+    // The next child done elsewhere is news again, for B alone.
+    await work(moreB, p1, 'done');
+    assert.deepEqual(await inbox(leadB), [[epicB.issueKey, 'other_child_done'], [placedOut.issueKey, 'child_done']]);
+  });
 });

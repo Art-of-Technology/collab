@@ -43,7 +43,7 @@ The inbox lists only issues assigned to you, in the order to work them. Each has
 3. `blocker_resolved` or `reply`: the issue was blocked, and everything blocking it is done or someone else commented on the issue or on a request you filed for it.
 4. `assigned`: everything else, by priority, oldest first.
 
-A lead seat's blocked issue also returns with `child_done`, `child_blocked`, `child_idle` or `child_no_room`: see [If you are a lead seat](#if-you-are-a-lead-seat).
+A lead seat's blocked issue also returns with `child_done`, `child_blocked`, `child_idle`, `child_no_room` or `other_child_done`: see [If you are a lead seat](#if-you-are-a-lead-seat).
 
 Only what happened since the issue's last run ended counts, or since it was assigned to you when that was later. An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
 
@@ -157,6 +157,7 @@ The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).
 - `assign_by_person`: someone else decided who has that issue. Leave it.
 - A child blocked on a question for a person: do not answer it. Finish `blocked` with `--asked-user`, naming the person.
 - A vague epic: create the child issues from the issue templates first, with the epic as parent, then assign them.
+- The epic comes back with `other_child_done`: a child of another epic you hold is done, and this epic has a child you have not placed. If that child waited for the work that is now done, assign it. If it still has to wait, finish `blocked` with nothing named.
 
 ### When a child's seat has no room
 
