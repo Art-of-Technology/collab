@@ -9,14 +9,15 @@ flowchart LR
   kind -- yes --> declared{Says Decision or Your hands,<br>with the fields?}
   declared -- no --> refused[Collab refuses the stop]
   declared -- yes --> home[Row on Home]
-  home --> mail[One email to that person]
-  mail --> answer[Person answers]
+  declared -- yes --> mail[One email to that person]
+  home --> answer[Person replies]
+  mail --> answer
   answer --> clears[Row clears, seat goes on]
 ```
 
 ## The problem
 
-When a seat's run ends and names a person, Collab records the person and a one-line next step, nothing more. Home lists every such stop as "Question". Nothing leaves Collab, so a person finds out only by opening Home.
+When a seat finishes a run naming a person, its exit note can describe either a choice or work the person must do. Home labels the stop "Review" if the finish names a pull request and "Question" otherwise. Neither label tells the person which kind of help the seat needs, and the finish sends them no notification.
 
 Measured on 25 November 2026:
 
@@ -42,8 +43,8 @@ One answer had been given on another issue the same day, and its row stayed for 
 
 Checked against commit `26b8bf6c1` of `main`.
 
-- A run's finish takes `askedUser`, `nextStep`, `pullRequest` and `headCommit` (`finishSchema` in `src/lib/agent-runs.ts`). A finish with a missing heading or field is refused with `exit_note_required` or `exit_state_required`.
-- Home reads those facts (`src/lib/dashboard/needs-you.ts`). A stop with a pull request is a "review" row, every other stop is a "question" row. In the "All work" view it lists the stops of the whole workspace, whoever they name, 20 rows at most.
+- A successful named-person finish saves the full exit note on the run. Its `AGENT_RUN_FINISHED` activity records `runId`, `askedUser`, the one-line `nextStep` and, if supplied, `pullRequest` and `headCommit` together. A missing required heading or finish fact gives `exit_note_required`. A missing required wait target gives `exit_state_required` (`src/lib/agent-runs.ts`).
+- Home matches the finish activity to the run by `runId` and reads `askedUser`, `pullRequest` and `nextStep` (`src/lib/dashboard/needs-you.ts`). For an eligible named-person stop, a pull request gives the row the label "Review". Without one, the label is "Question". "All work" includes stops on readable issues even when they name someone else. Home counts all eligible rows, then sorts and displays at most 20 for the selected filter.
 - A notification in the bell is written only when a seat asks a question in the middle of a run (`ISSUE_RUN_QUESTION`). A run that ends naming a person writes none.
 - `sendEmail` in `src/lib/email.ts` is used for workspace invitations and nothing else. `NotificationPreferences` has `emailNotificationsEnabled`.
 - The app has no job that runs at a time of day.
@@ -67,7 +68,7 @@ The owner decided these on 25 November 2026.
 4. **Rows clear themselves.** A row goes when the person it names replies on the issue the reply belongs on, when the issue is done, or when its pull request is merged.
 5. **A Continue button** on a row posts a reply on the issue, which brings the issue back to its seat as any comment does. It is for rows written before this work, and for a seat that stopped although it could have gone on.
 6. **A runner that gives up is a failed run,** not a question.
-7. **Email, the slice after.** When a stop is declared, Collab sends one email to the person it names: what waits, since when, the suggested answer, a link to the row. While something is still open, one list goes out at 09:00 London time. No email for due dates. A person who has switched `emailNotificationsEnabled` off gets none.
+7. **Email, the slice after.** A declared stop triggers one email to the person it names. At 09:00 London time, anyone with eligible open stops gets one list covering all of them, including those outside Home's first 20 rows. In both emails each stop gives the time it began and links directly to the readable issue where the person should reply. A Decision gives the question, reply words and suggested choice. Your hands gives the steps and the word to send once the work is done. No email for due dates. A person who has switched `emailNotificationsEnabled` off gets none.
 8. **Email goes only to the person named.** The "All work" view may keep listing other people's rows; nobody is emailed about them.
 9. **Migration merges stay with a person** in the projects that have that rule. The email is what removes the wait.
 
@@ -79,8 +80,8 @@ One slice at a time. The next starts when the one before is live and used once.
 | --- | --- | --- |
 | 1 | `ask` on the finish, the refusal, the seat texts, the CLI options, and Home reading the fields (decisions 1 to 4 and 6) | CLB-1034 merged; a CLI release |
 | 2 | The Continue button (decision 5) | slice 1 |
-| 3 | The email on a declared stop (decisions 7 and 8) | slice 1; the mail key set in production |
-| 4 | The 09:00 list | slice 3; a job that runs at a time of day, which the app does not have |
+| 3 | Email the named person the choice or steps and the direct issue link (decisions 7 and 8) | slice 1; the mail key set in production |
+| 4 | Select every eligible open stop for the person before Home's 20-row limit. Send the 09:00 list with the same details and issue links as slice 3. | slice 3; a job that runs at a time of day, which the app does not have |
 
 ## Not in this work
 
@@ -93,4 +94,4 @@ One slice at a time. The next starts when the one before is live and used once.
 
 - Whether the mail key is set in production.
 - How many of the five newest rows on Home need a person; the page shows 20.
-- The time each seat stopped: the tools give none, so the ages above come from comment times.
+- The ages above were estimated from comment times. The run API returns the exact `endedAt` to the account that holds the run. Home uses it as the stop's `since` and shows the UTC timestamp when the reader hovers over the age.
