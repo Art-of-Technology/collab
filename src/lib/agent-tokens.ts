@@ -18,7 +18,7 @@ export const agentMintErrors = {
   runner_seat: [409, 'This seat is run by a runner, which fetches its tokens itself. No token is made for it by hand.'],
 } as const;
 
-async function liveSeatOwner(db: Pick<Prisma.TransactionClient, 'agentSeat'>, userId?: string | null) {
+async function liveSeatOwner(db: Pick<typeof prisma, 'agentSeat'>, userId?: string | null) {
   if (!userId) return null;
   const seat = await db.agentSeat.findUnique({ where: { userId, retiredAt: null }, select: { ownerId: true } });
   return seat?.ownerId ?? null;
