@@ -77,6 +77,15 @@ test('a link to a heading that does not exist fails, on another page and on the 
   await one({ 'index.md': clean['index.md'] + '\n[Old id](/docs/cli#install-install)\n' }, /no heading with the id "install-install"/);
 });
 
+test('a heading that links outside the docs point at must stay', async () => {
+  const { checkDocs } = await import(checkScript);
+  assert.deepEqual(Array.from(checkDocs(folder(), { cli: ['install', 'usage'] })), []);
+  const problems = Array.from(checkDocs(folder(), { cli: ['install', 'gone'], missing: ['x'] }));
+  assert.equal(problems.length, 2);
+  assert.match(problems[0], /cli\.md has no heading with the id "gone"/);
+  assert.match(problems[1], /missing\.md has no heading with the id "x"/);
+});
+
 test('a page missing from the navigation fails, and a navigation entry without a file fails', async () => {
   await one({ 'guides/draft.md': '# Draft\n\nNot listed yet.\n' }, /content\/docs\/guides\/draft\.md is not in nav\.json/);
   await one({ 'guides/seats.md': null, 'index.md': '# Docs\n\nWhere to start.\n', 'cli.md': clean['cli.md'] }, /nav\.json lists "guides\/seats", but content\/docs\/guides\/seats\.md does not exist/);
