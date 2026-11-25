@@ -70,8 +70,11 @@ jobs:
         run: npm ci --legacy-peer-deps
       # The docs check needs only these three packages, at the versions in the lock file.
       - if: env.DOCS_ONLY == 'true'
+        shell: bash
         run: |
-          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/docs" $(node -p "['typescript', 'marked', 'entities'].map(name => name + '@' + require('./package-lock.json').packages['node_modules/' + name].version).join(' ')")
+          specs=$(node -p "['typescript', 'marked', 'entities'].map(name => name + '@' + require('./package-lock.json').packages['node_modules/' + name].version).join('\n')")
+          mapfile -t packages <<< "$specs"
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/docs" "${packages[@]}"
           mv "$RUNNER_TEMP/docs/node_modules" node_modules
       # Errors fail the check. Warnings do not: main had 56 of them when this was added.
       - if: env.DOCS_ONLY != 'true'
@@ -110,7 +113,7 @@ jobs:
           NEXTAUTH_URL: http://127.0.0.1:3999
         run: |
           PORT=3999 HOSTNAME=127.0.0.1 node .next/standalone/server.js &
-          for attempt in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3999/docs && break; sleep 1; done
+          for _ in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3999/docs && break; sleep 1; done
           for address in /docs /docs/cli /docs/reference/cli-commands /docs/reference/mcp-tools /llms.txt /llms-full.txt /docs-index.json; do
             status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3999$address")
             [ "$status" = 200 ] || { echo "$address answered $status, not 200"; exit 1; }
