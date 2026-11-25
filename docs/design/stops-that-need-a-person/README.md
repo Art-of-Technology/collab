@@ -69,11 +69,12 @@ The owner decided these on 25 November 2026.
 3. **"Shall I continue?" is not a stop.** The seat texts say: work that is already agreed goes on without asking. A real go or no-go is a Decision with `go` and `hold`. Collab can check the shape of a stop, not whether the decision is a real one, so this rule lives in the seat texts.
 4. **Rows clear as they do today, and that is also what wakes the seat.** A row goes when anyone other than the seat comments on the issue after the stop, or when the issue is done. The same comment brings the issue back to its seat, so a cleared row never leaves a seat waiting. A merged pull request clears nothing by itself: a finish does not record which forge a pull request belongs to.
    Every Home button that posts a comment sends the issue and the displayed finish's `runId`. The server posts only if that run is still the issue's current unanswered stop, checking this and writing the comment atomically. If someone already answered, the issue is done or a later run has started, a click on the old row posts nothing.
-5. **A Continue button** uses the same check as the reply buttons. It posts a comment on the issue under the name of whoever presses it, which brings the issue back to its seat as any comment does. Anyone who may comment on the issue may press it, on a row that names someone else too. It is for rows written before this work, and for a seat that stopped although it could have gone on.
+5. **A Continue button** is bound to the displayed finish the same way as "Send answer". Choosing a reply word only fills the answer field, as today; nothing is posted until "Send answer" or Continue is pressed. Continue posts a comment on the issue under the name of whoever presses it, which brings the issue back to its seat as any comment does. Anyone who may comment on the issue may press it, on a row that names someone else too. It is for rows written before this work, and for a seat that stopped although it could have gone on.
 6. **Email, after the Continue button.** A declared stop triggers one email to the person it names. At 09:00 London time, anyone with eligible open stops gets one list covering all of them, including those outside Home's first 20 rows. In both emails each stop gives the time it began and links directly to the readable issue where the person should reply. A Decision gives the question, reply words and suggested choice. Your hands gives the steps and the word to send once the work is done. No email for due dates. Before each email, at the moment of sending, Collab checks that the person is still a member of the workspace who may read the issue, and has not switched `emailNotificationsEnabled` off for that workspace. Someone who lost access since the stop gets nothing.
 7. **Email goes only to the person named.** The "All work" view may keep listing other people's rows; nobody is emailed about them.
 8. **Migration merges stay with a person** in the projects that have that rule. The email is what removes the wait.
-9. **The refusal is switched on last.** A finish without `ask` is accepted and shown as today until a workspace's runners run the CLI release that sends it. Then the refusal is switched on for that workspace. Switched on earlier, it would refuse every seat that names a person.
+9. **The refusal is switched on last, in a release of its own.** Slice 1 ships the check behind one setting of the deployment, off. Until it is on, a finish without `ask` is accepted and shown as today. It is switched on once the seat texts and the CLI send `ask` and Home has shown no finish without it for a week; a runner that finishes over HTTP without the CLI must send `ask` by then too. Switched on earlier, it would refuse every seat that names a person. There is no setting per workspace.
+10. **An answer given before the finish counts.** A seat writes its question as a comment and finishes a moment later. A comment by anyone other than the seat that is later than the seat's last comment of that run answers the stop, also when it arrived before the finish: Home shows no row, no email is sent, and the issue goes straight back to the seat. Today both Home and the seat's inbox look only at comments later than the finish, so such an answer is lost and the seat waits.
 
 ## The cut
 
@@ -81,7 +82,7 @@ One slice at a time. The next starts when the one before is live and used once.
 
 | Slice | What | Needs |
 | --- | --- | --- |
-| 1 | `ask` on the finish, the refusal behind its switch, the seat texts, the CLI options, and Home reading the fields and posting reply words only for the displayed open stop (decisions 1 to 4 and 9) | CLB-1034 merged; a CLI release |
+| 1 | `ask` on the finish, the refusal behind its switch, the seat texts, the CLI options, and Home reading the fields and posting reply words only for the displayed open stop (decisions 1 to 4, 9 and 10) | CLB-1034, merged on 25 November 2026; a CLI release |
 | 2 | The Continue button uses slice 1's check for the displayed stop, including on legacy rows (decision 5) | slice 1 |
 | 3 | Email the named person the choice or steps and the direct issue link (decisions 6 and 7) | slice 2; the mail key set in production |
 | 4 | Select every eligible open stop for the person before Home's 20-row limit. Send the 09:00 list with the same details and issue links as slice 3. | slice 3. This slice also builds the job that runs at 09:00 London time; the app has none |
@@ -94,6 +95,7 @@ One slice at a time. The next starts when the one before is live and used once.
 - A reply that belongs on another issue than the one that stopped.
 - A model that guesses the kind of a stop from its text.
 - Any change to who merges what.
+- A switch per workspace for the refusal.
 
 ## Not checked
 
