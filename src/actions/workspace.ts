@@ -852,8 +852,7 @@ export async function updateWorkspaceMemberStatus(data: {
   const member = await prisma.workspaceMember.findFirst({
     where: {
       id: memberId,
-      workspaceId,
-      status: true
+      workspaceId
     },
     include: {
       user: {

@@ -101,6 +101,9 @@ export async function PUT(
       if (member.userId === session.user.id) {
         return NextResponse.json({ error: 'Nobody can change their own role' }, { status: 403 });
       }
+      if (!member.user.email && levelOfRole(role) !== 'STANDARD') {
+        return NextResponse.json({ error: 'An agent account cannot be an Owner or an Admin' }, { status: 403 });
+      }
       if (!mayActOn(actor, target, holdsChangeRoles)) {
         return NextResponse.json({ error: 'You can only change the role of members below your own level' }, { status: 403 });
       }

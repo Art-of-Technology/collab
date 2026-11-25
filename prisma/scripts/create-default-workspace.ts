@@ -36,12 +36,12 @@ async function main() {
         ownerId: owner.id,
       },
     });
-    // Add the owner as a member with 'owner' role
+    // Add the owner as a member with the 'OWNER' role
     await prisma.workspaceMember.create({
       data: {
         userId: owner.id,
         workspaceId: defaultWorkspace.id,
-        role: 'owner',
+        role: 'OWNER',
       },
     });
 
@@ -59,7 +59,7 @@ async function main() {
         data: {
           userId: user.id,
           workspaceId: defaultWorkspace.id,
-          role: 'member',
+          role: 'MEMBER',
         },
       });
     }
