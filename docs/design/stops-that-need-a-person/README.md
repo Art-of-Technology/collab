@@ -36,8 +36,8 @@ One answer had been given on another issue the same day, and its row stayed for 
 ## The three lines
 
 - **Who is waiting:** the repository's owner.
-- **First day:** he opens Home and every row is a real decision or a task for his hands, and a new one reaches him by email within a minute.
-- **Smallest version:** a seat that names a person says which of two kinds of stop it is and gives the fields below; Collab refuses the stop otherwise. The email is the slice after that.
+- **First day:** he opens Home and every row addressed to him is a real decision or a task for his hands, and a new one reaches him by email within a minute.
+- **Smallest version:** a seat that names a person says which of two kinds of stop it is and gives the fields below; Collab refuses the stop otherwise. Then the Continue button, then the email.
 
 ## What exists today
 
@@ -59,18 +59,20 @@ The owner decided these on 25 November 2026.
 
    | Kind | The seat gives | Home shows |
    | --- | --- | --- |
-   | Decision | the question, two to four reply words, the one it suggests, and the issue the reply belongs on when that is another one | "Question", one button per reply word, the suggested one first |
+   | Decision | one or more questions, each with two to four reply words and the one it suggests | "Question". With one question: a button per reply word, the suggested one first. With several: the questions, and a link to the issue |
    | Your hands | what to do in steps, and the reply word that says it is done | "Waiting on you", the steps, the reply word |
 
    A finish that names a person without `ask`, or with a Decision that has no reply words, is refused like a missing heading, and the refusal names what is missing.
-2. **A status note or a wait on something else names no person.** It finishes `blocked` on the issue it waits for, or on nothing, as a lead does today. It never reaches "Needs you".
+
+   The reply belongs on the issue that stopped. A stop names no other issue for it: a seat that needs an answer about another issue asks on its own. A planner that asks several questions in one round gives them as several questions of one Decision.
+2. **A status note or a wait on something else names no person.** It finishes `blocked` on the issue it waits for and never reaches "Needs you". A lead with an unfinished child keeps the exception it has today; no other seat gets one.
 3. **"Shall I continue?" is not a stop.** The seat texts say: work that is already agreed goes on without asking. A real go or no-go is a Decision with `go` and `hold`. Collab can check the shape of a stop, not whether the decision is a real one, so this rule lives in the seat texts.
-4. **Rows clear themselves.** A row goes when the person it names replies on the issue the reply belongs on, when the issue is done, or when its pull request is merged.
-5. **A Continue button** on a row posts a reply on the issue, which brings the issue back to its seat as any comment does. It is for rows written before this work, and for a seat that stopped although it could have gone on.
-6. **A runner that gives up is a failed run,** not a question.
-7. **Email, the slice after.** A declared stop triggers one email to the person it names. At 09:00 London time, anyone with eligible open stops gets one list covering all of them, including those outside Home's first 20 rows. In both emails each stop gives the time it began and links directly to the readable issue where the person should reply. A Decision gives the question, reply words and suggested choice. Your hands gives the steps and the word to send once the work is done. No email for due dates. A person who has switched `emailNotificationsEnabled` off gets none.
-8. **Email goes only to the person named.** The "All work" view may keep listing other people's rows; nobody is emailed about them.
-9. **Migration merges stay with a person** in the projects that have that rule. The email is what removes the wait.
+4. **Rows clear as they do today, and that is also what wakes the seat.** A row goes when anyone other than the seat comments on the issue after the stop, or when the issue is done. The same comment brings the issue back to its seat, so a cleared row never leaves a seat waiting. A merged pull request clears nothing by itself: a finish does not record which forge a pull request belongs to.
+5. **A Continue button** on a row posts a comment on the issue under the name of whoever presses it, which brings the issue back to its seat as any comment does. Anyone who may comment on the issue may press it, on a row that names someone else too. It is for rows written before this work, and for a seat that stopped although it could have gone on.
+6. **Email, after the Continue button.** A declared stop triggers one email to the person it names. At 09:00 London time, anyone with eligible open stops gets one list covering all of them, including those outside Home's first 20 rows. In both emails each stop gives the time it began and links directly to the readable issue where the person should reply. A Decision gives the question, reply words and suggested choice. Your hands gives the steps and the word to send once the work is done. No email for due dates. Before each email, at the moment of sending, Collab checks that the person is still a member of the workspace who may read the issue, and has not switched `emailNotificationsEnabled` off for that workspace. Someone who lost access since the stop gets nothing.
+7. **Email goes only to the person named.** The "All work" view may keep listing other people's rows; nobody is emailed about them.
+8. **Migration merges stay with a person** in the projects that have that rule. The email is what removes the wait.
+9. **The refusal is switched on last.** A finish without `ask` is accepted and shown as today until a workspace's runners run the CLI release that sends it. Then the refusal is switched on for that workspace. Switched on earlier, it would refuse every seat that names a person.
 
 ## The cut
 
@@ -78,15 +80,17 @@ One slice at a time. The next starts when the one before is live and used once.
 
 | Slice | What | Needs |
 | --- | --- | --- |
-| 1 | `ask` on the finish, the refusal, the seat texts, the CLI options, and Home reading the fields (decisions 1 to 4 and 6) | CLB-1034 merged; a CLI release |
+| 1 | `ask` on the finish, the refusal behind its switch, the seat texts, the CLI options, and Home reading the fields (decisions 1 to 4 and 9) | CLB-1034 merged; a CLI release |
 | 2 | The Continue button (decision 5) | slice 1 |
-| 3 | Email the named person the choice or steps and the direct issue link (decisions 7 and 8) | slice 1; the mail key set in production |
-| 4 | Select every eligible open stop for the person before Home's 20-row limit. Send the 09:00 list with the same details and issue links as slice 3. | slice 3; a job that runs at a time of day, which the app does not have |
+| 3 | Email the named person the choice or steps and the direct issue link (decisions 6 and 7) | slice 2; the mail key set in production |
+| 4 | Select every eligible open stop for the person before Home's 20-row limit. Send the 09:00 list with the same details and issue links as slice 3. | slice 3. This slice also builds the job that runs at 09:00 London time; the app has none |
 
 ## Not in this work
 
 - Slack or browser push.
-- Rewriting the rows that exist today. The owner clears them with Continue or an answer.
+- Rewriting the rows that exist today. Anyone who may comment on the issue clears one with Continue or an answer.
+- Showing a runner that gave up as a failed run. The runner records that only on its own side, so it needs a new report from the runner to the server.
+- A reply that belongs on another issue than the one that stopped.
 - A model that guesses the kind of a stop from its text.
 - Any change to who merges what.
 
