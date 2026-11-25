@@ -734,6 +734,23 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual((await comments(noted.target)).at(-1), [owner, 'window']);
     session = person;
 
+    // An answer written after the seat's question and before its finish has answered the stop: the seat has the issue back.
+    const asking = async (seatSaid, ownerSaid) => {
+      const { target, run } = await started(devA);
+      await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(60) } });
+      await raw.issueComment.create({ data: { issueId: target.id, authorId: devA.userId, content: ask.questions[0].question, createdAt: ago(seatSaid) } });
+      await raw.issueComment.create({ data: { issueId: target.id, authorId: owner, content: 'Split it: the window is taken tonight.', createdAt: ago(ownerSaid) } });
+      assert.equal((await finish(devA, run.id, { outcome: 'blocked', askedUser: person, ask }))[0], 200);
+      return { target, run };
+    };
+    const early = await asking(30, 20);
+    await closed(early);
+    assert.deepEqual(await offered(devA, early.target), ['reply']);
+    // What was said before the question is no answer to it.
+    const before = await asking(20, 30);
+    assert.deepEqual(await offered(devA, before.target), []);
+    assert.equal((await reply(before.target, before.run.id))[0], 200);
+
     // The issue is done, or went to another seat.
     const done = await stopped();
     await move(done.target, 'done');

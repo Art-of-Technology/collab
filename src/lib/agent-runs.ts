@@ -75,7 +75,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
-      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
+      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { id: true, outcome: true, startedAt: true, endedAt: true } },
     },
   });
   // A run that finished done leaves the issue to its status, so a reopened issue is offered again. A project with no
@@ -103,6 +103,9 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
+  // `since` is the end of the last run only when that run still says where the issue stands.
+  const early = await answeredEarly(db, me, candidates.flatMap(({ issue, last, since }) => last?.endedAt && last.endedAt >= since
+    ? [{ issueId: issue.id, runId: last.id, startedAt: last.startedAt, endedAt: last.endedAt, reply: details.get(issue.id)?.comments[0]?.createdAt }] : []));
 
   // Only a lead waits for children, so nobody else pays for this read.
   const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
@@ -184,11 +187,28 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
 
   return { items: candidates
-    .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
+    .flatMap(candidate => { const reason = reasonFor(candidate) ?? (early.has(candidate.issue.id) ? 'reply' as const : null); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
     .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
       category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
+}
+
+/**
+ * Declared stops: the issues whose stop was answered before its run finished. A seat writes its question as a comment and
+ * finishes a moment later, so a comment by somebody else that is later than the seat's last comment of the run that named
+ * a person answers the stop, also when it came before the finish. A run in which the seat wrote no comment keeps the
+ * finish as its boundary. `reply` is the issue's latest comment by somebody else: one after the finish is a reply already,
+ * so nothing is read unless it came during the run. Home clears its row by the same rule (src/lib/dashboard/needs-you.ts).
+ */
+async function answeredEarly(db: DB, me: string, stops: { issueId: string; runId: string; startedAt: Date; endedAt: Date; reply?: Date }[]) {
+  const during = stops.filter(stop => stop.reply && stop.reply > stop.startedAt && stop.reply <= stop.endedAt);
+  if (!during.length) return new Set<string>();
+  const asked = new Map((await db.issueComment.groupBy({ by: ['issueId'], _max: { createdAt: true }, where: { authorId: me,
+    OR: during.map(stop => ({ issueId: stop.issueId, createdAt: { gte: stop.startedAt, lte: stop.endedAt } })) } })).map(row => [row.issueId, row._max.createdAt]));
+  const named = new Set((await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: [...asked.keys()] }, action: 'AGENT_RUN_FINISHED' }, select: { details: true } }))
+    .map(row => JSON.parse(row.details ?? '{}')).filter(facts => typeof facts.askedUser === 'string').map(facts => facts.runId as string));
+  return new Set(during.filter(stop => named.has(stop.runId) && stop.reply! > (asked.get(stop.issueId) ?? stop.endedAt)).map(stop => stop.issueId));
 }
 
 export type Pushed = { runId: string; pullRequest: string; headCommit: string };
@@ -859,7 +879,8 @@ export async function clearRun(userId: string, issueIdOrKey: string, runId: stri
 /**
  * Declared stops: a person's answer from Home is a comment on the issue, posted only while the stop its row showed is
  * still open. Open: that run is the issue's latest, a seat's, and finished in review or blocked naming a person; the
- * seat still holds the issue, the issue is not done, and nobody but the seat has commented since the run ended. Anyone
+ * seat still holds the issue, the issue is not done, and nobody but the seat has commented since the seat's last comment
+ * of that run, or since the run ended when it wrote none. Anyone
  * who may read the issue may answer, as with a comment on its page. It is checked and written under the issue's lock,
  * which a checkout and a second answer take too: two presses post one comment, and a press on an old row posts none.
  */
@@ -870,13 +891,15 @@ export async function answerStop(userId: string, issueIdOrKey: string, runId: st
   const comment = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${issue.id} FOR UPDATE`;
     const current = await tx.issue.findFirst({ where: { id: issue.id, ...issueReadAccessWhere(userId) }, select: { assigneeId: true, projectStatus: statusSelect,
-      agentRuns: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { id: true, userId: true, seatId: true, state: true, outcome: true, endedAt: true } } } });
+      agentRuns: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { id: true, userId: true, seatId: true, state: true, outcome: true, startedAt: true, endedAt: true } } } });
     const run = current?.agentRuns[0];
     const entry = await tx.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
     const facts = JSON.parse(entry?.details ?? '{}');
+    // The seat's last comment of the run is its question: what somebody else wrote after it is an answer (`answeredEarly`).
+    const asked = run?.endedAt ? (await tx.issueComment.aggregate({ where: { issueId: issue.id, authorId: run.userId, createdAt: { gte: run.startedAt, lte: run.endedAt } }, _max: { createdAt: true } }))._max.createdAt : null;
     if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isDone(current)
       || facts.runId !== runId || typeof facts.askedUser !== 'string'
-      || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: run.endedAt } } })) {
+      || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: asked ?? run.endedAt } } })) {
       throw new HandoffError('stop_closed', 'Nothing was posted: this is no longer waiting for an answer. Someone has answered it, the issue is done, or its seat has started on it again', 409);
     }
     return tx.issueComment.create({ data: { issueId: issue.id, authorId: userId, content: input.content }, select: { id: true, issueId: true, authorId: true, content: true, createdAt: true } });

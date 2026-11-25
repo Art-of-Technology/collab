@@ -276,6 +276,53 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     await clear();
   });
 
+  await t.test("declared stops: an answer written after the seat's question brings the issue back, also when it came before the finish", async () => {
+    /** A run that finished naming the person, as its finish records it. It started 90 minutes ago and ended 60 minutes ago. */
+    const stop = async (target, outcome = 'blocked') => {
+      const made = await run(target, devA, { outcome });
+      await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: target.projectId, itemType: 'ISSUE', itemId: target.id, userId: devA.userId,
+        action: 'AGENT_RUN_FINISHED', details: JSON.stringify({ runId: made.id, outcome, askedUser: person }) } });
+    };
+    const early = await issue(devA);
+    await stop(early);
+    await comment(early, devA.userId, 70);
+    await comment(early, person, 65);
+    // The seat's last comment of the run is the question: an earlier one is a progress note.
+    const review = await issue(devA);
+    await stop(review, 'in_review');
+    await comment(review, devA.userId, 80);
+    await comment(review, devA.userId, 70);
+    await comment(review, person, 61);
+    // Written before the seat's question, also between two of its comments: not an answer to it.
+    const before = await issue(devA);
+    await stop(before);
+    await comment(before, devA.userId, 80);
+    await comment(before, person, 75);
+    await comment(before, devA.userId, 70);
+    // The seat wrote nothing in its run, only before it: the finish is the boundary, as it was.
+    const silent = await issue(devA);
+    await stop(silent);
+    await comment(silent, devA.userId, 100);
+    await comment(silent, person, 65);
+    // A run that named no person waits for what it named.
+    const unnamed = await issue(devA);
+    await run(unnamed, devA, { outcome: 'blocked' });
+    await comment(unnamed, devA.userId, 70);
+    await comment(unnamed, person, 65);
+    // What the seat wrote after the finish moves nothing: the answer came after its last comment of the run.
+    const noted = await issue(devA);
+    await stop(noted);
+    await comment(noted, devA.userId, 70);
+    await comment(noted, person, 65);
+    await comment(noted, devA.userId, 30);
+    assert.deepEqual((await inbox(devA.token)).map(item => [item.issueKey, item.reason]), [[review.issueKey, 'reply'], [early.issueKey, 'reply'], [noted.issueKey, 'reply']]);
+
+    // A comment after the finish is a reply, as it was.
+    await comment(before, person, 5);
+    assert.equal((await offered(devA.token, before)).reason, 'reply');
+    await clear();
+  });
+
   await t.test("reading the inbox records that the seat was seen, at most once a minute", async () => {
     const seen = async () => (await raw.agentSeat.findUniqueOrThrow({ where: { id: devA.id } })).lastSeenAt;
     await raw.agentSeat.update({ where: { id: devA.id }, data: { lastSeenAt: null } });

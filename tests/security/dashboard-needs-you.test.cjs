@@ -285,6 +285,31 @@ test('a question leaves the list once someone other than the seat has commented'
   assert.deepEqual(result.waitingSeats, []);
 });
 
+test("declared stops: an answer written after the seat's question clears the row, also when it came before the finish", async () => {
+  // Each run started at date(-2.5) and finished at date(-2).
+  const says = (issueId, authorId, days, content) => raw.issueComment.create({ data: { issueId, authorId, content, createdAt: date(days) } });
+  const question = 'Run the migration in tonight\'s window, or split it? Reply `window` or `split`.';
+  for (const id of ['early', 'before', 'between', 'silent', 'noted']) await waiting(id);
+  await says('early', 'seat-user', -2.2, question);
+  await says('early', 'other', -2.1, 'split');
+  // Written before the seat's question, also between two of its comments: not an answer to it.
+  await says('before', 'other', -2.3, 'Is the backup done?');
+  await says('before', 'seat-user', -2.2, question);
+  await says('between', 'seat-user', -2.4, 'The backup is done.');
+  await says('between', 'other', -2.3, 'Thanks.');
+  await says('between', 'seat-user', -2.2, question);
+  // The seat wrote nothing in its run, only before it: the finish is the boundary, as it was.
+  await says('silent', 'seat-user', -3, 'Picked this up.');
+  await says('silent', 'other', -2.1, 'Any news?');
+  // What the seat wrote after the finish moves nothing: the answer came after its last comment of the run.
+  await says('noted', 'seat-user', -2.2, question);
+  await says('noted', 'other', -2.1, 'window');
+  await says('noted', 'seat-user', -1, 'Thanks, I will take it from here.');
+  const result = await read();
+  assert.deepEqual(result.items.map(row => row.issue.id), ['before', 'between', 'silent']);
+  assert.deepEqual(result.counts, { question: 3, review: 0, failed: 0, due: 0 });
+});
+
 test('a question of an issue that was reassigned since the run is not listed', async () => {
   await waiting('different-assignee', { assigneeId: 'other' });
   await waiting('returned-to-seat');

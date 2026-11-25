@@ -280,6 +280,7 @@ export async function loadNeedsYou({
 
     const answered = new Set<string>();
     const commentDates = new Map<string, Date>();
+    const during = new Map<string, Date>();
     for (const reply of comments) {
       const current = waiting.get(reply.issueId);
       const latest = reply._max.createdAt;
@@ -287,6 +288,16 @@ export async function loadNeedsYou({
       // Seats write their question during the run; only a later comment by someone else answers it.
       if (reply.authorId === current.seat.userId) commentDates.set(reply.issueId, latest);
       else if (latest > current.endedAt) answered.add(reply.issueId);
+      else if (latest > (during.get(reply.issueId) ?? current.startedAt)) during.set(reply.issueId, latest);
+    }
+    // A comment by someone else that came during the run answers it when it is later than the seat's last comment of that
+    // run: the seat asks, then finishes a moment later. The seat's inbox offers the issue by the same rule (`answeredEarly`).
+    const asked = [...during.keys()].filter(issueId => !answered.has(issueId)).map(issueId => {
+      const { seat, startedAt, endedAt } = waiting.get(issueId)!;
+      return { issueId, authorId: seat.userId, createdAt: { gte: startedAt, lte: endedAt } };
+    });
+    for (const row of asked.length ? await prisma.issueComment.groupBy({ by: ['issueId'], where: { issue: readableIssues, OR: asked }, _max: { createdAt: true } }) : []) {
+      if (row._max.createdAt && during.get(row.issueId)! > row._max.createdAt) answered.add(row.issueId);
     }
     const factsByIssue = new Map<string, ExitFacts>();
     for (const activity of finishes) {
