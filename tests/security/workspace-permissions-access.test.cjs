@@ -196,3 +196,21 @@ test("the Owner role's permissions cannot be changed or reset, and an unknown ro
     assert.ok(g.state.rows.some(row => row.role === 'admin' && row.permission === 'VIEW_POSTS'));
   }
 });
+
+test('a platform admin who is a member below Owner manages permissions as before, but never the Owner role', async () => {
+  for (const memberRole of ['HR', 'ADMIN']) {
+    for (const [method, body] of [['GET'], ['PUT', { role: 'DEVELOPER', permission: 'VIEW_POSTS', enabled: true }], ['POST', { role: 'DEVELOPER' }]]) {
+      const f = fixture(); f.state.admin = true; f.state.memberRole = memberRole; f.state.manage = false;
+      assert.equal((await f.invoke(method, body)).status, 200, `${memberRole}: ${method}`);
+      // The same membership without the platform role keeps today's answer.
+      const g = fixture(); g.state.memberRole = memberRole;
+      assert.equal((await g.invoke(method, body)).status, 403, `${memberRole} without the platform role: ${method}`);
+      assert.deepEqual(g.state.writes, []);
+    }
+    for (const [method, body] of [['PUT', { role: 'OWNER', permission: 'VIEW_POSTS', enabled: false }], ['POST', { role: 'owner' }]]) {
+      const f = fixture(); f.state.admin = true; f.state.memberRole = memberRole;
+      assert.equal((await f.invoke(method, body)).status, 403, `${memberRole}: ${method} on the Owner role`);
+      assert.deepEqual(f.state.writes, []);
+    }
+  }
+});

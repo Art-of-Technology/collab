@@ -3,11 +3,11 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const root = 'src/app/api/workspaces/[workspaceId]/';
 
 function fixture(role = 'OWNER') {
-  const state = { active: true, owner: false, role, manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
+  const state = { active: true, owner: false, admin: false, role, manage: true, mapping: true, legacy: 0, failPermissions: false, writes: [],
     roles: [{ id: 'custom', workspaceId: 'workspace', name: 'Support' }, { id: 'foreign', workspaceId: 'foreign', name: 'Support' }],
     permissions: [{ workspaceId: 'workspace', role: 'Support', permission: 'VIEW_POSTS' }, { workspaceId: 'foreign', role: 'Support', permission: 'VIEW_POSTS' }],
     members: [{ id: 'member', userId: 'target', workspaceId: 'workspace', role: 'Support', status: true }, { id: 'foreign', userId: 'foreign', workspaceId: 'foreign', role: 'Support', status: true }] };
-  const actor = { id: 'actor', email: 'actor@weezboo.com', role: 'DEVELOPER', get ownedWorkspaces() { return state.owner ? [{ id: 'workspace' }] : []; }, get workspaceMemberships() { return state.active ? [{ role: state.role }] : []; } };
+  const actor = { id: 'actor', email: 'actor@weezboo.com', get role() { return state.admin ? 'SYSTEM_ADMIN' : 'DEVELOPER'; }, get ownedWorkspaces() { return state.owner ? [{ id: 'workspace' }] : []; }, get workspaceMemberships() { return state.active ? [{ role: state.role }] : []; } };
   function match(row, where) {
     if (where.name?.equals !== undefined) { const { name, ...rest } = where; return row.name.toLowerCase() === name.equals.toLowerCase() && matches(row, rest); }
     return matches(row, where);
@@ -126,4 +126,19 @@ test('creating, editing and deleting a custom role is for Owner and above; listi
   }
   const f = fixture(); f.state.active = false;
   assert.equal((await f.invoke('list', 'GET')).status, 403, 'someone without an active membership who is not the owner');
+});
+
+test('a platform admin who is a member below Owner creates, edits and deletes custom roles as before', async () => {
+  const writes = [['list', 'POST', { name: 'New', permissions: ['VIEW_POSTS'] }], ['detail', 'PUT', { description: 'Updated' }], ['detail', 'DELETE']];
+  for (const role of ['ADMIN', 'HR', 'Support']) {
+    for (const [route, method, body] of [['list', 'GET'], ...writes]) {
+      const f = fixture(); f.state.admin = true; f.state.role = role; f.state.members = []; f.state.manage = false;
+      assert.equal((await f.invoke(route, method, body)).status, 200, `${role}: ${route} ${method}`);
+    }
+    for (const [route, method, body] of writes) {
+      const f = fixture(); f.state.role = role; f.state.members = [];
+      assert.equal((await f.invoke(route, method, body)).status, 403, `${role} without the platform role: ${route} ${method}`);
+      assert.deepEqual(f.state.writes, []);
+    }
+  }
 });

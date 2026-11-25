@@ -155,6 +155,22 @@ test('a system admin puts anyone into any workspace', async () => {
   assert.equal(f.audit.at(-1).actorId, 'root');
 });
 
+test('a system admin who is a standard member of the workspace still switches anyone but its owner on or off', async () => {
+  const f = fixture();
+  f.workspace('w1').members.push({ userId: 'root', role: 'MEMBER', status: true });
+  f.as('root');
+  const off = await f.put('w1', 'carol', { active: false });
+  assert.equal(JSON.stringify([off.status, off.body]), JSON.stringify([200, { active: false, changed: true }]));
+  assert.equal(f.member('w1', 'carol').status, false);
+  assert.equal((await f.put('w1', 'carol')).status, 200);
+  assert.equal((await f.put('w1', 'alice', { active: false })).status, 409, 'the owner stays in');
+  // A standard member who is not a system admin, holding the same permission, keeps today's answer.
+  f.rolePermissions.push({ workspaceId: 'w1', role: 'MEMBER', permission: 'MANAGE_WORKSPACE_MEMBERS' });
+  f.as('bob');
+  assert.equal((await f.put('w1', 'carol', { active: false })).status, 403);
+  assert.equal(f.member('w1', 'carol').status, true);
+});
+
 test('sharing a workspace counts for its owner and for active members only', async () => {
   const f = fixture();
   f.as('alice');

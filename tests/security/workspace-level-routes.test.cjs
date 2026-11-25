@@ -8,8 +8,10 @@ const flat = where => Object.fromEntries(Object.entries(where || {}).flatMap(([k
 function fixture() {
   const members = [
     ['prim', 'OWNER'], ['own1', 'OWNER'], ['own2', 'owner'], ['adm1', 'ADMIN'], ['adm2', 'admin'], ['hr', 'HR'], ['dev', 'DEVELOPER'],
+    // Platform admins who are also members: a standard role, an Admin and an Owner.
+    ['pas', 'DEVELOPER'], ['paa', 'ADMIN'], ['pao', 'OWNER'],
   ].map(([userId, role]) => ({ id: `m-${userId}`, workspaceId: 'w', userId, role, status: true }));
-  const users = [...members.map(row => ({ id: row.userId, name: row.userId, email: `${row.userId}@example.test`, role: 'DEVELOPER' })),
+  const users = [...members.map(row => ({ id: row.userId, name: row.userId, email: `${row.userId}@example.test`, role: row.userId.startsWith('pa') ? 'SYSTEM_ADMIN' : 'DEVELOPER' })),
     { id: 'out', name: 'out', email: 'out@example.test', role: 'DEVELOPER' }, { id: 'root', name: 'root', email: 'root@example.test', role: 'SYSTEM_ADMIN' }];
   const db = {
     workspaces: [{ id: 'w', slug: 'w', name: 'W', description: null, logoUrl: null, ownerId: 'prim', dockEnabled: false, timeTrackingEnabled: false }],
@@ -132,6 +134,8 @@ function fixture() {
     createRole: call('roles', 'POST', { name: 'Helpers', permissions: ['VIEW_POSTS'] }),
     editRole: call('role', 'PUT', { description: 'Edited' }, { roleId: 'c1' }),
     deleteRole: call('role', 'DELETE', undefined, { roleId: 'c1' }),
+    changeOwnerRole: call('permissions', 'PUT', { role: 'OWNER', permission: 'VIEW_POSTS', enabled: false }),
+    resetOwnerRole: call('permissions', 'POST', { role: 'OWNER' }),
   };
   const snapshot = () => JSON.stringify(db);
   return { paths, db, snapshot, workspace: () => db.workspaces[0] ?? null };
@@ -224,4 +228,59 @@ test('a platform admin who is not a member gets today\'s answer on each path', a
   assert.equal((await f.paths.deleteAction('root')).ok, false);
   assert.deepEqual(await f.paths.listRoles('root'), { ok: false, status: 403, error: 'Not a member of this workspace' });
   assert.equal(f.snapshot(), before);
+});
+
+test('a platform admin who is also a member gets the answer a platform admin got before the level rules', async () => {
+  // Allowed before, through the platform role, whatever the membership.
+  for (const path of ['rename', 'deleteRoute', 'listInvitations', 'invite', 'cancelInvitation', 'listRoles',
+    'readPermissions', 'changePermission', 'resetPermissions', 'createRole', 'editRole', 'deleteRole']) {
+    for (const actor of ['pas', 'paa', 'pao']) {
+      const f = fixture();
+      const answer = await f.paths[path](actor);
+      assert.equal(answer.ok, true, `${path}: ${actor} ${JSON.stringify(answer)}`);
+      if (path === 'rename') assert.equal(f.workspace().name, 'Renamed');
+      if (path === 'deleteRoute') assert.equal(f.workspace(), null);
+      if (path === 'changePermission') assert.ok(f.db.rolePermissions.some(row => row.role === 'DEVELOPER' && row.permission === 'VIEW_POSTS'));
+    }
+  }
+  // Refused before for anyone but the workspace's owner; today an Owner may, a platform admin as any other.
+  for (const path of ['settings', 'updateAction', 'deleteAction']) {
+    for (const actor of ['pas', 'paa', ...(path === 'deleteAction' ? ['pao'] : [])]) {
+      const f = fixture();
+      const before = f.snapshot();
+      assert.equal((await f.paths[path](actor)).ok, false, `${path}: ${actor}`);
+      assert.equal(f.snapshot(), before, `${path}: ${actor} stored nothing`);
+    }
+  }
+  for (const path of ['settings', 'updateAction']) assert.equal((await fixture().paths[path]('pao')).ok, true, `${path}: pao`);
+  // A member at the same level who is not a platform admin keeps today's answer.
+  for (const path of ['rename', 'deleteRoute', 'readPermissions', 'changePermission', 'resetPermissions', 'createRole', 'editRole', 'deleteRole']) {
+    for (const actor of ['dev', 'adm1']) {
+      const f = fixture();
+      const before = f.snapshot();
+      refused(await f.paths[path](actor), `${path}: ${actor}`);
+      assert.equal(f.snapshot(), before);
+    }
+  }
+});
+
+test("nobody changes or resets the Owner role's permissions, a platform admin who is a member included", async () => {
+  for (const path of ['changeOwnerRole', 'resetOwnerRole']) {
+    for (const actor of ['prim', 'root', 'pas', 'paa', 'pao']) {
+      const f = fixture();
+      const before = f.snapshot();
+      refused(await f.paths[path](actor), `${path}: ${actor}`);
+      assert.equal(f.snapshot(), before);
+    }
+  }
+});
+
+test('someone without access to the workspace is refused on every workspace path', async () => {
+  for (const path of ['rename', 'settings', 'updateAction', 'deleteRoute', 'deleteAction', 'readPermissions', 'changePermission',
+    'resetPermissions', 'listRoles', 'createRole', 'editRole', 'deleteRole', 'listInvitations', 'invite', 'cancelInvitation']) {
+    const f = fixture();
+    const before = f.snapshot();
+    assert.equal((await f.paths[path]('out')).ok, false, path);
+    assert.equal(f.snapshot(), before, path);
+  }
 });

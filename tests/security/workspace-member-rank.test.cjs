@@ -5,9 +5,11 @@ function fixture() {
   const rows = [
     ['prim', 'OWNER'], ['own1', 'OWNER'], ['own2', 'owner'], ['adm1', 'ADMIN'], ['adm2', 'admin'],
     ['hr', 'HR'], ['hr2', 'HR'], ['dev', 'DEVELOPER'], ['mem', 'MEMBER'], ['agent', 'MEMBER'], ['gone', 'MEMBER', false],
+    // Platform admins who are also members: a standard role, an Admin and an Owner.
+    ['pas', 'DEVELOPER'], ['paa', 'ADMIN'], ['pao', 'OWNER'],
   ].map(([userId, role, status = true]) => ({ id: `m-${userId}`, workspaceId: 'w', userId, role, status }));
-  const users = [...rows.map(row => ({ id: row.userId, email: `${row.userId}@example.test`, role: 'DEVELOPER' })),
-    { id: 'root', email: 'root@example.test', role: 'SYSTEM_ADMIN' }];
+  const users = [...rows.map(row => ({ id: row.userId, email: `${row.userId}@example.test`, role: row.userId.startsWith('pa') ? 'SYSTEM_ADMIN' : 'DEVELOPER' })),
+    { id: 'root', email: 'root@example.test', role: 'SYSTEM_ADMIN' }, { id: 'out', email: 'out@example.test', role: 'DEVELOPER' }];
   users.find(user => user.id === 'agent').email = null; // an agent token's service account
   const workspaces = [{ id: 'w', slug: 'w', name: 'W', ownerId: 'prim' }];
   const rolePermissions = [
@@ -151,7 +153,7 @@ test('a standard role with change-roles moves people between standard roles only
 
 test('the primary owner\'s membership cannot be re-roled, switched off or removed, by anyone', async () => {
   const f = fixture();
-  for (const actor of ['prim', 'own1', 'adm1', 'hr', 'root']) {
+  for (const actor of ['prim', 'own1', 'adm1', 'hr', 'root', 'pas', 'paa', 'pao']) {
     refused(await f.role(actor, 'prim', 'MEMBER'), `${actor} re-roles the primary owner`);
     for (const path of ['patch', 'action']) refused(await f[path](actor, 'prim', false), `${actor} switches the primary owner off on ${path}`);
     // The by-user path keeps its own answer for the owner, who is in the workspace through ownership.
@@ -260,4 +262,59 @@ test('a platform admin who is not a member gets today\'s answer on each path', a
   // Remove: refused.
   assert.equal((await f.remove('root', 'mem')).ok, false);
   assert.ok(f.row('mem'));
+});
+
+test('a platform admin who is also a member gets the answer a platform admin got before the rank rule', async () => {
+  // Role: allowed for any role on any other member but the primary owner, whatever the admin's own membership.
+  for (const [actor, target, role] of [['pas', 'adm1', 'MEMBER'], ['pas', 'mem', 'OWNER'], ['paa', 'own1', 'MEMBER'], ['paa', 'adm2', 'OWNER'], ['pao', 'own2', 'ADMIN']]) {
+    const f = fixture();
+    assert.equal((await f.role(actor, target, role)).ok, true, `${actor} gives ${target} ${role}`);
+    assert.equal(f.row(target).role, role);
+  }
+  // Nobody changes their own role, a platform admin included.
+  for (const [actor, role] of [['pas', 'ADMIN'], ['paa', 'OWNER'], ['paa', 'MEMBER']]) {
+    const f = fixture();
+    refused(await f.role(actor, actor, role), `${actor} sets their own role to ${role}`);
+    assert.equal(f.row(actor).role, actor === 'pas' ? 'DEVELOPER' : 'ADMIN');
+  }
+  // PATCH and the server action: Admin and above may, on anyone but the primary owner; below Admin may not.
+  for (const path of ['patch', 'action']) {
+    for (const [actor, target] of [['paa', 'adm2'], ['paa', 'own1'], ['paa', 'paa'], ['pao', 'own2']]) {
+      const f = fixture();
+      assert.equal((await f[path](actor, target, false)).ok, true, `${path}: ${actor} on ${target}`);
+      assert.equal(f.row(target).status, false);
+    }
+    const f = fixture();
+    refused(await f[path]('pas', 'mem', false), `${path}: a platform admin with a standard role`);
+    assert.equal(f.row('mem').status, true);
+  }
+  // By-user: allowed on anyone but the owner and agents.
+  for (const [actor, target] of [['pas', 'adm1'], ['pas', 'pas'], ['paa', 'own1']]) {
+    const f = fixture();
+    assert.equal((await f.byUser(actor, target, false)).ok, true, `by-user: ${actor} on ${target}`);
+    assert.equal(f.row(target).status, false);
+  }
+  // Remove: as for anyone at that level today, which is no less than before.
+  let f = fixture();
+  refused(await f.remove('pas', 'mem'), 'a platform admin with a standard role removes someone');
+  refused(await f.remove('paa', 'adm2'), 'a platform admin Admin removes an Admin');
+  assert.ok(f.row('mem') && f.row('adm2'));
+  assert.equal((await f.remove('paa', 'mem')).ok, true, 'a platform admin Admin removes a standard role');
+  assert.equal(f.row('mem'), null);
+  // A member at the same level who is not a platform admin keeps today's answer.
+  f = fixture();
+  refused(await f.role('hr', 'adm1', 'MEMBER'), 'a standard role on an Admin');
+  refused(await f.role('adm1', 'adm2', 'OWNER'), 'an Admin on an Admin');
+  refused(await f.patch('adm1', 'adm2', false), 'an Admin switches an Admin off');
+  refused(await f.byUser('hr', 'adm1', false), 'a standard role switches an Admin off');
+  assert.deepEqual([f.row('adm1').role, f.row('adm2').role, f.row('adm2').status, f.row('adm1').status], ['ADMIN', 'admin', true, true]);
+});
+
+test('someone without access to the workspace is refused on every member path', async () => {
+  const f = fixture();
+  const before = JSON.stringify(f.rows);
+  refused(await f.role('out', 'mem', 'ADMIN'), 'role');
+  for (const path of ['patch', 'byUser', 'action']) refused(await f[path]('out', 'mem', false), path);
+  refused(await f.remove('out', 'mem'), 'remove');
+  assert.equal(JSON.stringify(f.rows), before);
 });

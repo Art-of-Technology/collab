@@ -76,9 +76,9 @@ const person = (id, name, role, level, more = {}) => ({ id: `m-${id}`, role, sta
 const people = () => [
   person('alex', 'Alex Kay', 'OWNER', 'PRIMARY_OWNER'),
   person('sam', 'Sam Roe', 'owner', 'OWNER'),
-  person('robin', 'Robin Lee', 'ADMIN', 'ADMIN', { mayAct: true }),
-  person('kim', 'Kim Park', 'MEMBER', 'STANDARD', { mayAct: true }),
-  person('pat', 'Pat Jones', 'Support', 'STANDARD', { mayAct: true, status: false }),
+  person('robin', 'Robin Lee', 'ADMIN', 'ADMIN', { mayAct: true, mayManage: true, mayRemove: true }),
+  person('kim', 'Kim Park', 'MEMBER', 'STANDARD', { mayAct: true, mayManage: true, mayRemove: true }),
+  person('pat', 'Pat Jones', 'Support', 'STANDARD', { mayAct: true, mayManage: true, mayRemove: true, status: false }),
   person('seat', 'Sample Developer', 'MEMBER', 'STANDARD', { agent: true, user: { id: 'seat', name: 'Sample Developer', email: null } }),
 ];
 const workspace = more => ({ id: 'w1', name: 'Acme', slug: 'acme', ownerId: 'robin', isOwner: false, isMember: true, canManage: false,
@@ -289,11 +289,41 @@ test("a platform admin's header badge reads Platform admin", async () => {
     const badges = [...document.querySelector('h1').parentElement.querySelectorAll('span')].map(el => el.textContent);
     assert.ok(badges.includes('Platform admin'));
     assert.ok(!badges.includes('Admin'));
-    // The controls this screen gave them before stay: switching a person on or off, and their other workspaces.
+    // Their other workspaces stay; switching on or off is not offered, as the status paths refuse it.
     assert.equal(document.querySelectorAll('select').length, 0);
     await click(button('More actions for Kim Park'));
-    assert.ok(button('Deactivate'));
+    assert.ok([...row('Kim Park').parentElement.querySelectorAll('a')].some(link => link.textContent === 'Other workspaces'));
+    assert.equal(!!button('Deactivate'), false);
     assert.equal(button('Remove from workspace…'), undefined);
     assert.equal(button('More actions for Sample Developer'), undefined);
   } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a platform admin sees the controls the server accepts from them, whatever their membership', async () => {
+  const everyRole = ['OWNER', 'ADMIN', 'MEMBER', 'Support'];
+  // As the action computes them: the role select on every other person but the primary owner; the menu from Admin up.
+  const members = (manage, self) => [
+    person('alex', 'Alex Kay', 'OWNER', 'PRIMARY_OWNER'),
+    person('sam', 'Sam Roe', 'owner', 'OWNER', { mayAct: true, mayManage: manage }),
+    person('robin', 'Robin Lee', 'ADMIN', 'ADMIN', { mayAct: true, mayManage: manage }),
+    person('kim', 'Kim Park', 'MEMBER', 'STANDARD', { mayAct: true, mayManage: manage, mayRemove: manage }),
+    person('root', 'Root Admin', self, self === 'ADMIN' ? 'ADMIN' : 'STANDARD', { mayManage: manage }),
+  ];
+  for (const [self, viewerLevel, manage] of [['MEMBER', 'STANDARD', false], ['ADMIN', 'ADMIN', true]]) {
+    const root = await render(workspace({ viewerLevel, canManage: true, rolesViewerMayGrant: everyRole, members: members(manage, self) }));
+    try {
+      assert.deepEqual([...document.querySelectorAll('select')].map(el => el.getAttribute('aria-label')), ['Role of Sam Roe', 'Role of Robin Lee', 'Role of Kim Park'], self);
+      assert.deepEqual([...row('Sam Roe').querySelector('select').options].map(option => option.value), everyRole);
+      assert.equal(!!button('More actions for Alex Kay'), false);
+      assert.doesNotMatch(document.body.textContent, /Changing roles needs Admin or above/);
+      for (const name of ['Sam Roe', 'Robin Lee', 'Kim Park', 'Root Admin']) {
+        const menu = button(`More actions for ${name}`);
+        assert.equal(!!menu, manage, `${self}: menu on ${name}`);
+        if (!menu) continue;
+        await click(menu);
+        assert.equal(!!button('Deactivate'), true, `${self}: ${name}`);
+        assert.equal(!!button('Remove from workspace…'), name === 'Kim Park', `${self}: Remove on ${name}`);
+      }
+    } finally { await React.act(async () => root.unmount()); }
+  }
 });
