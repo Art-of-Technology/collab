@@ -1,6 +1,7 @@
 name: Tests and build
 # The other workflows run a few test files for the paths they watch. This one runs for every change:
 # the whole security and render suites, the type check, lint, and the production build.
+# A pull request that changes only documentation (scripts/docs-only.mjs) runs only the docs check.
 on:
   pull_request:
   push:
@@ -8,8 +9,26 @@ on:
 permissions:
   contents: read
 jobs:
+  changes:
+    name: changed files
+    # Pushes to main always run everything: the release waits for full tests and production build to pass there.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs-only: ${{ steps.docs-only.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The pull request's merge commit and its first parent, the base branch.
+          fetch-depth: 2
+      - id: docs-only
+        run: echo "docs-only=$(git diff --name-only --no-renames HEAD^1 HEAD | node scripts/docs-only.mjs)" >> "$GITHUB_OUTPUT"
   full-tests:
     name: full tests
+    needs: changes
+    # Runs when the changes job was skipped (a push) or failed: only a docs-only answer skips it.
+    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -32,22 +51,35 @@ jobs:
         run: npm run test:browser
   lint:
     name: lint
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      DOCS_ONLY: ${{ needs.changes.outputs.docs-only == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-      - run: npm ci --legacy-peer-deps
+          cache: ${{ env.DOCS_ONLY != 'true' && 'npm' || '' }}
+      - if: env.DOCS_ONLY != 'true'
+        run: npm ci --legacy-peer-deps
+      # The docs check needs only these three packages, at the versions in the lock file.
+      - if: env.DOCS_ONLY == 'true'
+        run: |
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/docs" $(node -p "['typescript', 'marked', 'entities'].map(name => name + '@' + require('./package-lock.json').packages['node_modules/' + name].version).join(' ')")
+          mv "$RUNNER_TEMP/docs/node_modules" node_modules
       # Errors fail the check. Warnings do not: main had 56 of them when this was added.
-      - run: npm run lint
+      - if: env.DOCS_ONLY != 'true'
+        run: npm run lint
       # The published docs: no dead link or missing heading, every page in the navigation, every `collab` command real,
       # and the two generated reference pages in step with the code (`npm run docs:reference` rewrites them).
       - run: npm run docs:check
   production-build:
     name: production build
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
