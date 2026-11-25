@@ -188,9 +188,9 @@ export async function fetchedBy(db: DB, userIds: string[]): Promise<Map<string, 
 /** A project's seats that a runner runs, each with how it stands with its runner and when the seat last asked for work. */
 export async function runnerSeats(db: DB, projectId: string) {
   const seats = await db.agentSeat.findMany({ where: { projectId, byRunner: true, retiredAt: null }, orderBy: [{ role: 'asc' }, { name: 'asc' }],
-    select: { id: true, userId: true, name: true, role: true, lastSeenAt: true, owner: { select: { name: true } } } });
+    select: { id: true, userId: true, name: true, role: true, lastSeenAt: true, owner: { select: { name: true } }, customRole: { select: { name: true } } } });
   const fetched = await fetchedBy(db, seats.map(seat => seat.userId));
-  return seats.map(({ userId, owner, ...seat }) => ({ ...seat, owner: owner?.name ?? null, runner: fetched.get(userId)?.runner ?? null,
+  return seats.map(({ userId, owner, customRole, ...seat }) => ({ ...seat, customRole: customRole?.name ?? null, owner: owner?.name ?? null, runner: fetched.get(userId)?.runner ?? null,
     fetchedAt: fetched.get(userId)?.fetchedAt ?? null, expiresAt: fetched.get(userId)?.expiresAt ?? null, state: fetched.get(userId)?.state ?? null }));
 }
 

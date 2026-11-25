@@ -109,3 +109,13 @@ test('a seat a runner runs shows whether a runner fetched its token and when it 
     assert.match(rows[1], /^p-reviewer reviewer, owned by AdaFetched by mac on .+ · not used yet$/);
   } finally { await React.act(async () => root.unmount()); }
 });
+
+test("a runner's seat with the organisation's own role is named by that role (CLB-628)", async () => {
+  const root = await render([200, { ...handoffs, runnerSeats: [
+    { id: 'a', name: 'p-qa', role: 'developer', customRole: 'QA Tester', owner: 'Ada', runner: null, fetchedAt: null, lastSeenAt: null },
+  ] }]);
+  try {
+    const row = [...document.querySelectorAll('div.rounded-xl')].map(item => item.textContent).find(text => text.startsWith('p-'));
+    assert.match(row, /^p-qa QA Tester, owned by Ada/);
+  } finally { await React.act(async () => root.unmount()); }
+});

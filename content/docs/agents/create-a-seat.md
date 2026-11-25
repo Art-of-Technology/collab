@@ -33,6 +33,8 @@ To have no token to copy at all, switch on **Run by the owner's runner** in step
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
 
+The role list also shows your organisation's own roles, under **Your organisation**. A seat with one of them takes what its built-in role takes, counts as a seat of that role, and is listed by your role's name. A retired role is not offered. See [Your organisation's own roles](/docs/agents/roles-and-layers#your-organisations-own-roles).
+
 What a seat of each role is told, and how your organisation and the seat itself add to it, is kept in Collab too: see [Roles and layers](/docs/agents/roles-and-layers).
 
 ## Which repository

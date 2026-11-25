@@ -44,7 +44,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
     where: { workspaceId: workspace.id, retiredAt: null, project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } },
     select: {
       id: true, userId: true, name: true, role: true, isDefault: true, byRunner: true, projectId: true, project: { select: { name: true } },
-      ownerId: true, room: true, roomProgram: true, roomAt: true,
+      ownerId: true, room: true, roomProgram: true, roomAt: true, customRole: { select: { name: true } },
       owner: { select: { id: true, name: true, email: true } },
       // A runner works one issue at a time, but a lost run stays open until someone clears it, so a seat can have several.
       runs: { where: { endedAt: null, issue: issueReadAccessWhere(userId) }, orderBy: { startedAt: 'desc' },
@@ -80,8 +80,9 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
     projects: projects.map(({ agentSeats, agentMode, isArchived, ...project }) => ({ ...project, mine: [...new Set(agentSeats.map(seat => seat.role))],
       // Where seats can be added at all: the switch and the Add button are offered only there.
       addable: agentMode === 'seats' && !isArchived })),
-    seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, owner, room, roomProgram, roomAt, ...seat }, index) => ({
-      ...seat, project: project.name, noRunner: runner && !fetched.has(account),
+    seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, owner, room, roomProgram, roomAt, customRole, ...seat }, index) => ({
+      // `role` is the role it behaves as; `customRole` the name of the workspace's own role it has (CLB-628), shown in its place.
+      ...seat, customRole: customRole?.name ?? null, project: project.name, noRunner: runner && !fetched.has(account),
       // The name of the runner of the seat's person, for everyone; the room only for who may see it.
       runner: runnerOf(seat.ownerId)?.name ?? null,
       room: canManage || seat.ownerId === userId ? seatRoom({ byRunner: runner, room, roomProgram, roomAt }, runnerOf(seat.ownerId), now) : null,
