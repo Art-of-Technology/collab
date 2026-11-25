@@ -8,13 +8,14 @@ const edited = { sections: [{ title: 'What broke', required: true, guidance: 'On
 
 // The signed-in person's account role and membership role, for the real authority module.
 const LEVEL = { PRIMARY_OWNER: ['DEVELOPER', null], OWNER: ['DEVELOPER', 'OWNER'], ADMIN: ['DEVELOPER', 'ADMIN'], STANDARD: ['DEVELOPER', 'MEMBER'],
-  PLATFORM: ['SYSTEM_ADMIN', null], PLATFORM_MEMBER: ['SYSTEM_ADMIN', 'MEMBER'] };
+  OUTSIDER: ['DEVELOPER', null], PLATFORM: ['SYSTEM_ADMIN', null], PLATFORM_MEMBER: ['SYSTEM_ADMIN', 'MEMBER'] };
 
 // A workspace with its stored templates, one signed-in person, and the real store, authority module and settings route.
-function workspace({ user = 'admin', canManage = true, level = canManage ? 'OWNER' : 'STANDARD', member = true, rows = [], enforced = false } = {}) {
+function workspace({ user = 'admin', canManage = true, level = canManage ? 'OWNER' : 'STANDARD', rows = [], enforced = false } = {}) {
   const [accountRole, memberRole] = LEVEL[level];
+  const ownerId = level === 'PRIMARY_OWNER' ? user : 'someone-else';
   const authority = load('src/lib/workspace-authority.ts', { './prisma': { prisma: {
-    workspace: { findUnique: async () => ({ ownerId: level === 'PRIMARY_OWNER' ? user : 'someone-else' }) },
+    workspace: { findUnique: async () => ({ ownerId }) },
     user: { findUnique: async () => ({ role: accountRole, workspaceMemberships: memberRole ? [{ role: memberRole }] : [] }) },
   } } });
   const state = { rows: rows.map(row => ({ workspaceId: 'workspace-one', version: 2, ...row })), writes: [], enforced };
@@ -46,7 +47,8 @@ function workspace({ user = 'admin', canManage = true, level = canManage ? 'OWNE
     '@/lib/issue-templates': library,
     '@/lib/request-session': { getServerSession: async () => (user ? { user: { id: user } } : null) },
     '@/lib/auth-options': { authOptions: {} },
-    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => member },
+    '@/lib/issue-finder': { userHasWorkspaceAccess: async (userId, workspaceId) =>
+      workspaceId === 'workspace-one' && (userId === ownerId || (userId === user && memberRole !== null)) },
     '@/lib/workspace-authority': authority,
     // Everyone holds every permission here, so a route that still asked one would let an Admin through.
     '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_SETTINGS: 'MANAGE_WORKSPACE_SETTINGS' }, checkUserPermission: async () => ({ hasPermission: true }) },
@@ -111,7 +113,7 @@ test('any member can read the templates and learns whether they may manage them'
 
 test('templates are not shown without a sign-in or to someone outside the workspace', async () => {
   assert.equal((await workspace({ user: null }).get()).status, 401);
-  assert.equal((await workspace({ member: false }).get()).status, 404);
+  assert.equal((await workspace({ level: 'OUTSIDER' }).get()).status, 404);
   assert.equal((await workspace({ user: null }).put({ type: 'BUG', ...edited })).status, 401);
 });
 
@@ -149,9 +151,12 @@ test('an Owner and the primary owner save and switch enforcement; an Admin and a
   for (const level of ['PRIMARY_OWNER', 'OWNER', 'PLATFORM', 'PLATFORM_MEMBER']) {
     const allowed = workspace({ level });
     assert.equal((await allowed.put({ type: 'BUG', ...edited })).status, 200, level);
+    assert.equal((await allowed.put({ type: 'BUG', reset: true })).status, 200, level);
     assert.equal((await allowed.put({ enforced: true })).status, 200, level);
-    assert.deepEqual([allowed.state.writes, allowed.state.enforced], [['save', 'enforce'], true], level);
-    assert.equal((await (await allowed.get()).json()).canManage, true, level);
+    assert.deepEqual([allowed.state.writes, allowed.state.enforced], [['save', 'reset', 'enforce'], true], level);
+    const read = await allowed.get();
+    if (level === 'PLATFORM') assert.equal(read.status, 404, level);
+    else assert.deepEqual([read.status, (await read.json()).canManage], [200, true], level);
   }
   for (const level of ['ADMIN', 'STANDARD']) {
     const refused = workspace({ level });
