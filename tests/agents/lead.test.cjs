@@ -379,6 +379,12 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     const waiting = async who => (await inbox(who)).filter(([key]) => [epicA, epicB, placedOut, taken, far].some(epic => epic.issueKey === key));
     assert.deepEqual(await inbox(leadB), []);
 
+    const foreign = await raw.workspace.create({ data: { name: 'Other workspace', slug: 'other', ownerId: owner } });
+    await issue(B, { workspaceId: foreign.id, parentId: placedOut.id });
+    const foreignChild = await issue(B, { workspaceId: foreign.id, parentId: epicA.id });
+    await raw.issue.update({ where: { id: foreignChild.id }, data: { statusId: `${B}-done` } });
+    assert.deepEqual(await inbox(leadB), []);
+
     // Work that is not under an epic this lead holds in its project brings nothing back: an epic nobody holds, another
     // project's lead's epic, and an epic of another project that carries this lead's account as assignee.
     const [, u1] = await epicOf(B, null, 1), [stray, s1] = await epicOf(A, leadB, 1);
@@ -423,9 +429,10 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
   await t.test('two epics do not wake each other: once the lead has looked, neither comes back until another child is done (CLB-1179)', async () => {
     const [one, c1, c2] = await epicOf(B, leadB), [two] = await epicOf(B, leadB);
     await waits(leadB, one, devB, c1);
-    await waits(leadB, two, devB);
+    const run = await start(leadB, two);
     const back = async () => (await inbox(leadB)).filter(([key]) => [one, two].some(epic => epic.issueKey === key));
     await work(devB, c1, 'done');
+    assert.deepEqual(await finish(leadB, run, 'blocked'), [200, undefined]);
     assert.deepEqual(await back(), [[one.issueKey, 'child_done'], [two.issueKey, 'other_child_done']]);
     await waits(leadB, one, devB);
     assert.deepEqual(await back(), [[two.issueKey, 'other_child_done']]);

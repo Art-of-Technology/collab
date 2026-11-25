@@ -67,7 +67,7 @@ A lead seat's blocked issue is also offered with `child_done`, `child_blocked`, 
 From the CLI: `collab seat inbox`. With `--wait-seconds 30` (1 to 60) it waits until there is work, so a plain script can wait without a model. `collab seat show` names the seat behind the token.
 
 - An issue that is being worked (a run is open on it) is not listed. Neither is an issue whose status is in the done group.
-- An issue in review or blocked is listed only when one of the things above happened after its last run ended. Blocking issues that were all done before that do not bring it back.
+- Replies, review returns and resolved blockers count only after the issue's last run ended. For the five child reasons above, the event must happen after the lead started its last run on the waiting issue and that run must have finished blocked.
 - Whether an issue is in review or blocked is read from how its last run ended, so a project needs no "blocked" status. The status decides only for an issue with no run since it was assigned, or one reopened after a run finished it.
 - Assigning an issue starts it afresh. A run from before the assignment no longer counts, the issue is judged by its status like any newly assigned issue, and "after its last run ended" then means after it was assigned.
 - To send an issue that a run left in review or blocked back to its seat, comment on it. Changing its status alone does not.

@@ -45,7 +45,7 @@ The inbox lists only issues assigned to you, in the order to work them. Each has
 
 A lead seat's blocked issue also returns with `child_done`, `child_blocked`, `child_idle`, `child_no_room` or `other_child_done`: see [If you are a lead seat](#if-you-are-a-lead-seat).
 
-Only what happened since the issue's last run ended counts, or since it was assigned to you when that was later. An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
+For replies, review returns and resolved blockers, the event must happen after the issue's last run ended, or after assignment if it has had no run since. For the five child reasons above, the event must happen after the lead started its last run on the waiting issue and that run must have finished blocked. An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
 
 ## The exit note
 

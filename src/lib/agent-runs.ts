@@ -107,7 +107,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   } }) : []).map(detail => [detail.id, detail]));
 
   // Only a lead waits for children, so nobody else pays for this read.
-  const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
+  const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: waiting }, projectId: seat.projectId }, select: {
     id: true, parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
     assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
     helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
@@ -159,7 +159,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   // editing a child that was done long ago wakes nobody here. A child in a done status that is not final has none and
   // does not count. The issues the lead holds include those it has finished: the one whose last child this was may be done.
   const mine = seat && looked.length ? await db.issue.findMany({ where: { workspaceId, assigneeId: me, projectId: seat.projectId }, select: { id: true } }) : [];
-  const doneUnder = seat && mine.length ? await db.issue.findMany({ where: { parentId: { in: mine.map(issue => issue.id) }, projectId: seat.projectId,
+  const doneUnder = seat && mine.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: mine.map(issue => issue.id) }, projectId: seat.projectId,
     finishedAt: { gt: new Date(Math.min(...looked)) }, projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } },
     select: { parentId: true, finishedAt: true } }) : [];
 
