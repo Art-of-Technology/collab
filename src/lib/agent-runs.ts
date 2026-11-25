@@ -147,16 +147,21 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   });
 
   // CLB-1179. A lead may hold a child back until work under another of its issues is done, a rule Collab does not know.
-  // So a child done under any issue the lead holds in its project is news for its other blocked issues there, once each
-  // as for a child of their own, and only for one with a child `leadPlaces` would let it give out: open, no request,
-  // no assignee, never placed by a lead. A run costs money, and there is nothing to do for an issue without one.
+  // So a child that reaches done under any issue the lead holds in its project is news for its other blocked issues there,
+  // once each as for a child of their own, and only for one with a child `leadPlaces` would let it give out: open, no
+  // request, no assignee, never placed by a lead. A run costs money, and there is nothing to do for an issue without one.
   const loose = children.filter(child => !isDone(child) && !child.assigneeId && !child.agentRequestRole);
   const placedBefore = new Set((loose.length ? await db.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: loose.map(child => child.id) }, action: 'LEAD_ASSIGNED' },
     select: { itemId: true } }) : []).map(entry => entry.itemId));
   const toPlace = new Set(loose.filter(child => !placedBefore.has(child.id)).map(child => child.parentId));
-  const lastDone = seat && toPlace.size ? (await db.issue.findFirst({ where: { workspaceId, projectId: seat.projectId,
-    parent: { workspaceId, projectId: seat.projectId, assigneeId: me }, projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } },
-    orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }))?.updatedAt : null;
+  const looked = candidates.flatMap(({ issue, ranBlocked }) => ranBlocked && toPlace.has(issue.id) ? [ranBlocked.getTime()] : []);
+  // `finishedAt` is when the status became final (the database trigger `track_issue_finish` writes it on every path), so
+  // editing a child that was done long ago wakes nobody here. A child in a done status that is not final has none and
+  // does not count. The issues the lead holds include those it has finished: the one whose last child this was may be done.
+  const mine = seat && looked.length ? await db.issue.findMany({ where: { workspaceId, assigneeId: me, projectId: seat.projectId }, select: { id: true } }) : [];
+  const doneUnder = seat && mine.length ? await db.issue.findMany({ where: { parentId: { in: mine.map(issue => issue.id) }, projectId: seat.projectId,
+    finishedAt: { gt: new Date(Math.min(...looked)) }, projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } },
+    select: { parentId: true, finishedAt: true } }) : [];
 
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
@@ -193,8 +198,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && unseen(new Date(due)) && due <= now;
     })) return 'child_idle';
     if (noRoomOf(issue.id, ranBlocked).length) return 'child_no_room';
-    // A child of this issue that is done was told above, so what is left here was done under another.
-    if (toPlace.has(issue.id) && unseen(lastDone)) return 'other_child_done';
+    if (toPlace.has(issue.id) && doneUnder.some(child => child.parentId !== issue.id && unseen(child.finishedAt))) return 'other_child_done';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);

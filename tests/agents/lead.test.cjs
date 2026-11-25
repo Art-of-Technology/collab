@@ -351,18 +351,18 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.deepEqual([context.children.length, context.lead], [1, undefined]);
   });
 
+  const epicOf = async (projectId, holder, kids = 2) => {
+    const epic = await issue(projectId, { type: 'EPIC' });
+    if (holder) await personGives(epic, holder.userId);
+    return [epic, ...await Promise.all(Array.from({ length: kids }, () => issue(projectId, { parentId: epic.id })))];
+  };
+  /** One session of a lead on an epic: it places what it is given and waits for the children. */
+  const waits = async (who, epic, to, ...placed) => {
+    const run = await start(who, epic);
+    for (const child of placed) assert.deepEqual(await give(who.token, child, to.userId), [200, undefined]);
+    assert.deepEqual(await finish(who, run, 'blocked'), [200, undefined]);
+  };
   await t.test('a child done under one epic brings back the lead\'s other epics that have a child to place, once (CLB-1179)', async () => {
-    const epicOf = async (projectId, holder, kids = 2) => {
-      const epic = await issue(projectId, { type: 'EPIC' });
-      if (holder) await personGives(epic, holder.userId);
-      return [epic, ...await Promise.all(Array.from({ length: kids }, () => issue(projectId, { parentId: epic.id })))];
-    };
-    /** One session of a lead on an epic: it places what it is given and waits for the children. */
-    const waits = async (who, epic, to, ...placed) => {
-      const run = await start(who, epic);
-      for (const child of placed) assert.deepEqual(await give(who.token, child, to.userId), [200, undefined]);
-      assert.deepEqual(await finish(who, run, 'blocked'), [200, undefined]);
-    };
     const moreB = await seat('more-b', B), farDev = await seat('far-a', A);
     // The lead holds four epics: one whose child is at work, one with a child held back, one with nothing left to
     // place, and one whose open children the lead may not place: a person took one from its seat, the other is a request.
@@ -403,5 +403,42 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     // The next child done elsewhere is news again, for B alone.
     await work(moreB, p1, 'done');
     assert.deepEqual(await inbox(leadB), [[epicB.issueKey, 'other_child_done'], [placedOut.issueKey, 'child_done']]);
+  });
+
+  await t.test('editing a child that was done before brings back no other epic (CLB-1179)', async () => {
+    const [old, o1] = await epicOf(B, leadB, 1), [held] = await epicOf(B, leadB);
+    await waits(leadB, old, devB, o1);
+    await work(devB, o1, 'done');
+    await work(leadB, old, 'done');
+    // Every epic that waits has been looked at since, and two of them have a child to place.
+    for (const [issueKey] of await inbox(leadB)) await waits(leadB, { issueKey }, devB);
+    assert.deepEqual(await inbox(leadB), []);
+    assert.ok(await raw.issue.count({ where: { parentId: held.id, assigneeId: null } }));
+    const renamed = await send(item.PATCH, personToken, 'PATCH', { body: { title: 'Renamed long after it was done' }, params: { issueIdOrKey: o1.issueKey } });
+    assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
+    assert.ok((await raw.issue.findUniqueOrThrow({ where: { id: o1.id } })).updatedAt > (await raw.agentRun.findFirstOrThrow({ where: { issueId: held.id }, orderBy: { startedAt: 'desc' } })).startedAt);
+    assert.deepEqual(await inbox(leadB), []);
+  });
+
+  await t.test('two epics do not wake each other: once the lead has looked, neither comes back until another child is done (CLB-1179)', async () => {
+    const [one, c1, c2] = await epicOf(B, leadB), [two] = await epicOf(B, leadB);
+    await waits(leadB, one, devB, c1);
+    await waits(leadB, two, devB);
+    const back = async () => (await inbox(leadB)).filter(([key]) => [one, two].some(epic => epic.issueKey === key));
+    await work(devB, c1, 'done');
+    assert.deepEqual(await back(), [[one.issueKey, 'child_done'], [two.issueKey, 'other_child_done']]);
+    await waits(leadB, one, devB);
+    assert.deepEqual(await back(), [[two.issueKey, 'other_child_done']]);
+    // Both still have a child to place. The lead's own runs are no news to the other epic, however often it looks.
+    for (const epic of [two, one, two]) {
+      await waits(leadB, epic, devB);
+      assert.deepEqual(await back(), []);
+    }
+    for (const [issueKey] of await inbox(leadB)) await waits(leadB, { issueKey }, devB);
+    assert.deepEqual(await inbox(leadB), []);
+    // Another child reaches done, this time set by a person through the API: that is news for both again.
+    const closed = await send(item.PATCH, personToken, 'PATCH', { body: { status: 'done' }, params: { issueIdOrKey: c2.issueKey } });
+    assert.equal(closed.status, 200, JSON.stringify(closed.body));
+    assert.deepEqual(await back(), [[one.issueKey, 'child_done'], [two.issueKey, 'other_child_done']]);
   });
 });
