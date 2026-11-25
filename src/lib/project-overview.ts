@@ -4,6 +4,7 @@ import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { prisma } from '@/lib/prisma';
 import { burnAccountSelect, calculateProjectBurn, type BurnAccount, type BurnTransition } from '@/lib/project-burn';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 
 const DAY = 86_400_000;
 const PACE_DAYS = 21;
@@ -318,13 +319,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   const issueWhere = { ...readableIssue, projectId, workspaceId };
   const projectWhere = { id: projectId, workspaceId, workspace: postWorkspaceAccessWhere(userId) };
   const seatRunWhere = { workspaceId, issue: issueWhere, state: 'finished', seatId: { not: null }, seat: { workspaceId } };
-  const billingWhere = {
-    id: workspaceId,
-    OR: [
-      { ownerId: userId },
-      { members: { some: { userId, status: true, role: { in: ['OWNER', 'ADMIN'], mode: 'insensitive' as const } } } },
-    ],
-  };
+  const mayViewSpend = async () => may(await getWorkspaceAuthority(userId, workspaceId), 'spend.view');
   const dependencySelect = {
     id: true, issueKey: true, title: true, projectId: true, statusId: true, status: true, statusValue: true,
     assigneeId: true, updatedAt: true,
@@ -472,7 +467,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
   }
 
   const readRuns = (billing: boolean) => collect(after => prisma.agentRun.findMany({
-    where: { ...seatRunWhere, ...(billing ? { workspace: billingWhere } : {}), id: after ? { gt: after } : undefined },
+    where: { ...seatRunWhere, id: after ? { gt: after } : undefined },
     select: { id: true, startedAt: true, endedAt: true, user: { select: burnAccountSelect }, usage: billing },
     orderBy: pageOrder, take: PAGE_SIZE,
   }));
@@ -483,7 +478,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
       { workspaceMemberships: { some: { workspaceId } } },
     ],
   } satisfies Prisma.UserWhereInput;
-  const billingAtStart = !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  const billingAtStart = await mayViewSpend();
   const [baseline, seats, storedMerges, initialRuns, logs] = await Promise.all([
     prisma.projectBaseline.findFirst({
       where: { project: projectWhere },
@@ -574,7 +569,7 @@ export async function loadProjectHome(projectId: string, workspaceId: string, us
     },
     select: { name: true },
   });
-  const billingAllowed = billingAtStart && !!await prisma.workspace.findFirst({ where: billingWhere, select: { id: true } });
+  const billingAllowed = billingAtStart && await mayViewSpend();
   // If billing access was revoked while reading, fetch the ordinary run fields
   // again. The billed query may have returned only the pages read before revocation.
   const runs = (billingAtStart && !billingAllowed ? await readRuns(false) : initialRuns).filter(run => run.user.agentSeat);

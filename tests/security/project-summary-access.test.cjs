@@ -253,9 +253,9 @@ function fixture(options={}){
    }
    return selected;
   }},
- workspace:{findFirst:async args=>query(spaces,args)[0]??null},
+ workspace:{findFirst:async args=>query(spaces,args)[0]??null,findUnique:async({where})=>spaces.find(s=>s.id===where.id)??null},
  issueActivity:{findMany:async args=>boundedQuery(activity,args)},user:{
-  findUnique:async()=>options.deleted?null:actor,
+  findUnique:async args=>options.deleted?null:{...actor,workspaceMemberships:(spaces.find(s=>s.id===args?.select?.workspaceMemberships?.where.workspaceId)?.members??[]).filter(m=>m.userId===actor.id&&m.status)},
   findMany:async args=>query([agent,{...actor,workspaceMemberships:[{workspaceId:target.workspaceId}]}],args),
  },project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return args.select?.milestoneId ? boundedQuery(issues,args) : query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},

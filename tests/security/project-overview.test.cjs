@@ -326,3 +326,59 @@ test('the script queue includes earlier and undated running milestones and appli
   assert.equal(item.deliveryForecast.likelyDate, date(24).toISOString());
   assert.equal(item.deliveryForecast.safeDate, date(24).toISOString());
 });
+
+test('agentSpendUsd is in the answer for an Admin, an Owner and the primary owner and absent for a standard member, also when the level drops while reading', async () => {
+  const seat = { id: 'seat', name: 'Seat', agentSeat: { name: 'Seat', workspaceId: 'workspace' } };
+  const run = { id: 'run', startedAt: date(18), endedAt: date(19), user: seat, usage: { estimatedUSD: 12.5 } };
+  const none = { findMany: async () => [], findFirst: async () => null };
+  // `world` is what the authority module reads. `filterSays` is what a hand-written workspace filter is told,
+  // and it always disagrees with the module, so only an answer that asks the module comes out right.
+  async function home(world, { dropAfterBilledRead = false } = {}) {
+    const runReads = [];
+    const db = {
+      projectStatus: none, issue: none, issueActivity: none, projectBaseline: none, agentSeat: none, pullRequest: none, workLog: none,
+      agentRun: { findMany: async args => {
+        runReads.push(args.select.usage);
+        if (args.select.usage && dropAfterBilledRead) world = { ...world, membership: 'MEMBER' };
+        return [args.select.usage ? run : { ...run, usage: undefined }];
+      } },
+      workspace: {
+        findFirst: async () => (world.filterSays ? { id: 'workspace' } : null),
+        findUnique: async ({ where }) => (where.id === 'workspace' ? { ownerId: world.ownerId ?? 'someone-else' } : null),
+      },
+      user: { ...none, findUnique: async ({ where }) => (where.id === 'reader' ? {
+        role: world.platformAdmin ? 'SYSTEM_ADMIN' : 'USER',
+        workspaceMemberships: world.membership ? [{ role: world.membership }] : [],
+      } : null) },
+    };
+    const { loadProjectHome } = load('src/lib/project-overview.ts', {
+      '@/lib/prisma': { prisma: db }, '@/lib/post-access': { postWorkspaceAccessWhere: () => ({}) },
+      '@/lib/issue-finder': { issueReadAccessWhere: () => ({}) }, '@/lib/project-burn': load('src/lib/project-burn.ts'),
+    });
+    const result = await loadProjectHome('project', 'workspace', 'reader', date(1), now, 'PRJ');
+    return { result, runReads };
+  }
+  const sees = ({ result }) => {
+    assert.equal(result.overview.agentSpendUsd, 12.5);
+    assert.equal(result.burn.spendUsd, 12.5);
+    assert.equal(result.burn.contributors.find(row => row.agent)?.spendUsd, 12.5);
+  };
+  const seesNone = ({ result }) => {
+    assert.equal(Object.hasOwn(result.overview, 'agentSpendUsd'), false);
+    assert.doesNotMatch(JSON.stringify(result), /spendUsd|spendPerIssueUsd|estimatedUSD|12\.5/);
+  };
+
+  for (const world of [
+    { membership: 'admin' }, { membership: 'Owner' }, { ownerId: 'reader' }, { ownerId: 'reader', membership: 'MEMBER' },
+  ]) sees(await home({ ...world, filterSays: false }));
+
+  for (const world of [
+    { membership: 'MEMBER' }, {}, { platformAdmin: true, membership: 'MEMBER' }, { platformAdmin: true },
+  ]) seesNone(await home({ ...world, filterSays: true }));
+
+  // The Admin is made a standard member once the billed runs are read: the runs are read again without spend.
+  const dropped = await home({ membership: 'ADMIN', filterSays: true }, { dropAfterBilledRead: true });
+  seesNone(dropped);
+  assert.deepEqual(dropped.runReads, [true, false]);
+  assert.equal(dropped.result.overview.runCount, 1);
+});
