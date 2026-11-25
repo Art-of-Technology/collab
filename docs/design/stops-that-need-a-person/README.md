@@ -1,0 +1,96 @@
+# Stops that need a person
+
+Design note. The repository's owner asked for it on 25 November 2026 and is the person waiting for it. Nothing here is built yet.
+
+```mermaid
+flowchart LR
+  seat[Seat stops] --> kind{Names a person?}
+  kind -- no --> wait[Waits on an issue or a review]
+  kind -- yes --> declared{Says Decision or Your hands,<br>with the fields?}
+  declared -- no --> refused[Collab refuses the stop]
+  declared -- yes --> home[Row on Home]
+  home --> mail[One email to that person]
+  mail --> answer[Person answers]
+  answer --> clears[Row clears, seat goes on]
+```
+
+## The problem
+
+When a seat's run ends and names a person, Collab records the person and a one-line next step, nothing more. Home lists every such stop as "Question". Nothing leaves Collab, so a person finds out only by opening Home.
+
+Measured on 25 November 2026:
+
+| What | Number |
+| --- | --- |
+| A green pull request with a database migration waited for the person who merges it | 28 hours |
+| Rows under "Needs you" on the owner's Home, all labelled "Question" | 25 |
+| Of the 20 oldest, rows that ask the owner for something still open | 5 |
+| Rows that name another person | 10 |
+| Rows already answered or overtaken | 4, and 3 more partly |
+| Rows that only ask to continue work already agreed, or report that a runner gave up | 2 |
+| Decisions with no reply words | 3 |
+
+One answer had been given on another issue the same day, and its row stayed for six days.
+
+## The three lines
+
+- **Who is waiting:** the repository's owner.
+- **First day:** he opens Home and every row is a real decision or a task for his hands, and a new one reaches him by email within a minute.
+- **Smallest version:** a seat that names a person says which of two kinds of stop it is and gives the fields below; Collab refuses the stop otherwise. The email is the slice after that.
+
+## What exists today
+
+Checked against commit `26b8bf6c1` of `main`.
+
+- A run's finish takes `askedUser`, `nextStep`, `pullRequest` and `headCommit` (`finishSchema` in `src/lib/agent-runs.ts`). A finish with a missing heading or field is refused with `exit_note_required` or `exit_state_required`.
+- Home reads those facts (`src/lib/dashboard/needs-you.ts`). A stop with a pull request is a "review" row, every other stop is a "question" row. In the "All work" view it lists the stops of the whole workspace, whoever they name, 20 rows at most.
+- A notification in the bell is written only when a seat asks a question in the middle of a run (`ISSUE_RUN_QUESTION`). A run that ends naming a person writes none.
+- `sendEmail` in `src/lib/email.ts` is used for workspace invitations and nothing else. `NotificationPreferences` has `emailNotificationsEnabled`.
+- The app has no job that runs at a time of day.
+- The seat texts tell a seat how to ask a person (`askingAPerson` in `src/lib/agent-role-catalogue.ts`). Nothing checks that it did.
+- CLB-1034 (pull request #798, not merged) reads the question, the reply words and the suggested answer out of the seat's last comment. It names this note's first slice as "the proper fix … planned as the work after this".
+
+## Decisions
+
+The owner decided these on 25 November 2026.
+
+1. **A seat declares the kind of stop.** A finish that names a person carries `ask`, one of two kinds:
+
+   | Kind | The seat gives | Home shows |
+   | --- | --- | --- |
+   | Decision | the question, two to four reply words, the one it suggests, and the issue the reply belongs on when that is another one | "Question", one button per reply word, the suggested one first |
+   | Your hands | what to do in steps, and the reply word that says it is done | "Waiting on you", the steps, the reply word |
+
+   A finish that names a person without `ask`, or with a Decision that has no reply words, is refused like a missing heading, and the refusal names what is missing.
+2. **A status note or a wait on something else names no person.** It finishes `blocked` on the issue it waits for, or on nothing, as a lead does today. It never reaches "Needs you".
+3. **"Shall I continue?" is not a stop.** The seat texts say: work that is already agreed goes on without asking. A real go or no-go is a Decision with `go` and `hold`. Collab can check the shape of a stop, not whether the decision is a real one, so this rule lives in the seat texts.
+4. **Rows clear themselves.** A row goes when the person it names replies on the issue the reply belongs on, when the issue is done, or when its pull request is merged.
+5. **A Continue button** on a row posts a reply on the issue, which brings the issue back to its seat as any comment does. It is for rows written before this work, and for a seat that stopped although it could have gone on.
+6. **A runner that gives up is a failed run,** not a question.
+7. **Email, the slice after.** When a stop is declared, Collab sends one email to the person it names: what waits, since when, the suggested answer, a link to the row. While something is still open, one list goes out at 09:00 London time. No email for due dates. A person who has switched `emailNotificationsEnabled` off gets none.
+8. **Email goes only to the person named.** The "All work" view may keep listing other people's rows; nobody is emailed about them.
+9. **Migration merges stay with a person** in the projects that have that rule. The email is what removes the wait.
+
+## The cut
+
+One slice at a time. The next starts when the one before is live and used once.
+
+| Slice | What | Needs |
+| --- | --- | --- |
+| 1 | `ask` on the finish, the refusal, the seat texts, the CLI options, and Home reading the fields (decisions 1 to 4 and 6) | CLB-1034 merged; a CLI release |
+| 2 | The Continue button (decision 5) | slice 1 |
+| 3 | The email on a declared stop (decisions 7 and 8) | slice 1; the mail key set in production |
+| 4 | The 09:00 list | slice 3; a job that runs at a time of day, which the app does not have |
+
+## Not in this work
+
+- Slack or browser push.
+- Rewriting the rows that exist today. The owner clears them with Continue or an answer.
+- A model that guesses the kind of a stop from its text.
+- Any change to who merges what.
+
+## Not checked
+
+- Whether the mail key is set in production.
+- How many of the five newest rows on Home need a person; the page shows 20.
+- The time each seat stopped: the tools give none, so the ages above come from comment times.
