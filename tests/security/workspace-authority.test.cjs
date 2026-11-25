@@ -78,6 +78,18 @@ test('each action answers yes from its minimum level and no below it', () => {
   assert.equal(may(actor('PRIMARY_OWNER'), 'toString'), false);
 });
 
+test('content.manage and spend.view start at Admin; integrations.manage and runners.manage start at Owner; a standard role and an unknown action get no', () => {
+  const { may } = pure();
+  const minimum = { 'content.manage': 'ADMIN', 'spend.view': 'ADMIN', 'integrations.manage': 'OWNER', 'runners.manage': 'OWNER' };
+  for (const [action, level] of Object.entries(minimum)) {
+    for (const held of LEVELS) assert.equal(may(actor(held), action), LEVELS.indexOf(held) <= LEVELS.indexOf(level), `${held} ${action}`);
+    assert.equal(may(actor('STANDARD'), action), false);
+    assert.equal(may({ userId: 'root', level: null, role: null, platformAdmin: true }, action), false);
+    assert.equal(may(null, action), false);
+  }
+  assert.equal(may(actor('PRIMARY_OWNER'), 'content.anything'), false);
+});
+
 test('nobody may act on themselves, on their own level or on a level above', () => {
   const { mayActOn } = pure();
   for (const holdsChangeRoles of [false, true]) {

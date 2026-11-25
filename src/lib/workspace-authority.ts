@@ -17,7 +17,11 @@ export type WorkspaceAction =
   | "roles.edit"
   | "apps.manage"
   | "members.manage"
-  | "members.invite";
+  | "members.invite"
+  | "content.manage"
+  | "spend.view"
+  | "integrations.manage"
+  | "runners.manage";
 
 export interface WorkspaceAuthority {
   userId: string;
@@ -42,6 +46,12 @@ const MINIMUM: Record<WorkspaceAction, WorkspaceLevel> = {
   "apps.manage": "OWNER",
   "members.manage": "ADMIN",
   "members.invite": "ADMIN",
+  // Other people's notes, Context folders and files, posts through a token, and deleting an issue for good.
+  "content.manage": "ADMIN",
+  "spend.view": "ADMIN",
+  // Someone else's git connection, and someone else's runner.
+  "integrations.manage": "OWNER",
+  "runners.manage": "OWNER",
 };
 
 /** The level a stored role gives an active member. Built-in names match in any letter case. */
