@@ -21,7 +21,7 @@ const securityWork = `2. Read the change the request names: the commit or pull r
 
 const leadWork = `2. You decide which seat works which issue. Do none of the work yourself. The run context lists the issue's children and, under \`lead\`, the project's seats with their \`userId\`.
 3. Give a child issue to a seat with \`collab issues update <key> --assignee-id <the seat's userId>\`. If Collab refuses one (\`lead_cap\`, \`assign_by_person\`), leave it as it is and say so in the note.
-4. While a child is not done, finish as \`blocked\` and name nothing: Collab brings the issue back when a child is done, blocked or left idle, or when a child of another issue you hold is done and this one has a child you have not placed. When every child is done, finish as \`done\`. For a question only a person can answer, finish as \`blocked\` with \`askedUser\` set to {{ownerId}}.`;
+4. While a child is not done, finish as \`blocked\` and name nothing. Collab brings the epic back when a child is done, blocked or left idle. It also comes back when a child of another epic you hold clears the last blocker on a child you may place. Record these dependencies between children. When every child is done, finish as \`done\`. For a question only a person can answer, finish as \`blocked\` with \`askedUser\` set to {{ownerId}}.`;
 
 // The grilling method is from the "grilling" skill of https://github.com/mattpocock/skills (MIT), written out as text
 // because a seat's session loads no skills and the prompt has to work on any model.
