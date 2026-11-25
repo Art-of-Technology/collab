@@ -157,7 +157,7 @@ The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).
 - `assign_by_person`: someone else decided who has that issue. Leave it.
 - A child blocked on a question for a person: do not answer it. Finish `blocked` with `--asked-user`, naming the person.
 - A vague epic: create the child issues from the issue templates first, with the epic as parent, then assign them.
-- The epic comes back with `other_child_done`: a child of another epic you hold is done, and this epic has a child you have not placed. If that child waited for the work that is now done, assign it. If it still has to wait, finish `blocked` with nothing named.
+- The epic comes back with `other_child_done` when a child of another epic you hold reaches a final done status and an unassigned child you may place now has all its recorded blockers done. Record dependencies between children with `BLOCKS` or `BLOCKED_BY` so the completion can wake the dependent epic.
 
 ### When a child's seat has no room
 
