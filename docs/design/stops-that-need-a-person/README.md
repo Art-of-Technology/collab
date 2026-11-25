@@ -17,7 +17,7 @@ flowchart LR
 
 ## The problem
 
-When a seat finishes a run naming a person, its exit note can describe either a choice or work the person must do. Home labels the stop "Review" if the finish names a pull request and "Question" otherwise. Neither label tells the person which kind of help the seat needs, and the finish sends them no notification.
+When a seat finishes a run naming a person, its exit note can describe either a choice or work the person must do. Home shows “Question” when it can identify reply words and where to send them. Otherwise it shows “Waiting on you”, even when the finish names a pull request. A person reading the row still has to work out which kind of help the seat needs, and the finish sends them no notification.
 
 Measured on 25 November 2026:
 
@@ -41,15 +41,15 @@ One answer had been given on another issue the same day, and its row stayed for 
 
 ## What exists today
 
-Checked against commit `26b8bf6c1` of `main`.
+Checked against commit `4f9347ac` of `main`.
 
 - A successful named-person finish saves the full exit note on the run. Its `AGENT_RUN_FINISHED` activity records `runId`, `askedUser`, the one-line `nextStep` and, if supplied, `pullRequest` and `headCommit` together. A missing required heading or finish fact gives `exit_note_required`. A missing required wait target gives `exit_state_required` (`src/lib/agent-runs.ts`).
-- Home matches the finish activity to the run by `runId` and reads `askedUser`, `pullRequest` and `nextStep` (`src/lib/dashboard/needs-you.ts`). For an eligible named-person stop, a pull request gives the row the label "Review". Without one, the label is "Question". "All work" includes stops on readable issues even when they name someone else. Home counts all eligible rows, then sorts and displays at most 20 for the selected filter.
+- Home matches the finish activity to the run by `runId` and reads `askedUser`, `pullRequest` and `nextStep` (`src/lib/dashboard/needs-you.ts`). A named-person stop with a pull request counts under “Reviews”, and one without counts under “From seats”. In either filter the row shows “Question” when Home finds reply words for the current issue or for a single, readable reply destination. Missing reply words or an unresolved destination give it the label “Waiting on you”. “All work” includes stops on readable issues even when they name someone else. Home counts all eligible rows, then sorts and displays at most 20 for the selected filter.
 - A notification in the bell is written only when a seat asks a question in the middle of a run (`ISSUE_RUN_QUESTION`). A run that ends naming a person writes none.
 - `sendEmail` in `src/lib/email.ts` is used for workspace invitations and nothing else. `NotificationPreferences` has `emailNotificationsEnabled`.
 - The app has no job that runs at a time of day.
 - The seat texts tell a seat how to ask a person (`askingAPerson` in `src/lib/agent-role-catalogue.ts`). Nothing checks that it did.
-- CLB-1034 (pull request #798, merged on 25 November 2026, after the commit above) reads the question, the reply words and the suggested answer out of the seat's last comment. It names this note's first slice as "the proper fix … planned as the work after this".
+- CLB-1034 (pull request #798, merged on 25 November 2026) reads the question, the reply words and the suggested answer out of the seat's last comment. It names this note's first slice as "the proper fix … planned as the work after this".
 
 ## Decisions
 
@@ -65,7 +65,7 @@ The owner decided these on 25 November 2026.
    A finish that names a person without `ask`, or with a Decision that has no reply words, is refused like a missing heading, and the refusal names what is missing.
 
    The reply belongs on the issue that stopped. A stop names no other issue for it: a seat that needs an answer about another issue asks on its own. A planner that asks several questions in one round gives them as several questions of one Decision.
-2. **A status note or a wait on something else names no person.** It finishes `blocked` on the issue it waits for and never reaches "Needs you". A lead with an unfinished child keeps the exception it has today; no other seat gets one.
+2. **A status note or a wait on something else names no person.** A seat waiting on a request it filed with the review seat finishes `in_review` with `reviewRequest` naming that open request for this issue. A seat waiting on a blocker, including a security request, finishes `blocked` with `blockedBy` naming the open issue linked as blocking its work. A lead waiting for an unfinished child may finish `blocked` without naming a target. These waits create no named-person row on Home.
 3. **"Shall I continue?" is not a stop.** The seat texts say: work that is already agreed goes on without asking. A real go or no-go is a Decision with `go` and `hold`. Collab can check the shape of a stop, not whether the decision is a real one, so this rule lives in the seat texts.
 4. **Rows clear as they do today, and that is also what wakes the seat.** A row goes when anyone other than the seat comments on the issue after the stop, or when the issue is done. The same comment brings the issue back to its seat, so a cleared row never leaves a seat waiting. A merged pull request clears nothing by itself: a finish does not record which forge a pull request belongs to.
    Every Home button that posts a comment sends the issue and the displayed finish's `runId`. The server posts only if that run is still the issue's current unanswered stop, checking this and writing the comment atomically. If someone already answered, the issue is done or a later run has started, a click on the old row posts nothing.
@@ -82,7 +82,7 @@ One slice at a time. The next starts when the one before is live and used once.
 
 | Slice | What | Needs |
 | --- | --- | --- |
-| 1 | `ask` on the finish, the refusal behind its switch, the seat texts, the CLI options, and Home reading the fields and posting reply words only for the displayed open stop (decisions 1 to 4, 9 and 10) | CLB-1034, merged on 25 November 2026; a CLI release |
+| 1 | Add `ask` to named-person finishes, the refusal behind its switch, and the CLI options. Update the seat texts with the two stop kinds and the existing waits from decision 2 (`in_review` with `reviewRequest`, `blocked` with `blockedBy`, and the lead's child exception). Home reads the fields and posts reply words only for the displayed open stop (decisions 1 to 4, 9 and 10). | CLB-1034, merged on 25 November 2026; a CLI release |
 | 2 | The Continue button uses slice 1's check for the displayed stop, including on legacy rows (decision 5) | slice 1 |
 | 3 | Email the named person the choice or steps and the direct issue link (decisions 6 and 7) | slice 2; the mail key set in production |
 | 4 | Select every eligible open stop for the person before Home's 20-row limit. Send the 09:00 list with the same details and issue links as slice 3. | slice 3. This slice also builds the job that runs at 09:00 London time; the app has none |
