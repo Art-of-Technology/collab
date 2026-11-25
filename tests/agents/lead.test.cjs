@@ -457,4 +457,18 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.equal(closed.status, 200, JSON.stringify(closed.body));
     assert.deepEqual(await back(), [[one.issueKey, 'child_done'], [two.issueKey, 'other_child_done']]);
   });
+
+  await t.test('a child in a done status that is not final wakes no other epic until its status is final (CLB-1179)', async () => {
+    await raw.projectStatus.create({ data: { id: `${B}-merged`, projectId: B, name: 'merged', displayName: 'merged', order: 6, category: 'done' } });
+    const [one, c1] = await epicOf(B, leadB), [two] = await epicOf(B, leadB);
+    await waits(leadB, one, devB, c1);
+    await waits(leadB, two, devB);
+    const back = async () => (await inbox(leadB)).filter(([key]) => key === two.issueKey);
+    assert.deepEqual(await back(), []);
+    await raw.issue.update({ where: { id: c1.id }, data: { statusId: `${B}-merged` } });
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: c1.id } })).finishedAt, null);
+    assert.deepEqual(await back(), []);
+    await raw.issue.update({ where: { id: c1.id }, data: { statusId: `${B}-done` } });
+    assert.deepEqual(await back(), [[two.issueKey, 'other_child_done']]);
+  });
 });
