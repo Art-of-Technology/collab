@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { EncryptionService } from '@/lib/encryption';
+import { getWorkspaceAuthority, may } from '@/lib/workspace-authority';
 import { getActivity, getRepository, instances, listRepositories, providerSchema, ProviderError, resolveInstance } from '@/lib/git-providers/client';
 
 type Context = { params: Promise<{ projectId: string }> };
@@ -19,11 +20,13 @@ async function access(projectId: string) {
   if (!actor) return { error: respond({ error: 'Unauthorized' }, 401) };
   const project = await prisma.project.findFirst({
     where: { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) },
-    select: { id: true, workspace: { select: { ownerId: true } } },
+    select: { id: true, workspaceId: true },
   });
   if (!project) return { error: respond({ error: 'Project not found' }, 404) };
   return { actor, project };
 }
+// Someone else's connection is an Owner-level power; the connector is checked first, so this is asked at most once.
+const managesOthers = async (userId: string, workspaceId: string) => may(await getWorkspaceAuthority(userId, workspaceId), 'integrations.manage');
 function failure(error: unknown) {
   if (error instanceof ProviderError) return respond({ error: error.message }, 400);
   if (error instanceof z.ZodError || error instanceof SyntaxError) return respond({ error: 'Invalid request or provider response.' }, 400);
@@ -34,7 +37,8 @@ export async function GET(_request: NextRequest, context: Context) {
     const { projectId } = await context.params;
     const scope = await access(projectId); if (scope.error) return scope.error;
     const connections = await prisma.gitConnection.findMany({ where: { projectId }, select, orderBy: { createdAt: 'asc' } });
-    return respond({ instances: instances(), connections: connections.map(c => ({ ...c, canManage: c.connectedById === scope.actor.id || scope.project.workspace.ownerId === scope.actor.id })) });
+    const others = connections.some(c => c.connectedById !== scope.actor.id) && await managesOthers(scope.actor.id, scope.project.workspaceId);
+    return respond({ instances: instances(), connections: connections.map(c => ({ ...c, canManage: c.connectedById === scope.actor.id || others })) });
   } catch (error) { return failure(error); }
 }
 const inputSchema = z.discriminatedUnion('action', [
@@ -54,7 +58,7 @@ export async function POST(request: NextRequest, context: Context) {
     if (body.action === 'disconnect' || body.action === 'refresh') {
       const connection = await prisma.gitConnection.findFirst({ where: { id: body.id, projectId } });
       if (!connection) return respond({ error: 'Connection not found' }, 404);
-      if (connection.connectedById !== scope.actor.id && scope.project.workspace.ownerId !== scope.actor.id) return respond({ error: 'Only the connection owner or workspace owner can manage this connection.' }, 403);
+      if (connection.connectedById !== scope.actor.id && !await managesOthers(scope.actor.id, scope.project.workspaceId)) return respond({ error: 'Only the connection owner or a workspace Owner can manage this connection.' }, 403);
       if (body.action === 'disconnect') {
         const updated = await prisma.gitConnection.updateMany({ where: { id: connection.id, updatedAt: connection.updatedAt, connectedById: connection.connectedById }, data: { credentials: null, isActive: false } });
         if (updated.count !== 1) return respond({ error: 'Connection changed during disconnect. Please reload.' }, 409);
@@ -82,7 +86,7 @@ export async function POST(request: NextRequest, context: Context) {
     const repository = await getRepository(instance, body.credentials, body.repositoryPath);
     const identity = { projectId, provider: instance.provider, baseUrl: instance.baseUrl, externalId: repository.id };
     const existing = await prisma.gitConnection.findUnique({ where: { projectId_provider_baseUrl_externalId: identity } });
-    if (existing && existing.connectedById !== scope.actor.id && scope.project.workspace.ownerId !== scope.actor.id) return respond({ error: 'Only the connection owner or workspace owner can reconnect this repository.' }, 403);
+    if (existing && existing.connectedById !== scope.actor.id && !await managesOthers(scope.actor.id, scope.project.workspaceId)) return respond({ error: 'Only the connection owner or a workspace Owner can reconnect this repository.' }, 403);
     const activity = await getActivity(instance, body.credentials, repository.path);
     const encrypted = EncryptionService.encrypt(body.credentials);
     await prisma.$transaction(async tx => {
