@@ -88,9 +88,9 @@ export async function POST(
       );
     }
 
-    // Owners only. A platform admin who is not a member keeps the answer this route gave before.
+    // Owners only. A platform admin, member or not, keeps the answer this route gave before.
     const authority = await getWorkspaceAuthority(session.user.id, workspaceId);
-    if (authority?.level !== null && !may(authority, 'roles.edit')) {
+    if (!authority?.platformAdmin && !may(authority, 'roles.edit')) {
       return NextResponse.json({ error: 'Only Owners can manage roles and permissions' }, { status: 403 });
     }
 

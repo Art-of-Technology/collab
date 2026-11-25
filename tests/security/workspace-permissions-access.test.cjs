@@ -207,7 +207,7 @@ test('a platform admin who is a member below Owner manages permissions as before
       assert.equal((await g.invoke(method, body)).status, 403, `${memberRole} without the platform role: ${method}`);
       assert.deepEqual(g.state.writes, []);
     }
-    for (const [method, body] of [['PUT', { role: 'OWNER', permission: 'VIEW_POSTS', enabled: false }], ['POST', { role: 'owner' }]]) {
+    for (const [method, body] of [['PUT', { role: 'OWNER', permission: 'VIEW_POSTS', enabled: false }], ['POST', { role: 'OWNER' }]]) {
       const f = fixture(); f.state.admin = true; f.state.memberRole = memberRole;
       assert.equal((await f.invoke(method, body)).status, 403, `${memberRole}: ${method} on the Owner role`);
       assert.deepEqual(f.state.writes, []);
