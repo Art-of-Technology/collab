@@ -82,7 +82,7 @@ function fixture({ statuses: statusFields } = {}) {
     issue('milestone', { type: 'MILESTONE', statusId: 'todo', status: 'todo' }),
     issue('request', { statusId: 'done', status: 'done', agentRequestRole: 'review' }),
   ];
-  const none = { findMany: async () => [], findFirst: async () => null };
+  const none = { findMany: async () => [], findFirst: async () => null, findUnique: async () => null };
   const db = {
     project: { findFirst: async ({ where }) => (where.id === project.id ? project : null) },
     projectStatus: { findMany: async args => query(statuses, args) },
