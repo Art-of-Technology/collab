@@ -27,14 +27,24 @@ const destinationKey = new RegExp(
   `^(?:\`?(${issueKeyPattern})\\b|\\[[^\\]\\r\\n]*\\]\\([^\\s)]*/(${issueKeyPattern})\\b[^\\s)]*\\))`, 'i',
 );
 
-type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null };
+/** What a finish says it asks the person (`askOf` in src/lib/agent-runs.ts). */
+type Ask = { kind: 'decision'; questions: Array<{ question: string; options: string[]; suggested?: string }> }
+  | { kind: 'hands'; steps: string; doneWord: string };
+type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null; ask: Ask | null };
 type Repository = { provider: string; baseUrl: string; repositoryPath: string };
 
 function readFinish(details: string | null) {
   try {
     const facts = JSON.parse(details ?? 'null');
     if (typeof facts?.runId !== 'string' || typeof facts.askedUser !== 'string' || !facts.askedUser) return null;
+    const { ask } = facts;
+    // The finish checked it. One written any other way is not shown: the row falls back to the seat's comment.
+    const declared = ask?.kind === 'hands' ? typeof ask.steps === 'string' && typeof ask.doneWord === 'string'
+      : ask?.kind === 'decision' && Array.isArray(ask.questions) && ask.questions.length > 0 && ask.questions.every((item: Record<string, unknown> | null) =>
+        typeof item?.question === 'string' && Array.isArray(item.options) && item.options.every(option => typeof option === 'string')
+        && (item.suggested === undefined || typeof item.suggested === 'string'));
     return {
+      ask: declared ? ask as Ask : null,
       runId: facts.runId as string,
       askedUser: facts.askedUser as string,
       pullRequest: typeof facts.pullRequest === 'string' && facts.pullRequest ? facts.pullRequest as string : null,
@@ -311,7 +321,8 @@ export async function loadNeedsYou({
     }) : [];
     const commentByIssue = new Map(latestComments.map(comment => [comment.issueId, comment.content]));
     const parsedRows = seatRows.map(row => {
-      const content = commentByIssue.get(row.issue.id);
+      // A finish that says what it asks is not read out of a comment, so it names no other issue for the reply.
+      const content = row.facts.ask ? undefined : commentByIssue.get(row.issue.id);
       const { options, suggested, destinations } = replyDetails(content ?? '');
       return { ...row, content, options, suggested,
         destinations: destinations.filter(key => key !== row.issue.issueKey?.toUpperCase()) };
@@ -327,6 +338,16 @@ export async function loadNeedsYou({
       targetByKey.set(target.issueKey, targetByKey.has(target.issueKey) ? null : { id: target.id, issueKey: target.issueKey });
     }
     for (const { issue, seat, endedAt, facts, content, options, suggested, destinations } of parsedRows) {
+      if (facts.ask) {
+        const declared = facts.ask;
+        // One question is answered here. Several are answered on the issue, and work for the person's hands waits on them.
+        add(facts.pullRequest ? 'review' : 'question', issue, endedAt, { seat: { id: seat.id, name: seat.name }, text: facts.nextStep,
+          ...(declared.kind === 'hands' ? { question: `${declared.steps}\n\nWhen it is done, reply: ${declared.doneWord}` }
+            : declared.questions.length > 1 ? { ask: 'issue', question: declared.questions.map((item, index) =>
+              `${index + 1}. ${item.question}\nReply words: ${item.options.join(', ')}.${item.suggested ? ` Suggested: ${item.suggested}.` : ''}`).join('\n\n') }
+            : { ask: 'here', question: declared.questions[0].question, options: declared.questions[0].options, suggested: declared.questions[0].suggested ?? null }) });
+        continue;
+      }
       const [destination] = destinations;
       const target = destinations.length === 1 ? targetByKey.get(destination) : null;
       const ask = !options.length || (destinations.length > 0 && !target) ? 'none' : target ? 'elsewhere' : 'here';

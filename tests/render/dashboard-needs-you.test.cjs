@@ -261,6 +261,29 @@ test('only a question that is answered here has the Answer button', async () => 
   });
 });
 
+test('declared stops: what a finish asks is shown as text, and several questions or work for your hands have no reply buttons', async () => {
+  const markup = '<img src=x onerror="alert(1)">Run the migration tonight?';
+  await interact([
+    makeItem('question', 'q1', { question: markup, options: ['<b>window</b>', 'split'], suggested: 'split' }),
+    makeItem('review', 'q2', { ask: 'issue', question: `1. ${markup}\nReply words: window, split. Suggested: split.\n\n2. Keep the old column?\nReply words: keep, drop.` }),
+    makeItem('question', 'h1', { ask: 'none', options: [], question: '1. Open the repository settings.\n2. Add the event.\n\nWhen it is done, reply: webhook added' }),
+  ], async ({ container, row, click, calls }) => {
+    assert.deepEqual([...container.querySelectorAll('li > span')].map(label => label.textContent), ['Question', 'Question', 'Waiting on you']);
+    await click('Answer');
+    assert.deepEqual([...row(0).querySelectorAll('form button[type="button"]')].map(button => button.textContent.trim()), ['split Suggested', '<b>window</b>']);
+    assert.ok(row(0).textContent.includes(markup));
+    for (const index of [1, 2]) {
+      assert.deepEqual([...row(index).querySelectorAll('a, button')].map(control => [control.textContent, control.getAttribute('href')]),
+        [['Open issue', `/work/issues/${index === 1 ? 'Q2' : 'H1'}`], ['Show details', null]]);
+      await click('Show details', index);
+      assert.equal(row(index).querySelector('form, input'), null);
+      assert.match(row(index).textContent, index === 1 ? /2\. Keep the old column\?\nReply words: keep, drop\./ : /When it is done, reply: webhook added/);
+      assert.equal(container.querySelector('img, b'), null);
+    }
+    assert.deepEqual(calls, []);
+  });
+});
+
 test('the suggested answer is first and labelled, and pressing it fills the field and sends nothing', async () => {
   await interact([makeItem('question', 'q1', { options: ['revise', 'classify'], suggested: 'classify' })],
     async ({ row, click, type, calls, refreshes }) => {

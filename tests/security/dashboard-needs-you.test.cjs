@@ -58,7 +58,7 @@ const issue = (id, data = {}) => raw.issue.create({ data: {
   assigneeId: 'seat-user', createdAt: date(-60), updatedAt: date(-2), ...data,
 } });
 
-async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finishRunId, ...issueData } = {}) {
+async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finishRunId, ask, ...issueData } = {}) {
   const target = await issue(id, issueData);
   const seatUser = target.projectId === 'dormant' ? 'other-seat-user' : 'seat-user';
   const endedAt = date(days);
@@ -71,7 +71,7 @@ async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finish
   await raw.issueActivity.create({ data: {
     workspaceId: 'work', projectId: target.projectId, itemId: id, action: 'AGENT_RUN_FINISHED',
     userId: seatUser, createdAt: endedAt,
-    details: JSON.stringify({ runId: finishRunId || run.id, askedUser, pullRequest, nextStep: 'Read the result.' }),
+    details: JSON.stringify({ runId: finishRunId || run.id, askedUser, pullRequest, nextStep: 'Read the result.', ask }),
   } });
   return run;
 }
@@ -195,6 +195,64 @@ test('the reply word the seat marked as recommended or suggested is the suggeste
     none: [['CLB-938 used'], null],
     'bare-list': [['wait', 'go'], 'go'],
   });
+});
+
+const migration = { question: "Run the migration in tonight's window, or split it into two releases?", options: ['window', 'split'], suggested: 'split' };
+const column = { question: 'Keep the old column for one release?', options: ['keep', 'drop'] };
+const webhook = { kind: 'hands', steps: '1. Open the repository settings.\n2. Add the pull request event to the webhook.', doneWord: 'webhook added' };
+
+test('declared stops: a finish that says what it asks is shown from its fields, and its reply stays on its issue', async () => {
+  await issue('visible-target', { issueKey: 'ADS-52', projectId: 'dormant' });
+  await waiting('one-decision', { days: -5, ask: { kind: 'decision', questions: [migration] } });
+  await waiting('two-decisions', { days: -4, pullRequest: 'team/repo#7', ask: { kind: 'decision', questions: [migration, column] } });
+  await waiting('hands', { days: -3, ask: webhook });
+  await waiting('unsuggested', { days: -2, ask: { kind: 'decision', questions: [column] } });
+  // Nothing is read out of the seat's comment once the finish says what it asks.
+  for (const id of ['one-decision', 'two-decisions', 'hands', 'unsuggested']) await seatComment(id, 'Reply on ADS-52 with `yes` (recommended) or `no`.');
+  const { items, counts } = await read();
+  assert.deepEqual(items.map(row => [row.issue.id, row.kind, row.ask, row.canAct, row.options, row.suggested, row.replyOn]), [
+    ['one-decision', 'question', 'here', true, ['window', 'split'], 'split', null],
+    ['two-decisions', 'review', 'issue', false, [], null, null],
+    ['unsuggested', 'question', 'here', true, ['keep', 'drop'], null, null],
+    ['hands', 'question', 'none', false, [], null, null],
+  ]);
+  assert.deepEqual(counts, { question: 3, review: 1, failed: 0, due: 0 });
+  const questions = Object.fromEntries(items.map(row => [row.issue.id, row.question]));
+  assert.deepEqual(questions, {
+    'one-decision': migration.question, unsuggested: column.question,
+    'two-decisions': `1. ${migration.question}\nReply words: window, split. Suggested: split.\n\n2. ${column.question}\nReply words: keep, drop.`,
+    hands: `${webhook.steps}\n\nWhen it is done, reply: webhook added`,
+  });
+  assert.ok(!JSON.stringify(items).includes('ADS-52'));
+});
+
+test('declared stops: what a finish asks is shown only to a viewer who may read its issue', async () => {
+  const ask = { kind: 'decision', questions: [migration] };
+  await waiting('unreadable-status', { statusId: 'foreign-status', ask });
+  await waiting('trashed', { deletedAt: date(-1), ask: webhook });
+  await waiting('wrong-workspace', { workspaceId: 'foreign', ask });
+  await waiting('readable', { ask });
+  const result = await read();
+  assert.deepEqual(result.items.map(row => [row.issue.id, row.question, row.options]), [['readable', migration.question, ['window', 'split']]]);
+  assert.deepEqual(result.counts, { question: 1, review: 0, failed: 0, due: 0 });
+  assert.ok(!JSON.stringify(result).includes('webhook'));
+  // Not a member of the workspace, and a member who may not view issues: neither is given a row.
+  assert.deepEqual(plain(await loadNeedsYou({ actorId: 'foreign-owner', workspaceId: 'work', scope: 'all', now })), { kind: 'denied' });
+  await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
+  try {
+    assert.deepEqual(plain(await loadNeedsYou({ actorId: 'other', workspaceId: 'work', scope: 'all', now })), { kind: 'denied' });
+  } finally {
+    await raw.workspaceMember.delete({ where: { userId_workspaceId: { userId: 'other', workspaceId: 'work' } } });
+  }
+});
+
+test('declared stops: a finish without ask, or with one that was not checked, is read from the comment as before', async () => {
+  await waiting('legacy');
+  await waiting('unchecked', { ask: { kind: 'decision', questions: [{ question: { html: '<b>Now?</b>' }, options: 'yes' }] } });
+  await waiting('unknown-kind', { ask: { kind: 'status', steps: 'Nothing new.' } });
+  for (const id of ['legacy', 'unchecked', 'unknown-kind']) await seatComment(id, 'Reply `ship` (recommended) or `hold`.');
+  assert.deepEqual((await read()).items.map(row => [row.issue.id, row.ask, row.question, row.options, row.suggested]),
+    ['legacy', 'unchecked', 'unknown-kind'].map(id => [id, 'here', 'Reply `ship` (recommended) or `hold`.', ['ship', 'hold'], 'ship']));
 });
 
 function failed(id, { assigneeId, leaseUntil = date(-1), state = 'running', ...data } = {}) {

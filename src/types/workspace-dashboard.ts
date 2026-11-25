@@ -72,7 +72,7 @@ export type NeedsYouItem = {
   since: string; // Run end for questions and reviews, lease or start for failed runs, due date for due issues.
   text: string | null;
   question: string | null;
-  ask: 'here' | 'elsewhere' | 'none';
+  ask: 'here' | 'issue' | 'elsewhere' | 'none'; // 'issue': several questions, answered on the issue's own page.
   replyOn: { id: string; issueKey: string } | null;
   options: string[];
   suggested: string | null;
