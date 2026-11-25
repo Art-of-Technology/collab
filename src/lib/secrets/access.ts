@@ -227,7 +227,7 @@ export function noteAccessWhere(userId: string): Prisma.NoteWhereInput {
     OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }]
   };
   const admin: Prisma.WorkspaceWhereInput = {
-    OR: [{ ownerId: userId }, { members: { some: { userId, status: true, role: { in: ['ADMIN', 'OWNER'], mode: 'insensitive' as const } } } }]
+    OR: [{ ownerId: userId }, { members: { some: { userId, status: true, role: { in: ['ADMIN', 'OWNER'] } } } }]
   };
   // A direct workspace takes precedence over a project's workspace, as in canAccessNote.
   const inWorkspace = (where: Prisma.WorkspaceWhereInput): Prisma.NoteWhereInput => ({

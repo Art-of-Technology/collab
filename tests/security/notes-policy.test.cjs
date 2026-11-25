@@ -127,8 +127,7 @@ test('collection predicates match the single-note read policy across scope and m
     '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
   });
   for (const scope of Object.values(enums.NoteScope))
-  // A stored role in another letter case gives the same level in both reads.
-  for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER', 'admin'])
+  for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER'])
   for (const isRestricted of [false, true])
   for (const isEncrypted of [false, true])
   for (const authorId of ['alice', 'bob'])
@@ -150,6 +149,9 @@ test('collection predicates match the single-note read policy across scope and m
     assert.equal(matches(row, noteAccessWhere('alice')), expected, JSON.stringify({ scope, role, isRestricted, isEncrypted, authorId, shared, expired, projectFallback }));
   }
   assert.equal(matches(note, noteAccessWhere('')), false);
+  // The list filter names the stored role names exactly. A database lowers a custom role such as 'ADMİN' to 'admin',
+  // so a case-blind filter would list other people's notes for a member the single read treats as standard.
+  assert.ok(!JSON.stringify(noteAccessWhere('alice')).includes('insensitive'));
 });
 
 test('all Notes collections constrain their result reads', async () => {
