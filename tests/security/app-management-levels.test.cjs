@@ -233,28 +233,24 @@ test('a platform admin keeps install and uninstall, member or not, and on webhoo
 });
 
 test('an Owner of one workspace reaches no webhook or installation of another', async () => {
-  const answers = {};
+  const cases = [
+    ['getHookB', W, 404], ['getHookB', B, 403],
+    ['changeHookB', W, 403], ['changeHookB', B, 403],
+    ['deleteHookB', W, 404], ['deleteHookB', B, 403],
+    ['uninstallB', W, 'Installation not found'],
+    ['uninstallB', B, 'Insufficient permissions. Only Owners can uninstall apps.'],
+    ['testHookB', B, 403],
+  ];
   for (const actor of ['prim', 'own1']) {
-    for (const [name, path] of Object.entries(fixture().crossPaths)) {
-      for (const [label, id] of [['A', W], ['B', B]]) {
-        // The action is checked with A's id only; the test route takes no webhook, so with A's id it serves A.
-        if ((name === 'uninstallB' && label === 'B') || (name === 'testHookB' && label === 'A')) continue;
-        const f = fixture();
-        const before = f.snapshot();
-        const answer = await f.crossPaths[name](id)(actor);
-        const why = `${name} with ${label}'s id: ${actor} ${JSON.stringify(answer)}`;
-        assert.equal(answer.ok, false, why);
-        if (answer.status !== undefined) assert.ok([403, 404].includes(answer.status), why);
-        assert.equal(f.snapshot(), before, `${why}: stored nothing`);
-        assert.equal(f.state.sent.length, 0, `${why}: delivered nothing`);
-        answers[`${name}/${label}`] = answer.status ?? answer.error;
-      }
+    for (const [name, workspaceId, expected] of cases) {
+      const f = fixture();
+      const before = f.snapshot();
+      const answer = await f.crossPaths[name](workspaceId)(actor);
+      const why = `${name} with ${workspaceId}: ${actor} ${JSON.stringify(answer)}`;
+      assert.equal(answer.ok, false, why);
+      assert.equal(answer.status ?? answer.error, expected, why);
+      assert.equal(f.snapshot(), before, `${why}: stored nothing`);
+      assert.equal(f.state.sent.length, 0, `${why}: delivered nothing`);
     }
   }
-  // What the code answers today, pinned so a broken guard shows.
-  assert.deepEqual(answers, {
-    'getHookB/A': 404, 'getHookB/B': 403, 'changeHookB/A': 403, 'changeHookB/B': 403,
-    'deleteHookB/A': 404, 'deleteHookB/B': 403, 'uninstallB/A': 'Installation not found',
-    'testHookB/B': 403,
-  });
 });
