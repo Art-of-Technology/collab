@@ -133,7 +133,7 @@ test('activity search summary and workspace feed counts exclude retained histori
     'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma },
     '@/lib/apps/auth-middleware': { withAppAuth: handler => handler },
   };
-  const context = { workspace: { id: 'workspace' } };
+  const context = { workspace: { id: 'workspace' }, user: { id: 'user' } };
   const search = load('src/app/api/apps/auth/search/issues-by-activity/route.ts', deps, { URL, console });
   const result = await search.GET(new Request('https://example.test?includeActivity=false'), context);
   assert.equal(result.status, 200);

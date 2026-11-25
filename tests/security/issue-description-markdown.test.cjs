@@ -19,13 +19,14 @@ function activityApi(activities, {
   const rows = activities.map(row => ({ itemId: 'issue', ...row,
     createdAt: new Date(row.createdAt), details: row.details ? JSON.stringify(row.details) : null,
   }));
+  // The issue as the read rule sees it: in a workspace where a membership, when there is one, is active.
+  const workspace = { ownerId: 'owner', members: member ? [{ ...member, status: true }] : [] };
+  const stored = issue && { ...issue, statusId: null, workspace, project: { workspace } };
   const { GET } = load('src/app/api/issues/[issueId]/activities/route.ts', {
     'next/server': { NextResponse: Response },
     '@/lib/auth': { getAuthSession: async () => session },
     '@/lib/prisma': { prisma: {
-      issue: { findUnique: async ({ where }) => issue?.id === where.id ? issue : null },
-      workspaceMember: { findUnique: async ({ where: { userId_workspaceId: key } }) =>
-        member?.userId === key.userId && member?.workspaceId === key.workspaceId ? member : null },
+      issue: { findFirst: async ({ where }) => stored && matches(stored, where) ? issue : null },
       issueActivity: { findMany: async ({ where, orderBy, take }) => rows.filter(row => matches(row, where))
         .sort((a, b) => orderBy.createdAt === 'desc' ? b.createdAt - a.createdAt : a.createdAt - b.createdAt)
         .slice(0, take) },
@@ -299,7 +300,7 @@ test('description activity API applies its scope before the limit and retains or
 });
 
 test('description activity queries preserve session, issue and workspace access checks', async () => {
-  for (const [access, status] of [[{ session: null }, 401], [{ issue: null }, 404], [{ member: null }, 403]]) {
+  for (const [access, status] of [[{ session: null }, 401], [{ issue: null }, 404], [{ member: null }, 404]]) {
     const api = activityApi([activity('Private', { newValue: markdown })], access);
     const response = await api('https://fixture.invalid/api/issues/issue/activities?descriptionOnly=true&limit=100');
     assert.equal(response.status, status);

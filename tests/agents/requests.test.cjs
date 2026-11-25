@@ -70,7 +70,7 @@ test('requests: one seat asks another, in its own project or in another one', as
     } }, zod, 'next/server': response, '@/lib/prisma': { prisma }, '@/lib/apps/auth-middleware': middleware, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
     '@/lib/forge/legacy-write-guard': { ForgeProjectWriteError, assertLegacyIssueWriteAllowed: async () => { await guard(); await beforeIssueGuard?.(); }, assertLegacyProjectWriteAllowed: guard },
-    '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens, '@/lib/issue-templates': templates,
+    '@/lib/permissions': {}, '@/lib/agent-tokens': tokens, '@/lib/issue-templates': templates,
     '@/lib/issue-template-store': load('src/lib/issue-template-store.ts', { '@/lib/prisma': { prisma }, '@/lib/issue-templates': templates }),
     '@/lib/event-bus': { emitIssueCreated: async made => { emitted.push(made.id); } } };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });

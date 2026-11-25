@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 
 /**
  * GET /api/apps/auth/workspace/activity
@@ -36,9 +37,10 @@ export const GET = withAppAuth(
         where.userId = userId;
       }
 
-      // shortcut: Activity parents lack a relation; keep same-workspace active IDs until profiling justifies a database join.
+      // shortcut: Activity parents lack a relation; keep the IDs of the issues this account may read until profiling justifies a database join.
       const visibleIssues = await prisma.issue.findMany({
-        where: { workspaceId: context.workspace.id, ...(projectId ? { projectId } : {}) },
+        where: { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
+          project: { workspaceId: context.workspace.id }, ...(projectId ? { projectId } : {}) },
         select: { id: true },
       });
       where.itemId = { in: visibleIssues.map(issue => issue.id) };

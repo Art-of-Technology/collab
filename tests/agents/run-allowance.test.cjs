@@ -176,9 +176,9 @@ test('run allowance: a runner reports the program each run used, and the issue s
         [withProgram, 'AGENT_RUN_LATE', undefined],
       ]);
     }
-    // Someone outside the workspace reads nothing.
+    // Someone outside the workspace reads nothing: the issue is not found, as on the issue itself.
     await prisma.user.create({ data: { id: 'coutside001', name: 'Out Side', email: 'out@example.test' } });
     signedIn = 'coutside001';
-    assert.equal((await read())[0], 403);
+    assert.equal((await read())[0], 404);
   });
 });

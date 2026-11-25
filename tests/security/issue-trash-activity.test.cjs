@@ -13,9 +13,11 @@ const expected = ['legacy-task', 'legacy-other', 'current-issue'];
 
 function fixture(extra = []) {
   const user = { id: 'actor', name: 'Actor', email: 'actor@example.test', image: null };
-  const issue = { id: 'active', workspaceId: 'workspace', projectId: 'project', deletedAt: null,
+  // The workspace and project rows are what the issue read rule reads: the actor owns the workspace.
+  const workspace = { ownerId: user.id, members: [] };
+  const issue = { id: 'active', workspaceId: 'workspace', projectId: 'project', deletedAt: null, statusId: null, workspace,
     title: 'Visible issue', issueKey: 'TEST-1', type: 'TASK', priority: 'MEDIUM', status: 'TODO',
-    assigneeId: null, createdAt: noon, project: { id: 'project', name: 'Project' } };
+    assigneeId: null, createdAt: noon, project: { id: 'project', name: 'Project', workspaceId: 'workspace', workspace } };
   const issues = [issue, { ...issue, id: 'trashed', deletedAt: noon },
     { ...issue, id: 'foreign', workspaceId: 'elsewhere' },
     { ...issue, id: 'other-project', projectId: 'other-project' }];
@@ -90,12 +92,12 @@ test('workspace activity keeps legacy parent types, scoped list/count and existi
   ]);
   const result = await body(await f.route('apps/auth/workspace/activity').GET(
     new Request('https://example.test?projectId=project&userId=actor&action=CREATED&limit=2&page=2'),
-    { workspace: { id: 'workspace' } }));
+    { workspace: { id: 'workspace' }, user: { id: 'actor' } }));
   assert.deepEqual(result.activities.map(row => row.id), ['current-issue']);
   assert.deepEqual(result.pagination, { page: 2, limit: 2, total: 3, pages: 2 });
   assert.deepEqual(f.calls.activity[0].where, f.calls.count[0].where);
   const complete = await body(await f.route('apps/auth/workspace/activity').GET(
-    new Request('https://example.test?projectId=project&userId=actor&action=CREATED'), { workspace: { id: 'workspace' } }));
+    new Request('https://example.test?projectId=project&userId=actor&action=CREATED'), { workspace: { id: 'workspace' }, user: { id: 'actor' } }));
   assert.deepEqual(complete.activities.map(row => row.id), expected);
   assert.deepEqual(complete.activities.map(row => row.issue.id), ['active', 'active', 'active']);
 });
