@@ -57,9 +57,8 @@ const MINIMUM: Record<WorkspaceAction, WorkspaceLevel> = {
 
 /** The level a stored role gives an active member. Built-in names match in any letter case. */
 export function levelOfRole(role: string): "OWNER" | "ADMIN" | "STANDARD" {
-  const name = String(role).toUpperCase();
-  if (name === "OWNER") return "OWNER";
-  if (name === "ADMIN") return "ADMIN";
+  if (/^OWNER$/i.test(role)) return "OWNER";
+  if (/^ADMIN$/i.test(role)) return "ADMIN";
   return "STANDARD";
 }
 
