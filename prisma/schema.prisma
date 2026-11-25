@@ -2094,6 +2094,7 @@ enum Permission {
   RESOLVE_BLOCKER
   MANAGE_LEAVE
   MANAGE_APPS
+  MANAGE_AGENTS
 }
 
 enum IssueType {

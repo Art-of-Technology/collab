@@ -88,6 +88,7 @@ export const defaultRolePermissions: Record<string, PrismaPermission[]> = {
     'PIN_POST',
     'RESOLVE_BLOCKER',
     'MANAGE_LEAVE',
+    'MANAGE_AGENTS',
   ] as PrismaPermission[],
   ADMIN: [
     'CREATE_POST',
@@ -166,6 +167,8 @@ export const defaultRolePermissions: Record<string, PrismaPermission[]> = {
     'VIEW_REPORTS',
     'PIN_POST',
     'RESOLVE_BLOCKER',
+    'MANAGE_LEAVE',
+    'MANAGE_AGENTS',
   ] as PrismaPermission[],
   MODERATOR: [
     'CREATE_POST',
