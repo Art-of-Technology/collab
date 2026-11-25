@@ -16,8 +16,11 @@ const PERSON = { email: { not: null }, agentSeat: { is: null } } as const;
 export async function earlyAnswers(db: Prisma.TransactionClient | typeof prisma, stops: { issueId: string; seatUserId: string; startedAt: Date; endedAt: Date }[]) {
   const asked = stops.length ? await db.issueComment.groupBy({ by: ['issueId'], _max: { createdAt: true },
     where: { OR: stops.map(stop => ({ issueId: stop.issueId, authorId: stop.seatUserId, createdAt: { gte: stop.startedAt, lte: stop.endedAt } })) } }) : [];
-  const open = asked.flatMap(row => stops.filter(stop => stop.issueId === row.issueId && row._max.createdAt)
-    .map(stop => ({ issueId: stop.issueId, authorId: { not: stop.seatUserId }, createdAt: { gt: row._max.createdAt!, lte: stop.endedAt } })));
+  const byIssue = new Map(stops.map(stop => [stop.issueId, stop]));
+  const open = asked.flatMap(({ issueId, _max }) => {
+    const stop = byIssue.get(issueId)!;
+    return _max.createdAt ? [{ issueId, authorId: { not: stop.seatUserId }, createdAt: { gt: _max.createdAt, lte: stop.endedAt } }] : [];
+  });
   const answers = open.length ? await db.issueComment.groupBy({ by: ['issueId'], _min: { createdAt: true }, where: { author: PERSON, OR: open } }) : [];
   return new Map(answers.flatMap(row => row._min.createdAt ? [[row.issueId, row._min.createdAt] as const] : []));
 }

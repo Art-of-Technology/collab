@@ -65,9 +65,10 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
   const middleware = load('src/lib/apps/auth-middleware.ts', { crypto: require('node:crypto'), 'next/server': response,
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
+  const runs = load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date });
   const route = load('src/app/api/apps/auth/seats/me/inbox/route.ts', { '@/lib/apps/auth-middleware': middleware,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
-    '@/lib/agent-runs': load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date }) }, globals);
+    '@/lib/agent-runs': runs }, globals);
 
   const seat = async (name, projectId) => {
     const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId, role: 'developer', ownerId: person, name, expiresInDays: 30 });
@@ -291,6 +292,13 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     await stop(early);
     await comment(early, devA.userId, 70);
     await comment(early, person, 65);
+    const inboxReadCount = async () => {
+      let reads = 0;
+      const counted = prisma.$extends({ query: { $allOperations({ args, query }) { reads++; return query(args); } } });
+      await runs.inboxOf('w', devA.userId, devA, counted);
+      return reads;
+    };
+    const singleIssueReads = await inboxReadCount();
     // Before the finish only a person answers: what another seat wrote then does not bring the issue back.
     const bySeat = await issue(devA);
     await stop(bySeat);
@@ -331,6 +339,7 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     await comment(noted, devA.userId, 70);
     await comment(noted, person, 65);
     await comment(noted, devA.userId, 30);
+    assert.equal(await inboxReadCount(), singleIssueReads, 'additional early answers require no additional database calls');
     assert.deepEqual((await inbox(devA.token)).map(item => [item.issueKey, item.reason]), [[review.issueKey, 'reply'], [early.issueKey, 'reply'], [noted.issueKey, 'reply']]);
 
     // A comment after the finish is a reply, as it was, whoever but the seat wrote it.

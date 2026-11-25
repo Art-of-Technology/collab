@@ -215,15 +215,21 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
 }
 
-/** Whether the issue's last finish is that run's and named a person. A record that cannot be read names nobody. */
-async function namedPerson(db: DB, issueId: string, runId: string) {
-  const entry = await db.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issueId, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
-  try {
-    const facts = JSON.parse(entry?.details ?? 'null');
-    return facts?.runId === runId && typeof facts.askedUser === 'string';
-  } catch {
-    return false;
+async function runsNamingPerson(db: DB, issueIds: string[]) {
+  const runs = new Map<string, string>();
+  if (!issueIds.length) return runs;
+  const finishes = await db.$queryRaw<{ itemId: string; details: string | null }[]>`SELECT DISTINCT ON ("itemId") "itemId", "details"
+    FROM "BoardItemActivity" WHERE "itemType" = 'ISSUE' AND "action" = 'AGENT_RUN_FINISHED' AND "itemId" = ANY(${issueIds}::text[])
+    ORDER BY "itemId", "createdAt" DESC, "id" DESC`;
+  for (const { itemId, details } of finishes) {
+    try {
+      const facts = JSON.parse(details ?? 'null');
+      if (typeof facts?.askedUser === 'string' && typeof facts.runId === 'string') runs.set(itemId, facts.runId);
+    } catch {
+      continue;
+    }
   }
+  return runs;
 }
 
 /**
@@ -234,9 +240,8 @@ async function namedPerson(db: DB, issueId: string, runId: string) {
 async function answeredEarly(db: DB, me: string, stops: { issueId: string; runId: string; startedAt: Date; endedAt: Date; reply?: Date }[]) {
   const during = stops.filter(stop => stop.reply && stop.reply > stop.startedAt && stop.reply <= stop.endedAt);
   const early = await earlyAnswers(db, during.map(stop => ({ ...stop, seatUserId: me })));
-  const answered = new Set<string>();
-  for (const stop of during) if (early.has(stop.issueId) && await namedPerson(db, stop.issueId, stop.runId)) answered.add(stop.issueId);
-  return answered;
+  const named = await runsNamingPerson(db, [...early.keys()]);
+  return new Set(during.filter(stop => named.get(stop.issueId) === stop.runId).map(stop => stop.issueId));
 }
 
 export type Pushed = { runId: string; pullRequest: string; headCommit: string };
@@ -927,7 +932,7 @@ export async function answerStop(userId: string, issueIdOrKey: string, runId: st
       agentRuns: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { id: true, userId: true, seatId: true, state: true, outcome: true, startedAt: true, endedAt: true } } } });
     const run = current?.agentRuns[0];
     if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isDone(current)
-      || run.endedAt < lastAssigned(current) || !await namedPerson(tx, issue.id, runId)
+      || run.endedAt < lastAssigned(current) || (await runsNamingPerson(tx, [issue.id])).get(issue.id) !== runId
       || (await earlyAnswers(tx, [{ issueId: issue.id, seatUserId: run.userId, startedAt: run.startedAt, endedAt: run.endedAt }])).size
       || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: run.endedAt } } })) {
       throw new HandoffError('stop_closed', 'Nothing was posted: this is no longer waiting for an answer. Someone has answered it, the issue is done, or its seat has started on it again', 409);

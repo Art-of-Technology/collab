@@ -750,10 +750,13 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const before = await asking(20, 30);
     assert.deepEqual(await offered(devA, before.target), []);
     assert.equal((await reply(before.target, before.run.id))[0], 200);
-    // Before the finish only a person answers: what another seat wrote then leaves the stop open for the person.
-    const bySeat = await asking(30, 20, otherA.userId);
-    assert.deepEqual(await offered(devA, bySeat.target), []);
-    assert.equal((await reply(bySeat.target, bySeat.run.id))[0], 200);
+    const agent = await raw.user.create({ data: { name: 'Seatless agent', email: null } });
+    for (const authorId of [otherA.userId, agent.id]) {
+      const { target, run } = await asking(30, 20, authorId);
+      assert.deepEqual(await offered(devA, target), []);
+      assert.equal((await reply(target, run.id))[0], 200);
+      assert.deepEqual((await comments(target)).at(-1), [person, 'split']);
+    }
 
     // The issue is done, went to another seat, or was given to its seat again since the stop: Home shows none of them.
     const done = await stopped();
