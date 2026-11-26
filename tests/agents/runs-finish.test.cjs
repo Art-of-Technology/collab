@@ -936,5 +936,25 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
       assert.deepEqual([(await raw.issue.findUniqueOrThrow({ where: { id: target.id } })).description, (await raw.issueComment.findMany({ where: { issueId: target.id } })).map(row => row.content)],
         ['The description as written', ['The comment as written']]);
     });
+
+    await t.test(`${type} gives an inactive sender the same acknowledgement for unreadable and missing sources`, async () => {
+      const { notifications } = notifier();
+      const mentions = load('src/app/api/mentions/route.ts', { ...deps, '@/lib/session': { getCurrentUser: async () => ({ id: gone }) },
+        '@/lib/html-sanitizer': { sanitizeHtmlToPlainText: text => text }, '@/lib/notification-service': notifications }, globals);
+      const target = await issue(devA);
+      const source = sourceType === 'issue' ? target : await raw.issueComment.create({ data: { issueId: target.id, authorId: person, content: 'Private comment' } });
+      for (const [sourceId, recipient, expectedDeliveries] of [
+        [source.id, owner, 1],
+        [source.id, stranger, 0],
+        ['missing', owner, sourceType === 'issueComment' ? 1 : 0],
+      ]) {
+        const content = `Mention from ${sourceType} ${sourceId} to ${recipient}`;
+        const reply = await mentions.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({
+          userIds: [recipient], sourceType, sourceId, content }) }));
+        assert.equal(reply.status, 200);
+        assert.deepEqual(await reply.json(), { message: 'Mentions processed successfully', mentionsCount: 1, notificationsCreated: 0 });
+        assert.equal(await raw.notification.count({ where: { type, senderId: gone, userId: recipient, content } }), expectedDeliveries);
+      }
+    });
   }
 });
