@@ -5,7 +5,7 @@ const ALL = ['user:read', 'workspace:read', 'projects:read', 'issues:read', 'iss
 const READ = ALL.filter(scope => scope.endsWith(':read'));
 const CHALLENGE = `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/api/mcp"`;
 const READ_TOOLS = ['whoami', 'workspaces_list', 'projects_list', 'projects_statuses', 'labels_list', 'issues_list', 'issues_get', 'comments_list', 'notes_list', 'notes_get', 'search', 'context_get', 'folders_list', 'folders_get', 'files_get', 'seat_inbox', 'run_context'];
-const WRITE_TOOLS = ['issues_create', 'issues_update', 'comments_add', 'relations_add', 'worklogs_add', 'notes_create', 'notes_update'];
+const WRITE_TOOLS = ['issues_create', 'issues_update', 'comments_add', 'relations_add', 'worklogs_add', 'notes_create', 'notes_update', 'seat_request'];
 // The published documentation and the running revision are Collab's own and public: offered to every valid token, whatever its scopes.
 const DOCS_TOOLS = ['docs_search', 'docs_get', 'live_revision'];
 
@@ -31,6 +31,7 @@ const ROUTES = {
   'docs': { GET: { requiredScopes: [] } },
   'live': { GET: { requiredScopes: [] } },
   'seats/me/inbox': { GET: { requiredScopes: ['issues:read'] } },
+  'seats/me/requests': { POST: { requiredScopes: ['issues:write'], seatWrites: true } },
   'issues/[issueIdOrKey]/run-context': { GET: { requiredScopes: ['issues:read'] } },
 };
 
@@ -64,6 +65,7 @@ function fixture({ timers = { setTimeout, clearTimeout } } = {}) {
     // Synthetic tokens only: exercise lookup without a deployment key.
     '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async value => value.toString() },
     '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts', {}, { URL }),
+    '@/lib/agent-role-catalogue': load('src/lib/agent-role-catalogue.ts'),
     '@/lib/post-access': load('src/lib/post-access.ts'),
   };
   deps['@/lib/mcp-oauth'] = load('src/lib/mcp-oauth.ts', deps, globals);
@@ -210,6 +212,24 @@ test('MCP issue tools set, clear and filter by milestone ID', async () => {
   assert.equal(f.calls.at(-1).query.milestoneId, milestoneId);
 });
 
+test('seat_request advertises and forwards the new request kinds with the caller credentials', async () => {
+  const f = fixture();
+  const listed = await f.modern('full', 'tools/list');
+  const tool = listed.body.result.tools.find(tool => tool.name === 'seat_request');
+  assert.ok(tool, 'seat_request is available to a token with issues:write');
+  for (const role of ['docs', 'changelog', 'design']) {
+    assert.ok(tool.inputSchema.properties.role.enum.includes(role));
+    const input = { fromIssue: 'CLB-1', role, title: 'Request title', body: 'Task template body', project: 'OPS', blocks: true };
+    assert.equal((await f.call('full', 'seat_request', input)).isError, false);
+    assert.deepEqual(f.calls.at(-1), {
+      route: 'POST seats/me/requests', method: 'POST', path: '/api/apps/auth/seats/me/requests', query: {},
+      authorization: 'Bearer full', body: input, params: {}, user: 'agent', workspace: 'w1',
+    });
+    assert.equal((await f.call('readonly', 'seat_request', input)).rpcError.code, -32602);
+  }
+  assert.equal(f.calls.length, 3);
+});
+
 test('every tool forwards to its own route and method', async () => {
   const f = fixture();
   const args = { projects_statuses: { projectId: 'p1' }, issues_get: { issueIdOrKey: 'CLB-1' }, issues_create: { title: 't', projectId: 'p1' },
@@ -217,14 +237,15 @@ test('every tool forwards to its own route and method', async () => {
     relations_add: { issueIdOrKey: 'CLB-1', targetIssueId: 'CLB-2', relationType: 'BLOCKS' }, worklogs_add: { issueIdOrKey: 'CLB-1', timeSpent: 30 },
     folders_get: { id: 'folder1' }, files_get: { id: 'file1' }, folders_list: { projectId: 'p1' },
     notes_get: { id: 'n1' }, notes_create: { title: 't', content: 'c' }, notes_update: { id: 'n1', title: 't' }, search: { query: 'login' },
-    docs_search: { query: 'seat' }, docs_get: { slug: 'agents/seats' }, run_context: { issueIdOrKey: 'CLB-1' } };
+    docs_search: { query: 'seat' }, docs_get: { slug: 'agents/seats' }, run_context: { issueIdOrKey: 'CLB-1' },
+    seat_request: { fromIssue: 'CLB-1', role: 'review', title: 'Review', body: 'Review the change.' } };
   const expected = { whoami: 'GET user/me', workspaces_list: 'GET user/workspaces', projects_list: 'GET projects', projects_statuses: 'GET projects/[projectId]/statuses',
     labels_list: 'GET labels', issues_list: 'GET issues', issues_get: 'GET issues/[issueIdOrKey]', issues_create: 'POST issues', issues_update: 'PATCH issues/[issueIdOrKey]',
     comments_list: 'GET issues/[issueIdOrKey]/comments', comments_add: 'POST issues/[issueIdOrKey]/comments', relations_add: 'POST issues/[issueIdOrKey]/relations',
     worklogs_add: 'POST issues/[issueIdOrKey]/work-logs', notes_list: 'GET context', notes_get: 'GET context/[id]', notes_create: 'POST context', notes_update: 'PUT context/[id]',
     folders_list: 'GET context/folders', folders_get: 'GET context/folders/[id]', files_get: 'GET context/files/[id]',
     search: 'GET search', context_get: 'GET ai-context', docs_search: 'GET docs', docs_get: 'GET docs', live_revision: 'GET live',
-    seat_inbox: 'GET seats/me/inbox', run_context: 'GET issues/[issueIdOrKey]/run-context' };
+    seat_inbox: 'GET seats/me/inbox', seat_request: 'POST seats/me/requests', run_context: 'GET issues/[issueIdOrKey]/run-context' };
   for (const [name, route] of Object.entries(expected)) {
     const before = f.calls.length;
     const result = await f.call('full', name, args[name] ?? {});
@@ -251,7 +272,8 @@ test('every tool declares exactly the scopes its real route enforces', () => {
     const file = tool.path.replace(/:(\w+)/g, '[$1]');
     const real = declaredAccess(file, tool.method);
     assert.deepEqual([[...tool.scopes].sort(), !!tool.anyScope], [[...real.requiredScopes].sort(), real.scopeMode === 'any'], tool.name);
-    assert.deepEqual(ROUTES[file][tool.method], { requiredScopes: [...real.requiredScopes], ...(real.scopeMode ? { scopeMode: real.scopeMode } : {}) }, `fixture for ${tool.name}`);
+    const { requiredScopes, scopeMode = 'all' } = ROUTES[file][tool.method];
+    assert.deepEqual([requiredScopes, scopeMode], [[...real.requiredScopes], real.scopeMode ?? 'all'], `fixture for ${tool.name}`);
   }
 });
 

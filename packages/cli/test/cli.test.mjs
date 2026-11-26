@@ -2281,6 +2281,18 @@ test('seat and run commands send the seat contract and nothing else', async t =>
   assert.equal(f.calls.length, before);
 });
 
+test('seat request help lists the new roles and the CLI forwards each role', async t => {
+  const f = await fixture(t);
+  const { data } = await f.run(['schema']);
+  const { description } = data.commands['seat request'];
+  for (const role of ['docs', 'changelog', 'design']) {
+    assert.match(description, new RegExp(`\\b${role}\\b`));
+    const result = await f.run(['seat', 'request', '--from-issue', 'APP-1', '--role', role, '--title', 'Request', '--body', 'Task details']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(f.calls.at(-1).body), { role, fromIssue: 'APP-1', title: 'Request', body: 'Task details' });
+  }
+});
+
 test('run finish sends the declaration in --ask-file as ask, as it is, and sends nothing when the file is not JSON', async t => {
   const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ run: { id: 'run-one' } })));
   const note = '## Done\nAsked\n## Decisions\nNone\n## Evidence\nNone\n## Next\nAnswer';

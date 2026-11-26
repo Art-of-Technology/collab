@@ -24,9 +24,9 @@ daemon owns registration, claims and reporting.
 
 ## Seats
 
-A seat is one project and one role: developer, reviewer, release or security. `collab seat show`
-names yours; `seat_required` means this token is not a seat. Needs CLI 0.10.0 and the
-matching server; the security role and its verdict need CLI 0.10.2, and the exit note's fields need CLI 0.12.0.
+A seat has a project and a role. `collab seat show` names yours. The command returns
+`seat_required` when the token does not belong to a seat. Seats need CLI 0.10.0 and the
+matching server. Security verdicts need CLI 0.10.2, and the exit note's fields need CLI 0.12.0.
 
 A seat session works one issue and then ends. A runner (`collab seat run`, or another
 that speaks the same contract) has checked the issue out, started you, and keeps the
@@ -47,15 +47,17 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
    Record progress as comments on the issue. To show a screenshot on the issue, attach it with a
    comment in one step (CLI 0.15.1): `collab issues attach "$COLLAB_ISSUE_KEY" --file shot.png --comment 'What it shows'`.
    Without `--comment` the reply has a `markdown` line to put in a comment or the description yourself.
-3. When you need a review, a release, a security review, or work from another project, file a request.
+3. When your issue needs work from another seat, file a request.
    Never hand work over in a direct message or a handoff.
 
    ```sh
    collab seat request --from-issue "$COLLAB_ISSUE_KEY" --role review --title 'Review the change for APP-123' --body-file request.md
    ```
 
-   `--role` is `review`, `release`, `security` or `developer`. `--project ID_OR_PREFIX` sends it to
-   another project; `--blocks true` makes your issue wait for it. A security request always
+   `--role` is `review`, `release`, `security`, `developer`, `docs`, `changelog`, or `design`.
+   Use `docs` for the Documentation Manager, `changelog` for the Changelog Manager, and `design`
+   for the Software Architect. `--project ID_OR_PREFIX` sends the request to another project.
+   `--blocks true` makes your issue wait for it. A security request always
    blocks: finish `blocked --blocked-by` its key, and when your issue comes back read the
    request's `verdict` in the run context. After `failed`, fix the findings and file a new
    security request for the new commit. The body follows the
@@ -432,12 +434,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -459,7 +461,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -478,7 +480,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup

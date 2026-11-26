@@ -12,7 +12,7 @@ Bring your projects, issues, and shared Notes into the tools you already use. On
 
 ## Install the CLI {#installation}
 
-Paste one command into your terminal. The installer detects your machine, verifies the download, installs Collab CLI 0.17.0, and sets up PATH. No Node.js, npm, Bun, or terminal restart needed.
+Paste one command into your terminal. The installer detects your machine, verifies the download, installs Collab CLI 0.17.1, and sets up PATH. No Node.js, npm, Bun, or terminal restart needed.
 
 1. Run the command for your operating system.
 
@@ -46,15 +46,15 @@ Paste one command into your terminal. The installer detects your machine, verifi
 
 | Platform | Archive | Checksum |
 | --- | --- | --- |
-| macOS, Apple Silicon | [darwin-arm64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-darwin-arm64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-darwin-arm64.tar.gz.sha256) |
-| macOS, Intel | [darwin-x64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-darwin-x64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-darwin-x64.tar.gz.sha256) |
-| Linux, ARM64 | [linux-arm64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-linux-arm64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-linux-arm64.tar.gz.sha256) |
-| Linux, Intel / AMD x64 | [linux-x64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-linux-x64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-linux-x64.tar.gz.sha256) |
-| Windows, Intel / AMD x64 (64-bit) | [windows-x64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-windows-x64.zip) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-windows-x64.zip.sha256) |
-| Windows, x86 (32-bit) | [windows-x86](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-windows-x86.zip) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-windows-x86.zip.sha256) |
-| Windows, ARM64 | [windows-arm64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-windows-arm64.zip) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.0/collab-windows-arm64.zip.sha256) |
+| macOS, Apple Silicon | [darwin-arm64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-darwin-arm64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-darwin-arm64.tar.gz.sha256) |
+| macOS, Intel | [darwin-x64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-darwin-x64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-darwin-x64.tar.gz.sha256) |
+| Linux, ARM64 | [linux-arm64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-linux-arm64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-linux-arm64.tar.gz.sha256) |
+| Linux, Intel / AMD x64 | [linux-x64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-linux-x64.tar.gz) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-linux-x64.tar.gz.sha256) |
+| Windows, Intel / AMD x64 (64-bit) | [windows-x64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-windows-x64.zip) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-windows-x64.zip.sha256) |
+| Windows, x86 (32-bit) | [windows-x86](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-windows-x86.zip) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-windows-x86.zip.sha256) |
+| Windows, ARM64 | [windows-arm64](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-windows-arm64.zip) | [SHA-256](https://github.com/Art-of-Technology/collab/releases/download/cli-v0.17.1/collab-windows-arm64.zip.sha256) |
 
-These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow [Apple's guidance for opening a trusted app](https://support.apple.com/en-us/102445) after verifying the download. [Release notes and source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.17.0) are on GitHub.
+These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow [Apple's guidance for opening a trusted app](https://support.apple.com/en-us/102445) after verifying the download. [Release notes and source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.17.1) are on GitHub.
 
 ### Which Windows download do I need?
 
@@ -174,9 +174,9 @@ Notes created with a selected project use project scope. Updates do not move a N
 
 ## Agent collaboration {#agents}
 
-CLI 0.17.0 lets running agents send handoffs, watch their inbox, claim work and record progress. All matching recipients can read a handoff; only one can claim it. Use a unique name for each agent.
+CLI 0.17.1 lets running agents send handoffs, watch their inbox, claim work and record progress. All matching recipients can read a handoff; only one can claim it. Use a unique name for each agent.
 
-Load the [generic Collab agent skill](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.17.0/packages/cli/skills/collab-agents/SKILL.md) through your agent's supported skill mechanism. It covers idle waits, checks while busy, context recovery and useful handoffs.
+Load the [generic Collab agent skill](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.17.1/packages/cli/skills/collab-agents/SKILL.md) through your agent's supported skill mechanism. It covers idle waits, checks while busy, context recovery and useful handoffs.
 
 ```sh
 collab agents register --name builder-a --workspace WORKSPACE_ID
@@ -200,7 +200,7 @@ collab issues activity APP-123 --workspace WORKSPACE_ID
 
 Use `handoffs send --after-id HANDOFF_ID` to finish your current handoff and pass work onward atomically. Completion closes the handoff, not the issue. ACK is optional and does not claim work. Recover unfinished ownership with `inbox list --state claimed`.
 
-The issue timeline shows who picked up, progressed, passed and completed work. The app shows handoffs under **Agents** in the left menu, on the tab **Handoffs (old)**, while a project in the workspace still uses them. For its behavior and access rules, see the [web inbox guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#web-inbox). For automatic label handoffs and other supported delivery triggers, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#agent-coordination). It requires the matching server release and agent-handoff migration.
+The issue timeline shows who picked up, progressed, passed and completed work. The app shows handoffs under **Agents** in the left menu, on the tab **Handoffs (old)**, while a project in the workspace still uses them. For its behavior and access rules, see the [web inbox guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#web-inbox). For automatic label handoffs and other supported delivery triggers, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#agent-coordination). It requires the matching server release and agent-handoff migration.
 
 ### Dedicated background workers
 
@@ -224,9 +224,9 @@ collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID
 
 Stop the foreground worker before installing its per-user startup service, then run setup to clear the explicit stop. If a service is already installed, uninstall it before setup and reinstall it afterward. Install starts it and uses launchd on macOS, systemd user services on Linux, or a user Scheduled Task on Windows. Claude Code must support the machine; a 32-bit Collab CLI alone does not establish runner support. The Agent inbox and floor distinguish an idle daemon from a working model and show usage-limit or recovery states.
 
-Workers require the matching server and managed-worker migration. See the [worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#dedicated-managed-workers-cli-070) for budget flags, review handoffs, service removal, and recovery limits. Existing manual agents keep their current workflow.
+Workers require the matching server and managed-worker migration. See the [worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#dedicated-managed-workers-cli-070) for budget flags, review handoffs, service removal, and recovery limits. Existing manual agents keep their current workflow.
 
-For project-wide stalled-work monitoring, use the [project coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#project-coordinator-cli-080). Explicit local setup is required; run it in the foreground or install a service. The coordinator dispatches only to configured dedicated workers, reports missing execution routes and pauses on conflicts or uncertain outcomes. An interactive agent registration alone cannot be woken automatically.
+For project-wide stalled-work monitoring, use the [project coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#project-coordinator-cli-080). Explicit local setup is required; run it in the foreground or install a service. The coordinator dispatches only to configured dedicated workers, reports missing execution routes and pauses on conflicts or uncertain outcomes. An interactive agent registration alone cannot be woken automatically.
 
 ### Callbacks for an existing agent session
 
@@ -240,7 +240,7 @@ collab handoffs supersede OLD_HANDOFF_ID --agent builder-a --replacement-id CURR
 
 Supersession closes obsolete work and links its open, claimed or completed replacement on the same issue. Only the sender of open work or its current claimant may do this; another agent's claim is protected. The old record stays in history.
 
-Automatic notifications need a host-supplied adapter that delivers messages into the running agent's session. Follow the [host callback setup](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#wake-a-running-agent-through-its-host) to run `collab inbox watch` under the host's supervisor and verify delivery and a model response.
+Automatic notifications need a host-supplied adapter that delivers messages into the running agent's session. Follow the [host callback setup](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.1/packages/cli/README.md#wake-a-running-agent-through-its-host) to run `collab inbox watch` under the host's supervisor and verify delivery and a model response.
 
 Pass the registered `--host` and `--session-id` to the watcher to report health. The **Handoffs (old)** tab of the app's **Agents** page and `agents list` show current host/session, watcher state, last poll and last successful callback. Missing reports mean "not reported"; running health becomes stale after five minutes. Callback success means host acceptance, not model execution. These features require the matching server and agent-operations migration; they do not install an Orca adapter or supervisor.
 

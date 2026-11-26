@@ -225,12 +225,19 @@ test('requests: one seat asks another, in its own project or in another one', as
 
   await t.test('rule 8: at most five open requests from one project to another', async () => {
     const source = await issue(devA), elsewhere = await issue(devB);
-    for (let n = 1; n <= 4; n++) await filed(n % 2 ? devA : otherA, source, { project: 'BB' });
+    const requestKinds = [['docs', 'docs'], ['changelog', 'changelog'], ['design', 'architect']];
+    for (const [role, seatRole] of requestKinds) {
+      const targetSeat = await seat(`${seatRole}-b`, B, seatRole);
+      const { row } = await filed(devA, source, { project: 'BB', role });
+      assert.deepEqual([row.agentRequestRole, row.assigneeId], [role, targetSeat.userId]);
+    }
+    await filed(otherA, source, { project: 'BB' });
     // Two at the same moment for the one place left: the count is settled before either is written.
     const racing = await Promise.all([file(devA, source, { project: 'BB' }), file(otherA, source, { project: 'BB' })]);
     assert.deepEqual(racing.map(([status]) => status).sort(), [200, 429]);
     assert.equal(racing.find(([status]) => status === 429)[1].error, 'request_cap');
     for (const by of [devA, otherA]) await refused(file(by, source, { project: 'BB' }), 429, 'request_cap');
+    for (const [role] of requestKinds) await refused(file(devA, source, { project: 'BB', role }), 429, 'request_cap');
     assert.equal(await raw.issue.count({ where: { projectId: B, agentRequestRole: { not: null }, statusId: `${B}-to_do` } }), 5);
     // Requests inside a project have no count, and the other direction has its own: what project A asked itself is not B's.
     for (let n = 1; n <= 6; n++) await filed(devA, source, { role: 'review' });
