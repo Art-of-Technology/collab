@@ -2281,6 +2281,34 @@ test('seat and run commands send the seat contract and nothing else', async t =>
   assert.equal(f.calls.length, before);
 });
 
+test('run finish sends the declaration in --ask-file as ask, as it is, and sends nothing when the file is not JSON', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ run: { id: 'run-one' } })));
+  const note = '## Done\nAsked\n## Decisions\nNone\n## Evidence\nNone\n## Next\nAnswer';
+  const finish = ['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'blocked', '--asked-user', 'user-one', '--next-step', 'Answer the questions', '--note', note];
+  const base = { generation: 'gen-one', outcome: 'blocked', askedUser: 'user-one', nextStep: 'Answer the questions', note, event: 'finish' };
+  const decision = { kind: 'decision', questions: [{ question: 'Ship the new page?', options: ['yes', 'no'], suggested: 'yes' }] };
+  const hands = { kind: 'hands', steps: '1. Open the settings page.\n2. Turn on the switch.', doneWord: 'done' };
+  const sent = async (args, options) => {
+    const result = await f.run(args, options);
+    assert.equal(result.code, 0, `${args.join(' ')}: ${result.stderr}`);
+    return JSON.parse(f.calls.at(-1).body);
+  };
+  writeFileSync(path.join(f.dir, 'decision.json'), JSON.stringify(decision));
+  assert.deepEqual(await sent([...finish, '--ask-file', path.join(f.dir, 'decision.json')]), { ...base, ask: decision });
+  assert.deepEqual(await sent([...finish, '--ask-file', '-'], { input: JSON.stringify(hands) }), { ...base, ask: hands });
+  // Without the option the body is the one it always was.
+  const plain = await sent(finish);
+  assert.equal(Object.hasOwn(plain, 'ask'), false); assert.deepEqual(plain, base);
+  const before = f.calls.length;
+  writeFileSync(path.join(f.dir, 'not-json.json'), 'kind: decision');
+  writeFileSync(path.join(f.dir, 'list.json'), '[]');
+  for (const file of ['missing.json', 'not-json.json', 'list.json']) {
+    const refused = await f.run([...finish, '--ask-file', path.join(f.dir, file)]);
+    assert.equal(refused.code, 2, file); assert.equal(refused.error.error, 'invalid_input', file); assert.match(refused.error.message, /--ask-file/);
+  }
+  assert.equal(f.calls.length, before);
+});
+
 test('seat setup reads the preview, creates nothing without --yes, and never prints a token', async t => {
   const preview = { project: { id: 'project-one', name: 'Seatlense', issuePrefix: 'SE', mode: 'handoffs' },
     seats: [{ role: 'developer', name: 'Seatlense Developer', exists: false }], missing: ['developer'],
@@ -2455,6 +2483,11 @@ test('seat and run refusals keep their code and what is missing, and pass on not
     { code: 5, error: 'exit_note_required', status: 422, missing: ['Evidence', 'Next', 'x'.repeat(80)] });
   assert.deepEqual(await refused(422, { error: 'exit_state_required', missing: ['reviewRequest', 'askedUser'] }, finish),
     { code: 5, error: 'exit_state_required', status: 422, missing: ['reviewRequest', 'askedUser'] });
+  // A declaration the server does not take comes back with the places in it that are wrong.
+  writeFileSync(path.join(f.dir, 'ask.json'), JSON.stringify({ kind: 'decision', questions: [] }));
+  assert.deepEqual(await refused(422, { error: 'exit_note_required', missing: ['ask.questions'] }, ['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'blocked',
+    '--asked-user', 'user-one', '--note', 'text', '--ask-file', path.join(f.dir, 'ask.json')]), { code: 5, error: 'exit_note_required', status: 422, missing: ['ask.questions'] });
+  assert.deepEqual(await refused(422, { error: 'exit_state_required', missing: ['ask'] }, finish), { code: 5, error: 'exit_state_required', status: 422, missing: ['ask'] });
   assert.deepEqual(await refused(409, { error: 'run_fenced' }, finish), { code: 5, error: 'run_fenced', status: 409 });
   assert.deepEqual(await refused(409, { error: 'needs_person' }, ['run', 'start', '--issue', 'APP-1']), { code: 5, error: 'needs_person', status: 409 });
   assert.deepEqual(await refused(409, { error: 'already_running' }, ['run', 'start', '--issue', 'APP-1']), { code: 5, error: 'already_running', status: 409 });
