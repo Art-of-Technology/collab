@@ -103,7 +103,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
       {seat.waiting.length === 0 ? <p className="text-sm text-muted-foreground">Nothing waits for this seat.</p> : <ol className="divide-y text-sm">
         {seat.waiting.map(item => <li key={item.issueId} className="flex flex-wrap items-center justify-between gap-2 py-2">
           <span className="min-w-0 break-words">{issue(item.issueId, item.issueKey, item.title)}</span>
-          <span className="flex gap-2 text-xs text-muted-foreground"><span className="rounded border px-2 py-0.5">{REASONS[item.reason] ?? item.reason}</span><span className="rounded border px-2 py-0.5 capitalize">{item.priority}</span></span>
+          <span className="flex gap-2 text-xs text-muted-foreground">{item.project && <span className="rounded border px-2 py-0.5">{item.project}</span>}<span className="rounded border px-2 py-0.5">{REASONS[item.reason] ?? item.reason}</span><span className="rounded border px-2 py-0.5 capitalize">{item.priority}</span></span>
         </li>)}
       </ol>}
     </section>)}</div>}

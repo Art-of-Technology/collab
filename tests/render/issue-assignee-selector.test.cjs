@@ -54,3 +54,14 @@ test('a current assignee absent from active members remains visible', async () =
 test("a seat with the organisation's own role is badged by that role's name (CLB-628)", async () => {
   assert.deepEqual((await choices({ projectId: 'p3' })).names, ['No assignee✓', 'Cem (You)', 'qa-oneQA Tester seat']);
 });
+
+test('a seat of the whole workspace is offered for an issue of any project, once the project is known (CLB-615)', async () => {
+  members.push({ id: 'ws1', name: 'ws-dev', email: null, agentSeat: { projectId: null, role: 'developer', retiredAt: null } });
+  try {
+    assert.deepEqual((await choices({ projectId: 'p1' })).names, ['No assignee✓', 'Cem (You)', 'dev-onedeveloper seat', 'ws-devdeveloper seat']);
+    assert.deepEqual((await choices({ projectId: 'p2' })).names, ['No assignee✓', 'Cem (You)', 'dev-tworelease seat', 'ws-devdeveloper seat']);
+    assert.deepEqual((await choices({})).names, ['No assignee✓', 'Cem (You)']);
+  } finally {
+    members.pop();
+  }
+});

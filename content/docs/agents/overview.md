@@ -1,12 +1,28 @@
 # Agent seats
 
-An agent that works one project in one role, and only on issues someone assigned to it.
+An agent that works in one role, for one project or for the whole workspace, and only on issues someone assigned to it.
+
+## Project seats and workspace seats
+
+A seat's scope is one project or the whole workspace. **One project** is the default.
+
+| | Project seat | Workspace seat |
+| --- | --- | --- |
+| **Works on** | The issues of its project | The issues of every project in the workspace that its account can read |
+| **Repository** | Its project's, or its pick when the project has several | The repository of each issue's project |
+| **Roles** | Every role | Every role except Release |
+| **Created by** | Someone with **Manage agent seats and tokens**, or a member [for their own seats](/docs/agents/create-a-seat#let-members-add-their-own-seats) | Someone who also has **Manage Workspace Permissions** |
+| **Gets work** | When it is assigned an issue of its project | When it is assigned an issue of any project |
+| **Gets requests for its role** | First | Only from a project that has no seat of that role |
+| **Shown on Seats as** | Its project | **Whole workspace** |
+
+What a workspace seat may and may not do is under [A seat of the whole workspace](/docs/agents/seats#a-seat-of-the-whole-workspace).
 
 ## At a glance
 
 | What | It means |
 | --- | --- |
-| **One project, one role** | The [role](/docs/agents/roles-and-layers#the-roles) determines which issues a seat can take and what instructions it gets. |
+| **One project or the whole workspace, one role** | The scope decides which projects' issues a seat can be given. The [role](/docs/agents/roles-and-layers#the-roles) determines which issues a seat can take and what instructions it gets. |
 | **Work by assignment** | A seat is offered only the issues assigned to it. A mention or a label hands it nothing. |
 | **A fresh session per issue** | Each issue is worked in a new session. A finished run leaves a note for the next one. |
 
@@ -32,12 +48,12 @@ Open **Agents** in the left menu.
 
 | Line in the menu | Shows |
 | --- | --- |
-| **Seats** | A card per person who owns seats: the person's runner, the [room](#room-on-the-seats-tab) it has left, and each seat with its role, its project, the issue it works on now and how many issues wait for it. |
-| **Seat inbox** | Per seat, the issues that wait for it. The number in the menu is their total. |
+| **Seats** | A card per person who owns seats: the person's runner, the [room](#room-on-the-seats-tab) it has left, and each seat with its role, its project or **Whole workspace**, the issue it works on now and how many issues wait for it. |
+| **Seat inbox** | Per seat, the issues that wait for it, and for a workspace seat the project of each. The number in the menu is their total. |
 | **Floor** | The organisation floor: agents, projects and recorded handoffs. |
 
 - An issue waits for a seat when the seat would take it next. An issue it is working on, or one that waits for a review or an answer, does not count.
-- You see the seats of the projects you can read. Looking changes nothing.
+- You see the seats of the projects you can read, and every seat of the whole workspace. Of a workspace seat's waiting issues, you see those you can read. Looking changes nothing.
 - While a project in the workspace still uses handoffs, the page has a fourth tab, **Handoffs (old)**.
 
 ### Room on the Seats tab
@@ -61,6 +77,7 @@ Room is the percent of allowance a seat has left before its runner stops taking 
 | --- | --- |
 | See every seat and what waits for it | **Agents** in the app's left menu |
 | Give an agent a project and a role | [Create a seat](/docs/agents/create-a-seat) |
+| Give an agent every project of the workspace | [A seat for the whole workspace](/docs/agents/create-a-seat#a-seat-for-the-whole-workspace) |
 | Add my own seats to a project | [Let members add their own seats](/docs/agents/create-a-seat#let-members-add-their-own-seats) |
 | Hand an issue to a seat and follow it | [Give a seat work](/docs/agents/give-a-seat-work) |
 | Start the program that works a seat's issues | [Run a seat](/docs/agents/run-a-seat) |

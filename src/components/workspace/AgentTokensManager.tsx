@@ -52,6 +52,8 @@ interface AgentTokensManagerProps {
   seats?: { id: string; name: string; role: string; customRole?: string | null; project: string | null; isDefault: boolean; owner: string | null }[];
   /** The workspace's own roles a new seat can take (CLB-628), each behaving like its base role. */
   customRoles?: { id: string; name: string; baseRole: string }[];
+  /** The viewer may manage the workspace's permissions, so may create a seat for the whole workspace (CLB-616). */
+  canScopeWorkspace?: boolean;
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
@@ -65,8 +67,10 @@ const CUSTOM = 'custom:';
 const NONE = 'none';
 // Who pays for the seat's session, which the seat list says next to each seat.
 const ownerLabel = (owner: string | null) => owner ? `Owner: ${owner}` : 'No owner (API key)';
+// Release stays one per project (CLB-613), so a seat for the whole workspace cannot take it.
+const RELEASE_ONE_PROJECT = "A release seat belongs to one project: it deploys that project's changes, so it cannot have the whole workspace as its scope.";
 
-export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [], customRoles = [] }: AgentTokensManagerProps) {
+export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [], customRoles = [], canScopeWorkspace = false }: AgentTokensManagerProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -75,25 +79,30 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   const [access, setAccess] = useState<AgentTokenRow['access']>('read');
   const [days, setDays] = useState('90');
   const [projectId, setProjectId] = useState(NONE);
+  // One project (the default), or the whole workspace, which only who may manage the workspace's permissions is offered.
+  const [scope, setScope] = useState<'project' | 'workspace'>('project');
+  const wholeWorkspace = canScopeWorkspace && scope === 'workspace';
   const [role, setRole] = useState('developer');
   const [ownerId, setOwnerId] = useState(NONE);
   // The seat's tokens are fetched by its owner's runner: none is made or shown here.
   const [byRunner, setByRunner] = useState(false);
   const [retiring, setRetiring] = useState<{ name: string; seat: NonNullable<AgentTokenRow['seat']> } | null>(null);
   const orphanSeats = seats.filter(seat => !tokens?.some(token => token.seat?.id === seat.id));
-  const asSeat = projectId !== NONE;
+  const asSeat = wholeWorkspace || projectId !== NONE;
   // What the seat will work in. With several repositories the seat picks one, starting at the project's default; a
   // seat is not created while a role that works in a repository has none to work in.
   const [repositoryId, setRepositoryId] = useState('');
-  const repository = useSeatRepository(asSeat ? projectId : null);
+  // A seat of the whole workspace works in each issue's project's repository, so it reads none here.
+  const repository = useSeatRepository(asSeat && !wholeWorkspace ? projectId : null);
   // A role of the workspace's own is sent by its id; what the seat needs is its base role's.
   const custom = customRoles.find(row => `${CUSTOM}${row.id}` === role);
   const baseRole = custom?.baseRole ?? role;
   const needsRepository = (ROLE_CATALOGUE.getRole(baseRole)?.repository ?? 'none') !== 'none';
+  const releaseRefused = wholeWorkspace && baseRole === 'release';
   const several = (repository.data?.repositories.length ?? 0) > 1;
   const candidate = repositoryId || repository.data?.repository?.id || '';
   const pick = needsRepository && several && repository.data?.repositories.some(item => item.id === candidate) ? candidate : '';
-  const repositorySettled = !asSeat || !needsRepository || (!repository.error && (several ? !!pick : !!repository.data?.repository));
+  const repositorySettled = !asSeat || wholeWorkspace || !needsRepository || (!repository.error && (several ? !!pick : !!repository.data?.repository));
   const [busy, setBusy] = useState(false);
   const [minted, setMinted] = useState<{ name: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -113,7 +122,8 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(asSeat
-          ? { name, projectId, ...(custom ? { customRoleId: custom.id } : { role }), ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days), ...(byRunner && { byRunner }), ...(pick && { repositoryId: pick }) }
+          ? { name, ...(wholeWorkspace ? { scope: 'workspace' } : { projectId }), ...(custom ? { customRoleId: custom.id } : { role }), ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days),
+            ...(byRunner && { byRunner }), ...(!wholeWorkspace && pick && { repositoryId: pick }) }
           : { name, access, expiresInDays: Number(days) }),
       });
       const data = await response.json().catch(() => ({}));
@@ -124,6 +134,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       setAccess('read');
       setDays('90');
       setProjectId(NONE);
+      setScope('project');
       setRepositoryId('');
       setRole('developer');
       setOwnerId(NONE);
@@ -316,7 +327,19 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
               <Label htmlFor="agent-token-name">Name</Label>
               <Input id="agent-token-name" value={name} maxLength={50} placeholder="Claude" onChange={event => setName(event.target.value)} />
             </div>
-            <div className="space-y-2">
+            {canScopeWorkspace && <div className="space-y-2">
+              <Label id="agent-token-scope">Scope</Label>
+              <div role="group" aria-labelledby="agent-token-scope" className="flex">
+                <Button type="button" size="sm" variant={wholeWorkspace ? 'outline' : 'default'} className="rounded-r-none" aria-pressed={!wholeWorkspace}
+                  onClick={() => setScope('project')}>One project</Button>
+                <Button type="button" size="sm" variant={wholeWorkspace ? 'default' : 'outline'} className="rounded-l-none" aria-pressed={wholeWorkspace}
+                  onClick={() => setScope('workspace')}>Whole workspace</Button>
+              </div>
+              {wholeWorkspace && <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-600 dark:text-amber-400">
+                This seat can be assigned issues from every project in the workspace. Only people who manage workspace permissions can create it.
+              </p>}
+            </div>}
+            {!wholeWorkspace && <div className="space-y-2">
               <Label htmlFor="agent-token-project">Seat in a project</Label>
               <Select value={projectId} onValueChange={value => { setProjectId(value); setRepositoryId(''); }}>
                 <SelectTrigger id="agent-token-project"><SelectValue /></SelectTrigger>
@@ -325,7 +348,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   {projects.map(project => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
             {asSeat ? (
               <>
                 <div className="space-y-2">
@@ -333,16 +356,25 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   <Select value={role} onValueChange={setRole}>
                     <SelectTrigger id="agent-token-role"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ROLE_CATALOGUE.roles.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+                      {ROLE_CATALOGUE.roles.map(({ id, name }) => <SelectItem key={id} value={id} disabled={wholeWorkspace && id === 'release'}>{name}</SelectItem>)}
                       {customRoles.length > 0 && <SelectGroup>
                         <SelectLabel>Your organisation</SelectLabel>
-                        {customRoles.map(row => <SelectItem key={row.id} value={`${CUSTOM}${row.id}`}>{row.name}</SelectItem>)}
+                        {customRoles.map(row => <SelectItem key={row.id} value={`${CUSTOM}${row.id}`} disabled={wholeWorkspace && row.baseRole === 'release'}>{row.name}</SelectItem>)}
                       </SelectGroup>}
                     </SelectContent>
                   </Select>
+                  {wholeWorkspace && (releaseRefused
+                    ? <p role="alert" className="text-xs text-destructive">{RELEASE_ONE_PROJECT}</p>
+                    : <p className="text-xs text-muted-foreground">{RELEASE_ONE_PROJECT}</p>)}
                 </div>
-                <SeatRepositoryField key={projectId} projectId={projectId} roleName={custom?.name ?? roleLabel(role)} needed={needsRepository} query={repository}
-                  pick={pick} onPick={setRepositoryId} />
+                {wholeWorkspace ? <div className="space-y-2">
+                  <Label>Repository</Label>
+                  <div className="rounded-md border border-border/40 bg-card/50 p-3 text-sm">
+                    <Badge variant="outline" className="mr-1 rounded-full border-transparent bg-emerald-500/10 font-normal text-emerald-400">From each issue</Badge>
+                    {' '}A workspace seat gets the repository of the project its issue is in, run by run.
+                  </div>
+                </div> : <SeatRepositoryField key={projectId} projectId={projectId} roleName={custom?.name ?? roleLabel(role)} needed={needsRepository} query={repository}
+                  pick={pick} onPick={setRepositoryId} />}
                 <div className="space-y-2">
                   <Label htmlFor="agent-token-owner">Owner</Label>
                   <Select value={ownerId} onValueChange={setOwnerId}>
@@ -366,8 +398,10 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   <Switch id="agent-token-by-runner" checked={byRunner} onCheckedChange={setByRunner} />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  A seat can be assigned only this project&apos;s issues that fit its role, and its token can change only issues of this project.
-                  A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests. A lead seat takes an epic and assigns its child issues to the project's other seats.
+                  {wholeWorkspace
+                    ? 'A seat for the whole workspace can be assigned the issues of any project in this workspace that fit its role.'
+                    : <>A seat can be assigned only this project&apos;s issues that fit its role, and its token can change only issues of this project.</>}
+                  {' '}A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests. A lead seat takes an epic and assigns its child issues to the project's other seats.
                 </p>
               </>
             ) : (
@@ -396,7 +430,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)} disabled={busy}>Cancel</Button>
-            <Button onClick={create} disabled={busy || !name.trim() || (asSeat && byRunner && ownerId === NONE) || !repositorySettled}>
+            <Button onClick={create} disabled={busy || !name.trim() || (asSeat && byRunner && ownerId === NONE) || !repositorySettled || releaseRefused}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {asSeat ? 'Create seat' : 'Create token'}
             </Button>

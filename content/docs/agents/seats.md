@@ -2,11 +2,11 @@
 
 Every rule for seats, runs and requests, with the edge cases. For the short version, start at [Agent seats](/docs/agents/overview).
 
-A seat is an agent that works one project in one role and gets work only when someone assigns it an issue.
+A seat is an agent that works one project, or the whole workspace, in one role and gets work only when someone assigns it an issue.
 
 ## What a seat is
 
-- One project and one [role](/docs/agents/roles-and-layers#the-roles). A project has at most one active release seat and one active lead seat.
+- One project, or the [whole workspace](#a-seat-of-the-whole-workspace), and one [role](/docs/agents/roles-and-layers#the-roles). A project has at most one active release seat and one active lead seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -21,21 +21,55 @@ The owner is fixed when the seat is created: creating a token again under the sa
 
 1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need the **Manage agent seats and tokens** permission.
 2. Type a name. Everything the seat does is shown under this name.
-3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner.
+3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner. Someone who may manage the workspace's permissions first chooses the **Scope**: **One project** or **Whole workspace**; see [A seat of the whole workspace](#a-seat-of-the-whole-workspace).
 4. The **Repository** line says what the seat will work in. Pick one only when the project has several; see [Which repository](/docs/agents/create-a-seat#which-repository).
 5. Choose **Create seat** and copy the token. It is shown once.
 
 The first seat of a role in a project is the default for that role.
 
-A person finds the seats under **Agents** in the app's left menu: **Seats** groups the seats of the projects that person can read by their owner, or **No owner (API key)**, with the owner's runner and [room](/docs/agents/overview#room-on-the-seats-tab), and shows the issue each seat works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
+A person finds the seats under **Agents** in the app's left menu: **Seats** groups the seats of the projects that person can read, and the seats of the whole workspace, by their owner, or **No owner (API key)**, with the owner's runner and [room](/docs/agents/overview#room-on-the-seats-tab), and shows the issue each seat works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 
 Making an existing agent name a seat changes its tokens at once: from then on they follow the rules below. Open issues it holds in other projects, or that do not fit its role, become unassigned, each with an activity entry.
 
+## A seat of the whole workspace
+
+A seat's scope is one project, the default, or the whole workspace. A seat of the whole workspace has no project of its own: it works the issues assigned to it in any project of the workspace. It is the same kind of seat in every other way: one role, an optional owner, a token, a fresh session per issue.
+
+Creating one:
+
+- Only someone who has **Manage agent seats and tokens** and also **Manage Workspace Permissions** creates one. Anyone else is refused with `403 workspace_scope_forbidden`, and the form does not offer them the choice.
+- Any role except release and your organisation's roles built on release. A release seat deploys one project's changes, so it is refused with `release_one_project`.
+- It picks no repository (`repository_not_needed`): each run works in the repository of its issue's project. See [The repository](/docs/agents/runner-contract#the-repository).
+- A workspace has at most one Lead seat for the whole workspace. The other roles have no limit. The first seat of a role is the default among the workspace's seats of that role.
+- **Add my seats to this project** makes project seats only.
+- Project seats do not change when a workspace seat is made.
+
+What it may do:
+
+| What | The rule |
+| --- | --- |
+| Be given work | A person assigns it an issue of any project in the workspace that its role takes. The assignee picker offers it on every project's issues. |
+| Read | Only what its token's account can read. The scope gives it no access to a project its account cannot see. |
+| List its work | Its [inbox](#what-a-seat-works-on-next) has its issues of every project its account can read, in the usual order. The **Seat inbox** page shows the project of each. |
+| Take an issue | It checks out an issue of any project: it is not refused with `wrong_project`. The reply names the repository of that issue's project. |
+| Write | In a project where it works: an open issue there is assigned to it, or it has a run open on one there. It writes there what a project seat writes in its own project. |
+| File a request | From an issue of a project where it works. Without `project` the request goes to that issue's project; with `project`, only to another project where it works. A request into another project counts toward the [5 open requests](#ask-another-seat-a-request) that its issue's project may have there. |
+| Get requests | Only from a project with no seat of the role. A project's own seats of a role always come first. |
+
+What it may not do:
+
+- Write in a project where it does not work: `wrong_project`. That includes a project where every issue it was given is done.
+- Be a release seat.
+- Take part in the moves when a seat has no room. Collab moves no work off a workspace seat and places none on it, and a project's lead is not shown it under `lead.seats`, so a person assigns its work.
+- Lead a project, for now. A Lead seat for the whole workspace is offered what is assigned to it, but assigning an issue from it is refused with `wrong_project` and no child issue wakes it.
+
+[Retire](#retire-a-seat) a workspace seat as any other: its open issues in every project become unassigned.
+
 ## Give a seat work
 
-Assign the issue to the seat, as you would to a person. The assignee picker marks seats and offers only the seats of the issue's project. Until a project is selected, it offers no seats.
+Assign the issue to the seat, as you would to a person. The assignee picker marks seats and offers only the seats of the issue's project and the seats of the whole workspace. Until a project is selected, it offers no seats.
 
 - A developer seat takes ordinary issues.
 - A reviewer seat takes only review requests, a release seat only release requests, and a security seat only security requests. A label does not make an issue a request.
@@ -51,12 +85,13 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project. The one seat that assigns is the [lead seat](#lead-seat), within its rules.
 - The one write outside its project: a comment on [a request it filed](#ask-another-seat-a-request) there.
 - Its reads remain subject to the token's scopes and workspace access.
+- A seat of the whole workspace has no project of its own. It writes in a project while an open issue there is assigned to it or it has a run open on one there, and only where its account can read. Elsewhere it is refused with `wrong_project`.
 
 `GET /api/apps/auth/seats/me` tells a token which seat it is. A token that is not a seat gets `seat_required`.
 
 ## What a seat works on next
 
-`GET /api/apps/auth/seats/me/inbox` lists the issues assigned to the caller, at most 50, in the order to work them. A seat gets the issues of its project. A personal login gets the issues assigned to that person. Each item has a `reason`:
+`GET /api/apps/auth/seats/me/inbox` lists the issues assigned to the caller, at most 50, in the order to work them. A seat gets the issues of its project. A seat of the whole workspace gets those of every project its account can read. A personal login gets the issues assigned to that person. Each item has a `reason`:
 
 1. `resume`: the last run on the issue stopped before it finished.
 2. `review_returned` or `reply`: the issue is in review and a review request it filed is now done, or someone else commented on the issue.
@@ -90,7 +125,7 @@ From the CLI: `collab run start --issue <key>` (it makes up the generation and t
 - Taking an issue moves it to the first active status of the project's "in progress" group. It stays where it is when it is already in that group or the project has no active status in that group.
 - A second checkout of an issue with a live run gets `409 already_running`. Do not try it again: take the next issue. Only a person starting again on their own open run gets that run back, with its original generation.
 - An agent token that is not a seat takes no issue (`seat_required`).
-- An issue assigned to someone else gets `not_assigned`, also between a seat and a person. A seat takes only issues of its project.
+- An issue assigned to someone else gets `not_assigned`, also between a seat and a person. A seat takes only issues of its project; a seat of the whole workspace takes them in any project, and the reply names the repository of the issue's project.
 - An inbox read or a valid run request checks the workspace for lapsed leases and marks those runs **lost**. A clear checks only after the person is authorized to clear that run. A lease that lapses after the check is judged by a later call. A run on an issue in Trash is marked after the issue is restored. A lapsed lease does not prove the session stopped, so a lost run stays open: the issue is not offered, a checkout gets `409 needs_person`, and the run can no longer be renewed.
 - A lost run ends when its runner closes it with the run's account and generation, or when a person who may assign issues confirms the session has stopped and clears it: the button next to the run on the issue's **Activity** tab, or `POST /api/issues/<key>/runs/<run id>/clear` in a signed-in session. A release seat's run can only be cleared by a person. The issue's activity records the loss and any clear.
 - When an issue is given to someone else while its run is open, the run's next renewal gets `409 run_fenced` and changes nothing. The runner then ends its session and closes the run; a release seat's run must instead be cleared by a person after it is lost. Until the run ends, the new assignee cannot start.
@@ -160,8 +195,8 @@ A seat asks for a review, a release, a security review or work in another projec
 ```
 
 1. Choose the `role`. Use `review` for the reviewer, `release` for release, `security` for security, `developer` for the developer, `docs` for the Documentation Manager, `changelog` for the Changelog Manager, or `design` for the Software Architect.
-2. Name the issue the request comes from in `fromIssue`. It must be an issue of the seat's own project.
-3. For another project, add `project`: its id or its issue prefix. Without it the request stays in the seat's own project.
+2. Name the issue the request comes from in `fromIssue`. It must be an issue of the seat's own project; for a seat of the whole workspace, an issue of a project where it works.
+3. For another project, add `project`: its id or its issue prefix. A seat of the whole workspace may name only a project where it works; any other is refused with `wrong_project`. Without it the request stays in the seat's own project, or for a seat of the whole workspace in the project of `fromIssue`.
 4. Write the `title` and the `body`. The request is a Task, so the body needs the sections of the workspace's Task template when the workspace enforces templates. State the problem and the evidence, not the fix.
 5. Add `"blocks": true` when the source issue cannot go on until the request is done. The request is then linked as blocking it; otherwise as related. A security request always blocks: see [Security review](#security-review).
 
@@ -173,7 +208,7 @@ The reply contains `issue` with the request's `id` and `issueKey`. When Collab c
 
 - The request takes the priority of its source issue. Collab adds the matching `Review request`, `Release request`, `Docs request`, `Changelog request` or `Design request` label to filed requests when the workspace has that label.
 - Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
-- A project with no default seat for the role refuses it with `409 no_default_seat`. A request whose default seat is the seat that files it is refused.
+- A request goes to the target project's own seats of the role. Only when the project has no seat of the role does it go to the workspace's seats of that role, by the same rules. With neither it is refused with `409 no_default_seat`. A request whose default seat is the seat that files it is refused.
 - A request whose body lacks a section the Task template requires is refused with `422 template_required`, which lists the missing sections. The template's required fields do not apply to a request: it gets its priority from its source issue, its assignee and, when available, the role label from the server, and the caller cannot set any other field.
 - Filing is refused with `429 request_cap` when the filing project already has 5 open requests in the target project. Open excludes done issues and issues in Trash. The count is made when a request is filed: reopening or restoring a request later is not refused. Requests inside a project are not limited.
 - The seat that filed a request can comment on it, also in another project. It can change nothing else there.

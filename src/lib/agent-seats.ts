@@ -7,6 +7,7 @@ import { assertAssignable } from '@/lib/issue-assignee';
 import { connectedRepositories } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import { SEAT_RANK_REFUSAL, seatOwnerAccess } from '@/lib/workspace-authority';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -239,14 +240,12 @@ async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; us
 }
 
 /**
- * The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. A seat without a
- * project (scope whole workspace, CLB-613) is refused: it has no inbox, checkout or requests until CLB-615.
+ * The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. A seat whose scope
+ * is the whole workspace (CLB-613) has no project: `projectId` is null, and it works the issues assigned to it in any
+ * project of its workspace (CLB-615).
  */
 export async function seatFor(db: DB, context: Pick<AppAuthContext, 'user'>) {
-  const seat = await db.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
-  if (!seat) return null;
-  if (seat.projectId === null) throw new HandoffError('workspace_seat', 'A seat without a project cannot do this yet', 403);
-  return { ...seat, projectId: seat.projectId };
+  return db.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
 }
 
 export async function requireSeat(db: DB, context: Pick<AppAuthContext, 'user'>) {
@@ -346,8 +345,17 @@ export async function noRoomDue(db: DB, seat: { userId: string; workspaceId: str
  * any seat of the workspace (a seat without an owner counts its own).
  */
 export async function seatsWithRoom(db: DB, projectId: string, role?: string, now = new Date()) {
-  const seats = await db.agentSeat.findMany({ where: { projectId, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, workspaceId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true, createdAt: true,
+  return seatsIn(db, { projectId }, role, now);
+}
+
+/** The same for the seats of the whole workspace (CLB-615): those of `workspaceId` that have no project. */
+export async function workspaceSeatsWithRoom(db: DB, workspaceId: string, role?: string, now = new Date()) {
+  return seatsIn(db, { workspaceId, projectId: null }, role, now);
+}
+
+async function seatsIn(db: DB, scope: Prisma.AgentSeatWhereInput, role?: string, now = new Date()) {
+  const seats = await db.agentSeat.findMany({ where: { ...scope, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, workspaceId: true, projectId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true, createdAt: true,
       room: true, roomProgram: true, roomAt: true, owner: { select: { id: true, name: true } } } });
   if (!seats.length) return [];
   const { workspaceId } = seats[0], owners = seats.flatMap(seat => seat.ownerId ?? []);
@@ -379,16 +387,21 @@ export function byRoom<T extends { room: SeatRoom; openRuns: number; isDefault: 
 /**
  * Rule 2 limits a live project seat to its project's issues. Under Rule 8, comment and attachment routes
  * pass `commentOn` so the seat can also reply to a request that names it as the reporter.
- * Retired seats and seats without a project cannot write, even as reporters. Accounts without a seat pass this guard.
+ * A seat of the whole workspace (CLB-615) writes in a project of its workspace while it works there: an issue of that
+ * project is assigned to it and not done, or it has a run open on one. Only where its account may read, so it gains no
+ * access its account does not have. Retired seats cannot write, even as reporters. Accounts without a seat pass this guard.
  */
 export async function seatWriteGuard(db: DB, context: Pick<AppAuthContext, 'user'>, projectId: string,
   commentOn?: { agentRequestRole: string | null; reporterId: string | null }): Promise<void> {
-  const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { projectId: true, retiredAt: true } });
+  const me = context.user.id;
+  const seat = await db.agentSeat.findUnique({ where: { userId: me }, select: { workspaceId: true, projectId: true, retiredAt: true } });
   if (!seat) return;
   if (seat.retiredAt) throw new HandoffError('seat_scope', 'This seat is retired', 403);
-  if (seat.projectId === null) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
-  if (seat.projectId === projectId || (commentOn?.agentRequestRole && commentOn.reporterId === context.user.id)) return;
-  throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+  if (seat.projectId === projectId || (commentOn?.agentRequestRole && commentOn.reporterId === me)) return;
+  if (seat.projectId === null && await db.issue.count({ where: { workspaceId: seat.workspaceId, projectId, AND: [issueReadAccessWhere(me),
+    { OR: [{ assigneeId: me, ...NOT_DONE }, { agentRuns: { some: { userId: me, endedAt: null } } }] }] } })) return;
+  throw new HandoffError('wrong_project', seat.projectId === null ? 'A seat of the whole workspace writes only in the projects where it works'
+    : "A seat writes only to its own project's issues", 403);
 }
 
 const isSeatAccount = async (db: DB, userId: string) => !!await db.agentSeat.findUnique({ where: { userId }, select: { id: true } });

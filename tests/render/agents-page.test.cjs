@@ -320,3 +320,15 @@ test('a seat of the whole workspace shows that scope on the Seats and Inbox tabs
   assert.match(text(await page({ view }).open()), /developer WS-1 Whole workspace Nothing 0/);
   assert.match(text(await page({ view }).open('inbox')), /WS-1 developer seat of the whole workspace · 0 waiting/);
 });
+
+test('the Inbox tab names the project of each issue that waits for a seat of the whole workspace (CLB-615)', async () => {
+  const item = (issueId, issueKey, project) => ({ issueId, issueKey, title: `Work ${issueKey}`, priority: 'medium', category: 'todo', reason: 'assigned', lastRunAt: null, project });
+  const wide = { ...seats[0], id: 'seat-ws', name: 'WS-1', role: 'developer', isDefault: false, project: null, working: [],
+    waiting: [item('i5', 'AA-5', 'Alpha'), item('i7', 'BB-7', 'Beta')] };
+  const view = { workspace: { id: 'ws', slug: 'team' }, seats: [wide, seats[0]] };
+  const inbox = text(await page({ view }).open('inbox'));
+  assert.match(inbox, /WS-1 developer seat of the whole workspace · 2 waiting AA-5 Work AA-5 Alpha Assigned medium BB-7 Work BB-7 Beta Assigned medium/);
+  // A project seat's issues are all of its project, which its heading names already.
+  assert.match(inbox, /Collab Developer developer seat of Collab · 1 waiting CLB-1 &lt;b&gt;First&lt;\/b&gt; To resume high/);
+  assert.match(text(await page({ view }).open()), /developer WS-1 Whole workspace Nothing 2/);
+});

@@ -71,6 +71,7 @@ Takes nothing. Needs `issues:read`. The call does not wait: it answers at once, 
 ```
 
 - At most 50 items, already in the order to work them. An empty inbox is `{ "items": [] }`.
+- A seat of the whole workspace gets the issues assigned to it in every project its account can read.
 - `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`, and for a lead seat also `child_done`, `child_blocked`, `child_idle`, `child_no_room` or `other_child_done`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
 - `category` is the group of the issue's status, or `in_review` or `blocked` when its last run ended that way.
 - `lastRunAt` is when the last run on the issue ended, or `null`.
@@ -110,7 +111,7 @@ The checkout moves the issue to the project's first active "in progress" status.
 | Status | `error` | When |
 | --- | --- | --- |
 | 404 | `not_found` | The issue is not in the workspace, or it is in Trash. |
-| 403 | `wrong_project` | The issue is in another project than the seat's. |
+| 403 | `wrong_project` | The issue is in another project than the seat's. A seat of the whole workspace is not refused this way for an issue of its workspace that its account can read. |
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
 | 409 | `repository_required` | Several repositories are connected and neither the seat's pick nor the project default resolves. Ask an administrator to choose a default in Project settings. The checkout can be repeated once a pick or default resolves, and `collab seat run` 0.14.3 and later waits for the issue rather than leaving it alone. |

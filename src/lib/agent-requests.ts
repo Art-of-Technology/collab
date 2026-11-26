@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE, pushedWork, waitsPushed, type Pushed } from '@/lib/agent-runs';
-import { ASSIGN_CAP, byRoom, countSeatHandoff, fromLead, HandoffError, IDLE_MS, LEAD_CAP, NO_ROOM_MOVE_MS, noRoomDue, STARTED_MOVE_MS, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, type SeatRoom } from '@/lib/agent-seats';
+import { ASSIGN_CAP, byRoom, countSeatHandoff, fromLead, HandoffError, IDLE_MS, LEAD_CAP, NO_ROOM_MOVE_MS, noRoomDue, STARTED_MOVE_MS, requireSeat, seatFor, seatHandoffCapReached, seatsWithRoom, seatWriteGuard, workspaceSeatsWithRoom, type SeatRoom } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
@@ -45,8 +45,11 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
   await seatWriteGuard(prisma, context, source.projectId);
   const target = input.project
     ? await prisma.project.findFirst({ where: { workspaceId, OR: [{ id: input.project }, { issuePrefix: input.project }] }, select: { id: true } })
-    : { id: seat.projectId };
+    // A seat of the whole workspace asks in the project of the issue it works (CLB-615).
+    : { id: seat.projectId ?? source.projectId };
   if (!target) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  // A request is a write in its target project: a seat of the whole workspace files only where it works (CLB-1245).
+  if (seat.projectId === null) await seatWriteGuard(prisma, context, target.id);
   // As on every other issue write: a Forge-connected project's issues change through its Forge board.
   await Promise.all([assertLegacyProjectWriteAllowed(target.id), assertLegacyIssueWriteAllowed(source.id)]).catch(error => {
     throw error instanceof ForgeProjectWriteError ? new HandoffError('forge_connected_project', error.message, 409) : error;
@@ -70,9 +73,10 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     await seatWriteGuard(tx, context, currentSource.projectId);
     const currentSeat = await requireSeat(tx, context);
     if (currentSeat.projectId !== seat.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+    if (currentSeat.projectId === null) await seatWriteGuard(tx, context, target.id);
     const refusal = enforced && createRefusal(sections, issueShape({ type: 'TASK', description: input.body }));
     if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
-    return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId, kind, title: input.title, body: input.body,
+    return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId ?? currentSource.projectId, kind, title: input.title, body: input.body,
       source: currentSource, blocks: input.blocks, labelId: label?.id });
   });
 
@@ -109,7 +113,7 @@ function placeRequest<T extends { room: SeatRoom; openRuns: number; isDefault: b
 
 /**
  * What every request has, however it was asked for: a Task in `projectId`, reported by `me`, assigned to a seat of the
- * role in that project and linked to its source. The seat it goes to cannot be retired until the caller's transaction
+ * role in that project, or when the project has no seat of the role to one of the workspace's (CLB-615), and linked to its source. The seat it goes to cannot be retired until the caller's transaction
  * ends: its row is held here.
  */
 async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; kind: RequestKind;
@@ -117,8 +121,10 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   const { workspaceId, me, projectId, kind } = input, role = kind.id;
   const now = new Date();
   const place = async () => {
-    const seats = await seatsWithRoom(tx, projectId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
-    if (!fallback) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
+    const own = await seatsWithRoom(tx, projectId, kind.seat, now);
+    // The project's own seats of the role first; the workspace's only when the project has none.
+    const seats = own.length ? own : await workspaceSeatsWithRoom(tx, workspaceId, kind.seat, now), fallback = seats.find(seat => seat.isDefault);
+    if (!fallback) throw new HandoffError('no_default_seat', `Neither the project nor the workspace has a ${kind.seat} seat to take this request`, 409);
     // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
     if (fallback.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
     // Developer work is the lead's to place, and a role with one seat to give it to leaves nothing to choose: both go to
@@ -134,12 +140,14 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   // could deadlock. The row is asked again for what the seat was placed as: retired meanwhile, or made again for another
   // person, project or role, it is not that seat any more, and the seats are read again. Its room or the time it was
   // last seen changing is no reason to: that would place again on every report of a runner.
-  while (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${projectId} AND "role" = ${kind.seat}
+  while (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "workspaceId" = ${workspaceId}
+    AND "projectId" IS NOT DISTINCT FROM ${to.projectId} AND "role" = ${kind.seat}
     AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) ({ placed, to } = await place());
   await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: role }, to.userId);
   if (input.from && input.from !== projectId) {
     // A request is from a project when a seat of that project reported it.
-    const open = await tx.issue.count({ where: { projectId, agentRequestRole: { not: null }, reporter: { agentSeat: { projectId: input.from } }, ...NOT_DONE } });
+    // A seat of the whole workspace asks from its issue's project, and its own requests count there with that project's seats'.
+    const open = await tx.issue.count({ where: { projectId, agentRequestRole: { not: null }, AND: [{ OR: [{ reporter: { agentSeat: { projectId: input.from } } }, { reporterId: me }] }], ...NOT_DONE } });
     if (open >= REQUEST_CAP) throw new HandoffError('request_cap', `This project has ${REQUEST_CAP} open requests in that project; one of them has to be done first`, 429);
   }
 
@@ -210,9 +218,11 @@ const continues = (pushed: Pushed | undefined) => pushed ? `; the work continues
  * inbox offers it for its next run and its last run pushed its work (`waitsPushed`).
  */
 export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'workspace'>) {
-  const reader = await seatFor(prisma, context);
-  if (reader?.role === 'developer') return moveStories(context, reader);
-  if (!reader) return;
+  const found = await seatFor(prisma, context);
+  // Collab moves nothing off a seat of the whole workspace (CLB-615): a project's lead places work on those (CLB-951).
+  if (!found || found.projectId === null) return;
+  const reader = { ...found, projectId: found.projectId };
+  if (reader.role === 'developer') return moveStories(context, reader);
   const roles = ROLE_CATALOGUE.getRole(reader.role)?.requests.map(request => request.id);
   if (!roles?.length) return;
   const requests = { projectId: reader.projectId, agentRequestRole: { in: roles }, ...NOT_DONE };
