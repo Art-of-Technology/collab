@@ -103,7 +103,7 @@ function load(file, dependencies = {}, globals = {}) {
       if (!(name in dependencies) && name === '@/lib/issue-templates') {
         return load('src/lib/issue-templates.ts', { '@/lib/comment-html': load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') }) });
       }
-      if (!(name in dependencies) && ['@/lib/issue-template-enforcement', '@/lib/auth-error-diagnostics', '@/lib/issue-key-allocation', '@/lib/note-tag-access', '@/lib/issue-mutation', '@/lib/issue-milestones', '@/lib/post-access', '@/lib/delete-post-comment', '@/lib/user-utils', '@/lib/notification-access', '@/lib/secrets/access', '@/lib/issue-finder', '@/lib/shared-issue-key-utils', '@/lib/agent-repository'].includes(name)) {
+      if (!(name in dependencies) && ['@/lib/issue-comment-mentions', '@/lib/issue-template-enforcement', '@/lib/auth-error-diagnostics', '@/lib/issue-key-allocation', '@/lib/note-tag-access', '@/lib/issue-mutation', '@/lib/issue-milestones', '@/lib/post-access', '@/lib/delete-post-comment', '@/lib/user-utils', '@/lib/notification-access', '@/lib/secrets/access', '@/lib/issue-finder', '@/lib/shared-issue-key-utils', '@/lib/agent-repository'].includes(name)) {
         return load(`src/${name.slice(2)}.ts`, dependencies, globals);
       }
       // The rule for when a stop is answered reads only the database its caller hands it.

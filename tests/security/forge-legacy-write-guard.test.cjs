@@ -92,6 +92,7 @@ function fixture() {
   };
   dependencies['@/lib/issue-trash'] = load('src/lib/issue-trash.ts', dependencies);
   dependencies['@/lib/issue-trash-response'] = load('src/lib/issue-trash-response.ts', dependencies);
+  dependencies['@/lib/issue-comment-mentions'] = load('src/lib/issue-comment-mentions.ts', dependencies);
   return { guard, dependencies, issues, projects, relations, writes: () => writes, bind: value => { bindings = value; } };
 }
 const request = body => new Request('http://localhost/api/issues', { method: 'POST', body: JSON.stringify(body) });

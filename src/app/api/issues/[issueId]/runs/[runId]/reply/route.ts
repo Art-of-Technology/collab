@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handoffBody, handoffResponse } from '@/lib/agent-handoff-http';
 import { answerStop, stopAnswerSchema } from '@/lib/agent-runs';
+import { notifyCommentMentions } from '@/lib/issue-comment-mentions';
 import { publishEvent } from '@/lib/redis';
 import { getCurrentUser } from '@/lib/session';
 
@@ -10,7 +11,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { issueId, runId } = await params;
   return handoffResponse(async () => {
-    const { workspaceId, comment } = await answerStop(user.id, issueId, runId, stopAnswerSchema.parse(await handoffBody(request)));
+    const { workspaceId, issueKey, comment } = await answerStop(user.id, issueId, runId, stopAnswerSchema.parse(await handoffBody(request)));
+    // The answer is saved and the issue's lock released: from here it does what a comment posted on the issue page does.
+    await notifyCommentMentions(user, { id: comment.issueId, issueKey }, comment.content);
     await publishEvent(`workspace:${workspaceId}:events`, { type: 'issue.comments.changed', workspaceId, issueId: comment.issueId }, 1000);
     return comment;
   });
