@@ -12,7 +12,7 @@ require('node:test').after(() => queryClient.clear());
 
 const calls = [], notices = [];
 let refreshed = 0, answer = { ok: true, json: async () => ({}) };
-const el = tag => ({ children, id, onClick, disabled, htmlFor }) => React.createElement(tag, { id, onClick, disabled, htmlFor }, children);
+const el = tag => ({ children, id, onClick, disabled, htmlFor, role, 'aria-pressed': pressed }) => React.createElement(tag, { id, onClick, disabled, htmlFor, role, 'aria-pressed': pressed }, children);
 const parts = (names, tag = 'div') => Object.fromEntries(names.map(name => [name, el(tag)]));
 // What the create-seat form reads for a project: its connected repositories and the one it works out. A project that
 // is not listed here has one repository, so a seat in it has nothing to pick.
@@ -31,7 +31,7 @@ const ui = {
   '@/components/ui/input': { Input: ({ id, value, onChange, readOnly, 'aria-label': label }) => React.createElement('input', { id, value, onChange, readOnly, 'aria-label': label }) },
   '@/components/ui/label': { Label: el('label') },
   '@/components/ui/select': { Select: ({ value, onValueChange, children }) => React.createElement('select', { value, onChange: event => onValueChange(event.target.value) }, children),
-    SelectContent: ({ children }) => children, SelectItem: ({ value, children }) => React.createElement('option', { value }, children), SelectTrigger: () => null, SelectValue: () => null,
+    SelectContent: ({ children }) => children, SelectItem: ({ value, disabled, children }) => React.createElement('option', { value, disabled }, children), SelectTrigger: () => null, SelectValue: () => null,
     SelectGroup: ({ children }) => React.createElement('optgroup', null, children), SelectLabel: ({ children }) => React.createElement('option', { disabled: true }, children) },
 };
 const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
@@ -541,5 +541,87 @@ test('without roles of its own, the form has no Your organisation group', async 
     await React.act(async () => buttons('New token')[0].click());
     await choose(0, 'p1');
     assert.equal(document.querySelectorAll('select')[1].querySelector('optgroup'), null);
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+// CLB-616: the scope is a two-way switch, "One project" or "Whole workspace", offered only to who manages the
+// workspace's permissions. A workspace seat names no project and picks no repository; release stays one per project.
+test('without the permission to manage workspace permissions, the form offers no scope switch', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    assert.equal(buttons('Whole workspace').length, 0);
+    assert.equal(buttons('One project').length, 0);
+    assert.doesNotMatch(document.querySelector('[role=dialog]').textContent, /Whole workspace/);
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('a seat for the whole workspace is created from the switch: no project, the repository comes from each issue', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [{ id: 'u1', name: 'Cem' }], canScopeWorkspace: true });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'dev-all');
+    // One project is the default, and the project list still offers a plain token.
+    assert.equal(buttons('One project')[0].getAttribute('aria-pressed'), 'true');
+    assert.equal(buttons('Whole workspace')[0].getAttribute('aria-pressed'), 'false');
+    assert.equal(document.querySelectorAll('select')[0].value, 'none');
+
+    await React.act(async () => buttons('Whole workspace')[0].click());
+    assert.equal(buttons('Whole workspace')[0].getAttribute('aria-pressed'), 'true');
+    const dialog = () => document.querySelector('[role=dialog]').textContent;
+    assert.match(dialog(), /This seat can be assigned issues from every project in the workspace\. Only people who manage workspace permissions can create it\./);
+    assert.match(dialog(), /From each issue A workspace seat gets the repository of the project its issue is in, run by run\./);
+    assert.equal(document.querySelectorAll('select').length, 3, 'role, owner, expiry: no project to pick');
+    assert.equal(document.querySelectorAll('select')[0].value, 'developer');
+    await choose(1, 'u1');
+    answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'dev-all', token: 'collab_at_seat' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'dev-all', scope: 'workspace', role: 'developer', ownerId: 'u1', expiresInDays: 90 }]);
+    await React.act(async () => buttons('Done')[0].click());
+
+    // The next seat starts at One project again, and a project seat is sent as before.
+    await React.act(async () => buttons('New token')[0].click());
+    assert.equal(buttons('One project')[0].getAttribute('aria-pressed'), 'true');
+    await type('agent-token-name', 'dev-one');
+    await choose(0, 'p1');
+    await shows('From the project acme/app. Nothing to pick, nothing to type.');
+    answer = { ok: true, json: async () => ({ seat: { id: 's2' }, token: { name: 'dev-one', token: 'collab_at_seat' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'dev-one', projectId: 'p1', role: 'developer', ownerId: null, expiresInDays: 90 }]);
+    await React.act(async () => buttons('Done')[0].click());
+  } finally { await React.act(async () => root.unmount()); }
+});
+
+test('the release role cannot have the whole workspace as its scope, and the form says why', async () => {
+  const customRoles = [{ id: 'cr1', name: 'Shipper', baseRole: 'release' }, { id: 'cr2', name: 'QA Tester', baseRole: 'developer' }];
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], customRoles, canScopeWorkspace: true });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'rel');
+    const option = value => [...document.querySelectorAll('select')[0].options].find(row => row.value === value);
+    await React.act(async () => buttons('Whole workspace')[0].click());
+    // Release, and a role of the organisation's built on it, cannot be picked here; the others can.
+    assert.equal(option('release').disabled, true);
+    assert.equal(option('custom:cr1').disabled, true);
+    assert.equal(option('developer').disabled, false);
+    assert.equal(option('custom:cr2').disabled, false);
+    const why = /A release seat belongs to one project: it deploys that project's changes, so it cannot have the whole workspace as its scope\./;
+    assert.match(document.querySelector('[role=dialog]').textContent, why);
+
+    // Release picked for one project, then the scope switched: the reason is shown and nothing can be created.
+    await React.act(async () => buttons('One project')[0].click());
+    await choose(0, 'p1');
+    await choose(1, 'release');
+    await React.act(async () => buttons('Whole workspace')[0].click());
+    assert.match(document.querySelector('[role=alert]').textContent, why);
+    assert.equal(buttons('Create seat')[0].disabled, true);
+    const sent = calls.length;
+    await React.act(async () => buttons('Create seat')[0].click());
+    assert.equal(calls.length, sent);
+
+    // Another role, and the seat can be created.
+    await choose(0, 'developer');
+    assert.equal(document.querySelector('[role=alert]'), null);
+    assert.equal(buttons('Create seat')[0].disabled, false);
   } finally { await React.act(async () => root.unmount()); }
 });

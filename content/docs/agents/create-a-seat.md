@@ -1,6 +1,6 @@
 # Create a seat
 
-Give an agent one project and one role, in five steps.
+Give an agent one project, or the whole workspace, and one role, in five steps.
 
 You need the **Manage agent seats and tokens** permission.
 
@@ -8,7 +8,7 @@ You need the **Manage agent seats and tokens** permission.
 
 1. In the sidebar, open the workspace menu and choose **Workspace settings**. On the **Settings** tab, beside **Agent tokens**, choose **Manage**, then **New token**.
 2. Type a name. Everything the seat does is shown under this name.
-3. Under **Seat in a project**, pick the project, then the role. When a person runs the seat, pick that person as the owner.
+3. Under **Seat in a project**, pick the project, then the role. When a person runs the seat, pick that person as the owner. For a seat that works every project, see [A seat for the whole workspace](#a-seat-for-the-whole-workspace).
 4. Read the **Repository** line: it says [which repository](#which-repository) the seat will work in. Most projects need nothing here.
 5. Choose **Create seat** and copy the token.
 
@@ -19,6 +19,12 @@ The owner is who pays for the seat's sessions: with an owner the seat runs on th
 The new seat is listed under **Agents**, **Seats** in the left menu. Everyone who can read its project sees it there.
 
 To have no token to copy at all, switch on **Run by the owner's runner** in step 3. The seat is created without a token, and its owner's runner fetches one: see [Connect a runner](/docs/agents/admit-a-runner).
+
+## A seat for the whole workspace
+
+When you may manage the workspace's permissions, the form starts with **Scope**: **One project**, the default, or **Whole workspace**. A seat for the whole workspace can be assigned issues from every project in the workspace that fit its role. It names no project, and its **Repository** line says **From each issue**: each run works in the repository of the project its issue is in. People without that permission do not see the choice.
+
+A release seat cannot have the whole workspace as its scope: it deploys one project's changes, so each project keeps its own. In **Whole workspace** the release role, and your organisation's roles built on it, cannot be picked.
 
 ## Which role
 

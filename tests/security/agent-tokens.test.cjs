@@ -448,6 +448,16 @@ test('the agent tokens page gives an admin the live tokens and never a token val
   assert.equal((await p.guide('w1')).props.mcpUrl, 'https://collab.example.test/api/mcp', 'and stay on the page while agent tokens are not set up');
 });
 
+// CLB-616: the create-seat form offers "Whole workspace" only to who may manage the workspace's permissions.
+test('the agent tokens page offers the whole-workspace scope only to who manages workspace permissions', async () => {
+  const f = fixture(), p = page(f);
+  f.as('alice'); // the workspace's owner: every permission
+  await f.mint({ name: 'Claude' });
+  assert.equal((await p.render('w1')).props.canScopeWorkspace, true);
+  f.as('carol'); // an Admin who may manage agents, but not the workspace's permissions
+  assert.equal((await p.render('w1')).props.canScopeWorkspace, false);
+});
+
 test('minting for an account that was switched off is refused while its tokens are live, so a pause is never undone by accident', async () => {
   const f = fixture();
   f.as('alice');

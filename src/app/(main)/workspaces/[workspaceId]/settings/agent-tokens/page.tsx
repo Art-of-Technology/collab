@@ -35,6 +35,8 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
     prisma.project.findMany({ where: { workspaceId: workspace.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     listSeatOwnerChoices(workspace.id),
   ]) : [[], { seats: [], people: [], customRoles: [] }];
+  // A seat for the whole workspace reaches every project: only who manages the workspace's permissions is offered one (CLB-616).
+  const canScopeWorkspace = (await checkUserPermission(session.user.id, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission;
   const manageable = [];
   for (const { id, name, slug } of others) {
     if ((await checkUserPermission(session.user.id, id, Permission.MANAGE_AGENTS)).hasPermission) manageable.push({ id, name, slug });
@@ -65,6 +67,7 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
         seats={seats}
         customRoles={customRoles}
         people={people}
+        canScopeWorkspace={canScopeWorkspace}
         tokens={tokens && tokens.map(token => ({
           id: token.id,
           name: token.name,
