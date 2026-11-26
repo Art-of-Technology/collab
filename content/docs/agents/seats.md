@@ -384,7 +384,7 @@ The rules:
 
 - Only a lead seat is woken by its issue's children, and only for an issue its last run finished `blocked`. A blocked status without such a run wakes nobody. The children are the issues of the lead's project whose parent is that issue.
 - A lead's run may finish `blocked` without `blockedBy` or `askedUser` while the issue has a child that is not done. With every child done, that finish is refused with `422 exit_state_required`: finish `done`.
-- A child blocked on a question for a person: the lead does not answer for the person. It finishes `blocked` with `askedUser`. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done.
+- A child blocked on a question for a person: the lead does not answer for the person and does not name them again. The child already named them, so the lead finishes `blocked` with nothing named. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done. The lead names a person with `askedUser` only for a question it needs answered itself.
 - A lead may create child issues in its project, from the issue templates, like any seat, and then assign them.
 - The lead starts and restarts no runner, assigns nothing across projects, and gives no person work.
 - A project without a lead seat is not affected by any of this.
@@ -415,7 +415,16 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
    | `decision` | chooses | `questions`: 1 to 5, each with `question`, 2 to 4 `options` and, optionally, the `suggested` one. |
    | `hands` | does something | `steps` and `doneWord`, the reply that says it is done. |
 
-   The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked).
+   To send the declaration, append `--ask-file FILE` to your usual `collab run finish` command, keeping the run ID and all other arguments. If the CLI refuses `--ask-file` as an unknown flag, it is older than 0.17.0. Retry the same command, removing only `--ask-file` and its filename. The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked).
+
+   What the role texts also tell a seat about stopping:
+
+   | Situation | What the seat does |
+   | --- | --- |
+   | Work that is already agreed | Goes on. It never stops to ask whether to continue. A real go or no-go is a `decision` with the reply words `go` and `hold`. |
+   | A progress note | Names nobody, and the work goes on. |
+   | A wait on a review, a blocker or a child | Names no person: `in_review` with its `reviewRequest`, `blocked` with `blockedBy`, or a lead's `blocked` with nothing named while a child is not done. |
+   | A check on another service (CI, a review bot) still in progress after 20 minutes | Asks for it again once. If the check is still in progress 20 minutes later, it finishes `blocked` naming a person, with `hands` saying what to look at. It never waits without limit and never pushes an empty commit to rerun a check. |
 4. Give the facts the next session needs as fields, not only inside the note:
 
    | Field | CLI option | What it is | When |
