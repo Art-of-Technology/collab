@@ -79,7 +79,10 @@ test('a seat without a project', async t => {
   await t.test('the project seats get what they got before', async () => {
     assert.deepEqual(plain((await seats.seatsWithRoom(prisma, A, 'developer')).map(row => row.id)), before.room);
     assert.deepEqual(plain((await runs.seatInbox(caller('cseatdev001'))).items), before.inbox);
-    assert.deepEqual(plain(await page.readSeats(owner, 'team')), before.page);
+    // The page lists the workspace seats as well since CLB-613, with no project: the project seats' rows are as before.
+    const after = plain(await page.readSeats(owner, 'team'));
+    assert.deepEqual({ ...after, seats: after.seats.filter(seat => seat.project !== null) }, before.page);
+    assert.deepEqual(after.seats.filter(seat => seat.project === null).map(seat => seat.name).sort(), ['ws-dev', 'ws-dev2', 'ws-rev']);
   });
 
   await t.test('a seat without a project is refused where a project is needed, not treated as no seat', async () => {
