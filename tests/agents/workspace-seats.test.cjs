@@ -155,7 +155,7 @@ test('a seat with the scope "whole workspace" (CLB-613)', async t => {
     const view = plain(await page.readSeats(owner, 'w'));
     const scopeOf = Object.fromEntries(view.seats.map(seat => [seat.name, seat.project]));
     assert.deepEqual(scopeOf, { 'dev-p': 'Project P', 'dev-m': 'Project P', 'lead-p': 'Project P', 'ws-dev': null, 'ws-dev2': null, 'ws-dev3': null, 'ws-lead': null });
-    // It waits for nothing until a workspace seat has an inbox.
+    // Nothing is assigned to it yet, so nothing waits for it.
     assert.deepEqual(view.seats.find(seat => seat.name === 'ws-dev').waiting, []);
     // A member sees the workspace's seats too.
     assert.ok(plain(await page.readSeats(person, 'w')).seats.some(seat => seat.name === 'ws-dev'));

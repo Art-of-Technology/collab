@@ -85,15 +85,17 @@ test('a seat without a project', async t => {
     assert.deepEqual(after.seats.filter(seat => seat.project === null).map(seat => seat.name).sort(), ['ws-dev', 'ws-dev2', 'ws-rev']);
   });
 
-  await t.test('a seat without a project is refused where a project is needed, not treated as no seat', async () => {
-    // Its account even has an issue assigned: it is still not offered.
+  await t.test('a seat without a project is a seat, not treated as no seat: it works where it is assigned (CLB-615)', async () => {
     await raw.issue.update({ where: { id: issue.id }, data: { assigneeId: 'cwsdev00001' } });
-    await assert.rejects(runs.seatInbox(caller('cwsdev00001')), { code: 'workspace_seat' });
-    await assert.rejects(seats.seatFor(prisma, caller('cwsdev00001')), { code: 'workspace_seat' });
-    await assert.rejects(seats.seatWriteGuard(prisma, caller('cwsdev00001'), A), { code: 'wrong_project' });
-    // Not even on a request that names it as reporter, the one write outside its project a project seat has.
-    await assert.rejects(seats.seatWriteGuard(prisma, caller('cwsdev00001'), A, { agentRequestRole: 'review', reporterId: 'cwsdev00001' }), { code: 'wrong_project' });
+    assert.equal((await seats.seatFor(prisma, caller('cwsdev00001'))).projectId, null);
+    // It is a member of the workspace, as a seat's account is once its token is made, so it reads the issue.
+    await raw.workspaceMember.create({ data: { workspaceId: 'w', userId: 'cwsdev00001' } });
+    assert.deepEqual((await runs.seatInbox(caller('cwsdev00001'))).items.map(item => item.issueKey), ['AL-1']);
+    await seats.seatWriteGuard(prisma, caller('cwsdev00001'), A);
+    // With nothing assigned in the project it writes nothing there, unlike a project seat in its own project.
     await raw.issue.update({ where: { id: issue.id }, data: { assigneeId: 'cseatdev001' } });
+    await assert.rejects(seats.seatWriteGuard(prisma, caller('cwsdev00001'), A), { code: 'wrong_project' });
+    await seats.seatWriteGuard(prisma, caller('cseatdev001'), A);
   });
 
   await t.test('retiring a default seat without a project hands the default on only inside its own workspace', async () => {
