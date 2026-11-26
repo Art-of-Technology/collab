@@ -21,7 +21,7 @@ export default async function SeatPage({ params }: { params: Promise<{ workspace
     <Link className="text-sm text-primary underline-offset-4 hover:underline" href={`/${encodeURIComponent(workspace.slug || workspace.id)}/agents`}>Seats</Link>
     <div className="space-y-1">
       <h1 className="text-xl font-semibold">{seat.name}</h1>
-      <p className="text-sm text-muted-foreground">{role} seat of {seat.project} · {seat.owner ? `owner ${seat.owner}` : 'no owner (API key)'}</p>
+      <p className="text-sm text-muted-foreground">{role} seat of {seat.project ?? 'the whole workspace'} · {seat.owner ? `owner ${seat.owner}` : 'no owner (API key)'}</p>
     </div>
     <SeatInstructions workspaceId={workspace.id} canEdit={canEdit} seat={seat} />
     <p className="text-sm text-muted-foreground">A run reads the platform layer first, then what your organisation adds for the role, then this seat&apos;s. The first two are on the{' '}

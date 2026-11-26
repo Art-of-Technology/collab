@@ -15,18 +15,18 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true } });
   if (!workspace) return null;
   const seat = await prisma.agentSeat.findFirst({
-    where: { id: seatId, workspaceId: workspace.id, retiredAt: null, project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } },
+    // A seat of the whole workspace (no project, CLB-613) is shown to everyone who may see the workspace, as on the Seats page.
+    where: { id: seatId, workspaceId: workspace.id, retiredAt: null, OR: [{ projectId: null }, { project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } }] },
     select: { id: true, userId: true, name: true, role: true, instructions: true, project: { select: { name: true } }, owner: { select: { id: true, name: true, email: true } },
       customRole: { select: { name: true } } },
   });
-  // The filter on the project already leaves out a seat without one; this page shows a project seat only.
-  if (!seat?.project) return null;
+  if (!seat) return null;
   const { hasPermission } = await checkUserPermission(userId, workspace.id, Permission.MANAGE_AGENTS);
   // What saving would answer: someone else's seat needs the rank rule as well (CLB-1185), read only then.
   const canEdit = hasPermission && seat.userId !== userId && (await seatOwnerAccess(userId, workspace.id, seat.owner?.id ?? null))() === 'pass';
   return {
     workspace, canEdit,
-    seat: { id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name, instructions: seat.instructions ?? '',
+    seat: { id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project?.name ?? null, instructions: seat.instructions ?? '',
       owner: seat.owner ? seat.owner.name || seat.owner.email || seat.owner.id : null },
   };
 }

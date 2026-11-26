@@ -35,7 +35,8 @@ export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ cat
 export const fromLead = (projectId: string, lead: string, seat: string) => ({ projectId, assigneeId: seat, ...NOT_DONE, helpers: { some: { userId: seat, approvedBy: lead } } });
 
 interface SeatInput {
-  workspaceId: string; actorId: string; projectId: string; role: string; ownerId: string | null;
+  /** null: the seat's scope is the whole workspace (CLB-613). */
+  workspaceId: string; actorId: string; projectId: string | null; role: string; ownerId: string | null;
   name: string; expiresInDays: number; isDefault?: boolean;
   /** The seat is run by its owner's runner, which fetches its tokens: none is made here, and none is shown to anyone. */
   byRunner?: boolean;
@@ -50,7 +51,7 @@ interface SeatInput {
 }
 
 /**
- * Creates a seat for one project and role. If a token is minted, creation is atomic and minting again
+ * Creates a seat for one project, or the whole workspace when `projectId` is null, and one role. If a token is minted, creation is atomic and minting again
  * under the same name gives the seat another token. A workspace's custom role (`customRoleId`, CLB-628) uses its built-in base role.
  */
 export async function createSeat(input: Omit<SeatInput, 'role'> & { role?: string }) {
@@ -88,6 +89,29 @@ export async function lockMemberSeatProject(tx: Prisma.TransactionClient, worksp
 
 async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (typeof ROLE_CATALOGUE.roles)[number], account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>,
   owners: Awaited<ReturnType<typeof seatOwnerAccess>>) {
+  if (input.projectId === null) return writeSeatIn(tx, { ...input, projectId: null }, role, account, owners);
+  return writeSeatOf(tx, { ...input, projectId: input.projectId }, role, account, agents, owners);
+}
+
+/**
+ * A seat whose scope is the whole workspace (CLB-613). The route lets only who may manage the workspace's permissions ask
+ * for one. Release stays one per project; a role's limit per project is its limit among the workspace's seats here, so a
+ * workspace has one workspace Lead. The repository comes from each issue's project, so the seat picks none.
+ */
+async function writeSeatIn(tx: Prisma.TransactionClient, input: SeatInput & { projectId: null }, role: (typeof ROLE_CATALOGUE.roles)[number],
+  account: { id: string; name: string | null }, owners: Awaited<ReturnType<typeof seatOwnerAccess>>) {
+  if (input.own) throw new HandoffError('project_required', "A member's own seat belongs to one project");
+  if (role.id === 'release') throw new HandoffError('release_one_project', 'A release seat belongs to one project: it cannot have the whole workspace as its scope');
+  if (input.repositoryId) throw new HandoffError('repository_not_needed', "A seat of the whole workspace works in each issue's project's repository, so it picks none");
+  // The same lock retiring a workspace seat takes, so the default and the limit are decided on settled rows.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat-workspace:${input.workspaceId}`}))`;
+  await assertRoleLive(tx, input);
+  return writeSeatRow(tx, input, role, account, owners, await tx.agentSeat.findUnique({ where: { userId: account.id } }), { workspaceId: input.workspaceId, projectId: null },
+    max => `This workspace already has ${max === 1 ? `a ${role.id} seat for the whole workspace; retire it first` : `${max} ${role.id} seats for the whole workspace; retire one first`}`);
+}
+
+async function writeSeatOf(tx: Prisma.TransactionClient, input: SeatInput & { projectId: string }, role: (typeof ROLE_CATALOGUE.roles)[number], account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>,
+  owners: Awaited<ReturnType<typeof seatOwnerAccess>>) {
   // One seat change at a time per project, so "the first of its role is the default" and "one release seat" are decided on settled rows.
   if (input.own) await lockMemberSeatProject(tx, input.workspaceId, input.projectId);
   else {
@@ -101,10 +125,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
       throw new HandoffError('invalid_repository', "Choose one of this project's connected repositories");
     }
   }
-  // A role retired after it was read is not taken: retiring waits for this transaction, or this one sees it retired.
-  if (input.customRoleId && !(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentCustomRole" WHERE "id" = ${input.customRoleId} AND "retiredAt" IS NULL FOR SHARE`).length) {
-    throw new HandoffError('role_retired', 'This role is retired: no new seat takes it', 409);
-  }
+  await assertRoleLive(tx, input);
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
   if (input.own) {
     // A seat of this role the member was given in the meantime, under any name, is enough, whoever holds the derived
@@ -127,6 +148,24 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
       }
     }
   }
+  return writeSeatRow(tx, input, role, account, owners, existing, { projectId: input.projectId },
+    max => `This project already has ${max === 1 ? `a ${role.id} seat; retire it first` : `${max} ${role.id} seats; retire one first`}`);
+}
+
+/** A role retired after it was read is not taken: retiring waits for this transaction, or this one sees it retired. */
+async function assertRoleLive(tx: Prisma.TransactionClient, input: SeatInput) {
+  if (input.customRoleId && !(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentCustomRole" WHERE "id" = ${input.customRoleId} AND "retiredAt" IS NULL FOR SHARE`).length) {
+    throw new HandoffError('role_retired', 'This role is retired: no new seat takes it', 409);
+  }
+}
+
+/**
+ * What creating a seat writes once its scope's checks passed and its scope's lock is held: `existing` is the account's
+ * seat row, `among` names the seats of the same scope and `full` says a role's limit there is reached.
+ */
+async function writeSeatRow(tx: Prisma.TransactionClient, input: SeatInput, role: (typeof ROLE_CATALOGUE.roles)[number], account: { id: string; name: string | null },
+  owners: Awaited<ReturnType<typeof seatOwnerAccess>>, existing: Prisma.AgentSeatGetPayload<object> | null,
+  among: { workspaceId?: string; projectId: string | null }, full: (max: number) => string) {
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role
     && existing.customRoleId === (input.customRoleId ?? null);
   if (existing && !existing.retiredAt && !same) {
@@ -149,12 +188,9 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
     where: { id: input.workspaceId, OR: [{ ownerId: input.ownerId }, { members: { some: { userId: input.ownerId, status: true } } }] }, select: { id: true },
   }))) throw new HandoffError('owner_not_found', "The seat's owner is not an active member of this workspace");
   const others = await tx.agentSeat.findMany({
-    where: { projectId: input.projectId, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
+    where: { ...among, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
   });
-  if (role.maxPerProject !== null && others.length >= role.maxPerProject) {
-    const limit = role.maxPerProject === 1 ? `a ${role.id} seat; retire it first` : `${role.maxPerProject} ${role.id} seats; retire one first`;
-    throw new HandoffError(`${role.id}_seat_exists`, `This project already has ${limit}`, 409);
-  }
+  if (role.maxPerProject !== null && others.length >= role.maxPerProject) throw new HandoffError(`${role.id}_seat_exists`, full(role.maxPerProject), 409);
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   // A seat made again starts with no figure: the one it kept was reported for the seat it was, perhaps for someone else's runner.
@@ -180,11 +216,13 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
  * those that seat may not hold. Returns their keys. Written in SQL because the application's client hides issues in
  * Trash, and a restored issue must not bring the assignment back.
  */
-async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; userId: string }, actorId: string, reason: string, keep?: { projectId: string; role: string }) {
+async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; userId: string; workspaceId: string }, actorId: string, reason: string, keep?: { projectId: string | null; role: string }) {
   // Take the account's issues first, so a change to one of them that is already under way finishes before it is read here.
   await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "assigneeId" = ${seat.userId} FOR UPDATE`;
   // An ordinary issue has no request role; '' stands for that in the list of roles the seat takes.
-  const misfit = keep ? Prisma.sql`AND (i."projectId" <> ${keep.projectId} OR NOT (COALESCE(i."agentRequestRole", '') = ANY(${(ROLE_CATALOGUE.getRole(keep.role)?.issueKinds ?? []).map(kind => kind ?? '')})))` : Prisma.empty;
+  // A seat of the whole workspace (no project) may hold its role's issues of any of its workspace's projects.
+  const outside = !keep ? Prisma.empty : keep.projectId === null ? Prisma.sql`i."workspaceId" <> ${seat.workspaceId}` : Prisma.sql`i."projectId" <> ${keep.projectId}`;
+  const misfit = keep ? Prisma.sql`AND (${outside} OR NOT (COALESCE(i."agentRequestRole", '') = ANY(${(ROLE_CATALOGUE.getRole(keep.role)?.issueKinds ?? []).map(kind => kind ?? '')})))` : Prisma.empty;
   const issues = await tx.$queryRaw<{ id: string; issueKey: string | null; workspaceId: string; projectId: string }[]>`
     UPDATE "Issue" i SET "assigneeId" = NULL, "updatedAt" = ${new Date()}
     WHERE i."assigneeId" = ${seat.userId}
