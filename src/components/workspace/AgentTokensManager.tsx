@@ -401,7 +401,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   {wholeWorkspace
                     ? 'A seat for the whole workspace can be assigned the issues of any project in this workspace that fit its role.'
                     : <>A seat can be assigned only this project&apos;s issues that fit its role, and its token can change only issues of this project.</>}
-                  A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests. A lead seat takes an epic and assigns its child issues to the project's other seats.
+                  {' '}A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests. A lead seat takes an epic and assigns its child issues to the project's other seats.
                 </p>
               </>
             ) : (

@@ -573,6 +573,7 @@ test('a seat for the whole workspace is created from the switch: no project, the
     assert.match(dialog(), /From each issue A workspace seat gets the repository of the project its issue is in, run by run\./);
     assert.equal(document.querySelectorAll('select').length, 3, 'role, owner, expiry: no project to pick');
     assert.equal(document.querySelectorAll('select')[0].value, 'developer');
+    assert.match(dialog(), /fit its role\. A developer seat takes ordinary issues/);
     await choose(1, 'u1');
     answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'dev-all', token: 'collab_at_seat' } }) };
     await React.act(async () => buttons('Create seat')[0].click());
@@ -585,6 +586,7 @@ test('a seat for the whole workspace is created from the switch: no project, the
     await type('agent-token-name', 'dev-one');
     await choose(0, 'p1');
     await shows('From the project acme/app. Nothing to pick, nothing to type.');
+    assert.match(dialog(), /issues of this project\. A developer seat takes ordinary issues/);
     answer = { ok: true, json: async () => ({ seat: { id: 's2' }, token: { name: 'dev-one', token: 'collab_at_seat' } }) };
     await React.act(async () => buttons('Create seat')[0].click());
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'dev-one', projectId: 'p1', role: 'developer', ownerId: null, expiresInDays: 90 }]);
