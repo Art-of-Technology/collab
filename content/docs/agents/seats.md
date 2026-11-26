@@ -2,11 +2,11 @@
 
 Every rule for seats, runs and requests, with the edge cases. For the short version, start at [Agent seats](/docs/agents/overview).
 
-A seat is an agent that works one project in one role and gets work only when someone assigns it an issue.
+A seat is an agent that works one project, or the whole workspace, in one role and gets work only when someone assigns it an issue.
 
 ## What a seat is
 
-- One project and one [role](/docs/agents/roles-and-layers#the-roles). A project has at most one active release seat and one active lead seat.
+- One project, or the [whole workspace](#a-seat-of-the-whole-workspace), and one [role](/docs/agents/roles-and-layers#the-roles). A project has at most one active release seat and one active lead seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -21,17 +21,51 @@ The owner is fixed when the seat is created: creating a token again under the sa
 
 1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need the **Manage agent seats and tokens** permission.
 2. Type a name. Everything the seat does is shown under this name.
-3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner.
+3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner. Someone who may manage the workspace's permissions first chooses the **Scope**: **One project** or **Whole workspace**; see [A seat of the whole workspace](#a-seat-of-the-whole-workspace).
 4. The **Repository** line says what the seat will work in. Pick one only when the project has several; see [Which repository](/docs/agents/create-a-seat#which-repository).
 5. Choose **Create seat** and copy the token. It is shown once.
 
 The first seat of a role in a project is the default for that role.
 
-A person finds the seats under **Agents** in the app's left menu: **Seats** groups the seats of the projects that person can read by their owner, or **No owner (API key)**, with the owner's runner and [room](/docs/agents/overview#room-on-the-seats-tab), and shows the issue each seat works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
+A person finds the seats under **Agents** in the app's left menu: **Seats** groups the seats of the projects that person can read, and the seats of the whole workspace, by their owner, or **No owner (API key)**, with the owner's runner and [room](/docs/agents/overview#room-on-the-seats-tab), and shows the issue each seat works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 
 Making an existing agent name a seat changes its tokens at once: from then on they follow the rules below. Open issues it holds in other projects, or that do not fit its role, become unassigned, each with an activity entry.
+
+## A seat of the whole workspace
+
+A seat's scope is one project, the default, or the whole workspace. A seat of the whole workspace has no project of its own: it works the issues assigned to it in any project of the workspace. It is the same kind of seat in every other way: one role, an optional owner, a token, a fresh session per issue.
+
+Creating one:
+
+- Only someone who has **Manage agent seats and tokens** and also **Manage Workspace Permissions** creates one. Anyone else is refused with `403 workspace_scope_forbidden`, and the form does not offer them the choice.
+- Any role except release and your organisation's roles built on release. A release seat deploys one project's changes, so it is refused with `release_one_project`.
+- It picks no repository (`repository_not_needed`): each run works in the repository of its issue's project. See [The repository](/docs/agents/runner-contract#the-repository).
+- A workspace has at most one Lead seat for the whole workspace. The other roles have no limit. The first seat of a role is the default among the workspace's seats of that role.
+- **Add my seats to this project** makes project seats only.
+- Project seats do not change when a workspace seat is made.
+
+What it may do:
+
+| What | The rule |
+| --- | --- |
+| Be given work | A person assigns it an issue of any project in the workspace that its role takes. The assignee picker offers it on every project's issues. |
+| Read | Only what its token's account can read. The scope gives it no access to a project its account cannot see. |
+| List its work | Its [inbox](#what-a-seat-works-on-next) has its issues of every project its account can read, in the usual order. The **Seat inbox** page shows the project of each. |
+| Take an issue | It checks out an issue of any project: it is not refused with `wrong_project`. The reply names the repository of that issue's project. |
+| Write | In a project where it works: an open issue there is assigned to it, or it has a run open on one there. It writes there what a project seat writes in its own project. |
+| File a request | From an issue of a project where it works. Without `project` the request goes to that issue's project; with `project`, only to another project where it works. A request into another project counts toward the [5 open requests](#ask-another-seat-a-request) that its issue's project may have there. |
+| Get requests | Only from a project with no seat of the role. A project's own seats of a role always come first. |
+
+What it may not do:
+
+- Write in a project where it does not work: `wrong_project`. That includes a project where every issue it was given is done.
+- Be a release seat.
+- Take part in the moves when a seat has no room. Collab moves no work off a workspace seat and places none on it, and a project's lead is not shown it under `lead.seats`, so a person assigns its work.
+- Lead a project, for now. A Lead seat for the whole workspace is offered what is assigned to it, but assigning an issue from it is refused with `wrong_project` and no child issue wakes it.
+
+[Retire](#retire-a-seat) a workspace seat as any other: its open issues in every project become unassigned.
 
 ## Give a seat work
 
