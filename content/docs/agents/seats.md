@@ -383,7 +383,7 @@ The rules:
 - Only a lead seat is woken by its issue's children, and only for an issue its last run finished `blocked`. A blocked status without such a run wakes nobody. The children are the issues of the lead's project whose parent is that issue.
 - A lead's run may finish `blocked` without `blockedBy` or `askedUser` while the issue has a child that is not done. With every child done, that finish is refused with `422 exit_state_required`: finish `done`.
 - A child blocked on a question for a person: the lead does not answer for the person. It finishes `blocked` with `askedUser`. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done.
-- At most two epics are in flight in a project at the same time; a third starts when one of the two is live and has been used. A lead that holds more works the two that come first in the order it was given them. On any other it assigns nothing, says so in its note and finishes `blocked` with nothing named. Its role text says this; Collab does not refuse a third.
+- At most two epics are in flight in a project at the same time; a third starts when one of the two is live and has been used. A lead that holds more works the two that come first in the order it was given them. On any other it assigns nothing, says so in its note and finishes as it would otherwise: `blocked` with nothing named while a child is not done, `done` when every child is done. Its role text says this; Collab does not refuse a third.
 - A lead may create child issues in its project, from the issue templates, like any seat, and then assign them.
 - The lead starts and restarts no runner, assigns nothing across projects, and gives no person work.
 - A project without a lead seat is not affected by any of this.
@@ -414,7 +414,7 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
    | `decision` | chooses | `questions`: 1 to 5, each with `question`, 2 to 4 `options` and, optionally, the `suggested` one. |
    | `hands` | does something | `steps` and `doneWord`, the reply that says it is done. |
 
-   The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked). From the CLI, `--ask-file FILE` sends it and needs CLI 0.17.0. Collab's role texts tell a seat to check `collab --version` first and, below 0.17.0 or when the option is refused as an unknown flag, to finish without it as before.
+   The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked). From the CLI, `--ask-file FILE` sends it and needs CLI 0.17.0. Collab's role texts tell a seat that a refusal of `--ask-file` as an unknown flag means its CLI is older than 0.17.0, and to finish again without it as before.
 
    What the role texts also tell a seat about stopping:
 

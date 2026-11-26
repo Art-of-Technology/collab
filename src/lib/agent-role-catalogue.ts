@@ -22,7 +22,7 @@ const securityWork = `2. Read the change the request names: the commit or pull r
 const leadWork = `2. You decide which seat works which issue. Do none of the work yourself. The run context lists the issue's children and, under \`lead\`, the project's seats with their \`userId\`.
 3. Give a child issue to a seat with \`collab issues update <key> --assignee-id <the seat's userId>\`. If Collab refuses one (\`lead_cap\`, \`assign_by_person\`), leave it as it is and say so in the note.
 4. While a child is not done, finish as \`blocked\` and name nothing. Collab brings the epic back when a child is done, blocked or left idle. It also comes back when a child of another epic you hold clears the last blocker on a child you may place. Record these dependencies between children. When every child is done, finish as \`done\`. For a question only a person can answer, finish as \`blocked\` with \`askedUser\` set to {{ownerId}}.
-5. At most two epics are in flight in a project at the same time. A third starts when one of the two is live and has been used. If you hold more, work the two that come first in the order you were given them; on any other, assign nothing, say so in the note and finish as \`blocked\` naming nothing.`;
+5. At most two epics are in flight in a project at the same time. A third starts when one of the two is live and has been used. If you hold more, work the two that come first in the order you were given them; on any other, assign nothing and say so in the note, and finish as step 4 says.`;
 
 // The grilling method is from the "grilling" skill of https://github.com/mattpocock/skills (MIT), written out as text
 // because a seat's session loads no skills and the prompt has to work on any model.
@@ -61,7 +61,7 @@ const askingAPerson = `Asking a person. This applies whenever your result names 
 - End the ask with the one-line reply you expect, for example \`1 yes, 2 none yet\`.
 - Do not ask again for something that is already asked and still open; point to that ask.
 - When you finish naming a person, declare what you ask with \`collab run finish --ask-file FILE\`: a Decision (one to five questions, each with two to four short reply words without a slash, and the one you suggest) or Your hands (the steps, and the one word that says they are done). For example \`{"kind": "decision", "questions": [{"question": "Turn on the new page for everyone?", "options": ["go", "hold"], "suggested": "go"}]}\` or \`{"kind": "hands", "steps": "1. Open Settings. 2. Turn on Invoices.", "doneWord": "done"}\`.
-- First run \`collab --version\`: if it is below 0.17.0, or \`collab run finish\` refuses \`--ask-file\` as an unknown flag, finish without \`--ask-file\`, exactly as before.`;
+- If \`collab run finish\` refuses \`--ask-file\` as an unknown flag, your CLI is older than 0.17.0: finish again without \`--ask-file\`, exactly as before.`;
 
 /**
  * The longest text each instruction layer may hold, counted after trimming. The platform layer is the role's prompt with

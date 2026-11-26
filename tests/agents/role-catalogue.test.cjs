@@ -192,7 +192,9 @@ test('the shared part keeps its asking rules and says how a seat declares a stop
   assert.ok(examples[0].questions[0].options.every(option => option.length <= 40 && !option.includes('/')));
   assert.ok(examples[1].steps && examples[1].doneWord);
   // 2. A seat whose CLI lacks the option finishes as before.
-  assert.match(shared, /First run `collab --version`: if it is below 0\.17\.0, or `collab run finish` refuses `--ask-file` as an unknown flag, finish without `--ask-file`, exactly as before\./);
+  assert.match(shared, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0: finish again without `--ask-file`, exactly as before\./);
+  // A seat is never told to read the whole command schema to learn its version.
+  assert.doesNotMatch(shared, /collab (--version|schema|--help)/);
   // 3. Agreed work goes on; a real go or no-go is a Decision with go and hold.
   assert.match(shared, /Work that is already agreed goes on without asking\. Never stop to ask a person whether to continue\./);
   assert.match(shared, /go or no-go is a Decision with the reply words `go` and `hold`/);
@@ -209,7 +211,7 @@ test('only the lead is told to keep at most two epics in flight (CLB-1227)', () 
     const own = role.platformPrompt.slice(0, -sharedPart(role.platformPrompt).length);
     if (role.id !== 'lead') { assert.doesNotMatch(role.platformPrompt, /two epics/, role.id); continue; }
     assert.match(own, /At most two epics are in flight in a project at the same time\. A third starts when one of the two is live and has been used\./);
-    assert.match(own, /work the two that come first in the order you were given them; on any other, assign nothing, say so in the note and finish as `blocked` naming nothing/);
+    assert.match(own, /work the two that come first in the order you were given them; on any other, assign nothing and say so in the note, and finish as step 4 says\./);
   }
 });
 
@@ -217,7 +219,7 @@ test('a part that names --ask-file also says what a seat with an older CLI does 
   const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
   const check = (id, prompt) => {
     for (const part of prompt.split('\n\n')) {
-      if (part.includes('--ask-file')) assert.match(part, /`collab --version`: if it is below 0\.17\.0, or `collab run finish` refuses `--ask-file` as an unknown flag, finish without `--ask-file`/, id);
+      if (part.includes('--ask-file')) assert.match(part, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0: finish again without `--ask-file`/, id);
     }
   };
   for (const role of ROLE_CATALOGUE.roles) check(role.id, role.platformPrompt);
