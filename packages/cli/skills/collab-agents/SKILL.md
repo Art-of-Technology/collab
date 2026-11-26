@@ -83,6 +83,12 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
    - `--next-step 'ONE LINE'`: the first thing to do next. Needed for `in_review` and `blocked`.
    - `--pull-request OWNER/REPO#NUMBER --head-commit FULL_HASH`: when the work has a pull request, with the
      full 40-character commit you left it at (`git rev-parse HEAD`). Leave both out when there is none.
+   - `--ask-file ask.json`: with `--asked-user`, what you ask of the person, as JSON (CLI 0.17.0 and a server
+     from the release after pull request 843). A decision, with 1 to 5 questions and 2 to 4 short reply words each:
+     `{"kind": "decision", "questions": [{"question": "Turn on the new page for everyone?", "options": ["yes", "no"], "suggested": "yes"}]}`.
+     Work for their hands, with the steps and the word they reply when it is done:
+     `{"kind": "hands", "steps": "1. Open Settings.\n2. Select Billing and turn on Invoices.", "doneWord": "done"}`.
+     A wrong one is refused with `missing` naming the place, such as `ask.questions`.
 
    Do not send the state of the pull request (open, approved, merged): it changes after you end.
 
@@ -426,12 +432,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.16.0/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.16.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -453,7 +459,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.16.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -472,7 +478,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.16.0/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.17.0/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup

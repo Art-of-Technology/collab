@@ -42,7 +42,7 @@ function fixture() {
     rolePermission: { findUnique: async ({ where: { workspaceId_role_permission: key } }) => ROWS.find(row => row.workspaceId === key.workspaceId && row.role === key.role && row.permission === key.permission) ?? null },
     workspace: lookups(workspaces),
     project: lookups([project]),
-    agentSeat: lookups([seatRow]),
+    agentSeat: { ...lookups([seatRow]), updateMany: async () => ({ count: 1 }) },
   };
   const prisma = new Proxy({}, { get: (_, model) => model === '$transaction' ? async run => run(prisma) : new Proxy({}, { get: (__, op) => async args => {
     if (/^(create|update|upsert|delete)/.test(op)) writes.push(`${String(model)}.${String(op)}`);
@@ -72,7 +72,6 @@ function fixture() {
     '@/lib/agent-mode': { HandoffError, agentModeSchema: z.any(), agentModeState: async () => ({ mode: 'seats' }), setAgentMode: mutation('setAgentMode', {}) },
     '@/lib/agent-runners': { RUNNER_TOKEN_DAYS: 90, runnerSeats: async () => [], fetchedBy: async () => new Map(), runnerPeopleBelow: async () => new Set() },
     '@/lib/agent-runs': { inboxOf: async () => ({ items: [] }) },
-    '@/lib/workspace-authority': {},
     '@/lib/slug-resolvers': load('src/lib/slug-resolvers.ts', {
       '@/lib/prisma': { prisma }, '@/lib/url-utils': load('src/lib/url-utils.ts'),
     }, globals),

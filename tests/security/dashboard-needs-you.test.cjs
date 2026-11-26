@@ -11,11 +11,13 @@ const now = new Date('2026-11-21T12:00:00Z');
 const date = days => new Date(now.getTime() + days * 86400000);
 const plain = value => JSON.parse(JSON.stringify(value));
 let db, raw, loadNeedsYou;
-let forgeBindings = [];
+const forgeReader = { readForgeBindings: async () => [] };
 
 before(async () => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: ['viewer', 'other', 'seat-user', 'other-seat-user', 'foreign-owner'].map(id => ({ id, name: id })) });
+    // People sign in with an email; a seat's account has none.
+    await prisma.user.createMany({ data: ['viewer', 'other', 'seat-user', 'other-seat-user', 'foreign-owner']
+      .map(id => ({ id, name: id, ...(!id.endsWith('seat-user') && { email: `${id}@example.test` }) })) });
     await prisma.workspace.createMany({ data: [
       { id: 'work', name: 'Work', slug: 'work', ownerId: 'viewer' },
       { id: 'foreign', name: 'Foreign', slug: 'foreign', ownerId: 'foreign-owner' },
@@ -39,12 +41,11 @@ before(async () => {
   ({ loadNeedsYou } = load('src/lib/dashboard/needs-you.ts', {
     'server-only': {}, '@/lib/prisma': { prisma }, '@/lib/permissions': permissions,
     '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
-    '@/lib/forge/reader': { readForgeBindings: async () => forgeBindings },
-  }, { URL, Date }));
+    '@/lib/forge/reader': forgeReader,
+  }, { URL, Date, console }));
 });
 
 beforeEach(async () => {
-  forgeBindings = [];
   await raw.issueActivity.deleteMany();
   await raw.issue.deleteMany();
   await raw.gitConnection.deleteMany();
@@ -58,7 +59,7 @@ const issue = (id, data = {}) => raw.issue.create({ data: {
   assigneeId: 'seat-user', createdAt: date(-60), updatedAt: date(-2), ...data,
 } });
 
-async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finishRunId, ...issueData } = {}) {
+async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finishRunId, ask, ...issueData } = {}) {
   const target = await issue(id, issueData);
   const seatUser = target.projectId === 'dormant' ? 'other-seat-user' : 'seat-user';
   const endedAt = date(days);
@@ -71,7 +72,7 @@ async function waiting(id, { askedUser = 'other', pullRequest, days = -2, finish
   await raw.issueActivity.create({ data: {
     workspaceId: 'work', projectId: target.projectId, itemId: id, action: 'AGENT_RUN_FINISHED',
     userId: seatUser, createdAt: endedAt,
-    details: JSON.stringify({ runId: finishRunId || run.id, askedUser, pullRequest, nextStep: 'Read the result.' }),
+    details: JSON.stringify({ runId: finishRunId || run.id, askedUser, pullRequest, nextStep: 'Read the result.', ask }),
   } });
   return run;
 }
@@ -117,7 +118,7 @@ test('a row is a question only when that comment has reply words; otherwise it w
   const result = await read();
   assert.deepEqual(result.items.map(row => [row.issue.id, row.ask, row.canAct]), [
     ['real-review', 'here', true], ['real-question', 'here', true],
-    ['no-comment', 'none', false], ['note', 'none', false],
+    ['no-comment', 'none', true], ['note', 'none', true],
   ]);
   assert.deepEqual(result.oldestQuestion, { seatName: 'Developer', since: date(-4).toISOString() });
   assert.deepEqual(result.counts, { question: 3, review: 1, failed: 0, due: 0 });
@@ -145,7 +146,8 @@ test('a reply that belongs on another issue names that issue, and only one the v
   }
   const rows = new Map((await read()).items.map(row => [row.issue.id, row]));
   assert.equal(rows.get('visible').ask, 'elsewhere');
-  assert.equal(rows.get('visible').canAct, false);
+  // Continue is a comment on the issue that stopped, wherever the seat wanted the reply.
+  assert.equal(rows.get('visible').canAct, true);
   assert.deepEqual(rows.get('visible').replyOn, { id: 'visible-target', issueKey: 'ADS-52' });
   assert.equal(rows.get('own').ask, 'here');
   assert.equal(rows.get('aside').ask, 'here');
@@ -197,6 +199,66 @@ test('the reply word the seat marked as recommended or suggested is the suggeste
   });
 });
 
+const migration = { question: "Run the migration in tonight's window, or split it into two releases?", options: ['window', 'split'], suggested: 'split' };
+const column = { question: 'Keep the old column for one release?', options: ['keep', 'drop'] };
+const webhook = { kind: 'hands', steps: '1. Open the repository settings.\n2. Add the pull request event to the webhook.', doneWord: 'webhook added' };
+
+test('declared stops: a finish that says what it asks is shown from its fields, and its reply stays on its issue', async () => {
+  await issue('visible-target', { issueKey: 'ADS-52', projectId: 'dormant' });
+  await waiting('one-decision', { days: -5, ask: { kind: 'decision', questions: [migration] } });
+  await waiting('two-decisions', { days: -4, pullRequest: 'team/repo#7', ask: { kind: 'decision', questions: [migration, column] } });
+  await waiting('hands', { days: -3, ask: webhook });
+  await waiting('unsuggested', { days: -2, ask: { kind: 'decision', questions: [column] } });
+  // Nothing is read out of the seat's comment once the finish says what it asks.
+  for (const id of ['one-decision', 'two-decisions', 'hands', 'unsuggested']) await seatComment(id, 'Reply on ADS-52 with `yes` (recommended) or `no`.');
+  const { items, counts } = await read();
+  assert.deepEqual(items.map(row => [row.issue.id, row.kind, row.ask, row.canAct, row.options, row.suggested, row.replyOn]), [
+    ['one-decision', 'question', 'here', true, ['window', 'split'], 'split', null],
+    ['two-decisions', 'review', 'issue', true, [], null, null],
+    ['unsuggested', 'question', 'here', true, ['keep', 'drop'], null, null],
+    ['hands', 'question', 'none', true, [], null, null],
+  ]);
+  // Each row carries the finish it shows, which is what an answer from Home is bound to.
+  assert.deepEqual(items.map(row => row.runId), ['one-decision', 'two-decisions', 'unsuggested', 'hands'].map(id => `run-${id}`));
+  assert.deepEqual(counts, { question: 3, review: 1, failed: 0, due: 0 });
+  const questions = Object.fromEntries(items.map(row => [row.issue.id, row.question]));
+  assert.deepEqual(questions, {
+    'one-decision': migration.question, unsuggested: column.question,
+    'two-decisions': `1. ${migration.question}\nReply words: window, split. Suggested: split.\n\n2. ${column.question}\nReply words: keep, drop.`,
+    hands: `${webhook.steps}\n\nWhen it is done, reply: webhook added`,
+  });
+  assert.ok(!JSON.stringify(items).includes('ADS-52'));
+});
+
+test('declared stops: what a finish asks is shown only to a viewer who may read its issue', async () => {
+  const ask = { kind: 'decision', questions: [migration] };
+  await waiting('unreadable-status', { statusId: 'foreign-status', ask });
+  await waiting('trashed', { deletedAt: date(-1), ask: webhook });
+  await waiting('wrong-workspace', { workspaceId: 'foreign', ask });
+  await waiting('readable', { ask });
+  const result = await read();
+  assert.deepEqual(result.items.map(row => [row.issue.id, row.question, row.options]), [['readable', migration.question, ['window', 'split']]]);
+  assert.deepEqual(result.counts, { question: 1, review: 0, failed: 0, due: 0 });
+  assert.ok(!JSON.stringify(result).includes('webhook'));
+  // Not a member of the workspace, and a member who may not view issues: neither is given a row.
+  assert.deepEqual(plain(await loadNeedsYou({ actorId: 'foreign-owner', workspaceId: 'work', scope: 'all', now })), { kind: 'denied' });
+  await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
+  try {
+    assert.deepEqual(plain(await loadNeedsYou({ actorId: 'other', workspaceId: 'work', scope: 'all', now })), { kind: 'denied' });
+  } finally {
+    await raw.workspaceMember.delete({ where: { userId_workspaceId: { userId: 'other', workspaceId: 'work' } } });
+  }
+});
+
+test('declared stops: a finish without ask, or with one that was not checked, is read from the comment as before', async () => {
+  await waiting('legacy');
+  await waiting('unchecked', { ask: { kind: 'decision', questions: [{ question: { html: '<b>Now?</b>' }, options: 'yes' }] } });
+  await waiting('unknown-kind', { ask: { kind: 'status', steps: 'Nothing new.' } });
+  for (const id of ['legacy', 'unchecked', 'unknown-kind']) await seatComment(id, 'Reply `ship` (recommended) or `hold`.');
+  assert.deepEqual((await read()).items.map(row => [row.issue.id, row.ask, row.question, row.options, row.suggested]),
+    ['legacy', 'unchecked', 'unknown-kind'].map(id => [id, 'here', 'Reply `ship` (recommended) or `hold`.', ['ship', 'hold'], 'ship']));
+});
+
 function failed(id, { assigneeId, leaseUntil = date(-1), state = 'running', ...data } = {}) {
   return issue(id, { assigneeId, ...data, agentRuns: { create: {
     id: `run-${id}`, workspaceId: 'work', userId: 'other-seat-user', seatId: 'other-seat',
@@ -223,6 +285,37 @@ test('a question leaves the list once someone other than the seat has commented'
   const result = await read();
   assert.deepEqual(result.items, []);
   assert.deepEqual(result.waitingSeats, []);
+});
+
+test("declared stops: an answer written after the seat's question clears the row, also when it came before the finish", async () => {
+  // Each run started at date(-2.5) and finished at date(-2).
+  const says = (issueId, authorId, days, content) => raw.issueComment.create({ data: { issueId, authorId, content, createdAt: date(days) } });
+  const question = 'Run the migration in tonight\'s window, or split it? Reply `window` or `split`.';
+  for (const id of ['early', 'before', 'between', 'by-seat', 'silent', 'noted']) await waiting(id);
+  await says('early', 'seat-user', -2.2, question);
+  await says('early', 'other', -2.1, 'split');
+  // Before the finish only a person answers: what another seat wrote then leaves the question with the person.
+  await says('by-seat', 'seat-user', -2.2, question);
+  await says('by-seat', 'other-seat-user', -2.1, 'The review of this change passed.');
+  // Written before the seat's question, also between two of its comments: not an answer to it.
+  await says('before', 'other', -2.3, 'Is the backup done?');
+  await says('before', 'seat-user', -2.2, question);
+  await says('between', 'seat-user', -2.4, 'The backup is done.');
+  await says('between', 'other', -2.3, 'Thanks.');
+  await says('between', 'seat-user', -2.2, question);
+  // The seat wrote nothing in its run, only before it: the finish is the boundary, as it was.
+  await says('silent', 'seat-user', -3, 'Picked this up.');
+  await says('silent', 'other', -2.1, 'Any news?');
+  // What the seat wrote after the finish moves nothing: the answer came after its last comment of the run.
+  await says('noted', 'seat-user', -2.2, question);
+  await says('noted', 'other', -2.1, 'window');
+  await says('noted', 'seat-user', -1, 'Thanks, I will take it from here.');
+  const result = await read();
+  assert.deepEqual(result.items.map(row => row.issue.id), ['before', 'between', 'by-seat', 'silent']);
+  assert.deepEqual(result.counts, { question: 4, review: 0, failed: 0, due: 0 });
+  // After the finish any comment but the seat's own clears the row, as it always did.
+  await says('by-seat', 'other-seat-user', -1, 'The review request is done.');
+  assert.deepEqual((await read()).items.map(row => row.issue.id), ['before', 'between', 'silent']);
 });
 
 test('a question of an issue that was reassigned since the run is not listed', async () => {
@@ -308,7 +401,24 @@ test('a due issue of a dormant project is not listed', async () => {
   assert.deepEqual((await read({ scope: 'mine' })).items.map(item => item.issue.id), ['dormant-due']);
 });
 
-test('canAct follows the permissions the comment and clear routes check', async () => {
+test('an unreadable Forge configuration preserves rows and counts while disabling seat replies', async t => {
+  const diagnostic = t.mock.method(console, 'error', () => {});
+  t.mock.method(forgeReader, 'readForgeBindings', async () => { throw new Error('Invalid project connection configuration'); });
+  await waiting('hands', { ask: webhook });
+  await waiting('legacy-review', { pullRequest: 'team/repo#7' });
+  await waiting('decision', { ask: { kind: 'decision', questions: [migration] } });
+  await failed('lost-run');
+  await issue('due-item', { assigneeId: 'viewer', dueDate: date(1) });
+
+  const { items, counts } = await read();
+  assert.deepEqual(diagnostic.mock.calls.map(call => [...call.arguments]), [['Workspace Needs you could not read Forge bindings']]);
+  assert.deepEqual(counts, { question: 2, review: 1, failed: 1, due: 1 });
+  assert.deepEqual(Object.fromEntries(items.map(row => [row.issue.id, row.canAct])), {
+    hands: false, 'legacy-review': false, decision: false, 'lost-run': true, 'due-item': false,
+  });
+});
+
+test('canAct follows the permissions the comment and clear routes check', async t => {
   await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
   const grant = permission => raw.rolePermission.create({ data: { workspaceId: 'work', role: 'VIEWER', permission } });
   await grant('VIEW_TASKS');
@@ -317,20 +427,21 @@ test('canAct follows the permissions the comment and clear routes check', async 
   await waiting('forge-question', { projectId: 'dormant', assigneeId: 'other-seat-user' });
   await seatComment('forge-question', 'Reply `yes`.', { authorId: 'other-seat-user' });
   await waiting('review', { pullRequest: 'team/repo#7' });
+  await waiting('forge-note', { projectId: 'dormant', assigneeId: 'other-seat-user' });
   await failed('lost-run');
   await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
-  forgeBindings = [{ workspaceId: 'work', projectId: 'dormant' }];
+  t.mock.method(forgeReader, 'readForgeBindings', async () => [{ workspaceId: 'work', projectId: 'dormant' }]);
 
   const panel = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx', {
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { useRouter: () => ({}) },
   }).default;
-  // The browser comment route accepts issue readers on legacy projects. Clearing also needs ASSIGN_TASK.
+  // The browser comment route accepts issue readers on legacy projects, for an answer and for Continue. Clearing also needs ASSIGN_TASK.
   for (const canAssign of [false, true]) {
     if (canAssign) await grant('ASSIGN_TASK');
     const data = await read({ actorId: 'other' });
     assert.deepEqual(Object.fromEntries(data.items.map(row => [row.issue.id, row.canAct])), {
-      'legacy-question': true, 'forge-question': false, review: false, 'lost-run': canAssign, 'due-item': false,
+      'legacy-question': true, 'forge-question': false, review: true, 'forge-note': false, 'lost-run': canAssign, 'due-item': false,
     });
 
     const document = JSDOM.fragment(renderToStaticMarkup(React.createElement(panel, {
@@ -342,9 +453,10 @@ test('canAct follows the permissions the comment and clear routes check', async 
     ]));
     const openIssue = [['a', 'Open issue']];
     assert.deepEqual(controls, {
-      'legacy-question': [['button', 'Answer']],
+      'legacy-question': [['button', 'Answer'], ['button', 'Continue']],
       'forge-question': [['a', 'Open issue'], ['button', 'Show details']],
-      review: [['a', 'Open issue'], ['button', 'Show details']],
+      review: [['a', 'Open issue'], ['button', 'Show details'], ['button', 'Continue']],
+      'forge-note': [['a', 'Open issue'], ['button', 'Show details']],
       'lost-run': canAssign ? [['button', 'Session has stopped: clear run']] : openIssue,
       'due-item': openIssue,
     });
@@ -359,7 +471,7 @@ test('canAct follows the permissions the comment and clear routes check', async 
     id: 'question:legacy-question', kind: 'question', since: date(-2).toISOString(),
     issue: { id: 'legacy-question', issueKey: 'LEGACY-QUESTION', title: 'legacy-question',
       project: { id: 'project', slug: 'release', name: 'Release', color: null } },
-    seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: null, canAct: true,
+    seat: { id: 'owned-seat', name: 'Developer' }, text: 'Read the result.', pullRequestUrl: null, runId: 'run-legacy-question', canAct: true,
     question: 'Reply `yes`.', ask: 'here', replyOn: null, options: ['yes'], suggested: null,
   });
 });

@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { LEGACY_FINAL_STATUSES } from '@/constants/project-statuses';
+import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
 import { readForgeBindings } from '@/lib/forge/reader';
 import { repositoryAccessWhere } from '@/lib/github/access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
@@ -27,14 +27,24 @@ const destinationKey = new RegExp(
   `^(?:\`?(${issueKeyPattern})\\b|\\[[^\\]\\r\\n]*\\]\\([^\\s)]*/(${issueKeyPattern})\\b[^\\s)]*\\))`, 'i',
 );
 
-type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null };
+/** What a finish says it asks the person (`askOf` in src/lib/agent-runs.ts). */
+type Ask = { kind: 'decision'; questions: Array<{ question: string; options: string[]; suggested?: string }> }
+  | { kind: 'hands'; steps: string; doneWord: string };
+type ExitFacts = { askedUser: string; pullRequest: string | null; nextStep: string | null; ask: Ask | null };
 type Repository = { provider: string; baseUrl: string; repositoryPath: string };
 
 function readFinish(details: string | null) {
   try {
     const facts = JSON.parse(details ?? 'null');
     if (typeof facts?.runId !== 'string' || typeof facts.askedUser !== 'string' || !facts.askedUser) return null;
+    const { ask } = facts;
+    // The finish checked it. One written any other way is not shown: the row falls back to the seat's comment.
+    const declared = ask?.kind === 'hands' ? typeof ask.steps === 'string' && typeof ask.doneWord === 'string'
+      : ask?.kind === 'decision' && Array.isArray(ask.questions) && ask.questions.length > 0 && ask.questions.every((item: Record<string, unknown> | null) =>
+        typeof item?.question === 'string' && Array.isArray(item.options) && item.options.every(option => typeof option === 'string')
+        && (item.suggested === undefined || typeof item.suggested === 'string'));
     return {
+      ask: declared ? ask as Ask : null,
       runId: facts.runId as string,
       askedUser: facts.askedUser as string,
       pullRequest: typeof facts.pullRequest === 'string' && facts.pullRequest ? facts.pullRequest as string : null,
@@ -226,8 +236,8 @@ export async function loadNeedsYou({
 
     for (const { id, issueKey, title, project, assigneeId, createdAt, dueDate, status, statusValue, projectStatus, helpers, agentRuns } of issues) {
       const issue = { id, issueKey, title, project };
-      const legacyDone = LEGACY_FINAL_STATUSES.has((statusValue?.trim() || status?.trim() || '').toLowerCase());
-      if (!(projectStatus?.isFinal ?? legacyDone) && assigneeId === actorId && dueDate && dueDate < dueBefore) {
+      const done = isStopIssueDone({ projectStatus, statusValue, status });
+      if (!(projectStatus?.isFinal ?? done) && assigneeId === actorId && dueDate && dueDate < dueBefore) {
         due.push({ issue, since: dueDate });
       }
       const run = agentRuns[0];
@@ -239,11 +249,9 @@ export async function loadNeedsYou({
         }
       }
 
-      const done = projectStatus?.category != null ? projectStatus.category === 'done' : projectStatus?.isFinal ?? legacyDone;
       if (done || !seat || assigneeId !== seat.userId || run.userId !== seat.userId || run.state !== 'finished'
         || !run.endedAt || (run.outcome !== 'blocked' && run.outcome !== 'in_review')) continue;
-      const helper = helpers.find(row => row.userId === assigneeId);
-      if (run.endedAt >= (helper?.approvedAt ?? helper?.assignedAt ?? createdAt)) {
+      if (run.endedAt >= lastAssigned({ assigneeId, createdAt, helpers })) {
         waiting.set(id, { issue, seat, runId: run.id, startedAt: run.startedAt, endedAt: run.endedAt });
       }
     }
@@ -270,6 +278,7 @@ export async function loadNeedsYou({
 
     const answered = new Set<string>();
     const commentDates = new Map<string, Date>();
+    const during = new Set<string>();
     for (const reply of comments) {
       const current = waiting.get(reply.issueId);
       const latest = reply._max.createdAt;
@@ -277,7 +286,14 @@ export async function loadNeedsYou({
       // Seats write their question during the run; only a later comment by someone else answers it.
       if (reply.authorId === current.seat.userId) commentDates.set(reply.issueId, latest);
       else if (latest > current.endedAt) answered.add(reply.issueId);
+      else during.add(reply.issueId);
     }
+    // Somebody else commented during the run: a person's comment that is later than the seat's last comment of that run
+    // answers it, since the seat asks and finishes a moment later. The seat's inbox and its next run's context read the same rule.
+    for (const issueId of (await earlyAnswers(prisma, [...during].filter(issueId => !answered.has(issueId)).map(issueId => {
+      const { seat, startedAt, endedAt } = waiting.get(issueId)!;
+      return { issueId, seatUserId: seat.userId, startedAt, endedAt };
+    }))).keys()) answered.add(issueId);
     const factsByIssue = new Map<string, ExitFacts>();
     for (const activity of finishes) {
       const current = waiting.get(activity.itemId);
@@ -311,7 +327,8 @@ export async function loadNeedsYou({
     }) : [];
     const commentByIssue = new Map(latestComments.map(comment => [comment.issueId, comment.content]));
     const parsedRows = seatRows.map(row => {
-      const content = commentByIssue.get(row.issue.id);
+      // A finish that says what it asks is not read out of a comment, so it names no other issue for the reply.
+      const content = row.facts.ask ? undefined : commentByIssue.get(row.issue.id);
       const { options, suggested, destinations } = replyDetails(content ?? '');
       return { ...row, content, options, suggested,
         destinations: destinations.filter(key => key !== row.issue.issueKey?.toUpperCase()) };
@@ -326,7 +343,17 @@ export async function loadNeedsYou({
       if (!target.issueKey) continue;
       targetByKey.set(target.issueKey, targetByKey.has(target.issueKey) ? null : { id: target.id, issueKey: target.issueKey });
     }
-    for (const { issue, seat, endedAt, facts, content, options, suggested, destinations } of parsedRows) {
+    for (const { issue, seat, runId, endedAt, facts, content, options, suggested, destinations } of parsedRows) {
+      if (facts.ask) {
+        const declared = facts.ask;
+        // One question is answered here. Several are answered on the issue, and work for the person's hands waits on them.
+        add(facts.pullRequest ? 'review' : 'question', issue, endedAt, { seat: { id: seat.id, name: seat.name }, runId, text: facts.nextStep,
+          ...(declared.kind === 'hands' ? { question: `${declared.steps}\n\nWhen it is done, reply: ${declared.doneWord}` }
+            : declared.questions.length > 1 ? { ask: 'issue', question: declared.questions.map((item, index) =>
+              `${index + 1}. ${item.question}\nReply words: ${item.options.join(', ')}.${item.suggested ? ` Suggested: ${item.suggested}.` : ''}`).join('\n\n') }
+            : { ask: 'here', question: declared.questions[0].question, options: declared.questions[0].options, suggested: declared.questions[0].suggested ?? null }) });
+        continue;
+      }
       const [destination] = destinations;
       const target = destinations.length === 1 ? targetByKey.get(destination) : null;
       const ask = !options.length || (destinations.length > 0 && !target) ? 'none' : target ? 'elsewhere' : 'here';
@@ -334,6 +361,7 @@ export async function loadNeedsYou({
       const visible = (text: string | null) => text && hiddenKeys.length ? redactDestinations(text, hiddenKeys) : text;
       add(facts.pullRequest ? 'review' : 'question', issue, endedAt, {
         seat: { id: seat.id, name: seat.name },
+        runId,
         text: visible(facts.nextStep),
         question: visible(content ?? facts.nextStep)?.slice(0, 2000) ?? null,
         ask,
@@ -368,13 +396,17 @@ export async function loadNeedsYou({
         select: { projectId: true, fullName: true },
       }) : [],
       items.some(item => item.kind === 'failed') ? checkUserPermission(actorId, workspaceId, Permission.ASSIGN_TASK) : null,
-      items.some(item => item.ask === 'here') ? readForgeBindings() : [],
+      items.some(item => item.kind === 'question' || item.kind === 'review') ? readForgeBindings().catch(() => {
+        console.error('Workspace Needs you could not read Forge bindings');
+        return null;
+      }) : null,
     ]);
     const repositories = [...github.map(row => ({ projectId: row.projectId, provider: 'github',
       baseUrl: 'https://github.com', repositoryPath: row.fullName })), ...connections];
-    const forgeProjects = new Set(forgeBindings.map(binding => binding.projectId));
+    const forgeProjects = forgeBindings && new Set(forgeBindings.map(binding => binding.projectId));
     for (const item of items) {
-      if (item.ask === 'here') item.canAct = !forgeProjects.has(item.issue.project.id);
+      // An answer and Continue are both a comment on the issue, which a project worked on the Forge board does not take here.
+      if (forgeProjects && (item.kind === 'question' || item.kind === 'review')) item.canAct = !forgeProjects.has(item.issue.project.id);
       if (item.kind === 'failed') item.canAct = assign?.hasPermission ?? false;
       const reference = factsByIssue.get(item.issue.id)?.pullRequest;
       if (item.kind === 'review' && reference) {

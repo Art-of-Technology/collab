@@ -97,8 +97,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Nobody can change their own role' }, { status: 403 });
     }
 
-    if (!member.user.email && levelOfRole(role) !== 'STANDARD') {
-      return NextResponse.json({ error: 'An agent account cannot be an Owner or an Admin' }, { status: 403 });
+    // An account with no email is an agent token's service account: the Agent tokens page has its own rules for those.
+    if (!member.user.email) {
+      return NextResponse.json({ error: 'Agents are managed on the Agent tokens page' }, { status: 409 });
     }
 
     // The rank rule. A platform admin, member or not, keeps the answer this route gave before it.

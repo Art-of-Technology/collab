@@ -72,13 +72,13 @@ export type NeedsYouItem = {
   since: string; // Run end for questions and reviews, lease or start for failed runs, due date for due issues.
   text: string | null;
   question: string | null;
-  ask: 'here' | 'elsewhere' | 'none';
+  ask: 'here' | 'issue' | 'elsewhere' | 'none'; // 'issue': several questions, answered on the issue's own page.
   replyOn: { id: string; issueKey: string } | null;
   options: string[];
   suggested: string | null;
   pullRequestUrl: string | null;
-  runId: string | null;
-  canAct: boolean;
+  runId: string | null; // The finish a question or review row shows, or the failed run: an action from the row names it.
+  canAct: boolean; // The viewer may comment on a seat row's issue from here (Continue, and an answer when `ask` is 'here'), or clear a failed run.
 };
 
 export type NeedsYouOverview = Panel<{

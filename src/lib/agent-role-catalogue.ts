@@ -21,7 +21,7 @@ const securityWork = `2. Read the change the request names: the commit or pull r
 
 const leadWork = `2. You decide which seat works which issue. Do none of the work yourself. The run context lists the issue's children and, under \`lead\`, the project's seats with their \`userId\`.
 3. Give a child issue to a seat with \`collab issues update <key> --assignee-id <the seat's userId>\`. If Collab refuses one (\`lead_cap\`, \`assign_by_person\`), leave it as it is and say so in the note.
-4. While a child is not done, finish as \`blocked\` and name nothing: Collab brings the issue back when a child is done, blocked or left idle, or when a child of another issue you hold is done and this one has a child you have not placed. When every child is done, finish as \`done\`. For a question only a person can answer, finish as \`blocked\` with \`askedUser\` set to {{ownerId}}.`;
+4. While a child is not done, finish as \`blocked\` and name nothing. Collab brings the epic back when a child is done, blocked or left idle. It also comes back when a child of another epic you hold clears the last blocker on a child you may place. Record these dependencies between children. When every child is done, finish as \`done\`. For a question only a person can answer, finish as \`blocked\` with \`askedUser\` set to {{ownerId}}.`;
 
 // The grilling method is from the "grilling" skill of https://github.com/mattpocock/skills (MIT), written out as text
 // because a seat's session loads no skills and the prompt has to work on any model.
@@ -38,6 +38,16 @@ const documentationWork = `2. Update the docs pages the change touches. Put a pi
 3. Run docs checks and open a pull request. Finish as \`done\` with the link and checks.
 4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
 Never change product code.`;
+
+const changelogWork = `2. Check the release details and draft a changelog entry for what was released, in plain words a customer understands.
+3. Hand the draft to a person in a comment on the request so they can review and publish it. Finish as \`done\` with a link to the draft.
+4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
+Never publish a changelog entry.`;
+
+const architectWork = `2. Read the repository. Write a design note with a diagram and trade-offs. Name the simplest option that works.
+3. Post the full design as a comment on the design request. Link it in your \`done\` result. A person saves it as a project note in Context.
+4. If blocked, finish \`blocked\` with \`blockedBy\` for blockers or \`askedUser\` for people.
+Never change code, commit, push, open a pull request or create a Context note.`;
 
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
 - Look up everything you can first. Ask only for what only that person can decide or do.
@@ -77,6 +87,10 @@ export const ROLE_ENTRIES = [
     requests: [], repository: 'read-only', maxPerProject: null },
   { id: 'docs', name: 'Documentation Manager', platformPrompt: documentationWork, takesOrdinaryIssues: false,
     requests: [{ id: 'docs', label: 'Docs request' }], repository: 'yes', maxPerProject: null },
+  { id: 'changelog', name: 'Changelog Manager', platformPrompt: changelogWork, takesOrdinaryIssues: false,
+    requests: [{ id: 'changelog', label: 'Changelog request' }], repository: 'yes', maxPerProject: null },
+  { id: 'architect', name: 'Software Architect', platformPrompt: architectWork, takesOrdinaryIssues: false,
+    requests: [{ id: 'design', label: 'Design request' }], repository: 'read-only', maxPerProject: null },
 ] as const satisfies readonly RoleEntry[];
 
 export function createRoleCatalogue(entries: readonly RoleEntry[]) {

@@ -58,6 +58,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
+    // An account with no email is an agent token's service account: the Agent tokens page has its own rules for those.
+    if (!member.user.email) {
+      return NextResponse.json({ error: "Agents are managed on the Agent tokens page" }, { status: 409 });
+    }
+
     // The rank rule, which also keeps the workspace owner's membership on. A platform admin keeps the
     // answer this route gave an Admin before it: anyone but the workspace owner.
     const workspace = await prisma.workspace.findUnique({

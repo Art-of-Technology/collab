@@ -132,7 +132,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
 - `movedFrom`: `null`, unless the last run that finished was another account's than the assignee, as when [started work](#started-work) moved. It contains the prior `seat`, recorded `pullRequest` and `headCommit`, known `branch`, and `first` instructions. Follow [the handoff protocol](/docs/agents/protocol#when-the-issue-was-moved-to-you), including its repository check.
-- `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
+- `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments. When that run named a person and a person answered before it finished, after the seat's last comment of that run, it starts with that answer.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
@@ -405,6 +405,15 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
 1. Choose the `outcome`: `done`, `in_review` or `blocked`.
 2. Write the `note` with the four headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. It holds at most 16,000 characters.
 3. For `in_review`, say what the issue waits for: `reviewRequest` (a review request the caller filed, linked to this issue) or `askedUser` (the id of a person in the workspace). For `blocked`: `blockedBy` (an issue linked as blocking this one) or `askedUser`. A security request that finishes `done` names its `verdict` and what was `reviewed`: see [Security review](#security-review).
+
+   With `askedUser`, say what the person is asked in `ask`. It has one of two shapes:
+
+   | `kind` | The person | Fields |
+   | --- | --- | --- |
+   | `decision` | chooses | `questions`: 1 to 5, each with `question`, 2 to 4 `options` and, optionally, the `suggested` one. |
+   | `hands` | does something | `steps` and `doneWord`, the reply that says it is done. |
+
+   The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked).
 4. Give the facts the next session needs as fields, not only inside the note:
 
    | Field | CLI option | What it is | When |
@@ -425,6 +434,9 @@ The reply contains the finished `run` and `statusUnmapped`.
 - The state of the pull request (open, approved, merged) is not a field: it changes after the session ends.
 - A CLI before 0.12.0 cannot send these fields. For `in_review` and `blocked`, the server can take the next step from `## Next`; see the [runner contract](/docs/agents/runner-contract) for the fallback and its limits.
 - `in_review` or `blocked` without what it waits for is refused with `422 exit_state_required` and `missing`. The one exception is a [lead seat](#lead-seat) that waits for its issue's children. So is a review request or a blocking issue that is not linked to the issue or is done already, because it would never bring the issue back. `askedUser` is another person who is an active member, not an agent.
+- `ask` is taken only with `askedUser`: without it the finish is refused with `422 exit_state_required` and `"missing": ["askedUser"]`. A malformed `ask` is refused with `422 exit_note_required`, and `missing` names the place, such as `ask.questions.0.options`.
+- A deployment can require `ask`: with the environment setting `COLLAB_STOP_ASK_REQUIRED=true`, a finish with `askedUser` and no `ask` is refused with `422 exit_state_required` and `"missing": ["ask"]`. The setting is off by default and applies to every workspace of the deployment.
+- The person sees `ask` on their Home page under **Needs you**: one question with a button per reply word, several questions with a link to the issue, or the steps and the done word. Their answer is a comment on the issue. Outside projects connected to Forge, each of these rows also has a **Continue** button for a seat that stopped although it could have gone on. Anyone who may comment on the issue can press it, on a row that names someone else too. It posts the comment "Continue. Go on with the work as agreed." under their name, once, while that stop is still open. A comment by anyone other than the seat after the finish brings the issue back with reason `reply`. So does a person's comment written before the finish and after the seat's last comment of that run; a comment by another seat or agent account in that time does not.
 - The issue moves to a status of the outcome's group. `status` names it and must be an active status of that group. Without `status`, an issue already in the group stays where it is; otherwise it goes to the group's first active status, and for `done` to a final status before the others.
 - When the issue is not already in the outcome's group and the project has no active status in that group, the finish still succeeds, the issue stays where it is and the reply says `"statusUnmapped": true`. The outcome is recorded with the run, and the inbox reads it: an issue finished `in_review` or `blocked` waits as usual, and one finished `done` in a project with no done status is not offered again until it is assigned again.
 - If a person moved the issue to a done status while its run was open and there is no active status for the outcome, it stays in the done status and out of the inbox. Otherwise the finish follows the status rules above.
@@ -520,6 +532,7 @@ The command stops after the preview, and creates nothing, when:
 - a status the switch needs is missing a group (`status_groups`, with `missingGroups`);
 - no runner is connected to the workspace (`no_runner`), because nothing would fetch the seats' tokens;
 - several runners are connected and none of them is yours (`runner_choice`);
+- the only runner connected is someone else's and its person is at or above your own level (`runner_above`): the seats would be theirs, and a seat of someone at or above you is not yours to make;
 - the project is archived (`project_archived`), whose seats keep no fetched token.
 
 The apply answers `setup_blocked` in each of those cases. A runner that is connected but away does not stop it: the seats are created and show no runner until it asks. A run that is open in the project does not stop it either; the switch to seats does not need runs to be closed. Running the command twice creates nothing the second time: the seats are there, the project is already on seats, and an issue that belongs to a seat is no longer a claim to carry.
