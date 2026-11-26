@@ -36,11 +36,11 @@ export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ cat
 export const fromLead = (projectId: string, lead: string, seat: string) => ({ projectId, assigneeId: seat, ...NOT_DONE, helpers: { some: { userId: seat, approvedBy: lead } } });
 /**
  * What counts toward a seat's `LEAD_CAP`: for a project seat, `fromLead` of its project's lead. A seat of the whole
- * workspace (CLB-951) takes work from every project's lead, so its count is the open issues any lead seat that is not
- * retired gave it, whichever projects they are in.
+ * workspace (CLB-951) takes work from every project's lead, so its count is the open issues any lead seat gave it,
+ * whichever projects they are in. A retired lead's still count: retiring a lead leaves the work it placed where it is.
  */
 export const fromLeads = (seat: { userId: string; projectId: string | null }, projectId: string, lead: string) => seat.projectId === null
-  ? { assigneeId: seat.userId, ...NOT_DONE, helpers: { some: { userId: seat.userId, approver: { agentSeat: { role: 'lead', retiredAt: null } } } } }
+  ? { assigneeId: seat.userId, ...NOT_DONE, helpers: { some: { userId: seat.userId, approver: { agentSeat: { role: 'lead' } } } } }
   : fromLead(projectId, lead, seat.userId);
 
 interface SeatInput {
