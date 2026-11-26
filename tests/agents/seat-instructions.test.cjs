@@ -15,7 +15,8 @@ test("a seat's own instructions, on the seat's page", async t => {
     await prisma.user.createMany({ data: [owner, member, stranger, account, other, gone].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w-slug', ownerId: owner } });
     await prisma.workspace.create({ data: { id: 'x', name: 'x', slug: 'x', ownerId: stranger } });
-    await prisma.workspaceMember.createMany({ data: [member, account, other].map(userId => ({ workspaceId: 'w', userId })) });
+    // `other` is an Admin: a seat of a standard member is below it, so it passes the rank rule (CLB-1185).
+    await prisma.workspaceMember.createMany({ data: [member, account, other].map(userId => ({ workspaceId: 'w', userId, ...(userId === other && { role: 'ADMIN' }) })) });
     await prisma.project.create({ data: { id: 'p', workspaceId: 'w', name: 'Collab', slug: 'collab', issuePrefix: 'CLB' } });
     await prisma.project.create({ data: { id: 'q', workspaceId: 'x', name: 'Other', slug: 'other', issuePrefix: 'OTH' } });
   });

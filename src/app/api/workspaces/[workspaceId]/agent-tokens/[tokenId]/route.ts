@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { Permission, checkUserPermission } from '@/lib/permissions';
 import { z } from 'zod';
 import { revokeAgentToken, setAgentWorkspaceAccess } from '@/lib/agent-tokens';
+import { SEAT_RANK_REFUSAL } from '@/lib/workspace-authority';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const changed = await setAgentWorkspaceAccess({ workspaceId, actorId, tokenId, targetWorkspaceId, allowed });
+  if (changed === 'outranked') return NextResponse.json({ error: SEAT_RANK_REFUSAL }, { status: 403, headers: noStore });
   return changed
     ? NextResponse.json({ workspaceId: targetWorkspaceId, allowed }, { headers: noStore })
     : NextResponse.json({ error: 'Agent token or workspace not found' }, { status: 404, headers: noStore });
@@ -42,6 +44,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (!access.hasPermission) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: noStore });
 
   const revoked = await revokeAgentToken({ workspaceId, actorId: session.user.id, tokenId });
+  if (revoked === 'outranked') return NextResponse.json({ error: SEAT_RANK_REFUSAL }, { status: 403, headers: noStore });
   return revoked
     ? NextResponse.json({ revoked: true }, { headers: noStore })
     : NextResponse.json({ error: 'Agent token not found' }, { status: 404, headers: noStore });

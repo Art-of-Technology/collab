@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
 
-const owner = 'cowner00001', person = 'cperson0001', bystander = 'cbystand001';
+const owner = 'cowner00001', person = 'cperson0001', bystander = 'cbystand001', admin = 'cadmin00001';
 // S is the project to set up, N has no status a run could use, E already has a release seat.
 const S = 'cprojects001', N = 'cprojectn001', E = 'cprojecte001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
@@ -13,9 +13,10 @@ after(() => db?.stop());
 
 test('seat setup: one command gives an existing project its seats and switches it', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [owner, person, bystander].map(id => ({ id, name: id, email: `${id}@example.test` })) });
+    await prisma.user.createMany({ data: [owner, person, bystander, admin].map(id => ({ id, name: id, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.createMany({ data: [person, bystander].map(userId => ({ workspaceId: 'w', userId })) });
+    await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: admin, role: 'ADMIN' } });
     for (const [id, name, issuePrefix, names] of [[S, 'Seatlense', 'SE'], [N, 'Nowhere', 'NO', ['backlog', 'shipping']], [E, 'Elsewhere', 'EL']]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name, slug: issuePrefix.toLowerCase(), issuePrefix } });
       await prisma.projectStatus.createMany({ data: (names ?? ['to_do', 'in_progress', 'done']).map((status, order) => ({ id: `${id}-${status}`, projectId: id, name: status,
@@ -37,9 +38,9 @@ test('seat setup: one command gives an existing project its seats and switches i
   const runners = load('src/lib/agent-runners.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': tokens }, { Date });
   const deps = { zod, '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
     '@/lib/agent-tokens': tokens, '@/lib/agent-runners': runners, 'next/server': { NextResponse: Response }, '@/lib/apps/auth-middleware': {},
-    // Only the workspace's owner and `person` may manage its permissions here.
+    // Only the workspace's owner, `person` and the Admin may manage its agents here.
     '@/lib/permissions': { Permission: { MANAGE_AGENTS: 'MANAGE_AGENTS' },
-      checkUserPermission: async userId => ({ hasPermission: [owner, person].includes(userId) }) } };
+      checkUserPermission: async userId => ({ hasPermission: [owner, person, admin].includes(userId) }) } };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
   deps['@/lib/agent-mode'] = load('src/lib/agent-mode.ts', deps, { Date });
   const setup = load('src/lib/agent-seat-setup.ts', deps, { Date });
@@ -139,6 +140,24 @@ test('seat setup: one command gives an existing project its seats and switches i
       [['developer', 'mac', 'held'], ['release', 'mac', 'held'], ['reviewer', 'mac', 'held'], ['security', 'mac', 'held']]);
     assert.equal((await seatRows(S)).length, 4, 'running it twice creates nothing the second time');
     assert.equal(await prisma.appToken.count(), 4);
+  });
+
+  await t.test("the one runner of someone at or above the caller stops it after the preview: the seats would be theirs", async () => {
+    // The runner's person is a standard member, below the Admin: nothing stops it.
+    assert.equal((await preview(asPerson(admin), 'EL')).blocked, null);
+    await prisma.workspaceMember.update({ where: { userId_workspaceId: { userId: person, workspaceId: 'w' } }, data: { role: 'OWNER' } });
+    try {
+      const seen = await preview(asPerson(admin), 'EL');
+      assert.deepEqual([seen.blocked, seen.runner.name], ['runner_above', 'mac']);
+      assert.match(seen.reason, /at or above your own level/);
+      await refuses(setup.setupSeats(asPerson(admin), 'EL', {}), 'setup_blocked', 409);
+      assert.deepEqual(await seatRows(E), []);
+      // The primary owner and the runner's own person are not stopped.
+      assert.equal((await preview(asPerson(owner), 'EL')).blocked, null);
+      assert.equal((await preview(asPerson(person), 'EL')).blocked, null);
+    } finally {
+      await prisma.workspaceMember.update({ where: { userId_workspaceId: { userId: person, workspaceId: 'w' } }, data: { role: 'MEMBER' } });
+    }
   });
 
   await t.test('a seat of a role that already exists is left alone, whoever made it', async () => {

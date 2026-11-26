@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { saveSeatInstructions } from '@/lib/agent-seat-instructions';
+import { SEAT_RANK_REFUSAL } from '@/lib/workspace-authority';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (result.error === 'too_long') return NextResponse.json({ error: result.message }, { status: 400, headers: noStore });
   const [status, error] = ({
     forbidden: [403, 'Forbidden'],
+    outranked: [403, SEAT_RANK_REFUSAL],
     not_found: [404, 'Seat not found'],
   } as const)[result.error];
   return NextResponse.json({ error }, { status, headers: noStore });

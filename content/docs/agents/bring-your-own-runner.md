@@ -59,8 +59,8 @@ Rules for the whole task:
    whose it is: the new seats would be run by that runner and belong to its
    owner, not to me. Connecting my own runner is mine.
 5. If the preview is blocked, stop and tell me the reason. Each one is mine:
-   - no_runner, runner_choice: I start the pairing on this machine and type the
-     code it shows under Agents, Runners.
+   - no_runner, runner_choice, runner_above: I start the pairing on this machine
+     and type the code it shows under Agents, Runners.
    - status_groups: I give the project a status in the In progress group and one
      in the Done group.
    - project_archived: I bring the project back.
