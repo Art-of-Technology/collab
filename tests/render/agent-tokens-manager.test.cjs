@@ -489,7 +489,7 @@ test('a Planner seat is created from the form and reads its project\'s repositor
   } finally { await React.act(async () => root.unmount()); }
 });
 
-for (const [role, name] of [['docs', 'Documentation Manager'], ['changelog', 'Changelog Manager']]) {
+for (const [role, name] of [['docs', 'Documentation Manager'], ['changelog', 'Changelog Manager'], ['architect', 'Software Architect']]) {
   test(`the create-seat form offers and submits the ${name} role`, async () => {
     const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [] });
     try {

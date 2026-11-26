@@ -13,7 +13,7 @@ test('the built-in roles have platform instructions that end with the Asking a p
   const roles = Array.from(ROLE_CATALOGUE.roles);
   assert.deepEqual(roles.map(role => [role.id, role.repository, role.maxPerProject]), [
     ['developer', 'yes', null], ['reviewer', 'yes', null], ['release', 'yes', 1], ['security', 'read-only', null], ['lead', 'none', 1], ['planner', 'read-only', null],
-    ['docs', 'yes', null], ['changelog', 'yes', null],
+    ['docs', 'yes', null], ['changelog', 'yes', null], ['architect', 'read-only', null],
   ]);
   for (const role of roles) {
     assert.ok(role.platformPrompt.endsWith(askingAPerson), role.id);
@@ -100,6 +100,28 @@ test('the Changelog Manager takes changelog requests and gets a short draft-only
   assert.match(platform.text, /plain words a customer understands/i);
   assert.match(platform.text, /hand the draft to a person/i);
   assert.match(platform.text, /never publish/i);
+});
+
+test('the Software Architect takes design requests and gets a short read-only platform prompt', () => {
+  const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+  const role = ROLE_CATALOGUE.getRole('architect');
+  assert.ok(role, 'the catalogue has a Software Architect role');
+  assert.equal(role.name, 'Software Architect');
+  assert.equal(role.repository, 'read-only');
+  assert.deepEqual(Array.from(role.issueKinds), ['design']);
+  assert.deepEqual({ ...ROLE_CATALOGUE.getRequest('design') }, { id: 'design', label: 'Design request', seat: role.id });
+
+  const [platform] = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: null });
+  assert.equal(platform.layer, 'platform');
+  assert.equal(platform.text, role.platformPrompt);
+  assert.ok(platform.text.split(/\s+/).length <= 280);
+  assert.match(platform.text, /read the repository/i);
+  assert.match(platform.text, /design note/i);
+  assert.match(platform.text, /diagram/i);
+  assert.match(platform.text, /trade-offs/i);
+  assert.match(platform.text, /simplest option that works/i);
+  assert.match(platform.text, /project note in Context/i);
+  assert.match(platform.text, /never change code/i);
 });
 
 test('a run\'s instructions are three layers in order, platform, organisation and seat, or four with a custom role\'s, each with a stated maximum length', () => {

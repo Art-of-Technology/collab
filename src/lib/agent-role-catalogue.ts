@@ -44,6 +44,11 @@ const changelogWork = `2. Check the release details and draft a changelog entry 
 4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
 Never publish a changelog entry.`;
 
+const architectWork = `2. Read the repository for the design request. Write a design note with a diagram and the trade-offs. Name the simplest option that works.
+3. Save it as a project note in Context and link it in your \`done\` result.
+4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
+Never change code, commit, push or open a pull request.`;
+
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
 - Look up everything you can first. Ask only for what only that person can decide or do.
 - Do not pass on another seat's or an issue's question as you found it. Say in plain English what is being asked. An issue key or an internal name ("the waiting team", "the release tab") gets a few words saying what it is; if you could not find out what a name stands for, say that.
@@ -84,6 +89,8 @@ export const ROLE_ENTRIES = [
     requests: [{ id: 'docs', label: 'Docs request' }], repository: 'yes', maxPerProject: null },
   { id: 'changelog', name: 'Changelog Manager', platformPrompt: changelogWork, takesOrdinaryIssues: false,
     requests: [{ id: 'changelog', label: 'Changelog request' }], repository: 'yes', maxPerProject: null },
+  { id: 'architect', name: 'Software Architect', platformPrompt: architectWork, takesOrdinaryIssues: false,
+    requests: [{ id: 'design', label: 'Design request' }], repository: 'read-only', maxPerProject: null },
 ] as const satisfies readonly RoleEntry[];
 
 export function createRoleCatalogue(entries: readonly RoleEntry[]) {
