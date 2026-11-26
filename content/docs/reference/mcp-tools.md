@@ -317,6 +317,21 @@ Reads. Scope: `issues:read`.
 
 No arguments of its own.
 
+## seat_request
+
+Ask a seat for work on an issue in your own project. Requires a seat token. Security requests always block the source issue.
+
+Writes. Scope: `issues:write`.
+
+| Argument | Type | Details |
+| --- | --- | --- |
+| `fromIssue` | string | required · An issue ID or key, for example CLB-123 · minimum length: 1 · maximum length: 128 |
+| `role` | string | required · values: developer, review, release, security, docs, changelog, design |
+| `title` | string | required · minimum length: 1 · maximum length: 200 |
+| `body` | string | required · Fill in the workspace Task template. · minimum length: 1 · maximum length: 32000 |
+| `project` | string | Target project ID or issue prefix. Omit to use your own project. · minimum length: 1 · maximum length: 128 |
+| `blocks` | boolean | Make the request block the source issue. |
+
 ## run_context
 
 What a fresh session needs to work an issue, in one read: the issue, the repository to work in, the instructions in three layers to start the session with (platform, organisation, seat, in that order; an empty layer has empty text), the last exit note and its checked facts (pull request, head commit, next step), the comments made since, what blocks it and the requests filed for it.

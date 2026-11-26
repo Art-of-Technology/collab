@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.17.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.17.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.17.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.17.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.17.1 lists `docs`, `changelog` and `design` in `seat request` help. These requests go to the project's Documentation Manager, Changelog Manager and Software Architect seats, respectively.
 
 Version 0.17.0 adds `--ask-file FILE|-` to `run finish`: with `--asked-user`, the file says what the person is asked, as JSON, either a decision (`{"kind":"decision","questions":[{"question":"...","options":["yes","no"],"suggested":"yes"}]}`) or work for their hands (`{"kind":"hands","steps":"...","doneWord":"done"}`), and it goes to the server as `ask`. The CLI checks only that the file is a readable JSON object; the server checks the shape and its refusal lists the places that are wrong, such as `ask.questions`. It needs the server support that is live with the release after pull request 843.
 

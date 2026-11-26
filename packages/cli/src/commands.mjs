@@ -77,7 +77,7 @@ export const commands = {
   }),
   'seat request': command('POST', 'seats/me/requests', { project: string, role: string, title: string, body: string, fromIssue: string, blocks: boolean }, {}, {
     required: ['role', 'title', 'body', 'fromIssue'],
-    description: 'Ask a seat for work on one of your issues: --role developer, review, release or security, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it; a security request always does.',
+    description: 'Ask a seat for work on one of your issues. Use --role developer, review, release, security, docs, changelog or design. Pass the source issue with --from-issue and the filled-in Task template with --body or --body-file. Use --project with an ID or issue prefix to file in another project. Use --blocks true to make your issue wait for the request. A security request always blocks.',
   }),
   'seat setup': command('POST', 'seats/setup/:project', { carryOver: array }, {}, {
     setupPreview: true,

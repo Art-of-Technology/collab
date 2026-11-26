@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { fromJsonSchema } from '@modelcontextprotocol/server';
 import { hasAllScopes, hasAnyScope } from '@/lib/oauth-scopes';
+import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import * as me from '@/app/api/apps/auth/user/me/route';
 import * as userWorkspaces from '@/app/api/apps/auth/user/workspaces/route';
 import * as projects from '@/app/api/apps/auth/projects/route';
@@ -20,6 +21,7 @@ import * as search from '@/app/api/apps/auth/search/route';
 import * as aiContext from '@/app/api/apps/auth/ai-context/route';
 import * as docs from '@/app/api/apps/auth/docs/route';
 import * as seatInbox from '@/app/api/apps/auth/seats/me/inbox/route';
+import * as seatRequests from '@/app/api/apps/auth/seats/me/requests/route';
 import * as runContext from '@/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route';
 import * as live from '@/app/api/apps/auth/live/route';
 
@@ -152,6 +154,13 @@ export const tools: McpTool[] = [
     },
   }),
   tool('seat_inbox', 'The issues assigned to this token\'s account, at most 50, in the order to work them, each with the reason it is offered. A seat gets the issues of its project.', ['issues:read'], 'GET', 'seats/me/inbox', seatInbox.GET),
+  tool('seat_request', 'Ask a seat for work on an issue in your own project. Requires a seat token. Security requests always block the source issue.', ['issues:write'], 'POST', 'seats/me/requests', seatRequests.POST, {
+    fromIssue: issueIdOrKey, role: oneOf(...ROLE_CATALOGUE.requests.map(request => request.id)),
+    title: { type: 'string', minLength: 1, maxLength: 200 },
+    body: { type: 'string', minLength: 1, maxLength: 32_000, description: 'Fill in the workspace Task template.' },
+    project: { ...id, description: 'Target project ID or issue prefix. Omit to use your own project.' },
+    blocks: { ...flag, description: 'Make the request block the source issue.' },
+  }, ['fromIssue', 'role', 'title', 'body']),
   tool('run_context', 'What a fresh session needs to work an issue, in one read: the issue, the repository to work in, the instructions in three layers to start the session with (platform, organisation, seat, in that order; an empty layer has empty text), the last exit note and its checked facts (pull request, head commit, next step), the comments made since, what blocks it and the requests filed for it.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/run-context', runContext.GET, { issueIdOrKey }, ['issueIdOrKey']),
   tool('live_revision', 'The commit of Collab\'s own code that this server runs. With commit, also whether that commit is in it: contains is true, false, or null when it cannot be told.', [], 'GET', 'live', live.GET, {
     commit: { type: 'string', pattern: '^[0-9a-f]{7,40}$', description: 'A commit ID of the Collab repository, 7 to 40 lowercase hex characters' },

@@ -67,7 +67,12 @@ export function cliCommandsPage(table_ = commands) {
 /** The MCP server's tool table, read from the app's own file. Its route handlers are never called here, so they are stand-ins. */
 export function mcpTools() {
   const standIn = new Proxy(function () {}, { get: (_, key) => (key === 'then' ? undefined : standIn), apply: () => standIn });
-  return loadTs(join(repo, 'src/lib/mcp-tools.ts'), name => (name === '@modelcontextprotocol/server' ? { fromJsonSchema: () => null } : standIn));
+  const catalogue = loadTs(join(repo, 'src/lib/agent-role-catalogue.ts'));
+  return loadTs(join(repo, 'src/lib/mcp-tools.ts'), name => {
+    if (name === '@modelcontextprotocol/server') return { fromJsonSchema: () => null };
+    if (name === '@/lib/agent-role-catalogue') return catalogue;
+    return standIn;
+  });
 }
 
 /** The MCP tool reference: one section per tool. `warning` is the sentence the server adds to tools that return member content. */
