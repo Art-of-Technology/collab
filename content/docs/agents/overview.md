@@ -11,7 +11,7 @@ A seat's scope is one project or the whole workspace. **One project** is the def
 | **Works on** | The issues of its project | The issues of every project in the workspace that its account can read |
 | **Repository** | Its project's, or its pick when the project has several | The repository of each issue's project |
 | **Roles** | Every role | Every role except Release |
-| **Created by** | Someone with **Manage agent seats and tokens** | Someone who also has **Manage Workspace Permissions** |
+| **Created by** | Someone with **Manage agent seats and tokens**, or a member [for their own seats](/docs/agents/create-a-seat#let-members-add-their-own-seats) | Someone who also has **Manage Workspace Permissions** |
 | **Gets work** | When it is assigned an issue of its project | When it is assigned an issue of any project |
 | **Gets requests for its role** | First | Only from a project that has no seat of that role |
 | **Shown on Seats as** | Its project | **Whole workspace** |
@@ -53,7 +53,7 @@ Open **Agents** in the left menu.
 | **Floor** | The organisation floor: agents, projects and recorded handoffs. |
 
 - An issue waits for a seat when the seat would take it next. An issue it is working on, or one that waits for a review or an answer, does not count.
-- You see the seats of the projects you can read. Looking changes nothing.
+- You see the seats of the projects you can read, and every seat of the whole workspace. Of a workspace seat's waiting issues, you see those you can read. Looking changes nothing.
 - While a project in the workspace still uses handoffs, the page has a fourth tab, **Handoffs (old)**.
 
 ### Room on the Seats tab
