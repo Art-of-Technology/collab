@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
+import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -74,10 +75,10 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
     },
     select: {
-      id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
+      id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, status: true, statusValue: true, projectStatus: statusSelect,
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
-      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
+      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { id: true, seatId: true, userId: true, outcome: true, startedAt: true, endedAt: true } },
     },
   });
   // A run that finished done leaves the issue to its status, so a reopened issue is offered again. A project with no
@@ -87,7 +88,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     OR: [{ category: 'done' }, { category: null, isFinal: true }] }, select: { projectId: true }, distinct: ['projectId'] }) : []).map(status => status.projectId));
   const candidates = issues.flatMap(issue => {
     const last = issue.agentRuns[0];
-    if (last && !last.endedAt) return [];
+    if ((last && !last.endedAt) || isStopIssueDone(issue)) return [];
     const category = categoryOf(issue.projectStatus);
     // Every path that assigns writes this row and stamps it again on a later assignment.
     const assigned = issue.helpers[0]?.approvedAt ?? issue.helpers[0]?.assignedAt ?? issue.createdAt;
@@ -105,6 +106,9 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
+  // `since` is the end of the last run only when that run still says where the issue stands.
+  const early = await answeredEarly(db, me, candidates.flatMap(({ issue, last, since }) => last?.seatId && last.userId === me && last.endedAt && last.endedAt >= since
+    ? [{ issueId: issue.id, runId: last.id, startedAt: last.startedAt, endedAt: last.endedAt, reply: details.get(issue.id)?.comments[0]?.createdAt }] : []));
 
   // Only a lead waits for children, so nobody else pays for this read.
   const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: waiting }, projectId: seat.projectId }, select: {
@@ -228,11 +232,40 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
 
   return { items: candidates
-    .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
+    .flatMap(candidate => { const reason = reasonFor(candidate) ?? (early.has(candidate.issue.id) ? 'reply' as const : null); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
     .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
       category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
+}
+
+async function runsNamingPerson(db: DB, issueIds: string[]) {
+  const runs = new Map<string, string>();
+  if (!issueIds.length) return runs;
+  const finishes = await db.$queryRaw<{ itemId: string; details: string | null }[]>`SELECT DISTINCT ON ("itemId") "itemId", "details"
+    FROM "BoardItemActivity" WHERE "itemType" = 'ISSUE' AND "action" = 'AGENT_RUN_FINISHED' AND "itemId" = ANY(${issueIds}::text[])
+    ORDER BY "itemId", "createdAt" DESC, "id" DESC`;
+  for (const { itemId, details } of finishes) {
+    try {
+      const facts = JSON.parse(details ?? 'null');
+      if (typeof facts?.askedUser === 'string' && typeof facts.runId === 'string') runs.set(itemId, facts.runId);
+    } catch {
+      continue;
+    }
+  }
+  return runs;
+}
+
+/**
+ * Declared stops: the issues whose stop was answered before its run finished, by the rule of `earlyAnswers`, for a run
+ * that named a person. `reply` is the issue's latest comment by somebody else: one after the finish is a reply already,
+ * so nothing is read unless it came during the run, and then one finish per issue that has such an answer.
+ */
+async function answeredEarly(db: DB, me: string, stops: { issueId: string; runId: string; startedAt: Date; endedAt: Date; reply?: Date }[]) {
+  const during = stops.filter(stop => stop.reply && stop.reply > stop.startedAt && stop.reply <= stop.endedAt);
+  const early = await earlyAnswers(db, during.map(stop => ({ ...stop, seatUserId: me })));
+  const named = await runsNamingPerson(db, [...early.keys()]);
+  return new Set(during.filter(stop => named.get(stop.issueId) === stop.runId).map(stop => stop.issueId));
 }
 
 export type Pushed = { runId: string; pullRequest: string; headCommit: string };
@@ -280,6 +313,8 @@ const finishSchema = z.object({
   verdict: z.enum(['passed', 'failed']).optional(), reviewed: text(200).optional(),
   // Checked in `exitFacts`, so a wrong one is refused like a missing heading, with its name.
   pullRequest: z.string().trim().optional(), headCommit: z.string().trim().optional(), nextStep: z.string().trim().optional(),
+  // Checked in `askOf`, so a wrong one is refused like a wrong fact, with the place it is wrong in.
+  ask: z.unknown(),
   // The shape a managed worker reports (`workerSchema` in src/lib/agent-handoffs.ts), so one reader serves both.
   usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: amount, reservedUSD: amount, estimatedUSD: amount, unknownUSD: amount,
     restarts: z.number().int().min(0).max(100), starts: tally, totalStarts: tally,
@@ -296,6 +331,7 @@ export const runActionSchema = z.discriminatedUnion('event', [
 export const runAnswerSchema = z.object({
   questionId: text(128), decision: z.enum(['approved', 'refused']), text: plainText(4000).transform(value => value.trim()).optional(),
 }).strict();
+export const stopAnswerSchema = z.object({ content: plainText(4000).transform(value => value.trim()) }).strict();
 
 type Question = { id: string; text: string; answer: { decision: 'approved' | 'refused'; text: string | null; userId: string; at: string } | null };
 // The existing JSON column was nullable and had no writer before questions.
@@ -538,6 +574,36 @@ function exitFacts(input: Finish) {
     + `the full 40-character commit it was left at; a run that finishes ${input.outcome === 'done' ? 'in review or blocked' : input.outcome} gives nextStep, the first thing to do next, in one line`, missing);
   return { ...(input.pullRequest && { pullRequest: input.pullRequest, headCommit: input.headCommit }), ...(nextStep && { nextStep }) };
 }
+
+/** A word a person sends back as a comment: short enough for a button, and one word of a choice, not the choice itself. */
+const replyWord = text(40).regex(/^[^\r\n\u2028\u2029/]+$/);
+const askSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('decision'), questions: z.array(z.object({ question: text(2000), options: z.array(replyWord).min(2).max(4), suggested: replyWord.optional() }).strict()
+    .refine(({ options }) => new Set(options).size === options.length, { path: ['options'] })
+    .refine(({ options, suggested }) => suggested === undefined || options.includes(suggested), { path: ['suggested'] })).min(1).max(5) }).strict(),
+  z.object({ kind: z.literal('hands'), steps: text(4000), doneWord: replyWord }).strict(),
+]);
+
+/**
+ * Declared stops: what a finish that names a person asks of them, so Home shows it from fields and not out of a comment.
+ * A decision has its questions, each with the reply words to choose from; work for the person's hands has its steps and
+ * the word that says they are done. It comes only with `askedUser`. A finish that names a person without it is refused
+ * once the deployment sets `COLLAB_STOP_ASK_REQUIRED=true`: set before the seats and the CLI send `ask`, that would
+ * refuse every seat that names a person.
+ */
+function askOf(input: Finish) {
+  if (input.ask === undefined) {
+    if (input.askedUser && process.env.COLLAB_STOP_ASK_REQUIRED === 'true') throw incomplete('exit_state_required', 'A run that names a person says what it asks of them: '
+      + 'ask is a decision with its questions and their reply words, or hands with the steps and the word that says they are done', ['ask']);
+    return undefined;
+  }
+  if (!input.askedUser) throw incomplete('exit_state_required', 'ask is what a person is asked: it comes with askedUser', ['askedUser']);
+  const parsed = askSchema.safeParse(input.ask);
+  if (!parsed.success) throw incomplete('exit_note_required', 'ask is incomplete: its kind is decision, with 1 to 5 questions of at most 2,000 characters, each with 2 to 4 different options '
+    + 'and at most one of them as suggested, or hands, with steps of at most 4,000 characters and doneWord; an option and doneWord have at most 40 characters, no line break and no slash',
+  [...new Set(parsed.error.issues.map(issue => ['ask', ...issue.path].join('.')))]);
+  return parsed.data;
+}
 const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, statusId: true, agentRequestRole: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
 
 /**
@@ -559,6 +625,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
   const stray = given.filter(name => !waitsFor.includes(name));
   if (stray.length) throw new HandoffError('invalid_request', `A run that finishes ${input.outcome} does not take ${stray.join(' or ')}`);
   if (input.outcome !== 'done' && (input.verdict || input.reviewed)) throw new HandoffError('invalid_request', 'Only a security request that finishes done takes a verdict');
+  const ask = askOf(input);
   // A lead waits for the children of its issue: blocked with nothing named. Whether one of them is open is decided with the finish, below.
   const forChildren = input.outcome === 'blocked' && !given.length && run.seat?.role === 'lead';
   if (waitsFor.length && !given.length && !forChildren) throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}`, waitsFor);
@@ -627,7 +694,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
 
     // Every issue here is in one project: when it has no status for the outcome, the first issue already says so.
     const unmapped = await settle(tx, me, workspaceId, issue, input, now);
-    await entry(issue, 'AGENT_RUN_FINISHED', { runId: run.id, ...waits });
+    await entry(issue, 'AGENT_RUN_FINISHED', { runId: run.id, ...waits, ...(ask && { ask }) });
     if (security) {
       // The issue the request was filed for is read from what filing wrote, never from the request's links: a link
       // somebody added later would put a verdict on an issue nobody reviewed. A request that asked for a review of
@@ -707,7 +774,7 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
 export async function runContext(context: Caller, issueIdOrKey: string) {
   const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
-    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
+    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
     sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
     targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
     // shortcut: the first 100 children, oldest first; page them when an epic outgrows that.
@@ -747,7 +814,11 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const elsewhere = !!pushed && (matches.length !== 1 || matches[0].id !== repository?.id);
   const branch = !elsewhere && repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { id: matches[0].id, projectId: issue.projectId, isActive: true } },
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
-  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
+  // A run that named a person may have been answered before it finished (`earlyAnswers`): the session that answer brings
+  // back finds it here, with what was said from then on. The seat itself wrote nothing between that answer and its finish.
+  const answer = last?.seat && last.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
+    ? (await earlyAnswers(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
@@ -864,4 +935,33 @@ export async function clearRun(userId: string, issueIdOrKey: string, runId: stri
       projectId: issue.projectId, details: JSON.stringify({ runId }) } });
     return { run: { ...await tx.agentRun.findFirstOrThrow({ where: { id: runId }, select: RUN }), ask: null } };
   });
+}
+
+/**
+ * Declared stops: a person's answer from Home is a comment on the issue, posted only while the stop its row showed is
+ * still open. Open: that run is the issue's latest, a seat's, and finished in review or blocked naming a person; the
+ * seat still holds the issue and was not given it again since, the issue is not done, nobody but the seat has commented
+ * since the run ended, and no person answered before it ended (`earlyAnswers`). Anyone who may read the issue may answer,
+ * as with a comment on its page. It is checked and written under the issue's lock, which a checkout and a second answer
+ * take too: two presses post one comment, and a press on an old row posts none.
+ */
+export async function answerStop(userId: string, issueIdOrKey: string, runId: string, input: z.infer<typeof stopAnswerSchema>) {
+  const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
+  if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
+  await forgeGuard(issue.id);
+  const comment = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${issue.id} FOR UPDATE`;
+    const current = await tx.issue.findFirst({ where: { id: issue.id, ...issueReadAccessWhere(userId) }, select: { assigneeId: true, createdAt: true, status: true, statusValue: true, projectStatus: statusSelect,
+      helpers: { select: { userId: true, approvedAt: true, assignedAt: true } },
+      agentRuns: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { id: true, userId: true, seatId: true, state: true, outcome: true, startedAt: true, endedAt: true } } } });
+    const run = current?.agentRuns[0];
+    if (!current || run?.id !== runId || !run.seatId || !run.endedAt || run.state !== 'finished' || run.outcome === 'done' || run.userId !== current.assigneeId || isStopIssueDone(current)
+      || run.endedAt < lastAssigned(current) || (await runsNamingPerson(tx, [issue.id])).get(issue.id) !== runId
+      || (await earlyAnswers(tx, [{ issueId: issue.id, seatUserId: run.userId, startedAt: run.startedAt, endedAt: run.endedAt }])).size
+      || await tx.issueComment.count({ where: { issueId: issue.id, authorId: { not: run.userId }, createdAt: { gt: run.endedAt } } })) {
+      throw new HandoffError('stop_closed', 'Nothing was posted: this is no longer waiting for an answer. Someone has answered it, the issue is done, or its seat has started on it again', 409);
+    }
+    return tx.issueComment.create({ data: { issueId: issue.id, authorId: userId, content: input.content }, select: { id: true, issueId: true, authorId: true, content: true, createdAt: true } });
+  });
+  return { workspaceId: issue.workspaceId, comment };
 }

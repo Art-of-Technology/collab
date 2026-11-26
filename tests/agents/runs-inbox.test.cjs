@@ -28,7 +28,8 @@ after(() => db?.stop());
 
 test('seat inbox: only what was assigned, in a fixed order, each with its reason', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
+    // People sign in with an email; a seat's account has none.
+    await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
     await prisma.workspace.create({ data: { id: 'w2', name: 'w2', slug: 'w2', ownerId: person } });
@@ -64,9 +65,10 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
   const middleware = load('src/lib/apps/auth-middleware.ts', { crypto: require('node:crypto'), 'next/server': response,
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
+  const runs = load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date });
   const route = load('src/app/api/apps/auth/seats/me/inbox/route.ts', { '@/lib/apps/auth-middleware': middleware,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
-    '@/lib/agent-runs': load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date }) }, globals);
+    '@/lib/agent-runs': runs }, globals);
 
   const seat = async (name, projectId) => {
     const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId, role: 'developer', ownerId: person, name, expiresInDays: 30 });
@@ -273,6 +275,78 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     const waiting = await issue(devA, { assigned: 90 });
     await run(waiting, devA, { outcome: 'blocked' });
     assert.equal(await offered(devA.token, waiting), undefined);
+    await clear();
+  });
+
+  await t.test("declared stops: an answer written after the seat's question brings the issue back, also when it came before the finish", async () => {
+    /** A run that finished naming the person, as its finish records it. It started 90 minutes ago and ended 60 minutes ago. */
+    const stop = async (target, outcome = 'blocked') => {
+      const made = await run(target, devA, { outcome });
+      await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: target.projectId, itemType: 'ISSUE', itemId: target.id, userId: devA.userId,
+        action: 'AGENT_RUN_FINISHED', details: JSON.stringify({ runId: made.id, outcome, askedUser: person }) } });
+    };
+    const early = await issue(devA);
+    // Only the last run's finish is read: what an earlier run left on the timeline, readable or not, says nothing here.
+    await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: A, itemType: 'ISSUE', itemId: early.id, userId: devA.userId,
+      action: 'AGENT_RUN_FINISHED', details: '{"runId":"an earlier run","askedUser":', createdAt: ago(200) } });
+    await stop(early);
+    await comment(early, devA.userId, 70);
+    await comment(early, person, 65);
+    const inboxReadCount = async () => {
+      let reads = 0;
+      const counted = prisma.$extends({ query: { $allOperations({ args, query }) { reads++; return query(args); } } });
+      await runs.inboxOf('w', devA.userId, devA, counted);
+      return reads;
+    };
+    const singleIssueReads = await inboxReadCount();
+    // Before the finish only a person answers: what another seat wrote then does not bring the issue back.
+    const bySeat = await issue(devA);
+    await stop(bySeat);
+    await comment(bySeat, devA.userId, 70);
+    await comment(bySeat, otherA.userId, 65);
+    // A finish whose record cannot be read names nobody: no early answer, and the rest of the inbox is still read.
+    const unreadable = await issue(devA);
+    await run(unreadable, devA, { outcome: 'blocked' });
+    await raw.issueActivity.create({ data: { workspaceId: 'w', projectId: A, itemType: 'ISSUE', itemId: unreadable.id, userId: devA.userId,
+      action: 'AGENT_RUN_FINISHED', details: '{"runId":' } });
+    await comment(unreadable, devA.userId, 70);
+    await comment(unreadable, person, 65);
+    // The seat's last comment of the run is the question: an earlier one is a progress note.
+    const review = await issue(devA);
+    await stop(review, 'in_review');
+    await comment(review, devA.userId, 80);
+    await comment(review, devA.userId, 70);
+    await comment(review, person, 61);
+    // Written before the seat's question, also between two of its comments: not an answer to it.
+    const before = await issue(devA);
+    await stop(before);
+    await comment(before, devA.userId, 80);
+    await comment(before, person, 75);
+    await comment(before, devA.userId, 70);
+    // The seat wrote nothing in its run, only before it: the finish is the boundary, as it was.
+    const silent = await issue(devA);
+    await stop(silent);
+    await comment(silent, devA.userId, 100);
+    await comment(silent, person, 65);
+    // A run that named no person waits for what it named.
+    const unnamed = await issue(devA);
+    await run(unnamed, devA, { outcome: 'blocked' });
+    await comment(unnamed, devA.userId, 70);
+    await comment(unnamed, person, 65);
+    // What the seat wrote after the finish moves nothing: the answer came after its last comment of the run.
+    const noted = await issue(devA);
+    await stop(noted);
+    await comment(noted, devA.userId, 70);
+    await comment(noted, person, 65);
+    await comment(noted, devA.userId, 30);
+    assert.equal(await inboxReadCount(), singleIssueReads, 'additional early answers require no additional database calls');
+    assert.deepEqual((await inbox(devA.token)).map(item => [item.issueKey, item.reason]), [[review.issueKey, 'reply'], [early.issueKey, 'reply'], [noted.issueKey, 'reply']]);
+
+    // A comment after the finish is a reply, as it was, whoever but the seat wrote it.
+    await comment(before, person, 5);
+    assert.equal((await offered(devA.token, before)).reason, 'reply');
+    await comment(bySeat, otherA.userId, 5);
+    assert.equal((await offered(devA.token, bySeat)).reason, 'reply');
     await clear();
   });
 

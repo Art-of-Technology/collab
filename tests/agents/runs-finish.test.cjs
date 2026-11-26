@@ -62,7 +62,9 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }),
     '@/lib/permissions': load('src/lib/permissions.ts', { './prisma': { prisma } }, { console }),
     '@/lib/session': { getCurrentUser: async () => session && { id: session } }, '@/lib/agent-tokens': tokens };
-  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
+  // The deployment's settings, as a finish reads them: none is set until a test sets one.
+  const env = {};
+  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date, process: { env } });
   const inboxRoute = load('src/app/api/apps/auth/seats/me/inbox/route.ts', deps, globals);
   const runs = load('src/app/api/apps/auth/runs/route.ts', deps, globals);
   const one = load('src/app/api/apps/auth/runs/[id]/route.ts', deps, globals);
@@ -248,6 +250,75 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const done = await started(devA);
     assert.equal((await finish(devA, done.run.id, { outcome: 'done', note: bare[0] }))[0], 200);
     assert.deepEqual(await facts(done.target), { pullRequest: null, headCommit: null, nextStep: null });
+  });
+
+  await t.test('declared stops: a finish that names a person may say what it asks, a decision or work for their hands', async () => {
+    const { target, run } = await started(devA);
+    const decision = { kind: 'decision', questions: [{ question: ' The migration rewrites the orders table, about four minutes with the app stopped. Run it in tonight\'s window, or split it into two releases? ',
+      options: ['window', ' split '], suggested: 'split' }] };
+    const hands = { kind: 'hands', steps: '1. Open the repository settings.\n2. Under Webhooks, add the pull request event.\n3. Save.', doneWord: 'webhook added' };
+    const [question] = decision.questions;
+    const asks = body => finish(devA, run.id, { outcome: 'blocked', askedUser: person, ...body });
+    // Only a finish that names a person asks one.
+    assert.deepEqual((await refused(finish(devA, run.id, { outcome: 'in_review', ask: decision }), 422, 'exit_state_required')).missing, ['askedUser']);
+    assert.deepEqual((await refused(finish(devA, run.id, { outcome: 'done', ask: hands }), 422, 'exit_state_required')).missing, ['askedUser']);
+    // A wrong one is refused like a wrong exit fact, and says where it is wrong.
+    const one = (changed, more = []) => ({ kind: 'decision', questions: [{ ...question, ...changed }, ...more] });
+    for (const [ask, missing] of [
+      ['Run it tonight or split it? Reply `window` or `split`.', ['ask']],
+      [{ kind: 'status', text: 'Nothing new since yesterday.' }, ['ask.kind']],
+      [{ ...decision, replyOn: 'K-1' }, ['ask']],
+      [{ kind: 'decision', questions: [] }, ['ask.questions']],
+      [one({}, Array(5).fill(question)), ['ask.questions']],
+      [one({ question: 'x'.repeat(2001) }), ['ask.questions.0.question']],
+      [one({ question: '  ' }), ['ask.questions.0.question']],
+      [one({ options: ['window'], suggested: undefined }), ['ask.questions.0.options']],
+      [one({ options: ['window', 'split', 'later', 'never', 'ask again'], suggested: undefined }), ['ask.questions.0.options']],
+      [one({ options: ['window', 'window'], suggested: undefined }), ['ask.questions.0.options']],
+      [one({ options: ['window', 'x'.repeat(41)], suggested: undefined }), ['ask.questions.0.options.1']],
+      [one({ options: ['window/split', 'later'], suggested: undefined }), ['ask.questions.0.options.0']],
+      [one({ options: ['window', 'split\nlater'], suggested: undefined }), ['ask.questions.0.options.1']],
+      [one({ suggested: 'later' }), ['ask.questions.0.suggested']],
+      [one({}, [{ question: 'And the backfill?', options: ['now'] }]), ['ask.questions.1.options']],
+      [{ kind: 'hands', steps: hands.steps }, ['ask.doneWord']],
+      [{ ...hands, steps: 'x'.repeat(4001) }, ['ask.steps']],
+      [{ ...hands, doneWord: 'done/not done' }, ['ask.doneWord']],
+    ]) assert.deepEqual((await refused(asks({ ask }), 422, 'exit_note_required')).missing, missing, JSON.stringify(ask).slice(0, 80));
+    await untouched(target, run);
+
+    // It is kept with the finish's other checked facts, trimmed, and nowhere else.
+    assert.equal((await asks({ ask: decision }))[0], 200);
+    const [entry] = await activities(target, 'AGENT_RUN_FINISHED');
+    assert.deepEqual(JSON.parse(entry.details).ask, { kind: 'decision', questions: [{ question: question.question.trim(), options: ['window', 'split'], suggested: 'split' }] });
+    assert.equal((await stored(run.id)).ask, null);
+    const second = await started(devA);
+    assert.equal((await finish(devA, second.run.id, { outcome: 'in_review', askedUser: person, ask: hands }))[0], 200);
+    assert.deepEqual(JSON.parse((await activities(second.target, 'AGENT_RUN_FINISHED'))[0].details).ask, hands);
+  });
+
+  await t.test('declared stops: one setting of the deployment refuses a finish that names a person without ask, and it is off until set', async () => {
+    const { target, run } = await started(devA);
+    const blocker = await issue(null);
+    await link(blocker, 'BLOCKS', target);
+    t.after(() => { delete env.COLLAB_STOP_ASK_REQUIRED; });
+    env.COLLAB_STOP_ASK_REQUIRED = 'true';
+    for (const outcome of ['blocked', 'in_review']) {
+      assert.deepEqual((await refused(finish(devA, run.id, { outcome, askedUser: person }), 422, 'exit_state_required')).missing, ['ask']);
+    }
+    await untouched(target, run);
+    // A stop that names no person asks nothing, and one that says what it asks is taken.
+    assert.equal((await finish(devA, run.id, { outcome: 'blocked', blockedBy: blocker.issueKey }))[0], 200);
+    const asked = await started(devA);
+    assert.equal((await finish(devA, asked.run.id, { outcome: 'blocked', askedUser: person, ask: { kind: 'hands', steps: 'Merge pull request 12 after the backup.', doneWord: 'merged' } }))[0], 200);
+
+    // Off, and with any other value, a finish without ask is accepted as before and records none.
+    for (const value of [undefined, 'false', '1']) {
+      if (value === undefined) delete env.COLLAB_STOP_ASK_REQUIRED; else env.COLLAB_STOP_ASK_REQUIRED = value;
+      const legacy = await started(devA);
+      assert.equal((await finish(devA, legacy.run.id, { outcome: 'blocked', askedUser: person }))[0], 200, String(value));
+      const details = JSON.parse((await activities(legacy.target, 'AGENT_RUN_FINISHED'))[0].details);
+      assert.deepEqual([details.askedUser, 'ask' in details], [person, false]);
+    }
   });
 
   await t.test('a valid finish ends the run, keeps note and usage, writes the timeline and moves the issue', async () => {
@@ -537,9 +608,21 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     // A person asks another person; a batch is a release seat's.
     await refused(finish(personToken, run.id, { outcome: 'in_review', askedUser: person }), 422, 'exit_state_required');
     await refused(finish(personToken, run.id, { outcome: 'done', alsoFinish: ['K-1'] }), 422, 'role_mismatch');
+    await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(60) } });
+    await raw.issueComment.createMany({ data: [
+      { issueId: target.id, authorId: person, content: 'Proceed?', createdAt: ago(30) },
+      { issueId: target.id, authorId: owner, content: 'Yes', createdAt: ago(20) },
+    ] });
     const [status, body] = await finish(personToken, run.id, { outcome: 'in_review', askedUser: owner });
     assert.deepEqual([status, body.run.state, body.run.outcome, await statusOf(target)], [200, 'finished', 'in_review', `${A}-in_review`]);
     assert.deepEqual(JSON.parse((await activities(target, 'AGENT_RUN_FINISHED'))[0].details), { runId: run.id, seatId: null, outcome: 'in_review', content: note(), nextStep: 'What there is to say under Next.', askedUser: owner });
+    assert.deepEqual(await offered(me, target), []);
+    await raw.issueComment.create({ data: { issueId: target.id, authorId: owner, content: 'I can review it now.', createdAt: new Date(Date.parse(body.run.endedAt) + 1) } });
+    assert.deepEqual(await offered(me, target), ['reply']);
+    const response = await contextRoute.GET(new Request('https://collab.test/api', { headers: { Authorization: `Bearer ${personToken}` } }),
+      { params: Promise.resolve({ issueIdOrKey: target.issueKey }) });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).commentsSince.map(comment => comment.content), ['I can review it now.']);
   });
 
   await t.test('a run on an issue in Trash is out of reach, so a finish writes nothing until the issue is restored', async () => {
@@ -581,5 +664,145 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.equal((await open(target))[0], 401);
     session = person;
     await act(devA, run.id, 'close');
+  });
+
+  await t.test('declared stops: an answer from Home is posted only while the stop it was shown for is still open', async () => {
+    const events = [];
+    const replyRoute = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...deps, '@/lib/redis': { publishEvent: async (...sent) => events.push(sent) } }, globals);
+    const reply = async (target, runId, content = 'split') => {
+      const response = await replyRoute.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) }),
+        { params: Promise.resolve({ issueId: target.id, runId }) });
+      return [response.status, await response.json()];
+    };
+    const comments = async target => (await raw.issueComment.findMany({ where: { issueId: target.id }, orderBy: { createdAt: 'asc' } })).map(row => [row.authorId, row.content]);
+    const says = (target, authorId, content) => raw.issueComment.create({ data: { issueId: target.id, authorId, content } });
+    const ask = { kind: 'decision', questions: [{ question: "Run the migration in tonight's window, or split it into two releases?", options: ['window', 'split'], suggested: 'split' }] };
+    /** An issue whose seat stopped and named the person. */
+    const stopped = async (body = { askedUser: person, ask }) => {
+      const { target, run } = await started(devA);
+      assert.equal((await finish(devA, run.id, { outcome: 'blocked', ...body }))[0], 200);
+      return { target, run };
+    };
+    /** The press is refused and leaves the issue's comments as they were. */
+    const closed = async ({ target, run }, runId = run.id) => {
+      const before = await comments(target);
+      await refused(reply(target, runId), 409, 'stop_closed');
+      assert.deepEqual(await comments(target), before);
+    };
+
+    // While the run is open there is no stop to answer.
+    const open = await started(devA);
+    await closed(open);
+    const first = await stopped();
+    // Another issue's run, no login, somebody who may not read the issue, an empty answer, a project that is worked on the Forge board.
+    await closed(first, open.run.id);
+    session = null;
+    assert.equal((await reply(first.target, first.run.id))[0], 401);
+    for (const outsider of ['cstranger001', gone]) {
+      session = outsider;
+      await refused(reply(first.target, first.run.id), 404, 'not_found');
+    }
+    session = person;
+    await refused(reply(first.target, first.run.id, '   '), 400, 'invalid_request');
+    forge = true;
+    try { await refused(reply(first.target, first.run.id), 409, 'forge_connected_project'); } finally { forge = false; }
+    assert.deepEqual([await comments(first.target), events], [[], []]);
+
+    // Two presses at once post one comment, as the person who pressed, and the next press finds the stop answered.
+    // Both are made to wait for the issue, so each checks only after the other has written or been refused.
+    let release, ready;
+    const held = new Promise(resolve => { release = resolve; }), locked = new Promise(resolve => { ready = resolve; });
+    const holding = raw.$transaction(async tx => { await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${first.target.id} FOR UPDATE`; ready(); await held; }, { timeout: 15000 });
+    await locked;
+    const pressing = Promise.all([reply(first.target, first.run.id, '  split '), reply(first.target, first.run.id, 'window')]);
+    try {
+      let waiting = 0;
+      for (const deadline = Date.now() + 5000; waiting < 2 && Date.now() < deadline; await new Promise(resolve => setTimeout(resolve, 20))) {
+        waiting = (await raw.$queryRaw`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%"Issue"%FOR UPDATE%' AND pid <> pg_backend_pid()`).length;
+      }
+      assert.equal(waiting, 2, 'both presses wait for the issue');
+    } finally {
+      release();
+      await holding;
+    }
+    const presses = await pressing;
+    assert.deepEqual(presses.map(([status, body]) => status === 200 ? 200 : body.error).sort(), [200, 'stop_closed']);
+    const [, posted] = presses.find(([status]) => status === 200);
+    assert.deepEqual([posted.authorId, posted.issueId], [person, first.target.id]);
+    assert.deepEqual(await comments(first.target), [[person, posted.content]]);
+    assert.ok(['split', 'window'].includes(posted.content));
+    assert.deepEqual(JSON.parse(JSON.stringify(events)), [['workspace:w:events', { type: 'issue.comments.changed', workspaceId: 'w', issueId: first.target.id }, 1000]]);
+    await closed(first);
+    assert.deepEqual(await offered(devA, first.target), ['reply']);
+
+    // Someone answered on the issue itself; the seat's own later comment is no answer.
+    const answered = await stopped();
+    await says(answered.target, owner, 'Split it: the window is taken tonight.');
+    await closed(answered);
+    const noted = await stopped();
+    await says(noted.target, devA.userId, 'Still waiting for the choice above.');
+    session = owner;
+    assert.equal((await reply(noted.target, noted.run.id, 'window'))[0], 200);
+    assert.deepEqual((await comments(noted.target)).at(-1), [owner, 'window']);
+    session = person;
+
+    // An answer written after the seat's question and before its finish has answered the stop: the seat has the issue back.
+    const asking = async (seatSaid, otherSaid, other = owner) => {
+      const { target, run } = await started(devA);
+      await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(60) } });
+      await raw.issueComment.create({ data: { issueId: target.id, authorId: devA.userId, content: ask.questions[0].question, createdAt: ago(seatSaid) } });
+      await raw.issueComment.create({ data: { issueId: target.id, authorId: other, content: 'Split it: the window is taken tonight.', createdAt: ago(otherSaid) } });
+      assert.equal((await finish(devA, run.id, { outcome: 'blocked', askedUser: person, ask }))[0], 200);
+      return { target, run };
+    };
+    const early = await asking(30, 20);
+    await closed(early);
+    assert.deepEqual(await offered(devA, early.target), ['reply']);
+    // What was said before the question is no answer to it.
+    const before = await asking(20, 30);
+    assert.deepEqual(await offered(devA, before.target), []);
+    assert.equal((await reply(before.target, before.run.id))[0], 200);
+    const agent = await raw.user.create({ data: { name: 'Seatless agent', email: null } });
+    for (const authorId of [otherA.userId, agent.id]) {
+      const { target, run } = await asking(30, 20, authorId);
+      assert.deepEqual(await offered(devA, target), []);
+      assert.equal((await reply(target, run.id))[0], 200);
+      assert.deepEqual((await comments(target)).at(-1), [person, 'split']);
+    }
+
+    // The issue is done, went to another seat, or was given to its seat again since the stop: Home shows none of them.
+    const done = await stopped();
+    await move(done.target, 'done');
+    await closed(done);
+    const legacyStops = { id: { in: [done.target.id, early.target.id] } };
+    for (const fields of [{ statusValue: ' Resolved ', status: 'open' }, { statusValue: ' ', status: ' CLOSED ' }]) {
+      await raw.issue.updateMany({ where: legacyStops, data: { statusId: null, ...fields } });
+      await closed(done);
+      assert.deepEqual(await offered(devA, early.target), []);
+    }
+    await raw.issue.updateMany({ where: legacyStops, data: { statusValue: 'open' } });
+    assert.equal((await reply(done.target, done.run.id))[0], 200);
+    assert.deepEqual(await offered(devA, early.target), ['reply']);
+    const moved = await stopped();
+    await raw.issue.update({ where: { id: moved.target.id }, data: { assigneeId: otherA.userId } });
+    await closed(moved);
+    const returned = await stopped();
+    await raw.issueAssignee.updateMany({ where: { issueId: returned.target.id, userId: devA.userId }, data: { approvedAt: new Date(Date.now() + 1000) } });
+    await closed(returned);
+
+    // A later run has started: the old row's press posts nothing, also after that run stopped with a question of its own.
+    const later = await stopped();
+    const again = await checkout(devA, later.target, 'g2');
+    await closed(later);
+    assert.equal((await finish(devA, again.id, { outcome: 'blocked', askedUser: person, ask }, 'g2'))[0], 200);
+    await closed(later);
+    assert.equal((await reply(later.target, again.id))[0], 200);
+
+    // A stop that waits for another issue asks no person.
+    const waits = await started(devA);
+    const blocker = await issue(null);
+    await link(blocker, 'BLOCKS', waits.target);
+    assert.equal((await finish(devA, waits.run.id, { outcome: 'blocked', blockedBy: blocker.issueKey }))[0], 200);
+    await closed(waits);
   });
 });
