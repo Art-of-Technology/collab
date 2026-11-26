@@ -92,7 +92,7 @@ before(async () => {
     await prisma.projectStatus.create({ data: { id: 'foreign-status', projectId: 'foreign-project', name: 'open', displayName: 'Open', order: 1 } });
   });
   for (const [id, statusId] of [['shown', null], ['hidden', 'foreign-status']]) {
-    await db.prisma.issue.create({ data: { id, title: id, issueKey: id.toUpperCase(), workspaceId: 'work', projectId: 'project', statusId } });
+    await db.prisma.issue.create({ data: { id, title: id, issueKey: id.toUpperCase(), workspaceId: 'work', projectId: 'project', statusId, assigneeId: 'viewer', status: 'in_progress' } });
     await db.prisma.issueActivity.create({ data: { itemId: id, action: 'UPDATED', userId: 'work-owner', workspaceId: 'work', projectId: 'project',
       fieldName: 'description', oldValue: `${id}-old`, newValue: `${id}-new`, details: JSON.stringify({ content: `${id}-details` }) } });
   }
@@ -100,9 +100,12 @@ before(async () => {
   const prisma = db.prisma.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
   const deps = { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma },
     '@/lib/auth': { getAuthSession: async () => ({ user: { id: signedIn } }) }, '@/lib/apps/auth-middleware': { withAppAuth: handler => handler } };
-  const route = path => load(`src/app/api/${path}/route.ts`, deps, { URL, console });
+  const route = path => load(`src/app/api/${path}/route.ts`, deps, { URL, console, Date });
   routes = { issue: route('issues/[issueId]/activities'), workspace: route('apps/auth/workspace/activity'), project: route('apps/auth/projects/[projectId]/activity') };
-  Object.assign(deps, { zod: require('zod'), '@/lib/redis': {}, '@/lib/event-bus': {}, '@/lib/rate-limit': { withRateLimit: handler => handler }, '@/lib/agent-context-folders': {}, '@/lib/issue-attachments': {} });
+  Object.assign(deps, { zod: require('zod'), 'date-fns': require('date-fns'), '@/utils/teamSyncAnalyzer': load('src/utils/teamSyncAnalyzer.ts'),
+    '@/lib/redis': {}, '@/lib/event-bus': {}, '@/lib/rate-limit': { withRateLimit: handler => handler }, '@/lib/agent-context-folders': {}, '@/lib/issue-attachments': {} });
+  routes.search = route('apps/auth/search/issues-by-activity');
+  for (const name of ['activity', 'range', 'team-activity']) routes[name] = route(`workspaces/[workspaceId]/planning/${name}`);
   for (const name of ['', '/comments', '/attachments']) routes[`item${name}`] = route(`apps/auth/issues/[issueIdOrKey]${name}`);
 });
 after(() => db?.stop());
@@ -164,3 +167,38 @@ test('the app issue routes find an issue by the issue read rule', async () => {
     for (const user of ['inactive', 'foreign-owner']) assert.deepEqual(await readItem(name, user, 'shown', method), missing, `${name} ${user}`);
   }
 });
+
+const searched = async user => JSON.parse((await reply(await routes.search.GET(new Request('https://example.test/api?fieldName=description'), asToken(user)))).text);
+
+test('the search by activity finds and counts only the issues its reader may read', async () => {
+  const found = await searched('viewer');
+  assert.deepEqual(found.results.map(row => [row.id, row.title, row.matchingActivities.map(activity => activity.newValue)]), [['shown', 'shown', ['shown-new']]]);
+  assert.deepEqual([found.pagination.total, found.summary], [1, { totalMatchingActivities: 1, uniqueIssuesWithActivity: 1 }]);
+  assert.doesNotMatch(JSON.stringify(found), /hidden/i);
+  const none = await searched('inactive');
+  assert.deepEqual([none.results, none.pagination.total, 'summary' in none], [[], 0, false]);
+});
+
+const day = offset => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+const plan = async (name, user, query = '') => {
+  signedIn = user;
+  return reply(await routes[name].GET(new Request(`https://example.test/api?startDate=${day(-1)}&endDate=${day(1)}${query}`), { params: Promise.resolve({ workspaceId: 'work' }) }));
+};
+
+for (const name of ['activity', 'range', 'team-activity']) {
+  test(`planning ${name} shows a member of the workspace only the issues they may read`, async () => {
+    // The member's own assigned issues too, where the route lists them.
+    for (const query of ['', '&userIds=viewer']) {
+      const served = await plan(name, 'viewer', query);
+      assert.equal(served.status, 200);
+      assert.doesNotMatch(served.text, /hidden/i, query);
+      if (name === 'team-activity' || !query) assert.match(served.text, /SHOWN/, query);
+    }
+  });
+
+  test(`planning ${name} answers a membership that is not active as it answers someone who is not a member`, async () => {
+    const outsider = await plan(name, 'foreign-owner');
+    assert.equal(outsider.status, 403);
+    assert.deepEqual(await plan(name, 'inactive'), outsider);
+  });
+}
