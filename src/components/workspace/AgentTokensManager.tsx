@@ -28,7 +28,7 @@ export interface AgentTokenRow {
   id: string;
   name: string;
   /**
-   * Set when the token's account is a seat: one project, one role, and the owner whose sign-in runs it. `customRole` is the
+   * For a seat token, `owner` names the person whose sign-in runs it. `customRole` is the
    * name of the workspace's own role the seat has (CLB-628), shown in place of `role`, the built-in role it behaves as.
    */
   seat: { id: string; role: string; customRole?: string | null; project: string | null; isDefault: boolean; retired: boolean; owner: string | null } | null;

@@ -50,9 +50,8 @@ interface SeatInput {
 }
 
 /**
- * A seat is an agent token's service account tied to one project and one role. It is created with its
- * token in one step; asking again under the same name gives the same seat a further token. A seat given the workspace's
- * own role (`customRoleId`, CLB-628) is made with that role's base role, and behaves as a seat of it everywhere.
+ * Creates a project seat and any token minted for it in one transaction. Minting another token under the same
+ * name reuses the seat. A workspace role (`customRoleId`, CLB-628) follows its base role's rules.
  */
 export async function createSeat(input: Omit<SeatInput, 'role'> & { role?: string }) {
   if (input.customRoleId) {

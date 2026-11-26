@@ -30,7 +30,6 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
     select: { id: true, name: true, slug: true },
     orderBy: { name: 'asc' },
   }) : [];
-  // A seat is tied to one project and may have an owner: the person whose logins run it.
   const [projects, { seats, people, customRoles }] = tokens ? await Promise.all([
     prisma.project.findMany({ where: { workspaceId: workspace.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     listSeatOwnerChoices(workspace.id),
