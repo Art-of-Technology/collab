@@ -18,7 +18,7 @@ export const SEAT_ROLES = ROLE_CATALOGUE.roles.map(role => role.id);
 export const MEMBER_ROLES = ['developer', 'reviewer', 'security'] as const;
 /** Issues one agent account that is not a seat may hand to seats per UTC day. */
 export const ASSIGN_CAP = 5;
-/** Open issues one seat may hold from its project's lead seat. */
+/** Open issues one seat may hold from its project's lead seat; a seat of the whole workspace from every project's lead together (CLB-951). */
 export const LEAD_CAP = 3;
 /** A release seat that has not read its inbox for this long is taken to be away, and so is a runner that has not asked for its seats. */
 export const IDLE_MS = 10 * 60_000;
@@ -34,6 +34,14 @@ const NO_ROOM = 'agent_seat.no_room', ROOM_BACK = 'agent_seat.room_back';
 export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
 /** The open issues a seat holds because the lead gave them to it: the lead's hand is on the row that made the seat the assignee. */
 export const fromLead = (projectId: string, lead: string, seat: string) => ({ projectId, assigneeId: seat, ...NOT_DONE, helpers: { some: { userId: seat, approvedBy: lead } } });
+/**
+ * What counts toward a seat's `LEAD_CAP`: for a project seat, `fromLead` of its project's lead. A seat of the whole
+ * workspace (CLB-951) takes work from every project's lead, so its count is the open issues any lead seat that is not
+ * retired gave it, whichever projects they are in.
+ */
+export const fromLeads = (seat: { userId: string; projectId: string | null }, projectId: string, lead: string) => seat.projectId === null
+  ? { assigneeId: seat.userId, ...NOT_DONE, helpers: { some: { userId: seat.userId, approver: { agentSeat: { role: 'lead', retiredAt: null } } } } }
+  : fromLead(projectId, lead, seat.userId);
 
 interface SeatInput {
   /** null: the seat's scope is the whole workspace (CLB-613). */
@@ -353,6 +361,14 @@ export async function workspaceSeatsWithRoom(db: DB, workspaceId: string, role?:
   return seatsIn(db, { workspaceId, projectId: null }, role, now);
 }
 
+/**
+ * The seats a project's lead places work on (CLB-951): the project's own and the developer seats of the whole
+ * workspace, in one list in the order `seatsWithRoom` gives, so `byRoom` orders them together.
+ */
+export async function leadSeatsWithRoom(db: DB, workspaceId: string, projectId: string, role?: string, now = new Date()) {
+  return seatsIn(db, { workspaceId, OR: [{ projectId }, { projectId: null, role: 'developer' }] }, role, now);
+}
+
 async function seatsIn(db: DB, scope: Prisma.AgentSeatWhereInput, role?: string, now = new Date()) {
   const seats = await db.agentSeat.findMany({ where: { ...scope, retiredAt: null, ...(role && { role }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: { id: true, workspaceId: true, projectId: true, userId: true, name: true, role: true, isDefault: true, lastSeenAt: true, byRunner: true, ownerId: true, createdAt: true,
@@ -430,25 +446,29 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
  * The lead's exception to rule 7, where it is decided: inside the transaction that sets the assignee of an existing
  * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
  * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
- * project, when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
+ * project or to a developer seat of the whole workspace (CLB-951), when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
  * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`), and an issue a run is open on keeps its
  * seat (`already_running`). The placement is on
  * the issue's timeline under the lead's name. It returns the seat for the caller's two checks after its update, where
  * the status the request sets is known: the issue is not done (`seat_scope`), and the seat holds at most `LEAD_CAP`
- * open issues from the lead (`lead_cap`).
+ * open issues from the lead (`lead_cap`, counted by `fromLeads`, so its `projectId` comes with it).
  */
 export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<AppAuthContext, 'user'>,
-  issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<{ name: string } | null> {
+  issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<{ name: string; projectId: string | null } | null> {
   const me = context.user.id;
   // Both seats' rows, held to the end and read after that: neither is retired while this runs, retiring waits for it,
   // and a retirement that got in first refuses this.
-  const rows = await tx.$queryRaw<{ id: string; name: string; userId: string }[]>`SELECT "id", "name", "userId" FROM "AgentSeat" WHERE "userId" IN (${me}, ${to}) ORDER BY "id" FOR SHARE`;
+  const rows = await tx.$queryRaw<{ id: string; name: string; userId: string; projectId: string | null; role: string }[]>`SELECT "id", "name", "userId", "projectId", "role" FROM "AgentSeat"
+    WHERE "userId" IN (${me}, ${to}) ORDER BY "id" FOR SHARE`;
   const lead = await tx.agentSeat.findFirst({ where: { userId: me, role: 'lead', retiredAt: null }, select: { id: true, projectId: true } });
   if (!lead) return null;
   if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
   const seat = rows.find(row => row.userId === to);
-  if (!seat || to === me) throw new HandoffError('seat_scope', 'A lead seat assigns issues only to the other seats of its project', 403);
+  const only = 'A lead seat assigns issues only to the other seats of its project and to the developer seats of the whole workspace';
+  if (!seat || to === me) throw new HandoffError('seat_scope', only, 403);
   await assertAssignable(tx, issue, to);
+  // Of the seats of the whole workspace, a project's lead places work on the developers only (CLB-951).
+  if (seat.projectId === null && seat.role !== 'developer') throw new HandoffError('seat_scope', only, 403);
   const current = await tx.issue.findUniqueOrThrow({ where: { id: issue.id }, select: { assigneeId: true, helpers: { where: { approvedBy: me }, select: { userId: true } } } });
   const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
     : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
@@ -459,7 +479,7 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
   await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
     fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });
-  return { name: seat.name };
+  return { name: seat.name, projectId: seat.projectId };
 }
 
 /**

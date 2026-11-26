@@ -21,7 +21,7 @@ import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
-import { assertTokenMayAssign, fromLead, LEAD_CAP, leadPlaces, NOT_DONE, seatWriteGuard } from '@/lib/agent-seats';
+import { assertTokenMayAssign, fromLeads, LEAD_CAP, leadPlaces, NOT_DONE, seatWriteGuard } from '@/lib/agent-seats';
 
 class InvalidMilestoneDates extends Error {}
 
@@ -377,7 +377,7 @@ export const PATCH = withAppAuth(
             await assertMilestoneHasNoIssues(tx, existingIssue.id);
           }
         }
-        let leadTarget: { name: string } | null = null;
+        let leadTarget: { name: string; projectId: string | null } | null = null;
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, assigneeId: true },
         }) : null;
@@ -457,8 +457,10 @@ export const PATCH = withAppAuth(
         }
         // shortcut: the limit is held where the lead assigns, on what is open then. An issue placed open, then done and
         // reopened, or one restored from Trash, is not refused and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
-        if (leadTarget && updateData.assigneeId && await tx.issue.count({ where: { ...fromLead(currentAssignee!.projectId, context.user.id, updateData.assigneeId), id: { not: existingIssue.id } } }) >= LEAD_CAP) {
-          throw new HandoffError('lead_cap', `${leadTarget.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
+        // A seat of the whole workspace counts what every project's lead gave it (CLB-951).
+        if (leadTarget && updateData.assigneeId && await tx.issue.count({ where: { ...fromLeads({ userId: updateData.assigneeId, projectId: leadTarget.projectId }, currentAssignee!.projectId,
+          context.user.id), id: { not: existingIssue.id } } }) >= LEAD_CAP) {
+          throw new HandoffError('lead_cap', `${leadTarget.name} already has ${LEAD_CAP} open issues from ${leadTarget.projectId === null ? 'the leads' : 'the lead'}; one of them has to be done first`, 429);
         }
         if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
         if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
