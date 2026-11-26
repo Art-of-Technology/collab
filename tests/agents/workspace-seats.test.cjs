@@ -61,6 +61,7 @@ test('a seat with the scope "whole workspace" (CLB-613)', async t => {
   const seatsRoute = load('src/app/api/workspaces/[workspaceId]/agent-seats/route.ts', deps, globals);
   const seatsMe = load('src/app/api/apps/auth/seats/me/route.ts', deps, globals);
   const page = load('src/lib/agents-page.ts', deps, { Date });
+  const seatPage = load('src/lib/agent-seat-instructions.ts', { ...deps, '@/lib/workspace-authority': { seatOwnerAccess: async () => () => 'pass' } });
 
   /** The create-seat form's request, as the signed-in person: the status and the body. */
   const create = async (name, extra, as = owner) => {
@@ -158,5 +159,12 @@ test('a seat with the scope "whole workspace" (CLB-613)', async t => {
     assert.deepEqual(view.seats.find(seat => seat.name === 'ws-dev').waiting, []);
     // A member sees the workspace's seats too.
     assert.ok(plain(await page.readSeats(person, 'w')).seats.some(seat => seat.name === 'ws-dev'));
+  });
+
+  await t.test('a workspace seat\'s own page opens from the list, with no project', async () => {
+    const view = plain(await seatPage.readSeatPage(owner, 'w', wsDev.seat.id));
+    assert.deepEqual([view?.seat.name, view?.seat.project], ['ws-dev', null]);
+    // A project seat's page is as before.
+    assert.equal(plain(await seatPage.readSeatPage(owner, 'w', projectDev.seat.id)).seat.project, 'Project P');
   });
 });
