@@ -110,8 +110,8 @@ export async function GET(
     const userIds = userIdsStr ? userIdsStr.split(',').filter(Boolean) : undefined;
 
     // The issue read rule: only the issues this user may read, and their activity, are shown.
-    const readable = { AND: [issueReadAccessWhere(session.user.id)], workspaceId };
-    const visibleIssues = await prisma.issue.findMany({ where: readable, select: { id: true } });
+    const readable = issueReadAccessWhere(session.user.id);
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId, ...readable }, select: { id: true } });
     const visibleActivityWhere = { itemId: { in: visibleIssues.map(issue => issue.id) } };
 
     // Fetch activities in the date range
@@ -203,6 +203,7 @@ export async function GET(
     // Fetch ALL assigned issues for each user (current state - not completed)
     const allAssignedIssues = await prisma.issue.findMany({
       where: {
+        workspaceId,
         ...readable,
         assigneeId: { in: uniqueUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),

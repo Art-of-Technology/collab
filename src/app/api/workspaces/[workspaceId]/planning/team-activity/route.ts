@@ -272,10 +272,11 @@ export async function GET(
     // Get ALL issues ever assigned to these members (for historical reconstruction)
     // Filter out issues from archived projects
     // The issue read rule: only the issues this user may read, and their blockers, are shown.
-    const readable = { AND: [issueReadAccessWhere(session.user.id)], workspaceId };
+    const readable = issueReadAccessWhere(session.user.id);
     const allIssues = await prisma.issue.findMany({
       where: {
-        ...readable,
+        workspaceId,
+        AND: [readable],
         assigneeId: { in: memberUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         // Only include issues from active projects (isArchived is null or false)

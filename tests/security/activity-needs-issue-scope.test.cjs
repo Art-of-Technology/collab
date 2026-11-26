@@ -202,3 +202,32 @@ for (const name of ['activity', 'range', 'team-activity']) {
     assert.deepEqual(await plan(name, 'inactive'), outsider);
   });
 }
+
+test('planning counts a cross-workspace blocker only for readers of that blocker', async () => {
+  const prisma = db.prisma;
+  await prisma.workspaceMember.create({ data: { workspaceId: 'foreign', userId: 'work-owner' } });
+  await prisma.projectStatus.create({ data: { id: 'local-open', projectId: 'project', name: 'in_progress', displayName: 'In progress', order: 1 } });
+  await prisma.issue.createMany({ data: [
+    { id: 'target', issueKey: 'REL-1', title: 'Local task', assigneeId: 'viewer', workspaceId: 'work', projectId: 'project', statusId: 'local-open' },
+    { id: 'blocker', issueKey: 'FOR-1', title: 'Blocker', assigneeId: 'viewer', workspaceId: 'foreign', projectId: 'foreign-project', statusId: 'foreign-status' },
+  ] });
+  await prisma.issueRelation.create({ data: { sourceIssueId: 'blocker', targetIssueId: 'target', relationType: 'BLOCKED_BY' } });
+
+  for (const [reader, count] of [['work-owner', 1], ['viewer', 0]]) {
+    const range = await plan('range', reader, '&userIds=viewer');
+    assert.equal(range.status, 200);
+    const { summary, members: [member] } = JSON.parse(range.text);
+    assert.equal(summary.totalBlocked, count);
+    assert.deepEqual(member.currentBlocked.map(issue => issue.issueKey), count ? ['REL-1'] : []);
+    assert.ok(member.assignedIssues.some(issue => issue.issueKey === 'REL-1'));
+    assert.ok(member.assignedIssues.every(issue => issue.issueKey !== 'FOR-1'));
+
+    const team = await plan('team-activity', reader, '&userIds=viewer');
+    assert.equal(team.status, 200);
+    const { summary: teamSummary, members: [{ current }] } = JSON.parse(team.text);
+    assert.equal(teamSummary.blocked, count);
+    assert.deepEqual(current.blocked.map(issue => [issue.key, issue.blockedBy]), count ? [['REL-1', 'FOR-1']] : []);
+    if (!count) assert.ok(current.inProgress.some(issue => issue.key === 'REL-1'));
+    assert.ok(Object.values(current).flat().every(issue => issue.key !== 'FOR-1'));
+  }
+});
