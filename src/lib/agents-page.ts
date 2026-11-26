@@ -104,7 +104,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
         ...(projectId === null && { project: run.issue.project.name }) })),
       // Whose seat has no room is the lead's to read, not everyone's who may see the seat: the reason alone is shown.
       // A seat of the whole workspace names the project of each issue (CLB-615); a project seat's are all of its project.
-      waiting: inboxes[index].filter(item => readable.has(item.issueId)).map(({ noRoom: _noRoom, ...item }) => ({ ...item,
+      waiting: inboxes[index].filter(item => readable.has(item.issueId)).map(({ noRoom: _noRoom, project: _project, ...item }) => ({ ...item,
         ...(projectId === null && { project: readable.get(item.issueId)! }) })),
     })),
   };

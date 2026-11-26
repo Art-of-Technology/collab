@@ -34,6 +34,8 @@ export interface InboxItem {
    * a child a run has started on the pull request its last run pushed (CLB-809).
    */
   noRoom?: { issueKey: string | null; seat: string; reason: string; pullRequest?: string }[];
+  /** For a seat of the whole workspace only: the issue's project (CLB-952). */
+  project?: { id: string; name: string; issuePrefix: string };
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -78,6 +80,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     },
     select: {
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, status: true, statusValue: true, projectStatus: statusSelect,
+      project: { select: { name: true, issuePrefix: true } },
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { id: true, seatId: true, userId: true, outcome: true, startedAt: true, endedAt: true } },
@@ -112,16 +115,21 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const early = await answeredEarly(db, me, candidates.flatMap(({ issue, last, since }) => last?.seatId && last.userId === me && last.endedAt && last.endedAt >= since
     ? [{ issueId: issue.id, runId: last.id, startedAt: last.startedAt, endedAt: last.endedAt, reply: details.get(issue.id)?.comments[0]?.createdAt }] : []));
 
-  // Only a lead waits for children, so nobody else pays for this read. A lead of the whole workspace leads no project's
-  // children yet (CLB-952): it is offered what is assigned to it, as any seat is.
-  const lead = seat?.role === 'lead' && seat.projectId !== null ? { ...seat, projectId: seat.projectId } : null;
-  const children = lead && waiting.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: waiting }, projectId: lead.projectId }, select: {
+  // Only a lead waits for children, so nobody else pays for this read. The workspace's Lead (CLB-952) waits for each
+  // epic's children in that epic's project, as that project's lead would.
+  const lead = seat?.role === 'lead' ? seat : null;
+  const epics = candidates.filter(({ issue }) => waiting.includes(issue.id)).map(({ issue }) => ({ parentId: issue.id, projectId: issue.projectId }));
+  const children = lead && waiting.length ? await db.issue.findMany({ where: { workspaceId, ...(lead.projectId !== null
+    ? { parentId: { in: waiting }, projectId: lead.projectId } : { OR: epics }) }, select: {
     id: true, parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
     assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
     helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
     agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
   } }) : [];
   const now = Date.now();
+  // A project's lead's alone: the moves of CLB-780 and CLB-809 and the completions under its other epics (CLB-1196).
+  // The workspace's Lead is woken by an epic's own children only.
+  const own = lead?.projectId ?? null;
 
   // CLB-780. Developer work is the lead's to move, and only what the lead may move is offered: a child the lead itself
   // placed, on a developer seat. Its seat has had no room for long enough, and another developer seat has a number and
@@ -131,17 +139,17 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const placed = children.filter(child => !isDone(child) && !child.agentRequestRole && child.assignee?.agentSeat?.role === 'developer'
     && child.helpers.some(row => row.userId === child.assigneeId && row.approvedBy === me));
   const full = new Map<string, { seat: string; reason: string; due: Date | null; started: { due: Date | null; pushed: Map<string, Pushed> } | null }>();
-  if (lead && placed.length) {
-    const developers = await leadSeatsWithRoom(db, workspaceId, lead.projectId, 'developer', new Date(now));
+  if (own && placed.length) {
+    const developers = await leadSeatsWithRoom(db, workspaceId, own, 'developer', new Date(now));
     let free = false;
     for (const developer of developers) {
-      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLeads(developer, lead.projectId, me) }) < LEAD_CAP;
+      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLeads(developer, own, me) }) < LEAD_CAP;
     }
     for (const developer of free ? developers : []) {
       const held = placed.filter(child => child.assigneeId === developer.userId);
       if (developer.room.kind !== 'no_room' || !held.length) continue;
       const started = held.some(child => child.agentRuns.length)
-        ? { due: await noRoomDue(db, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, lead.projectId, developer, db) } : null;
+        ? { due: await noRoomDue(db, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, own, developer, db) } : null;
       full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due: await noRoomDue(db, developer, new Date(now)), started });
     }
   }
@@ -163,17 +171,17 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     select: { itemId: true } }) : []).map(entry => entry.itemId));
   const toPlace = loose.filter(child => !placedBefore.has(child.id)).map(child => child.id);
   const readyEpics = new Set<string>();
-  if (lead && toPlace.length) {
+  if (own && toPlace.length) {
     const blockerScope = { workspaceId, ...issueReadAccessWhere(me) };
     // A recorded blocker outside this scope prevents an offer without its status being read.
     const hiddenBlocker = { NOT: { AND: [blockerScope] } };
     const blockerSelect = {
       projectId: true, projectStatus: statusSelect, finishedAt: true,
-      parent: { where: { workspaceId, projectId: lead.projectId, assigneeId: me }, select: { id: true } },
+      parent: { where: { workspaceId, projectId: own, assigneeId: me }, select: { id: true } },
     } as const;
     const linkedChildren = await db.issue.findMany({
       where: {
-        id: { in: toPlace }, workspaceId, projectId: lead.projectId, assigneeId: null, agentRequestRole: null, ...NOT_DONE,
+        id: { in: toPlace }, workspaceId, projectId: own, assigneeId: null, agentRequestRole: null, ...NOT_DONE,
         sourceRelations: { none: { relationType: 'BLOCKED_BY', targetIssue: hiddenBlocker } },
         targetRelations: { none: { relationType: 'BLOCKS', sourceIssue: hiddenBlocker } },
       },
@@ -189,7 +197,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       if (!ranBlocked) continue;
       const blockers = [...child.sourceRelations.map(relation => relation.targetIssue), ...child.targetRelations.map(relation => relation.sourceIssue)];
       // finishedAt records entry into a final status, so editing an old done blocker does not offer the epic again.
-      if (blockers.every(isDone) && blockers.some(blocker => blocker.projectId === lead.projectId && blocker.parent
+      if (blockers.every(isDone) && blockers.some(blocker => blocker.projectId === own && blocker.parent
         && blocker.parent.id !== child.parentId && blocker.finishedAt && blocker.finishedAt > ranBlocked)) {
         readyEpics.add(child.parentId);
       }
@@ -241,7 +249,9 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
     .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
-      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
+      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }),
+      // A seat of the whole workspace works in many projects: each item says which (CLB-952).
+      ...(seat?.projectId === null && { project: { id: issue.projectId, name: issue.project.name, issuePrefix: issue.project.issuePrefix } }) })) };
 }
 
 async function runsNamingPerson(db: DB, issueIds: string[]) {
@@ -771,8 +781,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
  * filed for (the ones it blocks or relates to from its own side, which is how filing links it). An issue with child issues
- * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's, the project's other
- * seats and the workspace's developer seats (CLB-951) come with it, each with the open issues it holds from the lead
+ * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's (the project's, or the
+ * workspace's Lead in a project without one, CLB-952), the project's other seats and the workspace's developer seats (CLB-951) come with it, each with the open issues it holds from the lead
  * (from every project's lead, for a seat of the whole workspace), and the limit. The lead itself gets each seat's
  * owner, room and the owner's open runs too, and the seats of one role in the order to prefer (`byRoom`); room is its
  * owner's figure, so no other reader is given it or the order that would say it. When the last run that finished was
@@ -794,7 +804,10 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } } } },
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
-  const lead = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
+  // The project's lead, or the workspace's Lead (CLB-952) while the project has no active lead seat of its own.
+  const assigned = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, role: 'lead', retiredAt: null,
+    OR: [{ projectId: issue.projectId }, { projectId: null }] }, select: { userId: true, projectId: true } }) : null;
+  const lead = assigned && (assigned.projectId !== null || !await prisma.agentSeat.count({ where: { projectId: issue.projectId, role: 'lead', retiredAt: null } })) ? assigned : null;
   // The project's seats and the workspace's developer seats (CLB-951): those the lead may place work on.
   const listed = lead ? (await leadSeatsWithRoom(prisma, context.workspace.id, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
   const asLead = lead?.userId === context.user.id;
