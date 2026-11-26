@@ -239,6 +239,12 @@ async function main() {
     if (value !== null && !(type === 'array' ? Array.isArray(value) && value.every(v => typeof v === 'string') : type === 'integer' ? Number.isSafeInteger(value) : typeof value === type)) throw new CliError('invalid_input', 'A JSON field has the wrong type.');
   }
   if (attachmentBytes) body.contentBase64 = attachmentBytes.toString('base64');
+  if (options['ask-file'] !== undefined) {
+    // The CLI checks only for a readable JSON object; the server judges the shape and names what is wrong in it.
+    let ask; try { ask = JSON.parse(await boundedInput(options['ask-file'])); } catch (error) { if (error instanceof CliError) throw error; }
+    if (!ask || typeof ask !== 'object' || Array.isArray(ask)) throw new CliError('invalid_input', 'The file given with --ask-file could not be read or is not a JSON object.');
+    body.ask = ask;
+  }
   if (name.startsWith('notes ')) {
     if (body.type && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(body.type)) throw new CliError('unsupported_note_type', 'This CLI manages project context, not secret documents.');
     if (body.scope && !['WORKSPACE', 'PROJECT', 'PUBLIC'].includes(body.scope)) throw new CliError('unsupported_note_scope', 'Use WORKSPACE, PROJECT or PUBLIC for shared Notes.');
