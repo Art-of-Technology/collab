@@ -313,3 +313,10 @@ test("a seat with the organisation's own role is shown by that role's name on th
   assert.doesNotMatch(text(html), /developer QA-1/);
   assert.match(text(await page({ view }).open('inbox')), /QA-1 QA Tester seat of Collab · 0 waiting/);
 });
+
+test('a seat of the whole workspace shows that scope on the Seats and Inbox tabs (CLB-613)', async () => {
+  const wide = { ...seats[0], id: 'seat-ws', name: 'WS-1', role: 'developer', isDefault: false, project: null, working: [], waiting: [] };
+  const view = { workspace: { id: 'ws', slug: 'team' }, seats: [wide] };
+  assert.match(text(await page({ view }).open()), /developer WS-1 Whole workspace Nothing 0/);
+  assert.match(text(await page({ view }).open('inbox')), /WS-1 developer seat of the whole workspace · 0 waiting/);
+});

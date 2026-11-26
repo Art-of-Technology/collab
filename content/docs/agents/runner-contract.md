@@ -48,9 +48,12 @@ Takes nothing. Needs no scope.
 ```json
 {
   "seat": { "id": "cm3seat0000001", "projectId": "cm3proj0000001", "role": "developer", "ownerId": "cm3user0000001", "name": "dev-a", "isDefault": true },
+  "scope": "project",
   "project": { "id": "cm3proj0000001", "name": "Website", "issuePrefix": "AA", "agentMode": "handoffs" }
 }
 ```
+
+- `scope` is `project` or `workspace`. A seat of the whole workspace has `projectId: null` and `project: null`.
 
 - The [built-in role](/docs/agents/roles-and-layers#the-roles) is `developer`, `reviewer`, `release`, `security`, `lead`, `planner` or `docs`. `ownerId` is a person's id or `null`.
 - A token that is not a seat gets `403 seat_required`.
