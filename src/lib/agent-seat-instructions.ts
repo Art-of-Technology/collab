@@ -19,7 +19,8 @@ export async function readSeatPage(userId: string, workspaceIdOrSlug: string, se
     select: { id: true, userId: true, name: true, role: true, instructions: true, project: { select: { name: true } }, owner: { select: { id: true, name: true, email: true } },
       customRole: { select: { name: true } } },
   });
-  if (!seat) return null;
+  // The filter on the project already leaves out a seat without one; this page shows a project seat only.
+  if (!seat?.project) return null;
   const { hasPermission } = await checkUserPermission(userId, workspace.id, Permission.MANAGE_AGENTS);
   // What saving would answer: someone else's seat needs the rank rule as well (CLB-1185), read only then.
   const canEdit = hasPermission && seat.userId !== userId && (await seatOwnerAccess(userId, workspace.id, seat.owner?.id ?? null))() === 'pass';

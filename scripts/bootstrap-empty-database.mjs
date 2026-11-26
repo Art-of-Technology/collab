@@ -58,6 +58,8 @@ try {
     '\n' + reviewIndex + '\n' + review.slice(reviewStart, -'COMMIT;\n'.length);
   const seats = rows.find(row => row.name === '20261116000100_agent_seats')?.sql ?? '';
   const seatIndexes = ['AgentRun_one_open', 'AgentSeat_one_release', 'AgentSeat_one_default'].map(name => seats.match(new RegExp(`^CREATE UNIQUE INDEX "${name}" [^;]* WHERE [^;]*;`, 'm'))?.[0]);
+  const workspaceSeats = rows.find(row => row.name === '20261126000100_seat_without_project')?.sql ?? '';
+  seatIndexes.push(workspaceSeats.match(/^CREATE UNIQUE INDEX "AgentSeat_one_workspace_default" [^;]* WHERE [^;]*;/m)?.[0]);
   if (seatIndexes.some(index => !index)) throw new Error('Agent seat supplements need review.');
   const tokenHash = rows.find(row => row.name === '20261116000200_app_token_hash')?.sql ?? '';
   const tokenHashStart = tokenHash.indexOf('CREATE FUNCTION "clear_replaced_token_hash"');

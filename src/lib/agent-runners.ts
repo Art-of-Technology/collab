@@ -285,8 +285,10 @@ export async function fetchSeats(credential: string, have: string[],
 
   // The seats that are this runner's to run. A figure is stored under the same conditions, stated again on the seat's row.
   const mine = { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } };
-  const seats = await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
-    select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
+  // The filter on the project already leaves out a seat without one: no runner runs such a seat until CLB-615.
+  const seats = (await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
+    select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } }))
+    .flatMap(({ project, ...seat }) => project ? [{ ...seat, project }] : []);
   const notStored: string[] = [], runsNotStored: string[] = [];
   // The runner and its person are asked again on their rows, as for a token: a runner removed or replaced, or a
   // person switched off, since this ask began stores nothing.

@@ -14,9 +14,10 @@ rollout prerequisite](agent-review-contract.md#rollout-prerequisite).
 The contract includes agent handoffs, transfer offers, Git provider connections
 and issue Trash. Their modeled tables, indexes and foreign keys are represented
 by the current Prisma schema; transfer guards and the pending-offer partial index
-also require SQL supplements. So do the three partial unique indexes of agent
-seats and runs (one open run per issue, one release seat per project, one default
-seat per project and role), taken from their migration by name. This does not qualify upgrades of an existing
+also require SQL supplements. Bootstrap takes the partial unique indexes for
+[project seats and open runs](../prisma/migrations/20261116000100_agent_seats/migration.sql)
+and [default seats without a project](../prisma/migrations/20261126000100_seat_without_project/migration.sql)
+from their respective migrations. This does not qualify upgrades of an existing
 installation. In particular, do not use bootstrap
 or baseline commands on a populated database without a migration ledger. Apply
 only its separately reviewed upgrade SQL after a fresh backup. For Git provider
@@ -95,8 +96,8 @@ Recovery is an explicit operator investigation, not an automatic retry:
    functions and enabled triggers, the pending-offer partial unique index, and
    the review constraints, indexes, functions and enabled triggers on their
    expected tables, comparing their definitions with the review migration.
-   Inspect the three partial unique indexes on `AgentSeat` and `AgentRun`,
-   comparing their definitions with the agent seats migration.
+   Compare the partial unique indexes on `AgentSeat` and `AgentRun` with the
+   definitions in both seat migrations linked above.
    Verify `Version.issueAccessInvalidated` is non-null with default false.
    The expected catalog is defined by the pinned schema, original supplement SQL
    and `prisma/bootstrap-contract.json`; actual native readback is still required.

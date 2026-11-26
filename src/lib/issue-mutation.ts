@@ -117,9 +117,9 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       if (body.assigneeId) {
         await assertAssignable(prisma, { workspaceId: existingIssue.workspaceId, projectId, agentRequestRole: existingIssue.agentRequestRole }, body.assigneeId);
       }
-      // A seat works one project: an issue that leaves the project leaves the seat too.
+      // A move clears a seat assignment outside the destination. SQL inequality skips null project IDs.
       const unseated = moving && existingIssue.assigneeId
-        ? await tx.agentSeat.findFirst({ where: { userId: existingIssue.assigneeId, projectId: { not: projectId } }, select: { userId: true } })
+        ? await tx.agentSeat.findFirst({ where: { userId: existingIssue.assigneeId, OR: [{ projectId: { not: projectId } }, { projectId: null }] }, select: { userId: true } })
         : null;
       if (unseated && !body.assigneeId) updateData.assigneeId = null;
       if (body.reporterId && !await userHasWorkspaceAccess(body.reporterId, existingIssue.workspaceId)) {

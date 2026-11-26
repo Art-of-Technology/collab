@@ -70,7 +70,7 @@ export async function listSeatOwnerChoices(workspaceId: string) {
   ]);
   return {
     people: people.map(user => ({ id: user.id, name: personLabel(user) })).sort((a, b) => a.name.localeCompare(b.name)),
-    seats: seats.map(seat => ({ id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name,
+    seats: seats.map(seat => ({ id: seat.id, name: seat.name, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project?.name ?? null,
       isDefault: seat.isDefault, owner: seat.owner && personLabel(seat.owner) })),
     customRoles,
   };
@@ -100,7 +100,7 @@ export async function listAgentTokens(workspaceId: string) {
   const seatOf = (userId: string | null) => {
     const seat = seats.find(row => row.userId === userId);
     // The owner is the person whose sign-in runs the seat; without one, no person's subscription pays for it.
-    return seat ? { id: seat.id, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt,
+    return seat ? { id: seat.id, role: seat.role, customRole: seat.customRole?.name ?? null, project: seat.project?.name ?? null, isDefault: seat.isDefault, retired: !!seat.retiredAt,
       owner: seat.owner && personLabel(seat.owner) } : null;
   };
   return tokens.map(token => ({

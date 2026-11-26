@@ -51,6 +51,7 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     psql('DROP TABLE "AgentCustomRole";');
     psql(readFileSync(resolve('prisma/migrations/20261125000100_agent_custom_roles/migration.sql'), 'utf8'));
     psql(readFileSync(resolve('prisma/migrations/20261125000400_agent_routines/migration.sql'), 'utf8'));
+    psql(readFileSync(resolve('prisma/migrations/20261126000100_seat_without_project/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();

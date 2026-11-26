@@ -50,9 +50,8 @@ interface SeatInput {
 }
 
 /**
- * A seat is an agent token's service account tied to one project and one role. It is created with its
- * token in one step; asking again under the same name gives the same seat a further token. A seat given the workspace's
- * own role (`customRoleId`, CLB-628) is made with that role's base role, and behaves as a seat of it everywhere.
+ * Creates a seat for one project and role. If a token is minted, creation is atomic and minting again
+ * under the same name gives the seat another token. A workspace's custom role (`customRoleId`, CLB-628) uses its built-in base role.
  */
 export async function createSeat(input: Omit<SeatInput, 'role'> & { role?: string }) {
   if (input.customRoleId) {
@@ -167,7 +166,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
     ...(!same && { room: null, roomProgram: null, roomAt: null }) };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
-  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', seat);
+  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', { projectId: input.projectId, role: seat.role });
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
     details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned, ...(seat.byRunner && { byRunner: true }),
@@ -201,9 +200,15 @@ async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; us
   return issues.map(issue => issue.issueKey ?? issue.id);
 }
 
-/** The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. */
-export function seatFor(db: DB, context: Pick<AppAuthContext, 'user'>) {
-  return db.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
+/**
+ * The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. A seat without a
+ * project (scope whole workspace, CLB-613) is refused: it has no inbox, checkout or requests until CLB-615.
+ */
+export async function seatFor(db: DB, context: Pick<AppAuthContext, 'user'>) {
+  const seat = await db.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
+  if (!seat) return null;
+  if (seat.projectId === null) throw new HandoffError('workspace_seat', 'A seat without a project cannot do this yet', 403);
+  return { ...seat, projectId: seat.projectId };
 }
 
 export async function requireSeat(db: DB, context: Pick<AppAuthContext, 'user'>) {
@@ -334,16 +339,16 @@ export function byRoom<T extends { room: SeatRoom; openRuns: number; isDefault: 
 }
 
 /**
- * Rule 2 for a route that lets seats write: a seat writes only to its own project. No effect for people and
- * for tokens that are not seats. A retired seat writes nothing, so retiring never widens what its tokens may do.
- * Rule 8 is the one way out, and only the route that creates a comment passes `commentOn`: a seat comments on a
- * request it filed, known by the field that only filing a request sets and by its reporter.
+ * Rule 2 limits a live project seat to its project's issues. Under Rule 8, comment and attachment routes
+ * pass `commentOn` so the seat can also reply to a request that names it as the reporter.
+ * Retired seats and seats without a project cannot write, even as reporters. Accounts without a seat pass this guard.
  */
 export async function seatWriteGuard(db: DB, context: Pick<AppAuthContext, 'user'>, projectId: string,
   commentOn?: { agentRequestRole: string | null; reporterId: string | null }): Promise<void> {
   const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { projectId: true, retiredAt: true } });
   if (!seat) return;
   if (seat.retiredAt) throw new HandoffError('seat_scope', 'This seat is retired', 403);
+  if (seat.projectId === null) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
   if (seat.projectId === projectId || (commentOn?.agentRequestRole && commentOn.reporterId === context.user.id)) return;
   throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
 }
@@ -454,10 +459,10 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
   return prisma.$transaction(async tx => {
     const found = await tx.agentSeat.findFirst({ where, select: { projectId: true } });
     if (!found) throw new HandoffError('not_found', 'Seat not found', 404);
-    // The same order as creating a seat: the project's lock, then the row.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${found.projectId}`}))`;
+    const lockKey = found.projectId === null ? `agent-seat-workspace:${input.workspaceId}` : `agent-seat:${found.projectId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${input.seatId} FOR UPDATE`;
-    const seat = await tx.agentSeat.findFirst({ where });
+    const seat = await tx.agentSeat.findFirst({ where: { ...where, projectId: found.projectId } });
     const verdict = seat && access(seat.ownerId);
     if (!seat || verdict === 'changed') throw new HandoffError('not_found', 'Seat not found', 404);
     if (verdict === 'refused') throw new HandoffError('outranked', SEAT_RANK_REFUSAL, 403);
@@ -471,8 +476,8 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
     const revoked = await tx.appToken.updateManyAndReturn({ where: { userId: seat.userId, runnerId: { not: null }, isRevoked: false },
       data: { isRevoked: true, revokedAt: new Date() }, select: { id: true } });
     if (seat.isDefault) {
-      // Requests for this role keep a seat to go to.
-      const next = await tx.agentSeat.findFirst({ where: { projectId: seat.projectId, role: seat.role, retiredAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+      // When projectId is null, workspaceId keeps the default in the retiring seat's workspace.
+      const next = await tx.agentSeat.findFirst({ where: { workspaceId: seat.workspaceId, projectId: seat.projectId, role: seat.role, retiredAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
       if (next) await tx.agentSeat.update({ where: { id: next.id }, data: { isDefault: true } });
     }
     await tx.appAuditLog.create({ data: {

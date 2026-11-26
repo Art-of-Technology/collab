@@ -44,7 +44,7 @@ export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) 
 export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true } });
   if (!workspace) return null;
-  const rows = await prisma.agentSeat.findMany({
+  const rows = (await prisma.agentSeat.findMany({
     where: { workspaceId: workspace.id, retiredAt: null, project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } },
     select: {
       id: true, userId: true, name: true, role: true, isDefault: true, byRunner: true, projectId: true, project: { select: { name: true } },
@@ -55,7 +55,8 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
         select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { id: true, issueKey: true, title: true } } } },
     },
     orderBy: [{ project: { name: 'asc' } }, { role: 'asc' }, { name: 'asc' }],
-  });
+  // The filter on the project already leaves out a seat without one: this page lists project seats only until CLB-613.
+  })).flatMap(({ project, projectId, ...seat }) => project && projectId ? [{ ...seat, project, projectId }] : []);
   const inboxes: InboxItem[][] = [];
   // shortcut: one small read per seat, one after the other so a page view holds one database connection; fine for
   // tens of seats. Read all seats in one query when a workspace has hundreds.
