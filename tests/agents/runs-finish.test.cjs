@@ -64,6 +64,24 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     '@/lib/session': { getCurrentUser: async () => session && { id: session } }, '@/lib/agent-tokens': tokens };
   // The deployment's settings, as a finish reads them: none is set until a test sets one.
   const env = {};
+  // The declared-stop email: its real checks and wording, the real sender module with a provider no test may reach, and in
+  // front of it a sender the tests replace. The deployment has no mail key until the email's own tests set one, so no other
+  // test's finish sends or records anything.
+  const sent = [], mailLogs = [], provider = [], reads = [];
+  const mailEnv = { NEXT_PUBLIC_APP_URL: 'https://collab.example.test' };
+  const mailConsole = { error: (...args) => mailLogs.push(args) };
+  const email = load('src/lib/email.ts', { 'server-only': {} }, { process: { env: mailEnv }, URL, AbortSignal,
+    console: mailConsole, fetch: async (...args) => { provider.push(args); throw new Error('A test reached the mail provider'); } });
+  const record = async message => { sent.push(message); return { success: true, messageId: 'test' }; };
+  let sender = record;
+  // What the email asks of the database, in order, with the moment the sender is handed the email.
+  const traced = prisma.$extends({ query: { $allModels: { $allOperations({ model, operation, args, query }) { reads.push(`${model}.${operation}`); return query(args); } } } });
+  const stopEmail = load('src/lib/agent-stop-email.ts', { ...deps, '@/lib/prisma': { prisma: traced },
+    '@/lib/email': { ...email, sendEmail: message => { reads.push('send'); return sender(message); } } }, { Date, URL, console: mailConsole, process: { env: mailEnv } });
+  // A finish starts the send and does not wait for it. Each send it started is kept here, so a test can wait until they are over.
+  const sends = [];
+  const settled = () => Promise.all(sends.splice(0));
+  deps['@/lib/agent-stop-email'] = { emailDeclaredStop: stop => { const send = stopEmail.emailDeclaredStop(stop); sends.push(send); return send; } };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date, process: { env } });
   const inboxRoute = load('src/app/api/apps/auth/seats/me/inbox/route.ts', deps, globals);
   const runs = load('src/app/api/apps/auth/runs/route.ts', deps, globals);
@@ -307,6 +325,376 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
       const [status, body] = await finish(devA, run.id, { outcome: 'blocked', askedUser: person, ask });
       assert.equal(status, 200, body.error_description);
     }
+  });
+
+  await t.test('declared stops: the person a seat names is told by email, once, after the finish is stored', async t => {
+    const observer = new PrismaClient({ datasources: { db: { url: db.url } } });
+    mailEnv.RESEND_API_KEY = 'test-resend-key';
+    t.after(() => { sender = record; delete mailEnv.RESEND_API_KEY; return observer.$disconnect(); });
+    const EMAILED = 'AGENT_STOP_EMAILED';
+    const question = { question: "Run the migration in tonight's window, or split it into two releases?", options: ['window', 'split'], suggested: 'split' };
+    const decision = { kind: 'decision', questions: [question] };
+    const several = { kind: 'decision', questions: [question, { question: 'Backfill the old rows as well?', options: ['yes', 'no', 'later'] }] };
+    const hands = { kind: 'hands', steps: '1. Open the repository settings.\n2. Under Webhooks, add the pull request event.\n3. Save.', doneWord: 'webhook added' };
+    const footer = 'You get this because a seat named you on this issue. To stop these emails, turn off email notifications in your Collab settings.';
+    // Comments at set times, in a run that began a minute ago: two written in one millisecond would have no order.
+    const says = (target, authorId, content, seconds) => raw.issueComment.create({ data: { issueId: target.id, authorId, content, createdAt: ago(seconds) } });
+    const asking = async () => { const stop = await open(); await raw.agentRun.update({ where: { id: stop.run.id }, data: { startedAt: ago(60) } }); return stop; };
+    // Another workspace of the same owner, which the person is no member of.
+    await raw.workspace.create({ data: { id: 'mail-w2', name: 'w2', slug: 'mail-w2', ownerId: owner } });
+    await raw.project.create({ data: { id: 'cprojectm001', workspaceId: 'mail-w2', name: 'm', slug: 'm', issuePrefix: 'MM' } });
+    let mails = 0;
+    /** An issue of the seat with its run open, under a key and a title the email is asserted with. */
+    const open = data => started(devA, { issueKey: `MAIL-${++mails}`, title: 'Orders migration', ...data });
+    /** The emails one finish sent. */
+    const finished = async (run, body) => {
+      await settled();
+      sent.length = 0;
+      assert.equal((await finish(devA, run.id, { outcome: 'blocked', ...body }))[0], 200);
+      await settled();
+      return sent.splice(0);
+    };
+    /** A stop that names the person and says what it asks, and the emails its finish sent. */
+    const stopped = async (ask, data) => {
+      const { target, run } = await open(data);
+      return { target, run, ask, mails: await finished(run, { askedUser: person, ask }) };
+    };
+    /** The same stop judged again, as it is at the moment of sending and as if no email about its issue had gone out: the emails that sends. */
+    const resent = async ({ run, ask }, userId = person) => {
+      await settled();
+      await raw.issueActivity.deleteMany({ where: { itemId: run.issueId, action: EMAILED } });
+      sent.length = 0;
+      await stopEmail.emailDeclaredStop({ runId: run.id, userId, ask });
+      return sent.splice(0);
+    };
+    const again = async (stop, userId) => (await resent(stop, userId)).length;
+    // The time is the finish's own, so it is asserted apart, on a finish whose time the test sets.
+    const timeless = text => text.replace(/ at \d\d:\d\d UTC on [1-9]\d? [A-Z][a-z]+ \d{4}/, ' at TIME');
+
+    await t.test('a decision with one question', async () => {
+      const first = await stopped(decision);
+      assert.deepEqual(first.mails.map(mail => [mail.to, mail.subject, Object.keys(mail).sort()]),
+        [['cperson0001@example.test', 'MAIL-1: dev-a needs a decision from you', ['html', 'subject', 'text', 'to']]]);
+      assert.equal(timeless(first.mails[0].text), `dev-a stopped work on MAIL-1 (Orders migration) at TIME and is waiting for your answer.
+
+Run the migration in tonight's window, or split it into two releases?
+
+Reply with one of: window, split. dev-a suggests split.
+
+Answer here: https://collab.example.test/w/issues/MAIL-1
+
+The work on this issue waits until someone answers.
+
+${footer}`);
+      // The same sentences as paragraphs, the link as a link, and nothing that loads or tracks.
+      assert.equal(timeless(first.mails[0].html), `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<p>dev-a stopped work on MAIL-1 (Orders migration) at TIME and is waiting for your answer.</p>
+<p>Run the migration in tonight&#39;s window, or split it into two releases?</p>
+<p>Reply with one of: window, split. dev-a suggests split.</p>
+<p>Answer here: <a href="https://collab.example.test/w/issues/MAIL-1" style="color: #22c55e; text-decoration: underline;">https://collab.example.test/w/issues/MAIL-1</a></p>
+<p>The work on this issue waits until someone answers.</p>
+<p style="color: #666; font-size: 14px;">${footer}</p>
+</div>`);
+      // The finish's time, in UTC: two digits for the hour, none added to the day.
+      await raw.agentRun.update({ where: { id: first.run.id }, data: { startedAt: new Date('2026-12-03T09:00:00Z'), endedAt: new Date('2026-12-03T09:05:00Z') } });
+      assert.equal((await resent(first))[0].text.split('\n')[0], 'dev-a stopped work on MAIL-1 (Orders migration) at 09:05 UTC on 3 December 2026 and is waiting for your answer.');
+      // A question without a suggested reply word says nothing of one.
+      const plain = await stopped({ kind: 'decision', questions: [{ question: 'Ship it today?', options: ['go', 'hold'] }] });
+      assert.equal(plain.mails[0].text.split('\n\n')[2], 'Reply with one of: go, hold.');
+    });
+
+    await t.test('a decision with several questions', async () => {
+      const { mails: [mail, ...more] } = await stopped(several, { issueKey: 'ASKS-2' });
+      assert.deepEqual([more.length, mail.to, mail.subject], [0, 'cperson0001@example.test', 'ASKS-2: dev-a has 2 questions for you']);
+      assert.equal(timeless(mail.text), `dev-a stopped work on ASKS-2 (Orders migration) at TIME and is waiting for 2 answers from you.
+
+1. Run the migration in tonight's window, or split it into two releases?
+   Reply words: window, split. Suggested: split.
+2. Backfill the old rows as well?
+   Reply words: yes, no, later.
+
+Answer on the issue: https://collab.example.test/w/issues/ASKS-2
+
+The work on this issue waits until someone answers.
+
+${footer}`);
+      assert.ok(mail.html.includes('<p>1. Run the migration in tonight&#39;s window, or split it into two releases?<br>   Reply words: window, split. Suggested: split.<br>'
+        + '2. Backfill the old rows as well?<br>   Reply words: yes, no, later.</p>'), mail.html);
+    });
+
+    await t.test('work for the hands of the person', async () => {
+      const { mails: [mail, ...more] } = await stopped(hands, { issueKey: 'HANDS-3' });
+      assert.deepEqual([more.length, mail.to, mail.subject], [0, 'cperson0001@example.test', 'HANDS-3: dev-a is waiting for you to do something']);
+      assert.equal(timeless(mail.text), `dev-a stopped work on HANDS-3 (Orders migration) at TIME. The next step is one only you can take.
+
+1. Open the repository settings.
+2. Under Webhooks, add the pull request event.
+3. Save.
+
+When it is done, reply "webhook added" on the issue: https://collab.example.test/w/issues/HANDS-3
+
+${footer}`);
+      assert.ok(mail.html.includes('<p>1. Open the repository settings.<br>2. Under Webhooks, add the pull request event.<br>3. Save.</p>\n'
+        + '<p>When it is done, reply &quot;webhook added&quot; on the issue: <a href="https://collab.example.test/w/issues/HANDS-3"'), mail.html);
+    });
+
+    await t.test('what the seat wrote is escaped in the HTML part and literal in the text part', async () => {
+      const markup = '<img src=x onerror=alert(1)> **bold** & "quoted"';
+      const escaped = '&lt;img src=x onerror=alert(1)&gt; **bold** &amp; &quot;quoted&quot;';
+      const marked = { question: markup, options: ['<b>', 'no'], suggested: '<b>' };
+      for (const ask of [{ kind: 'decision', questions: [marked] }, { kind: 'decision', questions: [marked, question] }, { kind: 'hands', steps: markup, doneWord: '<u>done' }]) {
+        const { mails: [mail] } = await stopped(ask, { title: `Title ${markup}` });
+        assert.ok(mail.text.includes(markup) && mail.text.includes(`(Title ${markup})`), mail.text);
+        assert.ok(mail.text.includes(ask.kind === 'hands' ? 'reply "<u>done" on' : ': <b>, no. '), mail.text);
+        assert.ok(mail.html.includes(escaped) && mail.html.includes(`(Title ${escaped})`), mail.html);
+        assert.ok(mail.html.includes(ask.kind === 'hands' ? 'reply &quot;&lt;u&gt;done&quot; on' : ': &lt;b&gt;, no. '), mail.html);
+        // The only tags are the ones the email itself is made of, and the only address in an attribute is the issue's.
+        assert.deepEqual([...new Set(mail.html.match(/<\/?[a-z]+/g))].filter(tag => tag !== '<br').sort(), ['</a', '</div', '</p', '<a', '<div', '<p']);
+        assert.deepEqual(mail.html.match(/href="[^"]*"/g), [`href="https://collab.example.test/w/issues/MAIL-${mails}"`]);
+      }
+    });
+
+    await t.test('nothing is sent for a finish that asks nothing, or one answered before it finished', async () => {
+      const silent = await open();
+      assert.deepEqual(await finished(silent.run, { askedUser: person }), []);
+      const waiting = await open();
+      const blocker = await issue(null);
+      await link(blocker, 'BLOCKS', waiting.target);
+      assert.deepEqual(await finished(waiting.run, { blockedBy: blocker.issueKey }), []);
+      // The seat asked in a comment, and the person replied before the seat finished: the stop is answered already.
+      const answered = await asking();
+      await says(answered.target, devA.userId, 'Window or split?', 30);
+      await says(answered.target, person, 'split', 20);
+      assert.deepEqual(await finished(answered.run, { askedUser: person, ask: decision }), []);
+      // What another seat wrote in that time is not the answer of the person.
+      const unanswered = await asking();
+      await says(unanswered.target, devA.userId, 'Window or split?', 30);
+      await says(unanswered.target, otherA.userId, 'I would split.', 20);
+      assert.equal((await finished(unanswered.run, { askedUser: person, ask: decision })).length, 1);
+    });
+
+    await t.test('nothing is sent once anybody but the seat has commented after the finish, as the row on Home clears', async () => {
+      const stop = await stopped(decision);
+      assert.deepEqual([stop.mails.length, await again(stop)], [1, 1]);
+      // What the seat itself adds after its finish answers nothing.
+      const own = await says(stop.target, devA.userId, 'One more detail.', -5);
+      assert.equal(await again(stop), 1);
+      // A person's comment answers, and so does another seat's: either clears the row on Home.
+      for (const authorId of [person, owner, otherA.userId]) {
+        const reply = await says(stop.target, authorId, 'split', -10);
+        assert.equal(await again(stop), 0, authorId);
+        await raw.issueComment.delete({ where: { id: reply.id } });
+      }
+      // A comment on another issue says nothing about this one.
+      await says((await stopped(decision)).target, person, 'split', -10);
+      assert.equal(await again(stop), 1);
+      await raw.issueComment.delete({ where: { id: own.id } });
+      assert.deepEqual(mailLogs, []);
+    });
+
+    await t.test('at most one email per person per issue in an hour: a second finish sends nothing, another person or another issue still gets one, and after the hour it sends again', async () => {
+      const first = await stopped(decision);
+      /** The seat takes the issue again and stops again, naming `askedUser`: who that finish emailed. */
+      const once = async (askedUser = person, { target } = first) => {
+        const run = await checkout(devA, target);
+        return (await finished(run, { askedUser, ask: decision })).map(mail => mail.to);
+      };
+      const records = async ({ target } = first) => (await activities(target, EMAILED)).map(row => [row.userId, row.newValue, JSON.parse(row.details).runId === undefined]);
+      assert.deepEqual([first.mails.map(mail => mail.to), await records()], [['cperson0001@example.test'], [[devA.userId, person, false]]]);
+      // The same person on the same issue, twice more inside the hour: nothing, and nothing more is recorded.
+      assert.deepEqual([await once(), await once(), await records()], [[], [], [[devA.userId, person, false]]]);
+      // Another person on the same issue gets theirs, once.
+      assert.deepEqual([await once(owner), await once(owner), await once()], [['cowner00001@example.test'], [], []]);
+      assert.deepEqual((await records()).map(([, to]) => to), [person, owner]);
+      // The same person on another issue gets theirs, once.
+      const second = await stopped(decision);
+      assert.deepEqual([second.mails.map(mail => mail.to), await once(person, second), await once()], [['cperson0001@example.test'], [], []]);
+      // The clock is turned back on what was recorded for the person: under an hour ago holds, over an hour ago sends again, once.
+      const recorded = { itemId: first.target.id, action: EMAILED, newValue: person };
+      await raw.issueActivity.updateMany({ where: recorded, data: { createdAt: ago(59 * 60) } });
+      assert.deepEqual([await once(), await once(owner)], [[], []]);
+      await raw.issueActivity.updateMany({ where: recorded, data: { createdAt: ago(61 * 60) } });
+      assert.deepEqual([await once(), await once(), await once(owner)], [['cperson0001@example.test'], [], []]);
+      assert.deepEqual((await records()).map(([, to]) => to), [person, owner, person]);
+      // The timeline says it in words.
+      const { getActionText } = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
+      assert.equal(getActionText({ action: EMAILED, user: { name: 'dev-a' }, details: {} }), 'Collab attempted to email the person dev-a named on this issue');
+      assert.deepEqual(mailLogs, []);
+    });
+
+    await t.test('the recipient, their access and their preference are the last thing read before the email is handed to the sender', async () => {
+      const stop = await stopped(decision);
+      await again(stop);
+      // Only what it writes down for the hourly limit comes between that read and the sender.
+      assert.deepEqual(reads.splice(0).slice(-3), ['Issue.findFirst', 'IssueActivity.create', 'send']);
+      // Whoever lost access during the earlier reads is still refused: every read but that one comes before it.
+      reads.length = 0;
+      await raw.workspaceMember.updateMany({ where: { workspaceId: 'w', userId: person }, data: { status: false } });
+      assert.equal(await again(stop), 0);
+      await raw.workspaceMember.updateMany({ where: { workspaceId: 'w', userId: person }, data: { status: true } });
+      assert.deepEqual([reads.at(-1), reads.filter(read => read === 'Issue.findFirst').length, reads.includes('IssueActivity.create')], ['Issue.findFirst', 1, false]);
+    });
+
+    await t.test('nothing is sent to somebody who, at the moment of sending, is not a member, may not read the issue or is no person', async () => {
+      const stop = await stopped(decision);
+      assert.deepEqual([stop.mails.length, await again(stop)], [1, 1]);
+      const membership = { workspaceId: 'w', userId: person };
+      await raw.workspaceMember.updateMany({ where: membership, data: { status: false } });
+      assert.equal(await again(stop), 0);
+      await raw.workspaceMember.updateMany({ where: membership, data: { status: true } });
+      assert.equal(await again(stop), 1);
+      // The owner of the workspace is told like a member; a member who was switched off and somebody who was never in it are not.
+      assert.deepEqual([await again(stop, owner), await again(stop, gone), await again(stop, 'cstranger001')], [1, 0, 0]);
+
+      // A member of the workspace who may not read the issue: its project is another workspace's.
+      await raw.issue.update({ where: { id: stop.target.id }, data: { projectId: 'cprojectm001', statusId: null } });
+      assert.deepEqual([await again(stop), await again(stop, owner)], [0, 1]);
+      await raw.issue.update({ where: { id: stop.target.id }, data: { projectId: A, statusId: `${A}-blocked` } });
+      assert.equal(await again(stop), 1);
+
+      // The account of a seat is a member of the workspace and no person, with an email address or without one.
+      assert.equal(await again(stop, otherA.userId), 0);
+      await raw.user.update({ where: { id: otherA.userId }, data: { email: 'seat@example.test' } });
+      assert.equal(await again(stop, otherA.userId), 0);
+      await raw.user.update({ where: { id: otherA.userId }, data: { email: null } });
+      // A run that has not finished is no stop.
+      assert.equal(await again({ run: (await open()).run, ask: decision }), 0);
+      assert.deepEqual(mailLogs, []);
+    });
+
+    await t.test('email switched off on the row of the workspace or on the row with no workspace sends nothing, and both on or missing sends', async () => {
+      const stop = await stopped(decision);
+      const row = (workspaceId, emailNotificationsEnabled) => raw.notificationPreferences.create({ data: { userId: person, workspaceId, emailNotificationsEnabled } });
+      const set = (preference, emailNotificationsEnabled) => raw.notificationPreferences.update({ where: { id: preference.id }, data: { emailNotificationsEnabled } });
+      // No row at all is on. So is the switch of another workspace, whatever it says, and that of somebody else.
+      assert.deepEqual([stop.mails.length, await again(stop)], [1, 1]);
+      await row('mail-w2', false);
+      await raw.notificationPreferences.create({ data: { userId: owner, workspaceId: 'w', emailNotificationsEnabled: false } });
+      await raw.notificationPreferences.create({ data: { userId: owner, emailNotificationsEnabled: false } });
+      assert.equal(await again(stop), 1);
+      // Off for this workspace, as the settings page stores it.
+      const here = await row('w', false);
+      assert.equal(await again(stop), 0);
+      assert.deepEqual(await finished((await open()).run, { askedUser: person, ask: hands }), []);
+      await set(here, true);
+      assert.equal(await again(stop), 1);
+      // Off on the row with no workspace, as the notification service and push read it.
+      const everywhere = await row(null, false);
+      assert.equal(await again(stop), 0);
+      assert.deepEqual(await finished((await open()).run, { askedUser: person, ask: hands }), []);
+      // Off on either row is off; both on sends.
+      await set(here, false);
+      assert.equal(await again(stop), 0);
+      await set(everywhere, true);
+      assert.equal(await again(stop), 0);
+      await set(here, true);
+      assert.equal(await again(stop), 1);
+      assert.equal((await finished((await open()).run, { askedUser: person, ask: hands })).length, 1);
+      await raw.notificationPreferences.deleteMany({ where: { userId: { in: [person, owner] } } });
+      assert.deepEqual(mailLogs, []);
+    });
+
+    await t.test('the email is sent after the finish is committed, and a sender that fails leaves the finish stored', async () => {
+      // Another connection sees only what is committed.
+      const seen = [];
+      let current = await open();
+      sender = async () => {
+        const { target, run } = current;
+        seen.push([(await observer.agentRun.findUniqueOrThrow({ where: { id: run.id } })).state,
+          await observer.issueActivity.count({ where: { itemId: target.id, action: 'AGENT_RUN_FINISHED' } }),
+          (await observer.issue.findUniqueOrThrow({ where: { id: target.id } })).statusId]);
+        // The row of the issue is free again: inside the lock of the finish this would be refused at once.
+        await observer.$transaction(tx => tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${target.id} FOR UPDATE NOWAIT`);
+        return { success: true };
+      };
+      assert.equal((await finish(devA, current.run.id, { outcome: 'blocked', askedUser: person, ask: decision }))[0], 200);
+      await settled();
+      assert.deepEqual([seen, mailLogs], [[['finished', 1, `${A}-blocked`]], []]);
+
+      // The real sender does not throw when the provider fails: it returns that it failed. One that throws is caught as well.
+      // The address, the question and what the provider said are in the failure, and in nothing that is logged: one fixed line each time.
+      for (const failing of [
+        async message => ({ success: false, error: `The email service did not accept ${message.to}: ${message.text}` }),
+        async message => { throw new Error(`Provider refused ${message.to}: ${message.text}`); },
+      ]) {
+        sender = failing;
+        current = await open();
+        const [status, body] = await finish(devA, current.run.id, { outcome: 'blocked', askedUser: person, ask: decision });
+        await settled();
+        assert.deepEqual([status, body.run.state, body.run.outcome], [200, 'finished', 'blocked']);
+        assert.deepEqual([(await stored(current.run.id)).state, (await activities(current.target, 'AGENT_RUN_FINISHED')).length, await statusOf(current.target)],
+          ['finished', 1, `${A}-blocked`]);
+        assert.deepEqual(mailLogs.splice(0), [['Declared stop email was not sent']]);
+      }
+    });
+
+    // A reply that waited for the mail provider would never come here, so the test is given a limit and not a pause.
+    await t.test('the finish reply returns while the send is still pending, and a sender that rejects later changes nothing and logs once', { timeout: 10_000 }, async t => {
+      let reached, refuse;
+      const called = new Promise(resolve => { reached = resolve; });
+      const refusal = new Promise((_, reject) => { refuse = reject; });
+      // Whatever becomes of this test, no send is left waiting for it, and a refusal nobody waited for is no error of its own.
+      refusal.catch(() => {});
+      t.after(() => refuse(new Error('The test is over')));
+      let calls = 0;
+      sender = message => { calls++; reached(message); return refusal; };
+      const { target, run } = await open();
+      await settled();
+      const [status, body] = await finish(devA, run.id, { outcome: 'blocked', askedUser: person, ask: decision });
+      assert.deepEqual([status, body.run.state, body.run.outcome, sends.length], [200, 'finished', 'blocked', 1]);
+      // The send reached the provider after the reply was given, and is not over.
+      const [send] = sends.splice(0);
+      let over = false;
+      send.then(() => { over = true; });
+      const message = await called;
+      const state = async () => [(await stored(run.id)).state, (await activities(target, 'AGENT_RUN_FINISHED')).length, await statusOf(target), over, calls, mailLogs.length];
+      assert.deepEqual(await state(), ['finished', 1, `${A}-blocked`, false, 1, 0]);
+      // The provider refuses at last: the send is over without an error for anybody, the finish is as it was, and one line is logged.
+      refuse(new Error(`Provider refused ${message.to}: ${message.text}`));
+      assert.equal(await send, undefined);
+      assert.deepEqual(await state(), ['finished', 1, `${A}-blocked`, true, 1, 1]);
+      assert.deepEqual(mailLogs.splice(0), [['Declared stop email was not sent']]);
+    });
+
+    /** A finish that names the person and asks, with the sender `through`: what was handed to it, logged and recorded for the hourly limit. */
+    const outcome = async through => {
+      sender = through;
+      const { target, run } = await open();
+      const mails = await finished(run, { askedUser: person, ask: hands });
+      return [(await stored(run.id)).state, mails.map(mail => mail.html.match(/href="([^"]*)"/)[1]), mailLogs.splice(0), (await activities(target, EMAILED)).length, provider.length];
+    };
+
+    await t.test("without an address of this Collab only a seat's declared stop logs a mail failure", async t => {
+      const address = mailEnv.NEXT_PUBLIC_APP_URL;
+      t.after(() => { delete mailEnv.NEXTAUTH_URL; mailEnv.NEXT_PUBLIC_APP_URL = address; });
+      delete mailEnv.NEXT_PUBLIC_APP_URL;
+      const { run } = await started(me);
+      await settled();
+      const [status, body] = await finish(me, run.id, { outcome: 'in_review', askedUser: owner, ask: decision });
+      assert.deepEqual([status, body.run.state, await settled(), mailLogs.splice(0)], [200, 'finished', [], []]);
+      assert.deepEqual(await outcome(record), ['finished', [], [['Declared stop email was not sent']], 0, 0]);
+      // Either setting is an address, the first before the second.
+      mailEnv.NEXTAUTH_URL = 'https://second.example.test';
+      assert.deepEqual(await outcome(record), ['finished', [`https://second.example.test/w/issues/MAIL-${mails}`], [], 1, 0]);
+      mailEnv.NEXT_PUBLIC_APP_URL = address;
+      assert.deepEqual(await outcome(record), ['finished', [`${address}/w/issues/MAIL-${mails}`], [], 1, 0]);
+    });
+
+    await t.test('without a mail key nothing is sent, logged or recorded, and nothing fails', async t => {
+      const key = mailEnv.RESEND_API_KEY;
+      t.after(() => { mailEnv.RESEND_API_KEY = key; });
+      // With a key the real sender goes to the provider, and says it failed when the provider does: that is logged once for this email.
+      assert.deepEqual((await outcome(email.sendEmail)).slice(2), [[['Resend email request could not be confirmed'], ['Declared stop email was not sent']], 1, 1]);
+      provider.length = 0;
+      // What the sender does today without a key: it says so to its caller, reaches no provider and logs nothing.
+      delete mailEnv.RESEND_API_KEY;
+      assert.deepEqual({ ...await email.sendEmail({ to: 'cperson0001@example.test', subject: 's', html: '<p>h</p>', text: 't' }) },
+        { success: false, error: 'Email delivery is not configured. Contact your workspace administrator.' });
+      // So the email is not attempted at all, with either sender in front, and no address of this Collab is missed either.
+      delete mailEnv.NEXT_PUBLIC_APP_URL;
+      t.after(() => { mailEnv.NEXT_PUBLIC_APP_URL = 'https://collab.example.test'; });
+      for (const through of [email.sendEmail, record]) assert.deepEqual(await outcome(through), ['finished', [], [], 0, 0]);
+    });
   });
 
   await t.test('declared stops: one setting of the deployment refuses a finish that names a person without ask, and it is off until set', async () => {

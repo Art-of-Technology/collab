@@ -108,6 +108,8 @@ function load(file, dependencies = {}, globals = {}) {
       }
       // The rule for when a stop is answered reads only the database its caller hands it.
       if (!(name in dependencies) && name === '@/lib/agent-stop-boundary') return load('src/lib/agent-stop-boundary.ts');
+      // A fixture that says nothing about the declared-stop email sends none: `tests/agents/runs-finish.test.cjs` runs the real one.
+      if (!(name in dependencies) && name === '@/lib/agent-stop-email') return { emailDeclaredStop: async () => {} };
       // The status rules are pure, so no fixture has to stand in for them.
       if (!(name in dependencies) && name === '@/constants/project-statuses') return load('src/constants/project-statuses.ts');
       if (!(name in dependencies) && name === '@/lib/issue-requests') return load('src/lib/issue-requests.ts');

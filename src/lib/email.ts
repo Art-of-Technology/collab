@@ -41,7 +41,7 @@ export async function sendEmail({
   return { success: false, error: 'Email delivery could not be confirmed. Check the recipient inbox before retrying.' };
 }
 
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[character]!);
 
