@@ -2483,11 +2483,18 @@ test('seat and run refusals keep their code and what is missing, and pass on not
     { code: 5, error: 'exit_note_required', status: 422, missing: ['Evidence', 'Next', 'x'.repeat(80)] });
   assert.deepEqual(await refused(422, { error: 'exit_state_required', missing: ['reviewRequest', 'askedUser'] }, finish),
     { code: 5, error: 'exit_state_required', status: 422, missing: ['reviewRequest', 'askedUser'] });
-  // A declaration the server does not take comes back with the places in it that are wrong.
-  writeFileSync(path.join(f.dir, 'ask.json'), JSON.stringify({ kind: 'decision', questions: [] }));
-  assert.deepEqual(await refused(422, { error: 'exit_note_required', missing: ['ask.questions'] }, ['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'blocked',
-    '--asked-user', 'user-one', '--note', 'text', '--ask-file', path.join(f.dir, 'ask.json')]), { code: 5, error: 'exit_note_required', status: 422, missing: ['ask.questions'] });
-  assert.deepEqual(await refused(422, { error: 'exit_state_required', missing: ['ask'] }, finish), { code: 5, error: 'exit_state_required', status: 422, missing: ['ask'] });
+  const note = '## Done\nPrepared the change\n## Decisions\nPending\n## Evidence\nTests passed\n## Next\nWait for the answer';
+  const finishAsking = ['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'blocked', '--asked-user', 'user-one', '--note', note];
+  const expectedFinish = { event: 'finish', generation: 'gen-one', outcome: 'blocked', askedUser: 'user-one', note };
+  const ask = { kind: 'decision', questions: [] };
+  const askFile = path.join(f.dir, 'ask.json');
+  writeFileSync(askFile, JSON.stringify(ask));
+  const invalidAsk = await refused(422, { error: 'exit_note_required', missing: ['ask.questions'] }, [...finishAsking, '--ask-file', askFile]);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { ...expectedFinish, ask });
+  assert.deepEqual(invalidAsk, { code: 5, error: 'exit_note_required', status: 422, missing: ['ask.questions'] });
+  const missingAsk = await refused(422, { error: 'exit_state_required', missing: ['ask'] }, finishAsking);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), expectedFinish);
+  assert.deepEqual(missingAsk, { code: 5, error: 'exit_state_required', status: 422, missing: ['ask'] });
   assert.deepEqual(await refused(409, { error: 'run_fenced' }, finish), { code: 5, error: 'run_fenced', status: 409 });
   assert.deepEqual(await refused(409, { error: 'needs_person' }, ['run', 'start', '--issue', 'APP-1']), { code: 5, error: 'needs_person', status: 409 });
   assert.deepEqual(await refused(409, { error: 'already_running' }, ['run', 'start', '--issue', 'APP-1']), { code: 5, error: 'already_running', status: 409 });
