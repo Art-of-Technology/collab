@@ -127,7 +127,7 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'person', name: 'Person' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/permissions': { Permission: { CREATE_TASK: 'CREATE_TASK' }, checkUserPermission: async () => ({ hasPermission: true }) },
-    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async (_id, options) => {
+    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, tokenIssueReadWhere: () => ({}), findIssueByIdOrKey: async (_id, options) => {
       const row = readIssue(options);
       if (state.afterRead) state.afterRead();
       return row;

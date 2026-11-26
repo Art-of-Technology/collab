@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { agentContextFailure } from '@/lib/agent-context-folders';
@@ -22,7 +23,7 @@ export const POST = withRateLimit(withAppAuth(
     try {
       const { issueIdOrKey } = await params;
       const issue = await prisma.issue.findFirst({
-        where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] },
+        where: { ...tokenIssueReadWhere(context), OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] },
         select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, reporterId: true },
       });
       if (!issue) {

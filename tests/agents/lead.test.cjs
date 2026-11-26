@@ -581,4 +581,72 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.equal(movable.reason, 'child_no_room');
     assert.deepEqual(movable.noRoom, [{ issueKey: placed.issueKey, seat: full.name, reason: 'no runner is connected' }]);
   });
+  await t.test('the issue routes answer by the issue read rule: a seat and a lead read and update as before, and an issue a token\'s account may not read is not found', async () => {
+    const [epic, child] = await epicOf(B, leadB, 1);
+    await personGives(child, devB.userId);
+    // An issue of this workspace with a status of a project in a workspace these accounts are not in: they may not read it.
+    const elsewhere = await raw.workspace.create({ data: { name: 'Elsewhere', slug: 'elsewhere', ownerId: owner } });
+    const elsewhereProject = await raw.project.create({ data: { workspaceId: elsewhere.id, name: 'Elsewhere', slug: 'elsewhere', issuePrefix: 'EW' } });
+    const status = await raw.projectStatus.create({ data: { projectId: elsewhereProject.id, name: 'open', displayName: 'Open', order: 1 } });
+    const hidden = await issue(B, { parentId: epic.id, statusId: status.id, assigneeId: devB.userId, title: 'Not for these accounts' });
+    const link = await raw.issueRelation.create({ data: { sourceIssueId: hidden.id, targetIssueId: child.id, relationType: 'BLOCKS' } });
+    const shown = await raw.issueRelation.create({ data: { sourceIssueId: epic.id, targetIssueId: child.id, relationType: 'RELATES_TO' } });
+    const log = await raw.workLog.create({ data: { issueId: hidden.id, userId: person, workspaceId: 'w', timeSpent: 5 } });
+    const at = (target, more = {}) => ({ issueIdOrKey: target, ...more });
+    const relations = route('issues/[issueIdOrKey]/relations'), relation = route('issues/[issueIdOrKey]/relations/[relationId]'),
+      logs = route('issues/[issueIdOrKey]/work-logs'), oneLog = route('issues/[issueIdOrKey]/work-logs/[workLogId]');
+
+    // The seat reads and updates the issue assigned to it.
+    const mine = await send(item.GET, devB.token, 'GET', { params: at(child.issueKey) });
+    assert.deepEqual([mine.status, mine.body.id, mine.body.assignee.id, mine.body.parent.id], [200, child.id, devB.userId, epic.id]);
+    assert.equal((await send(item.PATCH, devB.token, 'PATCH', { body: { title: 'Changed by its seat' }, params: at(child.issueKey) })).status, 200);
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: child.id } })).title, 'Changed by its seat');
+    // The lead reads its epic: of the children and links, those its account may read.
+    const read = await send(item.GET, leadB.token, 'GET', { params: at(epic.issueKey) });
+    assert.deepEqual([read.status, read.body.children.map(row => row.id), read.body.stats.childCount, read.body.stats.relationCount], [200, [child.id], 1, 1]);
+    const linked = (await send(relations.GET, leadB.token, 'GET', { params: at(child.issueKey) })).body.relations;
+    assert.deepEqual([linked.blocked_by, linked.relates_to.map(row => row.relationId)], [[], [shown.id]]);
+    // A member comments on it as before.
+    assert.equal((await send(comments.POST, personToken, 'POST', { body: { content: 'As before' }, params: at(child.issueKey) })).status, 201);
+
+    // Every read and write of the issue these accounts may not read answers as for an issue that does not exist.
+    const calls = [
+      [item.GET, 'GET'], [item.PATCH, 'PATCH', { title: 'Changed' }], [comments.GET, 'GET'], [comments.POST, 'POST', { content: 'A comment' }],
+      [relations.GET, 'GET'], [relations.POST, 'POST', { targetIssueId: child.id, relationType: 'RELATES_TO' }], [relation.DELETE, 'DELETE', undefined, { relationId: link.id }],
+      [logs.GET, 'GET'], [logs.POST, 'POST', { timeSpent: 5 }],
+      [oneLog.GET, 'GET', undefined, { workLogId: log.id }], [oneLog.PATCH, 'PATCH', { timeSpent: 9 }, { workLogId: log.id }], [oneLog.DELETE, 'DELETE', undefined, { workLogId: log.id }],
+    ];
+    for (const token of [devB.token, leadB.token, personToken]) {
+      for (const [handler, method, body, more] of calls) {
+        const missing = await send(handler, token, method, { body, params: at('K-0', more) });
+        assert.equal(missing.status, 404, method);
+        for (const name of [hidden.issueKey, hidden.id]) assert.deepEqual(await send(handler, token, method, { body, params: at(name, more) }), missing, method);
+      }
+    }
+    // Assigning is not for seat tokens; a member is answered the same way.
+    const unassign = name => send(assign.POST, personToken, 'POST', { body: { unassign: true }, params: at(name) });
+    assert.deepEqual(await unassign(hidden.issueKey), await unassign('K-0'));
+    // Nor is it a parent or the other end of a link: it is answered as an issue id nobody has.
+    const nobody = 'c000000000000000000000000';
+    for (const [handler, method, body, params] of [
+      [item.PATCH, 'PATCH', id => ({ parentId: id }), at(child.issueKey)], [issues.POST, 'POST', id => ({ title: 'A child', projectId: B, parentId: id }), {}],
+      [relations.POST, 'POST', id => ({ targetIssueId: id, relationType: 'RELATES_TO' }), at(child.issueKey)],
+    ]) {
+      const missing = await send(handler, personToken, method, { body: body(nobody), params });
+      assert.equal(missing.status, 404, JSON.stringify(missing.body));
+      assert.deepEqual(await send(handler, personToken, method, { body: body(hidden.id), params }), missing);
+    }
+    // Nothing of it changed.
+    const after = await raw.issue.findUniqueOrThrow({ where: { id: hidden.id }, include: { comments: true, workLogs: true, sourceRelations: true, targetRelations: true, children: true } });
+    assert.deepEqual([after.title, after.assigneeId, after.comments, after.children, after.targetRelations, after.sourceRelations.map(row => row.id), after.workLogs.map(row => [row.id, row.timeSpent])],
+      ['Not for these accounts', devB.userId, [], [], [], [link.id], [[log.id, 5]]]);
+
+    // A membership that is not active is refused at the door, as everywhere in the app API.
+    const inactive = 'cinactive01';
+    await raw.user.create({ data: { id: inactive, name: inactive } });
+    await raw.workspaceMember.create({ data: { workspaceId: 'w', userId: inactive, status: false } });
+    await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: inactive, installationId: null, accessToken: Buffer.from('collab_inactive_token').toString('base64'), scopes } });
+    const refused = await send(item.GET, 'collab_inactive_token', 'GET', { params: at(child.issueKey) });
+    assert.deepEqual([refused.status, refused.body.error], [403, 'workspace_access_denied']);
+  });
 });

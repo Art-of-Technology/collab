@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { isDone, legacyStatusLabel, resolveLegacyStatus } from '@/lib/project-overview';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { emitIssueCreated } from '@/lib/event-bus';
@@ -255,7 +256,7 @@ export const POST = withAppAuth(
         const parentIssue = await prisma.issue.findFirst({
           where: {
             id: issueData.parentId,
-            workspaceId: context.workspace.id
+            ...tokenIssueReadWhere(context)
           }
         });
 

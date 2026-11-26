@@ -102,6 +102,8 @@ before(async () => {
     '@/lib/auth': { getAuthSession: async () => ({ user: { id: signedIn } }) }, '@/lib/apps/auth-middleware': { withAppAuth: handler => handler } };
   const route = path => load(`src/app/api/${path}/route.ts`, deps, { URL, console });
   routes = { issue: route('issues/[issueId]/activities'), workspace: route('apps/auth/workspace/activity'), project: route('apps/auth/projects/[projectId]/activity') };
+  Object.assign(deps, { zod: require('zod'), '@/lib/redis': {}, '@/lib/event-bus': {}, '@/lib/rate-limit': { withRateLimit: handler => handler }, '@/lib/agent-context-folders': {}, '@/lib/issue-attachments': {} });
+  for (const name of ['', '/comments', '/attachments']) routes[`item${name}`] = route(`apps/auth/issues/[issueIdOrKey]${name}`);
 });
 after(() => db?.stop());
 
@@ -141,4 +143,24 @@ for (const feed of ['workspace', 'project']) {
 test('a membership that is not active reads no issue activity', async () => {
   assert.deepEqual(await readIssue('inactive', 'shown'), await readIssue('inactive', 'no-such-issue'));
   for (const feed of ['workspace', 'project']) assert.deepEqual(JSON.parse(await readFeed(feed, 'inactive')).activities, [], feed);
+});
+
+const asToken = user => ({ workspace: { id: 'work' }, user: { id: user } });
+const reply = async response => ({ status: response.status, text: await response.text() });
+
+// The token routes behind a door that lets every caller in: what is tested is the rule each route reads an issue by.
+const readItem = (name, user, issueIdOrKey, method = 'GET') => routes[`item${name}`][method](
+  new Request('https://example.test/api', { method, ...(method === 'POST' && { body: '{}' }) }), asToken(user), { params: Promise.resolve({ issueIdOrKey }) }).then(reply);
+
+test('the app issue routes find an issue by the issue read rule', async () => {
+  const served = await readItem('', 'viewer', 'SHOWN');
+  assert.deepEqual([served.status, JSON.parse(served.text).id, JSON.parse(served.text).stats], [200, 'shown', { commentCount: 0, childCount: 0, relationCount: 0 }]);
+  assert.equal((await readItem('/comments', 'viewer', 'shown')).status, 200);
+  for (const [name, method] of [['', 'GET'], ['/comments', 'GET'], ['/attachments', 'POST']]) {
+    const missing = await readItem(name, 'viewer', 'no-such-issue', method);
+    assert.deepEqual(missing, { status: 404, text: '{"error":"not_found","error_description":"Issue not found"}' });
+    for (const hidden of ['hidden', 'HIDDEN']) assert.deepEqual(await readItem(name, 'viewer', hidden, method), missing, name);
+    // A membership that is not active, and an account outside the workspace, read none.
+    for (const user of ['inactive', 'foreign-owner']) assert.deepEqual(await readItem(name, user, 'shown', method), missing, `${name} ${user}`);
+  }
 });

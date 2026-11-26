@@ -4,13 +4,15 @@ const zod = require('zod');
 
 // Handler/guard composition only; OAuth middleware has its own existing checks.
 test('app handlers deny bound issue writes before mutation while allowing unconnected assignment', async () => {
+  const workspace = { id: 'workspace', slug: 'workspace', name: 'Workspace', ownerId: 'actor', members: [] };
+  // The workspace and project rows are what the issue read rule reads: the actor owns the workspace.
+  const readable = { workspace, project: { workspaceId: 'workspace', workspace }, statusId: null };
   const issues = [
-    { id: 'c000000000000000000000001', issueKey: 'B-1', workspaceId: 'workspace', projectId: 'c000000000000000000000003', assigneeId: null, deletedAt: null },
-    { id: 'c000000000000000000000002', issueKey: 'L-1', workspaceId: 'workspace', projectId: 'c000000000000000000000004', assigneeId: null, deletedAt: null },
+    { id: 'c000000000000000000000001', issueKey: 'B-1', workspaceId: 'workspace', projectId: 'c000000000000000000000003', assigneeId: null, deletedAt: null, ...readable },
+    { id: 'c000000000000000000000002', issueKey: 'L-1', workspaceId: 'workspace', projectId: 'c000000000000000000000004', assigneeId: null, deletedAt: null, ...readable },
   ];
   let writes = 0, bindingReads = 0;
   const mutate = async () => { writes++; return {}; };
-  const workspace = { id: 'workspace', slug: 'workspace', name: 'Workspace', ownerId: 'actor', members: [] };
   const findWorkspace = async ({ where }) => matches(workspace, where) ? workspace : null;
   const db = {
     issue: { findFirst: async ({ where }) => issues.find(row => matches(row, where)), findUniqueOrThrow: async ({ where }) => issues.find(row => matches(row, where)), findMany: async ({ where }) => issues.filter(row => matches(row, where)), update: mutate, delete: mutate },

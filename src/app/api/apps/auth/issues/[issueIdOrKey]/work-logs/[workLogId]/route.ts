@@ -9,6 +9,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { z } from 'zod';
 
@@ -23,11 +24,12 @@ type RouteParams = { params: Promise<{ issueIdOrKey: string; workLogId: string }
 async function findIssueAndWorkLog(
   issueIdOrKey: string,
   workLogId: string,
-  workspaceId: string
+  context: AppAuthContext
 ) {
+  // The issue read rule: an issue the token's account may not read is not found.
   const issue = await prisma.issue.findFirst({
     where: {
-      workspaceId,
+      ...tokenIssueReadWhere(context),
       OR: [
         { id: issueIdOrKey },
         { issueKey: issueIdOrKey },
@@ -71,7 +73,7 @@ export const GET = withAppAuth(
       const { issue, workLog } = await findIssueAndWorkLog(
         issueIdOrKey,
         workLogId,
-        context.workspace.id
+        context
       );
 
       if (!issue) {
@@ -126,7 +128,7 @@ export const PATCH = withAppAuth(
       const { issue, workLog } = await findIssueAndWorkLog(
         issueIdOrKey,
         workLogId,
-        context.workspace.id
+        context
       );
 
       if (!issue) {
@@ -265,7 +267,7 @@ export const DELETE = withAppAuth(
       const { issue, workLog } = await findIssueAndWorkLog(
         issueIdOrKey,
         workLogId,
-        context.workspace.id
+        context
       );
 
       if (!issue) {

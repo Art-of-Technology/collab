@@ -9,6 +9,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { z } from 'zod';
 
@@ -17,10 +18,11 @@ const CreateCommentSchema = z.object({
   parentId: z.string().cuid().optional(),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
+// The issue read rule: an issue the token's account may not read is not found.
+async function findIssue(issueIdOrKey: string, context: AppAuthContext) {
   return prisma.issue.findFirst({
     where: {
-      workspaceId,
+      ...tokenIssueReadWhere(context),
       OR: [
         { id: issueIdOrKey },
         { issueKey: issueIdOrKey },
@@ -45,7 +47,7 @@ export const GET = withAppAuth(
         return NextResponse.json({ error: 'invalid_request', error_description: 'since is a time in ISO 8601.' }, { status: 400 });
       }
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssue(issueIdOrKey, context);
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -161,7 +163,7 @@ export const POST = withAppAuth(
       const body = await request.json();
       const data = CreateCommentSchema.parse(body);
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssue(issueIdOrKey, context);
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },

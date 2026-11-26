@@ -7,6 +7,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 
 /**
@@ -22,10 +23,10 @@ export const DELETE = withAppAuth(
     try {
       const { issueIdOrKey, relationId } = await params;
 
-      // Find the issue
+      // Find the issue, by the issue read rule
       const issue = await prisma.issue.findFirst({
         where: {
-          workspaceId: context.workspace.id,
+          ...tokenIssueReadWhere(context),
           OR: [
             { id: issueIdOrKey },
             { issueKey: issueIdOrKey },
