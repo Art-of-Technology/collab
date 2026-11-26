@@ -396,13 +396,14 @@ export async function loadNeedsYou({
         select: { projectId: true, fullName: true },
       }) : [],
       items.some(item => item.kind === 'failed') ? checkUserPermission(actorId, workspaceId, Permission.ASSIGN_TASK) : null,
-      items.some(item => item.ask === 'here') ? readForgeBindings() : [],
+      items.some(item => item.kind === 'question' || item.kind === 'review') ? readForgeBindings() : [],
     ]);
     const repositories = [...github.map(row => ({ projectId: row.projectId, provider: 'github',
       baseUrl: 'https://github.com', repositoryPath: row.fullName })), ...connections];
     const forgeProjects = new Set(forgeBindings.map(binding => binding.projectId));
     for (const item of items) {
-      if (item.ask === 'here') item.canAct = !forgeProjects.has(item.issue.project.id);
+      // An answer and Continue are both a comment on the issue, which a project worked on the Forge board does not take here.
+      if (item.kind === 'question' || item.kind === 'review') item.canAct = !forgeProjects.has(item.issue.project.id);
       if (item.kind === 'failed') item.canAct = assign?.hasPermission ?? false;
       const reference = factsByIssue.get(item.issue.id)?.pullRequest;
       if (item.kind === 'review' && reference) {

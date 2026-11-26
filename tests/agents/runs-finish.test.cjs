@@ -684,9 +684,9 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
       return { target, run };
     };
     /** The press is refused and leaves the issue's comments as they were. */
-    const closed = async ({ target, run }, runId = run.id) => {
+    const closed = async ({ target, run }, runId = run.id, content) => {
       const before = await comments(target);
-      await refused(reply(target, runId), 409, 'stop_closed');
+      await refused(reply(target, runId, content), 409, 'stop_closed');
       assert.deepEqual(await comments(target), before);
     };
 
@@ -804,5 +804,22 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await link(blocker, 'BLOCKS', waits.target);
     assert.equal((await finish(devA, waits.run.id, { outcome: 'blocked', blockedBy: blocker.issueKey }))[0], 200);
     await closed(waits);
+
+    // Continue is the fixed answer the row's button sends. It is posted once, by anyone who may comment on the issue,
+    // on a stop that names somebody else: an older one that says nothing of what it asks, and work for a person's hands.
+    const { CONTINUE_ANSWER } = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx',
+      { react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'), 'next/navigation': {} });
+    for (const body of [{ askedUser: owner }, { askedUser: owner, ask: { kind: 'hands', steps: '1. Merge the pull request.', doneWord: 'merged' } }]) {
+      const other = await stopped(body);
+      for (const outsider of [null, 'cstranger001', gone]) {
+        session = outsider;
+        assert.equal((await reply(other.target, other.run.id, CONTINUE_ANSWER))[0], outsider ? 404 : 401);
+      }
+      session = person;
+      assert.equal((await reply(other.target, other.run.id, CONTINUE_ANSWER))[0], 200);
+      assert.deepEqual(await comments(other.target), [[person, 'Continue. Go on with the work as agreed.']]);
+      await closed(other, other.run.id, CONTINUE_ANSWER);
+      assert.deepEqual(await offered(devA, other.target), ['reply']);
+    }
   });
 });
