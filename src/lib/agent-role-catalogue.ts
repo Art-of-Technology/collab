@@ -59,8 +59,8 @@ const askingAPerson = `Asking a person. This applies whenever your result names 
 - For something the person must do by hand: how long it takes, the exact link, the label to press or the text to paste, and the reply word.
 - End the ask with the one-line reply you expect, for example \`1 yes, 2 none yet\`.
 - Do not ask again for something that is already asked and still open; point to that ask.
-- When you finish naming a person, declare what you ask with \`collab run finish --ask-file FILE\`: a Decision (one to five questions, each with two to four short reply words without a slash, and the one you suggest) or Your hands (the steps, and the one word that says they are done). For example \`{"kind": "decision", "questions": [{"question": "Turn on the new page for everyone?", "options": ["go", "hold"], "suggested": "go"}]}\` or \`{"kind": "hands", "steps": "1. Open Settings. 2. Turn on Invoices.", "doneWord": "done"}\`.
-- If \`collab run finish\` refuses \`--ask-file\` as an unknown flag, your CLI is older than 0.17.0: finish again without \`--ask-file\`, exactly as before.`;
+- When you finish naming a person, append \`--ask-file FILE\` to your usual \`collab run finish\` command, keeping the run ID and all other arguments. In that file, declare what you ask as a Decision (one to five questions, each with two to four short reply words without a slash, and the one you suggest) or Your hands (the steps, and the one word that says they are done). For example \`{"kind": "decision", "questions": [{"question": "Turn on the new page for everyone?", "options": ["go", "hold"], "suggested": "go"}]}\` or \`{"kind": "hands", "steps": "1. Open Settings. 2. Turn on Invoices.", "doneWord": "done"}\`.
+- If \`collab run finish\` refuses \`--ask-file\` as an unknown flag, your CLI is older than 0.17.0. Retry the same command, removing only \`--ask-file\` and its filename.`;
 
 /**
  * The longest text each instruction layer may hold, counted after trimming. The platform layer is the role's prompt with

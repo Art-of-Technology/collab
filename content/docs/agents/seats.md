@@ -413,7 +413,7 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
    | `decision` | chooses | `questions`: 1 to 5, each with `question`, 2 to 4 `options` and, optionally, the `suggested` one. |
    | `hands` | does something | `steps` and `doneWord`, the reply that says it is done. |
 
-   The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked). From the CLI, `--ask-file FILE` sends it and needs CLI 0.17.0. Collab's role texts tell a seat that a refusal of `--ask-file` as an unknown flag means its CLI is older than 0.17.0, and to finish again without it as before.
+   To send the declaration, append `--ask-file FILE` to your usual `collab run finish` command, keeping the run ID and all other arguments. If the CLI refuses `--ask-file` as an unknown flag, it is older than 0.17.0. Retry the same command, removing only `--ask-file` and its filename. The limits and an example are in the [runner contract](/docs/agents/runner-contract#say-what-the-person-is-asked).
 
    What the role texts also tell a seat about stopping:
 

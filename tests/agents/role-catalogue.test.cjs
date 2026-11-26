@@ -186,11 +186,11 @@ test('the shared part keeps its asking rules and says how a seat declares a stop
   assert.match(shared, /one-line reply you expect/);
   assert.match(shared, /Do not ask again for something that is already asked and still open/);
   // 1. A finish that names a person declares a Decision or Your hands, with an example of each that the server takes.
-  assert.match(shared, /When you finish naming a person, declare what you ask with `collab run finish --ask-file FILE`/);
+  assert.match(shared, /When you finish naming a person, append `--ask-file FILE` to your usual `collab run finish` command, keeping the run ID and all other arguments/);
   assert.match(shared, /a Decision \(one to five questions, each with two to four short reply words without a slash, and the one you suggest\)/);
   assert.match(shared, /Your hands \(the steps, and the one word that says they are done\)/);
   // 2. A seat whose CLI lacks the option finishes as before.
-  assert.match(shared, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0: finish again without `--ask-file`, exactly as before\./);
+  assert.match(shared, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0\. Retry the same command, removing only `--ask-file` and its filename\./);
   // 3. Agreed work goes on; a real go or no-go is a Decision with go and hold.
   assert.match(shared, /Work that is already agreed goes on without asking\. Never stop to ask a person whether to continue\./);
   assert.match(shared, /go or no-go is a Decision with the reply words `go` and `hold`/);
@@ -213,7 +213,7 @@ test('every built-in role\'s complete text that names --ask-file says what a sea
   for (const role of ROLE_CATALOGUE.roles) {
     const text = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: 'cowner00001' }).map(layer => layer.text).join('\n\n');
     assert.ok(text.includes('--ask-file'), role.id);
-    if (text.includes('--ask-file')) assert.ok(text.includes('If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0.17.0: finish again without `--ask-file`, exactly as before.'), role.id);
+    if (text.includes('--ask-file')) assert.ok(text.includes('If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0.17.0. Retry the same command, removing only `--ask-file` and its filename.'), role.id);
     // `collab --version` prints the whole command schema: no text sends a seat there to learn its version.
     assert.doesNotMatch(text, /collab (--version|schema|--help)/, role.id);
   }
