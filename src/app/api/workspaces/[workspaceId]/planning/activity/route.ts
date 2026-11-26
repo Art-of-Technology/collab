@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import type { ActivityFeedData, IssueActivity } from '@/utils/teamSyncAnalyzer';
 
@@ -16,17 +17,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId,
-        },
-      },
-    });
-
-    if (!membership) {
+    // The workspace's owner and its active members; a membership that is not active is no membership.
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
     }
 
@@ -48,7 +40,9 @@ export async function GET(
     const userIds = userIdsStr ? userIdsStr.split(',').filter(Boolean) : undefined;
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
-    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
+    // The issue read rule: only the issues this user may read, and their activity, are shown.
+    const readable = { AND: [issueReadAccessWhere(session.user.id)], workspaceId };
+    const visibleIssues = await prisma.issue.findMany({ where: readable, select: { id: true } });
     const visibleActivityWhere = { itemId: { in: visibleIssues.map(issue => issue.id) } };
 
     // Fetch activities

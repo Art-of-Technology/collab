@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { eachDayOfInterval, format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import type {
   TeamSyncRangeData,
@@ -88,17 +89,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId,
-        },
-      },
-    });
-
-    if (!membership) {
+    // The workspace's owner and its active members; a membership that is not active is no membership.
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
     }
 
@@ -117,7 +109,9 @@ export async function GET(
     const projectIds = projectIdsStr ? projectIdsStr.split(',').filter(Boolean) : undefined;
     const userIds = userIdsStr ? userIdsStr.split(',').filter(Boolean) : undefined;
 
-    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
+    // The issue read rule: only the issues this user may read, and their activity, are shown.
+    const readable = issueReadAccessWhere(session.user.id);
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId, ...readable }, select: { id: true } });
     const visibleActivityWhere = { itemId: { in: visibleIssues.map(issue => issue.id) } };
 
     // Fetch activities in the date range
@@ -210,6 +204,7 @@ export async function GET(
     const allAssignedIssues = await prisma.issue.findMany({
       where: {
         workspaceId,
+        ...readable,
         assigneeId: { in: uniqueUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         // Exclude completed issues
@@ -244,6 +239,7 @@ export async function GET(
         targetRelations: {
           where: {
             relationType: 'BLOCKED_BY',
+            sourceIssue: readable,
           },
           select: {
             id: true,

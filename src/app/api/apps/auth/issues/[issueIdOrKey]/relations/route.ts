@@ -8,6 +8,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { z } from 'zod';
 
@@ -16,10 +17,11 @@ const CreateRelationSchema = z.object({
   relationType: z.enum(['PARENT', 'CHILD', 'BLOCKS', 'BLOCKED_BY', 'RELATES_TO', 'DUPLICATES', 'DUPLICATED_BY']),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
+// The issue read rule: an issue the token's account may not read is not found.
+async function findIssue(issueIdOrKey: string, context: AppAuthContext) {
   return prisma.issue.findFirst({
     where: {
-      workspaceId,
+      ...tokenIssueReadWhere(context),
       OR: [
         { id: issueIdOrKey },
         { issueKey: issueIdOrKey },
@@ -37,7 +39,7 @@ export const GET = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssue(issueIdOrKey, context);
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -45,9 +47,11 @@ export const GET = withAppAuth(
         );
       }
 
+      // Of the linked issues, those the token's account may read.
+      const readable = tokenIssueReadWhere(context);
       // Get relations where this issue is the source
       const sourceRelations = await prisma.issueRelation.findMany({
-        where: { sourceIssueId: issue.id },
+        where: { sourceIssueId: issue.id, targetIssue: readable },
         include: {
           targetIssue: {
             select: {
@@ -72,7 +76,7 @@ export const GET = withAppAuth(
 
       // Get relations where this issue is the target
       const targetRelations = await prisma.issueRelation.findMany({
-        where: { targetIssueId: issue.id },
+        where: { targetIssueId: issue.id, sourceIssue: readable },
         include: {
           sourceIssue: {
             select: {
@@ -202,7 +206,7 @@ export const POST = withAppAuth(
       const data = CreateRelationSchema.parse(body);
 
       // Find source issue
-      const sourceIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const sourceIssue = await findIssue(issueIdOrKey, context);
       if (!sourceIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Source issue not found' },
@@ -211,7 +215,7 @@ export const POST = withAppAuth(
       }
 
       // Find target issue
-      const targetIssue = await findIssue(data.targetIssueId, context.workspace.id);
+      const targetIssue = await findIssue(data.targetIssueId, context);
       if (!targetIssue) {
         return NextResponse.json(
           { error: 'target_not_found', error_description: 'Target issue not found' },

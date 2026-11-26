@@ -7,6 +7,7 @@ import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
@@ -31,10 +32,10 @@ export const POST = withAppAuth(
       const body = await request.json();
       const data = AssignIssueSchema.parse(body);
 
-      // Find the issue
+      // Find the issue, by the issue read rule
       const issue = await prisma.issue.findFirst({
         where: {
-          workspaceId: context.workspace.id,
+          ...tokenIssueReadWhere(context),
           OR: [
             { id: issueIdOrKey },
             { issueKey: issueIdOrKey },

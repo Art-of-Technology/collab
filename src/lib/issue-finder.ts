@@ -20,6 +20,18 @@ export function issueReadAccessWhere(userId: string) {
 }
 
 /**
+ * The issue read rule for an app token: of the workspace the token works in, the issues its account may read.
+ * The rule sits in `AND`, so a caller's own `OR` stands beside it.
+ */
+export function tokenIssueReadWhere(context: { user: { id: string }; workspace: { id: string } }) {
+  return {
+    AND: [issueReadAccessWhere(context.user.id)],
+    workspaceId: context.workspace.id,
+    project: { workspaceId: context.workspace.id },
+  } satisfies Prisma.IssueWhereInput;
+}
+
+/**
  * Options for finding issues
  */
 export interface FindIssueOptions {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { format, parseISO, startOfDay, endOfDay, eachDayOfInterval, isBefore, isAfter, isSameDay, differenceInDays } from 'date-fns';
 import type {
   TeamActivityResponse,
@@ -228,12 +229,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: { userId: session.user.id, workspaceId },
-      },
-    });
-    if (!membership) {
+    // The workspace's owner and its active members; a membership that is not active is no membership.
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
 
@@ -274,9 +271,12 @@ export async function GET(
 
     // Get ALL issues ever assigned to these members (for historical reconstruction)
     // Filter out issues from archived projects
+    // The issue read rule: only the issues this user may read, and their blockers, are shown.
+    const readable = issueReadAccessWhere(session.user.id);
     const allIssues = await prisma.issue.findMany({
       where: {
         workspaceId,
+        AND: [readable],
         assigneeId: { in: memberUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         // Only include issues from active projects (isArchived is null or false)
@@ -298,7 +298,7 @@ export async function GET(
         project: { select: { id: true, name: true, isArchived: true } },
         projectStatus: { select: { id: true, name: true, displayName: true, isFinal: true } },
         targetRelations: {
-          where: { relationType: 'BLOCKED_BY' },
+          where: { relationType: 'BLOCKED_BY', sourceIssue: readable },
           select: { sourceIssue: { select: { issueKey: true } } },
         },
       },

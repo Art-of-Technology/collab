@@ -161,7 +161,7 @@ test('Qdrant activity migration and status count share active-parent scope witho
 test('issues-by-activity keeps its preexisting ISSUE-only search contract', async () => {
   const f = fixture();
   const result = await body(await f.route('apps/auth/search/issues-by-activity').GET(
-    new Request('https://example.test?includeActivity=false'), { workspace: { id: 'workspace' } }));
+    new Request('https://example.test?includeActivity=false'), { workspace: { id: 'workspace' }, user: { id: 'actor' } }));
   assert.equal(result.summary.totalMatchingActivities, 1);
   assert.deepEqual(result.results.map(row => row.id), ['active']);
 });

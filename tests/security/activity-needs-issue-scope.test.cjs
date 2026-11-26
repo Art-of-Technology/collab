@@ -92,7 +92,7 @@ before(async () => {
     await prisma.projectStatus.create({ data: { id: 'foreign-status', projectId: 'foreign-project', name: 'open', displayName: 'Open', order: 1 } });
   });
   for (const [id, statusId] of [['shown', null], ['hidden', 'foreign-status']]) {
-    await db.prisma.issue.create({ data: { id, title: id, issueKey: id.toUpperCase(), workspaceId: 'work', projectId: 'project', statusId } });
+    await db.prisma.issue.create({ data: { id, title: id, issueKey: id.toUpperCase(), workspaceId: 'work', projectId: 'project', statusId, assigneeId: 'viewer', status: 'in_progress' } });
     await db.prisma.issueActivity.create({ data: { itemId: id, action: 'UPDATED', userId: 'work-owner', workspaceId: 'work', projectId: 'project',
       fieldName: 'description', oldValue: `${id}-old`, newValue: `${id}-new`, details: JSON.stringify({ content: `${id}-details` }) } });
   }
@@ -100,8 +100,13 @@ before(async () => {
   const prisma = db.prisma.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
   const deps = { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma },
     '@/lib/auth': { getAuthSession: async () => ({ user: { id: signedIn } }) }, '@/lib/apps/auth-middleware': { withAppAuth: handler => handler } };
-  const route = path => load(`src/app/api/${path}/route.ts`, deps, { URL, console });
+  const route = path => load(`src/app/api/${path}/route.ts`, deps, { URL, console, Date });
   routes = { issue: route('issues/[issueId]/activities'), workspace: route('apps/auth/workspace/activity'), project: route('apps/auth/projects/[projectId]/activity') };
+  Object.assign(deps, { zod: require('zod'), 'date-fns': require('date-fns'), '@/utils/teamSyncAnalyzer': load('src/utils/teamSyncAnalyzer.ts'),
+    '@/lib/redis': {}, '@/lib/event-bus': {}, '@/lib/rate-limit': { withRateLimit: handler => handler }, '@/lib/agent-context-folders': {}, '@/lib/issue-attachments': {} });
+  routes.search = route('apps/auth/search/issues-by-activity');
+  for (const name of ['activity', 'range', 'team-activity']) routes[name] = route(`workspaces/[workspaceId]/planning/${name}`);
+  for (const name of ['', '/comments', '/attachments']) routes[`item${name}`] = route(`apps/auth/issues/[issueIdOrKey]${name}`);
 });
 after(() => db?.stop());
 
@@ -141,4 +146,135 @@ for (const feed of ['workspace', 'project']) {
 test('a membership that is not active reads no issue activity', async () => {
   assert.deepEqual(await readIssue('inactive', 'shown'), await readIssue('inactive', 'no-such-issue'));
   for (const feed of ['workspace', 'project']) assert.deepEqual(JSON.parse(await readFeed(feed, 'inactive')).activities, [], feed);
+});
+
+const asToken = user => ({ workspace: { id: 'work' }, user: { id: user } });
+const reply = async response => ({ status: response.status, text: await response.text() });
+
+// The token routes behind a door that lets every caller in: what is tested is the rule each route reads an issue by.
+const readItem = (name, user, issueIdOrKey, method = 'GET') => routes[`item${name}`][method](
+  new Request('https://example.test/api', { method, ...(method === 'POST' && { body: '{}' }) }), asToken(user), { params: Promise.resolve({ issueIdOrKey }) }).then(reply);
+
+test('the app issue routes find an issue by the issue read rule', async () => {
+  const served = await readItem('', 'viewer', 'SHOWN');
+  assert.deepEqual([served.status, JSON.parse(served.text).id, JSON.parse(served.text).stats], [200, 'shown', { commentCount: 0, childCount: 0, relationCount: 0 }]);
+  assert.equal((await readItem('/comments', 'viewer', 'shown')).status, 200);
+  for (const [name, method] of [['', 'GET'], ['/comments', 'GET'], ['/attachments', 'POST']]) {
+    const missing = await readItem(name, 'viewer', 'no-such-issue', method);
+    assert.deepEqual(missing, { status: 404, text: '{"error":"not_found","error_description":"Issue not found"}' });
+    for (const hidden of ['hidden', 'HIDDEN']) assert.deepEqual(await readItem(name, 'viewer', hidden, method), missing, name);
+    // A membership that is not active, and an account outside the workspace, read none.
+    for (const user of ['inactive', 'foreign-owner']) assert.deepEqual(await readItem(name, user, 'shown', method), missing, `${name} ${user}`);
+  }
+});
+
+const searched = async user => JSON.parse((await reply(await routes.search.GET(new Request('https://example.test/api?fieldName=description'), asToken(user)))).text);
+
+test('the search by activity finds and counts only the issues its reader may read', async () => {
+  const found = await searched('viewer');
+  assert.deepEqual(found.results.map(row => [row.id, row.title, row.matchingActivities.map(activity => activity.newValue)]), [['shown', 'shown', ['shown-new']]]);
+  assert.deepEqual([found.pagination.total, found.summary], [1, { totalMatchingActivities: 1, uniqueIssuesWithActivity: 1 }]);
+  assert.doesNotMatch(JSON.stringify(found), /hidden/i);
+  const none = await searched('inactive');
+  assert.deepEqual([none.results, none.pagination.total, 'summary' in none], [[], 0, false]);
+});
+
+const day = offset => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+const plan = async (name, user, query = '') => {
+  signedIn = user;
+  return reply(await routes[name].GET(new Request(`https://example.test/api?startDate=${day(-1)}&endDate=${day(1)}${query}`), { params: Promise.resolve({ workspaceId: 'work' }) }));
+};
+
+for (const name of ['activity', 'range', 'team-activity']) {
+  test(`planning ${name} shows a member of the workspace only the issues they may read`, async () => {
+    // The member's own assigned issues too, where the route lists them.
+    for (const query of ['', '&userIds=viewer']) {
+      const served = await plan(name, 'viewer', query);
+      assert.equal(served.status, 200);
+      assert.doesNotMatch(served.text, /hidden/i, query);
+      if (name === 'team-activity' || !query) assert.match(served.text, /SHOWN/, query);
+    }
+  });
+
+  test(`planning ${name} answers a membership that is not active as it answers someone who is not a member`, async () => {
+    const outsider = await plan(name, 'foreign-owner');
+    assert.equal(outsider.status, 403);
+    assert.deepEqual(await plan(name, 'inactive'), outsider);
+  });
+}
+
+test('planning counts a cross-workspace blocker only for readers of that blocker', async () => {
+  const prisma = db.prisma;
+  await prisma.workspaceMember.create({ data: { workspaceId: 'foreign', userId: 'work-owner' } });
+  await prisma.projectStatus.create({ data: { id: 'local-open', projectId: 'project', name: 'in_progress', displayName: 'In progress', order: 1 } });
+  await prisma.issue.createMany({ data: [
+    { id: 'target', issueKey: 'REL-1', title: 'Local task', assigneeId: 'viewer', workspaceId: 'work', projectId: 'project', statusId: 'local-open' },
+    { id: 'blocker', issueKey: 'FOR-1', title: 'Blocker', assigneeId: 'viewer', workspaceId: 'foreign', projectId: 'foreign-project', statusId: 'foreign-status' },
+  ] });
+  await prisma.issueRelation.create({ data: { sourceIssueId: 'blocker', targetIssueId: 'target', relationType: 'BLOCKED_BY' } });
+
+  for (const [reader, count] of [['work-owner', 1], ['viewer', 0]]) {
+    const range = await plan('range', reader, '&userIds=viewer');
+    assert.equal(range.status, 200);
+    const { summary, members: [member] } = JSON.parse(range.text);
+    assert.equal(summary.totalBlocked, count);
+    assert.deepEqual(member.currentBlocked.map(issue => issue.issueKey), count ? ['REL-1'] : []);
+    assert.ok(member.assignedIssues.some(issue => issue.issueKey === 'REL-1'));
+    assert.ok(member.assignedIssues.every(issue => issue.issueKey !== 'FOR-1'));
+
+    const team = await plan('team-activity', reader, '&userIds=viewer');
+    assert.equal(team.status, 200);
+    const { summary: teamSummary, members: [{ current }] } = JSON.parse(team.text);
+    assert.equal(teamSummary.blocked, count);
+    assert.deepEqual(current.blocked.map(issue => [issue.key, issue.blockedBy]), count ? [['REL-1', 'FOR-1']] : []);
+    if (!count) assert.ok(current.inProgress.some(issue => issue.key === 'REL-1'));
+    assert.ok(Object.values(current).flat().every(issue => issue.key !== 'FOR-1'));
+  }
+});
+
+test('planning shows a person who may read every issue what it showed before the issue read rule', async () => {
+  const prisma = db.prisma;
+  // A member of both workspaces: every issue, status and blocker below is theirs to read.
+  await prisma.user.create({ data: { id: 'reader', name: 'reader' } });
+  await prisma.workspaceMember.createMany({ data: [{ workspaceId: 'work', userId: 'reader' }, { workspaceId: 'foreign', userId: 'reader' }] });
+  await prisma.project.create({ data: { id: 'plan', workspaceId: 'work', name: 'Plan', slug: 'plan', issuePrefix: 'PL' } });
+  await prisma.projectStatus.createMany({ data: [['in_progress', false], ['in_review', false], ['done', true]].map(([name, isFinal], order) => (
+    { id: `plan-${name}`, projectId: 'plan', name, displayName: name, order, isFinal })) });
+  const issue = (number, data) => ({ id: `plan-${number}`, issueKey: `PL-${number}`, title: `Planned ${number}`, assigneeId: 'reader', workspaceId: 'work', projectId: 'plan', ...data });
+  await prisma.issue.createMany({ data: [
+    issue(1, { statusId: 'plan-in_progress' }), issue(2, { statusId: 'plan-in_progress' }), issue(3, { statusId: 'plan-in_review' }), issue(4, { statusId: 'plan-in_review' }),
+    issue(5, { statusId: 'plan-done' }), issue(6, { status: 'todo' }), issue(7, { statusId: 'foreign-status' }),
+    issue(8, { workspaceId: 'foreign', projectId: 'foreign-project', statusId: 'foreign-status' }),
+  ] });
+  // As planning reads a link: PL-2 waits for PL-1, PL-3 for PL-8 in the other workspace. A BLOCKS link is not read.
+  await prisma.issueRelation.createMany({ data: [
+    { sourceIssueId: 'plan-1', targetIssueId: 'plan-2', relationType: 'BLOCKED_BY' }, { sourceIssueId: 'plan-8', targetIssueId: 'plan-3', relationType: 'BLOCKED_BY' },
+    { sourceIssueId: 'plan-1', targetIssueId: 'plan-4', relationType: 'BLOCKS' },
+  ] });
+  await prisma.issueActivity.createMany({ data: [['plan-1', 'to_do', 'in_progress'], ['plan-5', 'in_progress', 'done']].map(([itemId, oldValue, newValue]) => (
+    { itemId, action: 'STATUS_CHANGED', fieldName: 'status', oldValue, newValue, userId: 'reader', workspaceId: 'work', projectId: 'plan' })) });
+  const read = async name => {
+    const served = await plan(name, 'reader', '&userIds=reader');
+    assert.equal(served.status, 200);
+    return JSON.parse(served.text);
+  };
+  const keys = rows => rows.map(row => row.issueKey).sort();
+
+  const { feed, hasMore } = await read('activity');
+  assert.deepEqual([feed.map(row => [row.issueKey, row.newValue]).sort(), hasMore], [[['PL-1', 'in_progress'], ['PL-5', 'done']], false]);
+
+  // Range lists the workspace's assigned issues whose status is one of a project and not final; one a `BLOCKED_BY` link points at is blocked, whatever its status.
+  const range = await read('range'), [member] = range.members;
+  assert.equal(range.members.length, 1);
+  assert.deepEqual(['assignedIssues', 'currentInProgress', 'currentInReview', 'currentBlocked', 'currentPlanned'].map(list => keys(member[list])),
+    [['PL-1', 'PL-2', 'PL-3', 'PL-4', 'PL-7'], ['PL-1'], ['PL-4'], ['PL-2', 'PL-3'], ['PL-7']]);
+  const { totalCompleted, totalStarted, totalInProgress, totalInReview, totalPlanned, totalBlocked } = range.summary;
+  assert.deepEqual([totalCompleted, totalStarted, totalInProgress, totalInReview, totalPlanned, totalBlocked], [1, 1, 1, 1, 1, 2]);
+
+  // The team view also lists an issue without a project's status, and names the first blocker.
+  const team = await read('team-activity'), [{ current, summary }] = team.members;
+  assert.equal(team.members.length, 1);
+  assert.deepEqual(Object.fromEntries(Object.entries(current).map(([list, rows]) => [list, rows.map(row => [row.key, row.blockedBy ?? null]).sort()])), {
+    inProgress: [['PL-1', null]], inReview: [['PL-4', null]], blocked: [['PL-2', 'PL-1'], ['PL-3', 'PL-8']], planned: [['PL-6', null], ['PL-7', null]] });
+  assert.deepEqual([summary, team.summary.blocked, team.summary.completed], [{ completed: 1, inReview: 1, inProgress: 1, blocked: 2, planned: 2, workload: 4 }, 2, 1]);
 });

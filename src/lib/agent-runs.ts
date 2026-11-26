@@ -9,7 +9,7 @@ import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-bo
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
-import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere, tokenIssueReadWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
 export { NOT_DONE };
@@ -773,7 +773,7 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * the linked issues and children it lists are those the account may read; any other issue is not found.
  */
 export async function runContext(context: Caller, issueIdOrKey: string) {
-  const readable: Prisma.IssueWhereInput = { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id, project: { workspaceId: context.workspace.id } };
+  const readable = tokenIssueReadWhere(context);
   const issue = await prisma.issue.findFirst({ where: { ...readable, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
     agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } },

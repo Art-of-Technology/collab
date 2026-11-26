@@ -1,5 +1,6 @@
 import { notificationCommentAccessWhere } from "@/lib/notification-access";
 import { postAccessWhere } from "@/lib/post-access";
+import { issueReadAccessWhere } from "@/lib/issue-finder";
 import { prisma } from "@/lib/prisma";
 import {
   sendPushNotification,
@@ -94,6 +95,16 @@ export enum NotificationType {
   COCLAW_CHANNEL_EVENT = "COCLAW_CHANNEL_EVENT",
   COCLAW_MEMORY_UPDATE = "COCLAW_MEMORY_UPDATE",
   COCLAW_ERROR = "COCLAW_ERROR",
+}
+
+// The mention types that name an issue: the app's own, and the two the mentions handler sends for an issue and for a comment on one.
+const ISSUE_MENTION_TYPES = new Set<string>([NotificationType.ISSUE_MENTION, "issue_mention", "issueComment_mention"]);
+
+function findReadableIssue(issueId: string, userId: string) {
+  return prisma.issue.findFirst({
+    where: { id: issueId, ...issueReadAccessWhere(userId) },
+    select: { id: true },
+  });
 }
 
 export class NotificationService {
@@ -203,8 +214,7 @@ export class NotificationService {
 
   /**
    * Create notifications for a specific list of users, optionally filtering by preferences.
-   * Returns the number of notifications created. Also sends push notifications when
-   * postId or issueId are provided (used for URL generation).
+   * Sends push notifications when postId or issueId are provided (used for URL generation).
    */
   static async notifyUsers(
     userIds: string[],
@@ -274,6 +284,16 @@ export class NotificationService {
         recipientIds = allowed;
       }
 
+      // The issue read rule: a mention on an issue tells only the people who may read the issue; any other mention is skipped.
+      const isIssueMention = ISSUE_MENTION_TYPES.has(type);
+      if (issueId && isIssueMention) {
+        const readers: string[] = [];
+        for (const userId of recipientIds) {
+          if (await findReadableIssue(issueId, userId)) readers.push(userId);
+        }
+        recipientIds = readers;
+      }
+
       if (filterPreferences) {
         const filtered: string[] = [];
         for (const userId of recipientIds) {
@@ -327,6 +347,7 @@ export class NotificationService {
         type,
       });
 
+      if (isIssueMention && (!issueId || !(await findReadableIssue(issueId, senderId)))) return 0;
       return result.count ?? dedupedRecipientIds.length;
     } catch (error) {
       logger.error("Failed to notify users", error, { type });

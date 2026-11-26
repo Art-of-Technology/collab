@@ -905,4 +905,69 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.equal(mentionsAtPublication.at(-1), 0);
     assert.deepEqual([response.status, events.length, await raw.issueComment.count({ where })], [200, 1, 1]);
   });
+  // Someone outside the workspace, and `gone`, whose membership is not active: neither may read an issue of the workspace. The owner may.
+  const stranger = 'cmention0001';
+  await raw.user.create({ data: { id: stranger, name: stranger } });
+  /** The notification service on the test database, and the pushes it sends: who to, and the page they open. */
+  const notifier = () => {
+    const pushed = [];
+    const notifications = load('src/lib/notification-service.ts', { '@/lib/prisma': { prisma },
+      '@/lib/push-notifications': { sendPushNotification: async (userId, payload) => { pushed.push([userId, payload.url]); return true; } },
+      '@/lib/permissions': load('src/lib/permission-types.ts'), 'date-fns': require('date-fns'), '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {} });
+    return { notifications, pushed };
+  };
+
+  await t.test('a mention in a comment tells only the people who may read the issue, and the comment is stored as written', async () => {
+    const { notifications, pushed } = notifier();
+    const commentRoute = load('src/app/api/issues/[issueId]/comments/route.ts', { ...deps, '@/lib/session': { getCurrentUser: async () => raw.user.findUnique({ where: { id: person } }) },
+      '@/lib/redis': { publishEvent: async () => {} }, '@/utils/mentions': load('src/utils/mentions.ts'), '@/lib/notification-service': notifications }, globals);
+    const { target } = await started(devA);
+    await raw.notification.deleteMany();
+    const content = `@[The owner](${owner}) @[A stranger](${stranger}) @[Gone](${gone}) Please look at this.`;
+    const response = await commentRoute.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) }), { params: Promise.resolve({ issueId: target.id }) });
+    assert.equal(response.status, 201);
+    assert.deepEqual((await raw.notification.findMany()).map(row => [row.type, row.userId, row.senderId, row.content]),
+      [['ISSUE_MENTION', owner, person, `@[${person}](${person}) mentioned you in a comment on #[${target.issueKey}](${target.id})`]]);
+    assert.deepEqual(pushed, [[owner, `/issues/${target.id}`]]);
+    assert.deepEqual((await raw.issueComment.findMany({ where: { issueId: target.id } })).map(row => [row.authorId, row.content]), [[person, content]]);
+  });
+
+  // The mentions handler names an issue, or a comment on one, and sends its own two types.
+  for (const [sourceType, type] of [['issue', 'issue_mention'], ['issueComment', 'issueComment_mention']]) {
+    await t.test(`a mention sent as ${type} tells only the people who may read the issue, and what was written stays as written`, async () => {
+      const { notifications, pushed } = notifier();
+      const mentions = load('src/app/api/mentions/route.ts', { zod, 'next/server': response, '@/lib/prisma': { prisma }, '@/lib/session': { getCurrentUser: async () => ({ id: person }) },
+        '@/lib/html-sanitizer': { sanitizeHtmlToPlainText: text => text }, '@/lib/notification-service': notifications }, globals);
+      const { target } = await started(devA, { description: 'The description as written' });
+      const comment = await raw.issueComment.create({ data: { issueId: target.id, authorId: person, content: 'The comment as written' } });
+      await raw.notification.deleteMany();
+      const reply = await mentions.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({
+        userIds: [owner, stranger, gone], sourceType, sourceId: sourceType === 'issue' ? target.id : comment.id, content: 'Please look at this.' }) }));
+      assert.deepEqual([reply.status, (await reply.json()).notificationsCreated], [200, 1]);
+      assert.deepEqual((await raw.notification.findMany()).map(row => [row.type, row.userId, row.senderId, row.content]), [[type, owner, person, 'Please look at this.']]);
+      assert.deepEqual(pushed, [[owner, `/issues/${target.id}`]]);
+      assert.deepEqual([(await raw.issue.findUniqueOrThrow({ where: { id: target.id } })).description, (await raw.issueComment.findMany({ where: { issueId: target.id } })).map(row => row.content)],
+        ['The description as written', ['The comment as written']]);
+    });
+
+    await t.test(`${type} gives an inactive sender the same acknowledgement for unreadable and missing sources`, async () => {
+      const { notifications } = notifier();
+      const mentions = load('src/app/api/mentions/route.ts', { ...deps, '@/lib/session': { getCurrentUser: async () => ({ id: gone }) },
+        '@/lib/html-sanitizer': { sanitizeHtmlToPlainText: text => text }, '@/lib/notification-service': notifications }, globals);
+      const target = await issue(devA);
+      const source = sourceType === 'issue' ? target : await raw.issueComment.create({ data: { issueId: target.id, authorId: person, content: 'Private comment' } });
+      for (const [sourceId, recipient, expectedDeliveries] of [
+        [source.id, owner, 1],
+        [source.id, stranger, 0],
+        ['missing', owner, sourceType === 'issueComment' ? 1 : 0],
+      ]) {
+        const content = `Mention from ${sourceType} ${sourceId} to ${recipient}`;
+        const reply = await mentions.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({
+          userIds: [recipient], sourceType, sourceId, content }) }));
+        assert.equal(reply.status, 200);
+        assert.deepEqual(await reply.json(), { message: 'Mentions processed successfully', mentionsCount: 1, notificationsCreated: 0 });
+        assert.equal(await raw.notification.count({ where: { type, senderId: gone, userId: recipient, content } }), expectedDeliveries);
+      }
+    });
+  }
 });

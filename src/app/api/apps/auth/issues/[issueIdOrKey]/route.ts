@@ -14,6 +14,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { z } from 'zod';
 import { emitIssueUpdated } from '@/lib/event-bus';
 import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
@@ -43,10 +44,11 @@ const UpdateIssueSchema = z.object({
   timeEstimateMinutes: z.number().int().positive().nullable().optional(),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
+// The issue read rule: an issue the token's account may not read is not found.
+async function findIssue(issueIdOrKey: string, context: AppAuthContext) {
   return prisma.issue.findFirst({
     where: {
-      workspaceId,
+      ...tokenIssueReadWhere(context),
       OR: [
         { id: issueIdOrKey },
         { issueKey: issueIdOrKey },
@@ -64,9 +66,11 @@ export const GET = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
 
+      // The issue read rule: the issue, and of its parent, children and links those the token's account may read.
+      const readable = tokenIssueReadWhere(context);
       const issue = await prisma.issue.findFirst({
         where: {
-          workspaceId: context.workspace.id,
+          ...readable,
           OR: [
             { id: issueIdOrKey },
             { issueKey: issueIdOrKey },
@@ -99,6 +103,7 @@ export const GET = withAppAuth(
             },
           },
           parent: {
+            where: readable,
             select: {
               id: true,
               issueKey: true,
@@ -107,6 +112,7 @@ export const GET = withAppAuth(
             },
           },
           children: {
+            where: readable,
             select: {
               id: true,
               issueKey: true,
@@ -142,9 +148,9 @@ export const GET = withAppAuth(
           _count: {
             select: {
               comments: true,
-              children: true,
-              sourceRelations: true,
-              targetRelations: true,
+              children: { where: readable },
+              sourceRelations: { where: { targetIssue: readable } },
+              targetRelations: { where: { sourceIssue: readable } },
             },
           },
         },
@@ -226,7 +232,7 @@ export const PATCH = withAppAuth(
       const updateData = UpdateIssueSchema.parse(body);
 
       // Find the issue
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const existingIssue = await findIssue(issueIdOrKey, context);
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -236,9 +242,9 @@ export const PATCH = withAppAuth(
 
       await seatWriteGuard(prisma, context, existingIssue.projectId);
 
-      // A parent must be an issue of this workspace, as on create: checked before anything else looks at it.
+      // A parent must be an issue of this workspace that the token's account may read, as on create: checked before anything else looks at it.
       const parent = updateData.parentId ? await prisma.issue.findFirst({
-        where: { id: updateData.parentId, workspaceId: context.workspace.id }, select: { projectId: true },
+        where: { id: updateData.parentId, ...tokenIssueReadWhere(context) }, select: { projectId: true },
       }) : null;
       if (updateData.parentId && !parent) {
         return NextResponse.json(

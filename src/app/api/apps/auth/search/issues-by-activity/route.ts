@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 
 /**
  * GET /api/apps/auth/search/issues-by-activity
@@ -109,8 +110,9 @@ export const GET = withAppAuth(
       }
 
       // Activity has no Issue FK; also exclude trash from historical summary counts.
+      // The issue read rule: only the activity of issues the token's account may read is searched and counted.
       const visibleIssues = await prisma.issue.findMany({
-        where: { workspaceId: context.workspace.id }, select: { id: true },
+        where: tokenIssueReadWhere(context), select: { id: true },
       });
       activityWhere.itemId = { in: visibleIssues.map(issue => issue.id) };
 

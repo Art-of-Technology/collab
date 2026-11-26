@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
-import { issueReadAccessWhere } from '@/lib/issue-finder';
+import { tokenIssueReadWhere } from '@/lib/issue-finder';
 
 /**
  * GET /api/apps/auth/projects/:projectId/activity
@@ -36,7 +36,7 @@ export const GET = withAppAuth(
 
       // Get the IDs of this project's issues that the token's account may read
       const issues = await prisma.issue.findMany({
-        where: { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id, projectId },
+        where: { ...tokenIssueReadWhere(context), projectId },
         select: { id: true, issueKey: true },
       });
       const issueIds = issues.map(i => i.id);
