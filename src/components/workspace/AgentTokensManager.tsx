@@ -144,7 +144,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
     setBusy(true);
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/agent-tokens/${revoking.id}`, { method: 'DELETE' });
-      if (!response.ok) return failed('Failed to revoke the token');
+      if (!response.ok) return failed((await response.json().catch(() => ({}))).error || 'Failed to revoke the token');
       toast({ title: 'Token revoked', description: `${revoking.name} can no longer use it.` });
       setRevoking(null);
       await queryClient.invalidateQueries({ queryKey: ['workspace-member-users'] });
