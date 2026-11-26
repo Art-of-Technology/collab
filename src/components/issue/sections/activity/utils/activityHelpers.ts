@@ -74,7 +74,7 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   if (activity.action === 'SECURITY_VERDICT') {
     return `${userName} reviewed ${typeof activity.details?.reviewed === 'string' ? activity.details.reviewed : `this ${itemType}`} for security: ${activity.details?.verdict === 'passed' ? 'passed' : 'failed'}`;
   }
-  if (activity.action === 'AGENT_STOP_EMAILED') return `Collab emailed the person ${userName} named on this ${itemType}`;
+  if (activity.action === 'AGENT_STOP_EMAILED') return `Collab attempted to email the person ${userName} named on this ${itemType}`;
   if (activity.action === 'AGENT_RUN_LATE') return `${userName} sent an exit note after the run on this ${itemType} had ended; nothing else changed`;
   const actionName = getActionDisplayName(activity.action).toLowerCase();
   

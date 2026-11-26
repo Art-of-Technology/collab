@@ -518,7 +518,7 @@ ${footer}`);
       assert.deepEqual((await records()).map(([, to]) => to), [person, owner, person]);
       // The timeline says it in words.
       const { getActionText } = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
-      assert.equal(getActionText({ action: EMAILED, user: { name: 'dev-a' }, details: {} }), 'Collab emailed the person dev-a named on this issue');
+      assert.equal(getActionText({ action: EMAILED, user: { name: 'dev-a' }, details: {} }), 'Collab attempted to email the person dev-a named on this issue');
       assert.deepEqual(mailLogs, []);
     });
 
