@@ -432,7 +432,10 @@ const isSeatAccount = async (db: DB, userId: string) => !!await db.agentSeat.fin
 export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: string | null, existingIssue: boolean, leadPlacesNext = false): Promise<boolean> {
   const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { role: true, retiredAt: true } });
   if (seat) {
-    const leads = leadPlacesNext && existingIssue && !!assigneeId && assigneeId !== context.user.id && seat.role === 'lead' && !seat.retiredAt && await isSeatAccount(db, assigneeId);
+    // Never onto the workspace's Lead (CLB-952): a lead places work on the seats that do it.
+    const target = leadPlacesNext && existingIssue && !!assigneeId && assigneeId !== context.user.id && seat.role === 'lead' && !seat.retiredAt
+      ? await db.agentSeat.findUnique({ where: { userId: assigneeId }, select: { projectId: true, role: true } }) : null;
+    const leads = !!target && !(target.projectId === null && target.role === 'lead');
     if (!leads) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
     return true;
   }
@@ -468,7 +471,7 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   else if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
   const seat = rows.find(row => row.userId === to);
   const only = 'A lead seat assigns issues only to the other seats of its project and to the developer seats of the whole workspace';
-  // Never to a lead: the workspace's own is refused here, before the rule that keeps it out of a project with a lead.
+  // Never onto the workspace's Lead (CLB-952), as `assertTokenMayAssign` already says.
   if (!seat || to === me || (seat.projectId === null && seat.role === 'lead')) throw new HandoffError('seat_scope', only, 403);
   await assertAssignable(tx, issue, to);
   // Of the seats of the whole workspace, a project's lead places work on the developers only (CLB-951).
