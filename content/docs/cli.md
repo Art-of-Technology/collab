@@ -252,6 +252,7 @@ Pass the registered `--host` and `--session-id` to the watcher to report health.
 | `--profile NAME` | Use a separate local profile (default: default). |
 | `--url URL` | Choose a server for login or a token supplied through the environment. Stored tokens stay bound to their original server. |
 | `--input FILE` / `--input -` | Read a JSON body from a file or stdin. Use API field names such as assigneeId. |
+| `--ask-file FILE` / `--ask-file -` | With `collab run finish --asked-user`, read a JSON object from a file or stdin and send it as `ask` to declare what you ask the person to do or decide. |
 | `--content-file` / `--description-file` | Read text from a file or stdin (-). Maximum input: 1 MiB, within 30 seconds. |
 | `--yes` | Required for deletion. Issue deletion `--dry-run` reads the exact preview without `--yes`. |
 | `--all` | Fetch every page of issues, Notes, or work logs, up to 100 pages / 10,000 items. |
