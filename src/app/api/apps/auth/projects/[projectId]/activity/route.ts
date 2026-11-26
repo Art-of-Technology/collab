@@ -20,63 +20,52 @@ export const GET = withAppAuth(
       const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
       const action = searchParams.get('action');
 
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          workspaceId: context.workspace.id,
-        },
-      });
+      const snapshot = await prisma.$transaction(async tx => {
+        const project = await tx.project.findFirst({
+          where: {
+            id: projectId,
+            workspaceId: context.workspace.id,
+          },
+        });
 
-      if (!project) {
+        if (!project) return null;
+
+        // Get the IDs of this project's issues that the token's account may read
+        const issues = await tx.issue.findMany({
+          where: { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id, projectId },
+          select: { id: true, issueKey: true },
+        });
+        const activities = issues.length ? await tx.issueActivity.findMany({
+          where: {
+            itemType: 'ISSUE',
+            itemId: { in: issues.map(issue => issue.id) },
+            ...(action && { action }),
+          },
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+          },
+        }) : [];
+        return { project, issues, activities };
+      }, { isolationLevel: 'RepeatableRead' });
+
+      if (!snapshot) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Project not found' },
           { status: 404 }
         );
       }
 
-      // Get the IDs of this project's issues that the token's account may read
-      const issues = await prisma.issue.findMany({
-        where: { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id, projectId },
-        select: { id: true, issueKey: true },
-      });
-      const issueIds = issues.map(i => i.id);
+      const { project, issues, activities } = snapshot;
       const issueKeyMap = new Map(issues.map(i => [i.id, i.issueKey]));
-
-      if (issueIds.length === 0) {
-        return NextResponse.json({
-          projectId,
-          projectName: project.name,
-          activities: [],
-          total: 0,
-        });
-      }
-
-      // Build filter
-      const where: any = {
-        itemType: 'ISSUE',
-        itemId: { in: issueIds },
-      };
-
-      if (action) {
-        where.action = action;
-      }
-
-      const activities = await prisma.issueActivity.findMany({
-        where,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-        },
-      });
-
       return NextResponse.json({
         projectId,
         projectName: project.name,

@@ -26,6 +26,7 @@ function activityApi(activities, {
     'next/server': { NextResponse: Response },
     '@/lib/auth': { getAuthSession: async () => session },
     '@/lib/prisma': { prisma: {
+      $transaction(read) { return read(this); },
       issue: { findFirst: async ({ where }) => stored && matches(stored, where) ? issue : null },
       issueActivity: { findMany: async ({ where, orderBy, take }) => rows.filter(row => matches(row, where))
         .sort((a, b) => orderBy.createdAt === 'desc' ? b.createdAt - a.createdAt : a.createdAt - b.createdAt)

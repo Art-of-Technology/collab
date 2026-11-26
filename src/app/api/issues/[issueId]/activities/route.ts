@@ -12,7 +12,8 @@ export async function GET(
 
   try {
     const session = await getAuthSession();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,77 +23,83 @@ export async function GET(
     const descriptionOnly = searchParams.get('descriptionOnly') === 'true';
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
-    // The issue read rule, as on the issue itself: an issue this user may not read is answered as not found.
-    const issue = await prisma.issue.findFirst({
-      where: { id: issueId, ...issueReadAccessWhere(session.user.id) },
-      select: { id: true },
-    });
+    const isRun = (action: string) => action === 'AGENT_RUN_FINISHED' || action === 'AGENT_RUN_LOST';
+    const snapshot = await prisma.$transaction(async tx => {
+      // The issue read rule, as on the issue itself: an issue this user may not read is answered as not found.
+      const issue = await tx.issue.findFirst({
+        where: { id: issueId, ...issueReadAccessWhere(userId) },
+        select: { id: true },
+      });
 
-    if (!issue) {
+      if (!issue) return null;
+
+      // Fetch activities for this issue
+      const activities = await tx.issueActivity.findMany({
+        where: {
+          itemId: issueId,
+          ...(action ? { action } : {}),
+          ...(descriptionOnly ? {
+            OR: [
+              { action: { in: ['DESCRIPTION_CHANGED', 'DESCRIPTION_UPDATED'] } },
+              { action: 'UPDATED', fieldName: 'description' },
+            ],
+          } : {}),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              useCustomAvatar: true,
+              avatarSkinTone: true,
+              avatarEyes: true,
+              avatarBrows: true,
+              avatarMouth: true,
+              avatarNose: true,
+              avatarHair: true,
+              avatarEyewear: true,
+              avatarAccessory: true,
+            },
+          },
+          oldStatus: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              color: true,
+              iconName: true,
+            },
+          },
+          newStatus: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              color: true,
+              iconName: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: limit,
+      });
+
+      // Whose allowance each run used (CLB-779): the first name of its seat's owner and the program its runner reported.
+      // A run whose seat has no owner (an API-key seat) or no seat (a person's own run) shows none.
+      const parsed = activities.map(activity => ({ activity, details: activity.details ? JSON.parse(activity.details) : null }));
+      const runIds = parsed.filter(({ activity, details }) => isRun(activity.action) && typeof details?.runId === 'string').map(({ details }) => details.runId as string);
+      const runs = runIds.length ? await tx.agentRun.findMany({ where: { id: { in: runIds }, issueId },
+        select: { id: true, program: true, seat: { select: { owner: { select: { name: true } } } } } }) : [];
+      return { parsed, runs };
+    }, { isolationLevel: 'RepeatableRead' });
+
+    if (!snapshot) {
       return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
     }
-
-    // Fetch activities for this issue
-    const activities = await prisma.issueActivity.findMany({
-      where: {
-        itemId: issueId,
-        ...(action ? { action } : {}),
-        ...(descriptionOnly ? {
-          OR: [
-            { action: { in: ['DESCRIPTION_CHANGED', 'DESCRIPTION_UPDATED'] } },
-            { action: 'UPDATED', fieldName: 'description' },
-          ],
-        } : {}),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            useCustomAvatar: true,
-            avatarSkinTone: true,
-            avatarEyes: true,
-            avatarBrows: true,
-            avatarMouth: true,
-            avatarNose: true,
-            avatarHair: true,
-            avatarEyewear: true,
-            avatarAccessory: true,
-          },
-        },
-        oldStatus: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            color: true,
-            iconName: true,
-          },
-        },
-        newStatus: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            color: true,
-            iconName: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    });
-
-    // Whose allowance each run used (CLB-779): the first name of its seat's owner and the program its runner reported.
-    // A run whose seat has no owner (an API-key seat) or no seat (a person's own run) shows none.
-    const parsed = activities.map(activity => ({ activity, details: activity.details ? JSON.parse(activity.details) : null }));
-    const isRun = (action: string) => action === 'AGENT_RUN_FINISHED' || action === 'AGENT_RUN_LOST';
-    const runIds = parsed.filter(({ activity, details }) => isRun(activity.action) && typeof details?.runId === 'string').map(({ details }) => details.runId as string);
-    const runs = runIds.length ? await prisma.agentRun.findMany({ where: { id: { in: runIds }, issueId },
-      select: { id: true, program: true, seat: { select: { owner: { select: { name: true } } } } } }) : [];
+    const { parsed, runs } = snapshot;
     const allowanceOf = (runId: unknown) => {
       const run = runs.find(found => found.id === runId);
       const owner = run?.seat?.owner?.name?.trim().split(/\s+/)[0];

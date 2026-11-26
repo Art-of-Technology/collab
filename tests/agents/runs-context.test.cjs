@@ -45,7 +45,8 @@ test('run context: what a fresh session needs to work an issue, in one read', as
   const middleware = load('src/lib/apps/auth-middleware.ts', { crypto: require('node:crypto'), 'next/server': response,
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
-  const runs = load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date });
+  const loadRuns = prisma => load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date });
+  const runs = loadRuns(prisma);
   const route = load('src/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route.ts', { '@/lib/apps/auth-middleware': middleware,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals), '@/lib/agent-runs': runs }, globals);
 
@@ -71,6 +72,24 @@ test('run context: what a fresh session needs to work an issue, in one read', as
   const comment = (target, authorId, minutes, content) => raw.issueComment.create({ data: { issueId: target.id, authorId, content, createdAt: ago(minutes) } });
   const link = (source, relationType, target) => raw.issueRelation.create({ data: { sourceIssueId: source.id, targetIssueId: target.id, relationType } });
   const said = reply => reply.commentsSince.map(row => row.content);
+
+  await t.test('an in-flight run context keeps the comments visible before membership ended', async () => {
+    const viewer = await raw.user.create({ data: { name: 'Revoked viewer' } });
+    const member = await raw.workspaceMember.create({ data: { userId: viewer.id, workspaceId: 'w' } });
+    const target = await issue();
+    await comment(target, owner, 1, 'Before revocation');
+    const reader = prisma.$extends({ query: { issue: { async findFirst({ args, query }) {
+      const result = await query(args);
+      await raw.$transaction([
+        raw.workspaceMember.update({ where: { id: member.id }, data: { status: false } }),
+        raw.issueComment.create({ data: { issueId: target.id, authorId: owner, content: 'After revocation' } }),
+      ]);
+      return result;
+    } } } });
+    const caller = { user: { id: viewer.id }, workspace: { id: 'w' } };
+    assert.deepEqual(Array.from(said(await loadRuns(reader).runContext(caller, target.issueKey))), ['Before revocation']);
+    await assert.rejects(runs.runContext(caller, target.id), { code: 'not_found', status: 404 });
+  });
 
   await t.test('the issue, the last exit note, and only the comments made after the run that left it', async () => {
     const target = await issue({ description: 'What to do', priority: 'high', assigneeId: devA.userId });

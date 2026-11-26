@@ -45,6 +45,7 @@ function fixture(extra = []) {
     return selected.slice(args.skip || 0, args.take == null ? undefined : (args.skip || 0) + args.take);
   };
   const db = {
+    $transaction(read) { return read(this); },
     issue: {
       findMany: args => visibleQuery({ model: 'Issue', operation: 'findMany', args, query: async scoped => select(issues, scoped) }),
       count: args => visibleQuery({ model: 'Issue', operation: 'count', args, query: async scoped => select(issues, scoped).length }),
