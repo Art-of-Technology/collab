@@ -3072,7 +3072,7 @@ model AgentReceipt {
 model AgentSeat {
   id          String     @id @default(cuid())
   workspaceId String
-  projectId   String
+  projectId   String? // null: the seat's scope is the whole workspace (CLB-613); at most one default per role then, in SQL only
   role        String // developer | reviewer | release
   userId      String     @unique
   ownerId     String?
@@ -3090,7 +3090,7 @@ model AgentSeat {
   instructions String?  @db.Text // the seat layer of its runs' instructions (CLB-610); its length is checked in the application
   customRoleId String? // the workspace's own role the seat has (CLB-626); `role` is then that role's base role
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User       @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
   owner       User?      @relation("AgentSeatOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   customRole  AgentCustomRole? @relation(fields: [customRoleId], references: [id], onDelete: NoAction)

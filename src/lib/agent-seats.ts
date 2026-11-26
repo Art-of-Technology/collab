@@ -167,7 +167,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, role: (
     ...(!same && { room: null, roomProgram: null, roomAt: null }) };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
-  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', seat);
+  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', { projectId: input.projectId, role: seat.role });
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
     details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned, ...(seat.byRunner && { byRunner: true }),
@@ -201,9 +201,15 @@ async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; us
   return issues.map(issue => issue.issueKey ?? issue.id);
 }
 
-/** The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. */
-export function seatFor(db: DB, context: Pick<AppAuthContext, 'user'>) {
-  return db.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
+/**
+ * The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. A seat without a
+ * project (scope whole workspace, CLB-613) is refused: it has no inbox, checkout or requests until CLB-615.
+ */
+export async function seatFor(db: DB, context: Pick<AppAuthContext, 'user'>) {
+  const seat = await db.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
+  if (!seat) return null;
+  if (seat.projectId === null) throw new HandoffError('workspace_seat', 'A seat without a project cannot do this yet', 403);
+  return { ...seat, projectId: seat.projectId };
 }
 
 export async function requireSeat(db: DB, context: Pick<AppAuthContext, 'user'>) {
@@ -472,7 +478,8 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
       data: { isRevoked: true, revokedAt: new Date() }, select: { id: true } });
     if (seat.isDefault) {
       // Requests for this role keep a seat to go to.
-      const next = await tx.agentSeat.findFirst({ where: { projectId: seat.projectId, role: seat.role, retiredAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+      // The workspace too: a seat without a project hands its default only to another of its own workspace.
+      const next = await tx.agentSeat.findFirst({ where: { workspaceId: seat.workspaceId, projectId: seat.projectId, role: seat.role, retiredAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
       if (next) await tx.agentSeat.update({ where: { id: next.id }, data: { isDefault: true } });
     }
     await tx.appAuditLog.create({ data: {
