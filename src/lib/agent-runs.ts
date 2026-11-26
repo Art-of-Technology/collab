@@ -728,7 +728,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
   if (!result) throw fenced();
   // Started once the finish is committed and the issues are no longer held, and not waited for: the reply to the seat does not
   // take as long as the mail provider does. It catches and logs its own failures, so nothing of it reaches the caller.
-  if (ask && input.askedUser) void emailDeclaredStop({ runId: run.id, userId: input.askedUser, ask });
+  if (run.seatId && ask && input.askedUser) void emailDeclaredStop({ runId: run.id, userId: input.askedUser, ask });
   return result.unmapped;
 }
 

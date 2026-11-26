@@ -664,10 +664,14 @@ ${footer}`);
       return [(await stored(run.id)).state, mails.map(mail => mail.html.match(/href="([^"]*)"/)[1]), mailLogs.splice(0), (await activities(target, EMAILED)).length, provider.length];
     };
 
-    await t.test('without an address of this Collab nothing is sent and the fixed line is logged: no link to another installation', async t => {
+    await t.test("without an address of this Collab only a seat's declared stop logs a mail failure", async t => {
       const address = mailEnv.NEXT_PUBLIC_APP_URL;
       t.after(() => { delete mailEnv.NEXTAUTH_URL; mailEnv.NEXT_PUBLIC_APP_URL = address; });
       delete mailEnv.NEXT_PUBLIC_APP_URL;
+      const { run } = await started(me);
+      await settled();
+      const [status, body] = await finish(me, run.id, { outcome: 'in_review', askedUser: owner, ask: decision });
+      assert.deepEqual([status, body.run.state, await settled(), mailLogs.splice(0)], [200, 'finished', [], []]);
       assert.deepEqual(await outcome(record), ['finished', [], [['Declared stop email was not sent']], 0, 0]);
       // Either setting is an address, the first before the second.
       mailEnv.NEXTAUTH_URL = 'https://second.example.test';
