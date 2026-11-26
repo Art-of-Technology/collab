@@ -626,8 +626,13 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
       }
     }
     // Assigning is not for seat tokens; a member is answered the same way.
-    const unassign = name => send(assign.POST, personToken, 'POST', { body: { unassign: true }, params: at(name) });
-    assert.deepEqual(await unassign(hidden.issueKey), await unassign('K-0'));
+    for (const body of [{ assigneeId: devB.userId }, { unassign: true }]) {
+      const missing = await send(assign.POST, personToken, 'POST', { body, params: at('K-0') });
+      assert.deepEqual([missing.status, missing.body.error], [404, 'not_found']);
+      for (const name of [hidden.issueKey, hidden.id]) {
+        assert.deepEqual(await send(assign.POST, personToken, 'POST', { body, params: at(name) }), missing);
+      }
+    }
     // Nor is it a parent or the other end of a link: it is answered as an issue id nobody has.
     const nobody = 'c000000000000000000000000';
     for (const [handler, method, body, params] of [
