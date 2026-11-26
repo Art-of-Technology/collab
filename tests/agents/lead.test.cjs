@@ -590,6 +590,7 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     const status = await raw.projectStatus.create({ data: { projectId: elsewhereProject.id, name: 'open', displayName: 'Open', order: 1 } });
     const hidden = await issue(B, { parentId: epic.id, statusId: status.id, assigneeId: devB.userId, title: 'Not for these accounts' });
     const link = await raw.issueRelation.create({ data: { sourceIssueId: hidden.id, targetIssueId: child.id, relationType: 'BLOCKS' } });
+    const hiddenTargetLink = await raw.issueRelation.create({ data: { sourceIssueId: child.id, targetIssueId: hidden.id, relationType: 'RELATES_TO' } });
     const shown = await raw.issueRelation.create({ data: { sourceIssueId: epic.id, targetIssueId: child.id, relationType: 'RELATES_TO' } });
     const log = await raw.workLog.create({ data: { issueId: hidden.id, userId: person, workspaceId: 'w', timeSpent: 5 } });
     const at = (target, more = {}) => ({ issueIdOrKey: target, ...more });
@@ -599,6 +600,7 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     // The seat reads and updates the issue assigned to it.
     const mine = await send(item.GET, devB.token, 'GET', { params: at(child.issueKey) });
     assert.deepEqual([mine.status, mine.body.id, mine.body.assignee.id, mine.body.parent.id], [200, child.id, devB.userId, epic.id]);
+    assert.equal(mine.body.stats.relationCount, 1);
     assert.equal((await send(item.PATCH, devB.token, 'PATCH', { body: { title: 'Changed by its seat' }, params: at(child.issueKey) })).status, 200);
     assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: child.id } })).title, 'Changed by its seat');
     // The lead reads its epic: of the children and links, those its account may read.
@@ -638,8 +640,8 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     }
     // Nothing of it changed.
     const after = await raw.issue.findUniqueOrThrow({ where: { id: hidden.id }, include: { comments: true, workLogs: true, sourceRelations: true, targetRelations: true, children: true } });
-    assert.deepEqual([after.title, after.assigneeId, after.comments, after.children, after.targetRelations, after.sourceRelations.map(row => row.id), after.workLogs.map(row => [row.id, row.timeSpent])],
-      ['Not for these accounts', devB.userId, [], [], [], [link.id], [[log.id, 5]]]);
+    assert.deepEqual([after.title, after.assigneeId, after.comments, after.children, after.targetRelations.map(row => row.id), after.sourceRelations.map(row => row.id), after.workLogs.map(row => [row.id, row.timeSpent])],
+      ['Not for these accounts', devB.userId, [], [], [hiddenTargetLink.id], [link.id], [[log.id, 5]]]);
 
     // A membership that is not active is refused at the door, as everywhere in the app API.
     const inactive = 'cinactive01';
