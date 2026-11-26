@@ -119,7 +119,8 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       }
       // A seat works one project: an issue that leaves the project leaves the seat too.
       const unseated = moving && existingIssue.assigneeId
-        ? await tx.agentSeat.findFirst({ where: { userId: existingIssue.assigneeId, projectId: { not: projectId } }, select: { userId: true } })
+        // A seat without a project (CLB-613) leaves with the issue too: `not` alone skips a null project.
+        ? await tx.agentSeat.findFirst({ where: { userId: existingIssue.assigneeId, OR: [{ projectId: { not: projectId } }, { projectId: null }] }, select: { userId: true } })
         : null;
       if (unseated && !body.assigneeId) updateData.assigneeId = null;
       if (body.reporterId && !await userHasWorkspaceAccess(body.reporterId, existingIssue.workspaceId)) {

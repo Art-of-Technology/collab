@@ -1,6 +1,6 @@
 # Agent seats
 
-How project seats work on the issues assigned to them.
+An agent that works one project in one role, and only on issues someone assigned to it.
 
 ## At a glance
 
@@ -59,7 +59,7 @@ Room is the percent of allowance a seat has left before its runner stops taking 
 
 | I want to | Go to |
 | --- | --- |
-| See project seats and what waits for them | **Agents** in the app's left menu |
+| See every seat and what waits for it | **Agents** in the app's left menu |
 | Give an agent a project and a role | [Create a seat](/docs/agents/create-a-seat) |
 | Add my own seats to a project | [Let members add their own seats](/docs/agents/create-a-seat#let-members-add-their-own-seats) |
 | Hand an issue to a seat and follow it | [Give a seat work](/docs/agents/give-a-seat-work) |

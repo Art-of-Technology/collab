@@ -6,7 +6,7 @@ const { seatsDatabase } = require('./seats-db.cjs');
 
 // CLB-614: a seat may have no project (its scope is the whole workspace, CLB-613). The database holds at most one default
 // seat per role among a workspace's seats without a project, and such a seat changes nothing for the project seats.
-const owner = 'cowner00001', A = 'cprojecta001', C = 'cprojectc001';
+const owner = 'cowner00001', A = 'cprojecta001';
 const accounts = ['cseatdev001', 'cseatrev001', 'cwsdev00001', 'cwsdev00002', 'cwsdev00003', 'cwsrev00001', 'cwsdevw2001'];
 const plain = value => JSON.parse(JSON.stringify(value));
 
@@ -18,10 +18,8 @@ test('a seat without a project', async t => {
     await prisma.user.createMany({ data: [owner, ...accounts].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'team', ownerId: owner } });
     await prisma.workspace.create({ data: { id: 'w2', name: 'w2', slug: 'elsewhere', ownerId: owner } });
-    for (const [id, workspaceId] of [[A, 'w'], [C, 'w2']]) {
-      await prisma.project.create({ data: { id, workspaceId, name: id, slug: id, issuePrefix: id.slice(-4, -2).toUpperCase(), agentMode: 'seats' } });
-      await prisma.projectStatus.createMany({ data: ['to_do', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name, order, isFinal: name === 'done' })) });
-    }
+    await prisma.project.create({ data: { id: A, workspaceId: 'w', name: A, slug: A, issuePrefix: 'AL', agentMode: 'seats' } });
+    await prisma.projectStatus.createMany({ data: ['to_do', 'done'].map((name, order) => ({ id: `${A}-${name}`, projectId: A, name, displayName: name, order, isFinal: name === 'done' })) });
   });
   const raw = db.prisma;
   const prisma = raw.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
@@ -41,7 +39,7 @@ test('a seat without a project', async t => {
     '@/lib/agent-runs': runs, '@/lib/agent-runners': runners, '@/lib/agent-seats': seats,
     '@/lib/permissions': load('src/lib/permissions.ts', { './prisma': { prisma } }) }, { Date });
 
-  const seat = (id, userId, projectId, role, data = {}) => raw.agentSeat.create({ data: { id, workspaceId: projectId === C ? 'w2' : 'w', projectId, role, userId, name: id, ...data } });
+  const seat = (id, userId, projectId, role, data = {}) => raw.agentSeat.create({ data: { id, workspaceId: 'w', projectId, role, userId, name: id, ...data } });
   const inWorkspace = (id, userId, role, data = {}) => raw.agentSeat.create({ data: { id, workspaceId: 'w', projectId: null, role, userId, name: id, ...data } });
   await seat('dev-a', 'cseatdev001', A, 'developer', { isDefault: true });
   await seat('rev-a', 'cseatrev001', A, 'reviewer', { isDefault: true });
@@ -88,6 +86,8 @@ test('a seat without a project', async t => {
     await assert.rejects(runs.seatInbox(caller('cwsdev00001')), { code: 'workspace_seat' });
     await assert.rejects(seats.seatFor(prisma, caller('cwsdev00001')), { code: 'workspace_seat' });
     await assert.rejects(seats.seatWriteGuard(prisma, caller('cwsdev00001'), A), { code: 'wrong_project' });
+    // Not even on a request that names it as reporter, the one write outside its project a project seat has.
+    await assert.rejects(seats.seatWriteGuard(prisma, caller('cwsdev00001'), A, { agentRequestRole: 'review', reporterId: 'cwsdev00001' }), { code: 'wrong_project' });
     await raw.issue.update({ where: { id: issue.id }, data: { assigneeId: 'cseatdev001' } });
   });
 

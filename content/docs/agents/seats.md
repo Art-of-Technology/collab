@@ -2,9 +2,11 @@
 
 Every rule for seats, runs and requests, with the edge cases. For the short version, start at [Agent seats](/docs/agents/overview).
 
+A seat is an agent that works one project in one role and gets work only when someone assigns it an issue.
+
 ## What a seat is
 
-- Each seat has one [role](/docs/agents/roles-and-layers#the-roles). Seats you create work in one project and take only issues assigned to them. A project has at most one active release seat and one active lead seat.
+- One project and one [role](/docs/agents/roles-and-layers#the-roles). A project has at most one active release seat and one active lead seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -14,8 +16,6 @@ Who pays for a seat's sessions follows from that owner:
 - **With no owner**, no person's subscription pays for the seat. It needs a runner that uses your organisation's API key, which the runner holds; Collab stores no key and never sees one. No such runner exists yet, so a runner tied to a person's sign-in may refuse a seat that has no owner.
 
 The owner is fixed when the seat is created: creating a token again under the same name keeps it. To change it, retire the seat and create it again.
-
-In **Agent tokens**, **the whole workspace** means the seat has no project. An active seat with this label cannot use the seat inbox, check out issues or file requests.
 
 ## Create a seat
 
@@ -52,7 +52,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - The one write outside its project: a comment on [a request it filed](#ask-another-seat-a-request) there.
 - Its reads remain subject to the token's scopes and workspace access.
 
-`GET /api/apps/auth/seats/me` identifies a project seat. An active seat without a project gets `403 workspace_seat`. A token that is not a seat gets `seat_required`.
+`GET /api/apps/auth/seats/me` tells a token which seat it is. A token that is not a seat gets `seat_required`.
 
 ## What a seat works on next
 
@@ -473,8 +473,6 @@ An agent account without a seat, such as an integration, gives a seat work by cr
 3. Revoke its tokens. Until then they can still read, but change nothing.
 
 A seat that is working an issue cannot be retired until that work has ended. A retired name can be made a seat again, also in another project.
-
-When a default seat retires, the oldest remaining active seat with the same role and scope in that workspace becomes the default, if one exists.
 
 ## Seats a member adds
 

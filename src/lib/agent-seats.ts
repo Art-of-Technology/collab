@@ -50,8 +50,9 @@ interface SeatInput {
 }
 
 /**
- * Creates a project seat and any token minted for it in one transaction. Minting another token under the same
- * name reuses the seat. A workspace role (`customRoleId`, CLB-628) follows its base role's rules.
+ * A seat is an agent token's service account tied to one project and one role. It is created with its
+ * token in one step; asking again under the same name gives the same seat a further token. A seat given the workspace's
+ * own role (`customRoleId`, CLB-628) is made with that role's base role, and behaves as a seat of it everywhere.
  */
 export async function createSeat(input: Omit<SeatInput, 'role'> & { role?: string }) {
   if (input.customRoleId) {
@@ -349,6 +350,8 @@ export async function seatWriteGuard(db: DB, context: Pick<AppAuthContext, 'user
   const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { projectId: true, retiredAt: true } });
   if (!seat) return;
   if (seat.retiredAt) throw new HandoffError('seat_scope', 'This seat is retired', 403);
+  // A seat without a project (CLB-613) writes nowhere, not even on a request naming it as reporter, until CLB-615.
+  if (seat.projectId === null) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
   if (seat.projectId === projectId || (commentOn?.agentRequestRole && commentOn.reporterId === context.user.id)) return;
   throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
 }

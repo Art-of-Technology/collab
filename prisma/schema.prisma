@@ -3067,11 +3067,12 @@ model AgentReceipt {
   @@index([agentId])
 }
 
-// The SQL migrations define the partial unique indexes for seats.
+// A seat is one project and one role, backed by an agent token's account. Its three partial unique
+// indexes (one release seat and one default seat per role in a project) exist only in the migration.
 model AgentSeat {
   id          String     @id @default(cuid())
   workspaceId String
-  projectId   String? // null means the seat's scope is the whole workspace
+  projectId   String? // null: the seat's scope is the whole workspace (CLB-613); at most one default per role then, in SQL only
   role        String // developer | reviewer | release
   userId      String     @unique
   ownerId     String?

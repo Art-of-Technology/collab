@@ -421,6 +421,12 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     // A person stays assigned through a move.
     const kept = await issue(A, { assigneeId: person });
     assert.equal((await deps['@/lib/issue-mutation'].updateIssue(owner, kept.id, { projectId: B }, 'w')).issue.assigneeId, person);
+    // A seat without a project (CLB-614) belongs to neither project, so it leaves with the issue too.
+    const free = await seat('dev-without-project', A, 'developer');
+    const held = await issue(A, { assigneeId: free.userId });
+    await prisma.agentSeat.update({ where: { id: free.id }, data: { projectId: null } });
+    assert.equal((await deps['@/lib/issue-mutation'].updateIssue(owner, held.id, { projectId: B }, 'w')).issue.assigneeId, null);
+    await prisma.agentSeat.delete({ where: { id: free.id } });
   });
 
   await t.test('retirement preserves concurrent reassignment and completion', async () => {
