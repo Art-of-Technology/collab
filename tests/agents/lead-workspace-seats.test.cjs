@@ -262,4 +262,19 @@ test('a project\'s lead places work on workspace Developer seats (CLB-951)', asy
     assert.deepEqual([await holder(s1), await holder(s2)], [wsBob.userId, devCem.userId]);
     await settle();
   });
+
+  // Last: it retires lead B.
+  await t.test('a workspace seat\'s limit still counts what a lead placed after that lead is retired', async () => {
+    const [b1, b2] = [await issue(B, { parentId: epicB.id }), await issue(B, { parentId: epicB.id })];
+    const [a1, a2] = [await issue(A, { parentId: epicA.id }), await issue(A, { parentId: epicA.id })];
+    assert.deepEqual(await give(leadB, b1, wsBob.userId), [200, undefined]);
+    assert.deepEqual(await give(leadB, b2, wsBob.userId), [200, undefined]);
+    await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: leadB.id });
+    // Retiring the lead leaves its two placements open on Bob's seat: they keep their places.
+    assert.deepEqual([await holder(b1), await holder(b2)], [wsBob.userId, wsBob.userId]);
+    assert.equal((await leadView(leadA, epicA)).seats.find(found => found.name === 'ws-bob').openFromLead, 2);
+    assert.deepEqual(await give(leadA, a1, wsBob.userId), [200, undefined]);
+    assert.deepEqual(await give(leadA, a2, wsBob.userId), [429, 'lead_cap']);
+    assert.equal(await holder(a2), null);
+  });
 });
