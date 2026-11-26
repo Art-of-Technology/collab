@@ -146,7 +146,7 @@ test('seats rule: a workspace rule gives every new project its four seats, with 
     assert.equal(told.length, 1);
     assert.deepEqual([told[0].userId, told[0].senderId], [owner, admin]);
     assert.match(told[0].content, /Foxtrot/);
-    assert.match(told[0].content, /collab seat setup FOXTROT/);
+    assert.match(told[0].content, /^created the project Foxtrot \(FOXTROT\), which got no seats: the rule has given 5 new projects their seats today \(UTC\), its limit for a day\. To give it the seats still missing \(developer, reviewer, release, security\), run collab seat setup FOXTROT\.$/);
   });
 
   await t.test('switching the rule off and on again does not raise the count', async () => {
@@ -203,8 +203,13 @@ test('seats rule: a workspace rule gives every new project its four seats, with 
 
     const latest = (await notices()).filter(notice => notice.userId === owner).slice(told);
     assert.equal(latest.length, 2, 'the owner is told about each');
-    assert.match(latest[0].content, /Lima.*collab seat setup LIMA/);
-    assert.match(latest[1].content, /Mike.*collab seat setup MIKE/);
+    // Lima got nothing: the owner is told so, with the cause and what to do about the name before the setup can work.
+    assert.match(latest[0].content, /^created the project Lima \(LIMA\), which got no seats: Lima Developer is already a developer seat; retire it/);
+    assert.match(latest[0].content, /or add its developer seat under another name\. Then, to give it the seats still missing \(developer, reviewer, release, security\), run collab seat setup LIMA\.$/);
+    // Mike kept the two seats made before the failure: the owner is told which, and that setup makes only the rest.
+    assert.doesNotMatch(latest[1].content, /got no seats/);
+    assert.match(latest[1].content, /^created the project Mike \(MIKE\), which got only its developer and reviewer seats and stays in handoffs: Mike Release is already a release seat; retire it/);
+    assert.match(latest[1].content, /or add its release seat under another name\. Then, to give it the seats still missing \(release, security\), run collab seat setup MIKE\.$/);
   });
 
   await t.test('with the rule switched off new projects get no seats, and the seats already made stay', async () => {

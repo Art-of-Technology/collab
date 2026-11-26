@@ -185,12 +185,22 @@ export async function applySeatRule(input: { workspaceId: string; projectId: str
   const { workspaceId, projectId, creatorId } = input;
   const handoffs = { mode: 'handoffs' as const, seats: [] as string[] };
   let ownerId: string | null = null, claimedDay: string | null = null;
-  const skipped = async (reason: string) => {
+  let preview: Awaited<ReturnType<typeof previewSetup>> | null = null;
+  // `nameHeld`: a seat's name was held by another agent. The owner can free it, or give that role a seat under another
+  // name, which the setup then leaves alone.
+  const skipped = async (reason: string, nameHeld = false) => {
     if (!ownerId) return handoffs;
     try {
       const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { name: true, issuePrefix: true } });
+      // A setup stopped part of the way keeps the seats it made: say which, and that the setup makes only the rest.
+      const made = new Set((await prisma.agentSeat.findMany({ where: { projectId, retiredAt: null }, select: { role: true } })).map(seat => seat.role));
+      const have = SETUP_ROLES.filter(role => made.has(role)), still = SETUP_ROLES.filter(role => !made.has(role));
+      // The seats are made in the preview's order, so the first one still missing is the one that failed.
+      const failed = nameHeld ? preview?.seats.find(seat => !seat.exists && !made.has(seat.role)) : undefined;
+      const got = have.length ? `got only its ${have.length > 1 ? `${have.slice(0, -1).join(', ')} and ${have[have.length - 1]}` : have[0]} seat${have.length > 1 ? 's' : ''} and stays in handoffs` : 'got no seats';
+      const then = failed ? `, or add its ${failed.role} seat under another name. Then, to` : '. To';
       await prisma.notification.create({ data: { type: 'AGENT_SEATS_SKIPPED', userId: ownerId, senderId: creatorId,
-        content: `created the project ${project.name} (${project.issuePrefix}), which got no seats: ${reason.replace(/\.$/, '')}. To give it its seats, run collab seat setup ${project.issuePrefix}.` } });
+        content: `created the project ${project.name} (${project.issuePrefix}), which ${got}: ${reason.replace(/\.$/, '')}${then} give it the seats still missing (${still.join(', ')}), run collab seat setup ${project.issuePrefix}.` } });
     } catch (error) {
       console.error('The owner could not be told that a project got no seats:', error);
     }
@@ -200,7 +210,7 @@ export async function applySeatRule(input: { workspaceId: string; projectId: str
     const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true, autoSeats: true } });
     if (!workspace?.autoSeats) return handoffs;
     ownerId = workspace.ownerId;
-    const preview = await previewSetup(workspaceId, ownerId, projectId);
+    preview = await previewSetup(workspaceId, ownerId, projectId);
     if (preview.blocked) return skipped(preview.reason!);
     // A place in the day is taken in one statement, so two projects created at once cannot both take the last one.
     const day = utcDay();
@@ -229,7 +239,8 @@ export async function applySeatRule(input: { workspaceId: string; projectId: str
         console.error('The place in the day could not be given back:', release);
       }
     }
-    return skipped(error instanceof HandoffError ? error.message : 'its seats could not be created');
+    if (!(error instanceof HandoffError)) return skipped('its seats could not be created');
+    return skipped(error.message, ['seat_exists', 'name_taken'].includes(error.code));
   }
 }
 
