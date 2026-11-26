@@ -946,7 +946,7 @@ export async function clearRun(userId: string, issueIdOrKey: string, runId: stri
  * take too: two presses post one comment, and a press on an old row posts none.
  */
 export async function answerStop(userId: string, issueIdOrKey: string, runId: string, input: z.infer<typeof stopAnswerSchema>) {
-  const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
+  const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string; issueKey: string | null }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true, issueKey: true } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   await forgeGuard(issue.id);
   const comment = await prisma.$transaction(async tx => {
@@ -963,5 +963,5 @@ export async function answerStop(userId: string, issueIdOrKey: string, runId: st
     }
     return tx.issueComment.create({ data: { issueId: issue.id, authorId: userId, content: input.content }, select: { id: true, issueId: true, authorId: true, content: true, createdAt: true } });
   });
-  return { workspaceId: issue.workspaceId, comment };
+  return { workspaceId: issue.workspaceId, issueKey: issue.issueKey, comment };
 }

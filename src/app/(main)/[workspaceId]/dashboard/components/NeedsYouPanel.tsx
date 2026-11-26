@@ -15,9 +15,10 @@ const labels = {
 };
 const focus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400';
 const actionStyle = `w-fit rounded-md border border-collab-600 px-3 py-1.5 text-xs text-blue-300 hover:bg-collab-700 disabled:opacity-50 ${focus}`;
-const rowActionStyle = `col-start-2 sm:col-start-auto ${actionStyle}`;
 const primaryStyle = `w-fit rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-50 ${focus}`;
 const formStyle = 'col-span-full min-w-0 space-y-2 rounded-md border border-collab-600 bg-collab-900 p-3 sm:col-start-2 sm:col-end-4';
+// What Continue posts. The seat reads it as it reads any answer, so it says what to do in words.
+export const CONTINUE_ANSWER = 'Continue. Go on with the work as agreed.';
 const format = (count: number) => count.toLocaleString('en-GB');
 const minute = 60_000;
 const hour = 60 * minute;
@@ -90,12 +91,15 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
   const submitting = useRef(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
+  const [continueError, setContinueError] = useState('');
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const answer = seatRow && item.ask === 'here';
-  // Both actions name the run the row shows: the server acts only while that run is still what the row says it is.
-  const action = item.runId && (answer || item.kind === 'failed') ? `runs/${encodeURIComponent(item.runId)}/${answer ? 'reply' : 'clear'}` : null;
-  const actionable = item.canAct && action && !submitted;
+  // Every action names the run the row shows: the server acts only while that run is still what the row says it is.
+  const run = item.runId && `${issueApi}/runs/${encodeURIComponent(item.runId)}`;
+  const actionable = item.canAct && run && (answer || item.kind === 'failed') && !submitted;
+  // Continue is for any seat row, also one that names somebody else or asks nothing that can be answered here.
+  const canContinue = item.canAct && run && seatRow && !submitted;
   const showDetails = !actionable && seatRow && !!item.question && !submitted;
   const options = item.suggested ? [item.suggested, ...item.options.filter(option => option !== item.suggested)] : item.options;
   const question = item.question && <p className="whitespace-pre-wrap break-words text-sm text-collab-50">
@@ -105,6 +109,28 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
     if (open) input.current?.focus();
   }, [open]);
 
+  /** Posts an answer, or clears the run when there is none, and reports a refusal through `fail`. */
+  async function send(content: string | null, fail: (message: string) => void) {
+    if (submitting.current) return;
+    submitting.current = true;
+    setPending(true);
+    fail('');
+    const response = await fetch(`${run}/${content ? 'reply' : 'clear'}`, content
+      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }
+      : { method: 'POST' }).catch(() => null);
+    if (!response?.ok) {
+      const details = await response?.json().catch(() => null);
+      const message = details?.error_description || details?.error;
+      fail(typeof message === 'string' && message ? message
+        : content ? 'The answer could not be sent. Try again.' : 'The run could not be cleared. Try again.');
+      submitting.current = false;
+      setPending(false);
+      return;
+    }
+    setSubmitted(true);
+    onComplete(content ? await answerStatus(issueApi, item, workspaceSlug, response) : 'Run cleared.');
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!actionable || !open || submitting.current) return;
@@ -113,23 +139,7 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
       setError('Type an answer first.');
       return;
     }
-    const fallback = answer ? 'The answer could not be sent. Try again.' : 'The run could not be cleared. Try again.';
-    submitting.current = true;
-    setPending(true);
-    setError('');
-    const response = await fetch(`${issueApi}/${action}`, answer
-      ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }
-      : { method: 'POST' }).catch(() => null);
-    if (!response?.ok) {
-      const details = await response?.json().catch(() => null);
-      const message = details?.error_description || details?.error;
-      setError(typeof message === 'string' && message ? message : fallback);
-      submitting.current = false;
-      setPending(false);
-      return;
-    }
-    setSubmitted(true);
-    onComplete(answer ? await answerStatus(issueApi, item, workspaceSlug, response) : 'Run cleared.');
+    await send(answer ? content : null, setError);
   }
 
   return <li className={`grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center ${(actionable || showDetails) && open ? 'bg-blue-950/20' : ''}`}>
@@ -143,23 +153,28 @@ function NeedsYouRow({ item, workspaceSlug, reference, open, onToggle, onComplet
           : <span>Not recorded</span>}
       </p>
     </div>
-    {actionable
-      ? <button type="button" ref={trigger} aria-expanded={open} aria-controls={open ? actionId : undefined}
-        className={answer ? `col-start-2 sm:col-start-auto ${primaryStyle}` : rowActionStyle} onClick={onToggle}>
-        {answer ? (open ? 'Close' : 'Answer') : 'Session has stopped: clear run'}
-      </button>
-      : <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-auto sm:justify-end">
-        <a href={replyHref ?? issueHref} className={actionStyle}>
-          {item.replyOn ? `Open ${item.replyOn.issueKey}` : 'Open issue'}
-        </a>
-        {showDetails && <button type="button" className={actionStyle} aria-expanded={open}
-          aria-controls={open ? actionId : undefined} onClick={onToggle}>
-          {open ? 'Hide details' : 'Show details'}
-        </button>}
-      </div>}
+    <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-auto sm:justify-end">
+      {actionable
+        ? <button type="button" ref={trigger} aria-expanded={open} aria-controls={open ? actionId : undefined}
+          className={answer ? primaryStyle : actionStyle} onClick={onToggle}>
+          {answer ? (open ? 'Close' : 'Answer') : 'Session has stopped: clear run'}
+        </button>
+        : <>
+          <a href={replyHref ?? issueHref} className={actionStyle}>
+            {item.replyOn ? `Open ${item.replyOn.issueKey}` : 'Open issue'}
+          </a>
+          {showDetails && <button type="button" className={actionStyle} aria-expanded={open}
+            aria-controls={open ? actionId : undefined} onClick={onToggle}>
+            {open ? 'Hide details' : 'Show details'}
+          </button>}
+        </>}
+      {canContinue && <button type="button" className={actionStyle} disabled={pending}
+        onClick={() => send(CONTINUE_ANSWER, setContinueError)}>Continue</button>}
+    </div>
     {review && <a href={review} target="_blank" rel="noopener noreferrer" className={`col-start-2 text-xs text-blue-300 hover:underline ${focus}`}>
       Open pull request
     </a>}
+    {continueError && <p role="alert" className="col-span-full break-words text-xs text-red-300 sm:col-start-2 sm:col-end-4">{continueError}</p>}
     {showDetails && open && <div id={actionId} className={formStyle}>{question}</div>}
     {actionable && open && <form id={actionId} className={formStyle} onSubmit={submit}>
       {answer ? <>

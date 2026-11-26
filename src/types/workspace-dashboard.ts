@@ -78,7 +78,7 @@ export type NeedsYouItem = {
   suggested: string | null;
   pullRequestUrl: string | null;
   runId: string | null; // The finish a question or review row shows, or the failed run: an action from the row names it.
-  canAct: boolean;
+  canAct: boolean; // The viewer may comment on a seat row's issue from here (Continue, and an answer when `ask` is 'here'), or clear a failed run.
 };
 
 export type NeedsYouOverview = Panel<{

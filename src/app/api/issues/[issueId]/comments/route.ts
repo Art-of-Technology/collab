@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { findIssueByIdOrKey } from "@/lib/issue-finder";
-import { extractMentionUserIds } from "@/utils/mentions";
-import { NotificationService, NotificationType } from "@/lib/notification-service";
+import { notifyCommentMentions } from "@/lib/issue-comment-mentions";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -117,42 +116,7 @@ export async function POST(
       },
     });
 
-    try {
-      const mentionSource = typeof html === "string" && html.trim().length > 0 ? html : content;
-      const mentionedUserIds = Array.from(new Set(extractMentionUserIds(mentionSource || "")));
-      const recipients = mentionedUserIds.filter((id) => id && id !== currentUser.id);
-
-      if (recipients.length > 0) {
-        const actorDisplayName = currentUser.name || currentUser.email || "Someone";
-        const issueReference = issue.issueKey
-          ? `#[${issue.issueKey}](${issue.id})`
-          : `issue ${issue.id}`;
-
-        const notificationContent = `@[${actorDisplayName}](${currentUser.id}) mentioned you in a comment on ${issueReference}`;
-        const canNotify = typeof NotificationService?.notifyUsers === "function";
-        const notificationType = NotificationType?.ISSUE_MENTION;
-        const notificationTypeSupported = typeof notificationType === "string"
-          ? Object.values(NotificationType).includes(notificationType)
-          : false;
-
-        if (!canNotify || !notificationTypeSupported) {
-          console.error("[ISSUE_COMMENTS_POST_NOTIFY] Notification service unavailable or unsupported type", {
-            hasService: canNotify,
-            hasType: notificationTypeSupported,
-          });
-        } else {
-          await NotificationService.notifyUsers(
-            recipients,
-            notificationType,
-            notificationContent,
-            currentUser.id,
-            { issueId: issue.id }
-          );
-        }
-      }
-    } catch (notificationError) {
-      console.error("[ISSUE_COMMENTS_POST_NOTIFY]", notificationError);
-    }
+    await notifyCommentMentions(currentUser, issue, typeof html === "string" && html.trim().length > 0 ? html : content);
 
     await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
     return NextResponse.json(comment, { status: 201 });

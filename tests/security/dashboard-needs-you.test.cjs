@@ -11,7 +11,7 @@ const now = new Date('2026-11-21T12:00:00Z');
 const date = days => new Date(now.getTime() + days * 86400000);
 const plain = value => JSON.parse(JSON.stringify(value));
 let db, raw, loadNeedsYou;
-let forgeBindings = [];
+const forgeReader = { readForgeBindings: async () => [] };
 
 before(async () => {
   db = await seatsDatabase(async prisma => {
@@ -41,12 +41,11 @@ before(async () => {
   ({ loadNeedsYou } = load('src/lib/dashboard/needs-you.ts', {
     'server-only': {}, '@/lib/prisma': { prisma }, '@/lib/permissions': permissions,
     '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
-    '@/lib/forge/reader': { readForgeBindings: async () => forgeBindings },
-  }, { URL, Date }));
+    '@/lib/forge/reader': forgeReader,
+  }, { URL, Date, console }));
 });
 
 beforeEach(async () => {
-  forgeBindings = [];
   await raw.issueActivity.deleteMany();
   await raw.issue.deleteMany();
   await raw.gitConnection.deleteMany();
@@ -119,7 +118,7 @@ test('a row is a question only when that comment has reply words; otherwise it w
   const result = await read();
   assert.deepEqual(result.items.map(row => [row.issue.id, row.ask, row.canAct]), [
     ['real-review', 'here', true], ['real-question', 'here', true],
-    ['no-comment', 'none', false], ['note', 'none', false],
+    ['no-comment', 'none', true], ['note', 'none', true],
   ]);
   assert.deepEqual(result.oldestQuestion, { seatName: 'Developer', since: date(-4).toISOString() });
   assert.deepEqual(result.counts, { question: 3, review: 1, failed: 0, due: 0 });
@@ -147,7 +146,8 @@ test('a reply that belongs on another issue names that issue, and only one the v
   }
   const rows = new Map((await read()).items.map(row => [row.issue.id, row]));
   assert.equal(rows.get('visible').ask, 'elsewhere');
-  assert.equal(rows.get('visible').canAct, false);
+  // Continue is a comment on the issue that stopped, wherever the seat wanted the reply.
+  assert.equal(rows.get('visible').canAct, true);
   assert.deepEqual(rows.get('visible').replyOn, { id: 'visible-target', issueKey: 'ADS-52' });
   assert.equal(rows.get('own').ask, 'here');
   assert.equal(rows.get('aside').ask, 'here');
@@ -214,9 +214,9 @@ test('declared stops: a finish that says what it asks is shown from its fields, 
   const { items, counts } = await read();
   assert.deepEqual(items.map(row => [row.issue.id, row.kind, row.ask, row.canAct, row.options, row.suggested, row.replyOn]), [
     ['one-decision', 'question', 'here', true, ['window', 'split'], 'split', null],
-    ['two-decisions', 'review', 'issue', false, [], null, null],
+    ['two-decisions', 'review', 'issue', true, [], null, null],
     ['unsuggested', 'question', 'here', true, ['keep', 'drop'], null, null],
-    ['hands', 'question', 'none', false, [], null, null],
+    ['hands', 'question', 'none', true, [], null, null],
   ]);
   // Each row carries the finish it shows, which is what an answer from Home is bound to.
   assert.deepEqual(items.map(row => row.runId), ['one-decision', 'two-decisions', 'unsuggested', 'hands'].map(id => `run-${id}`));
@@ -401,7 +401,24 @@ test('a due issue of a dormant project is not listed', async () => {
   assert.deepEqual((await read({ scope: 'mine' })).items.map(item => item.issue.id), ['dormant-due']);
 });
 
-test('canAct follows the permissions the comment and clear routes check', async () => {
+test('an unreadable Forge configuration preserves rows and counts while disabling seat replies', async t => {
+  const diagnostic = t.mock.method(console, 'error', () => {});
+  t.mock.method(forgeReader, 'readForgeBindings', async () => { throw new Error('Invalid project connection configuration'); });
+  await waiting('hands', { ask: webhook });
+  await waiting('legacy-review', { pullRequest: 'team/repo#7' });
+  await waiting('decision', { ask: { kind: 'decision', questions: [migration] } });
+  await failed('lost-run');
+  await issue('due-item', { assigneeId: 'viewer', dueDate: date(1) });
+
+  const { items, counts } = await read();
+  assert.deepEqual(diagnostic.mock.calls.map(call => [...call.arguments]), [['Workspace Needs you could not read Forge bindings']]);
+  assert.deepEqual(counts, { question: 2, review: 1, failed: 1, due: 1 });
+  assert.deepEqual(Object.fromEntries(items.map(row => [row.issue.id, row.canAct])), {
+    hands: false, 'legacy-review': false, decision: false, 'lost-run': true, 'due-item': false,
+  });
+});
+
+test('canAct follows the permissions the comment and clear routes check', async t => {
   await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
   const grant = permission => raw.rolePermission.create({ data: { workspaceId: 'work', role: 'VIEWER', permission } });
   await grant('VIEW_TASKS');
@@ -410,20 +427,21 @@ test('canAct follows the permissions the comment and clear routes check', async 
   await waiting('forge-question', { projectId: 'dormant', assigneeId: 'other-seat-user' });
   await seatComment('forge-question', 'Reply `yes`.', { authorId: 'other-seat-user' });
   await waiting('review', { pullRequest: 'team/repo#7' });
+  await waiting('forge-note', { projectId: 'dormant', assigneeId: 'other-seat-user' });
   await failed('lost-run');
   await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
-  forgeBindings = [{ workspaceId: 'work', projectId: 'dormant' }];
+  t.mock.method(forgeReader, 'readForgeBindings', async () => [{ workspaceId: 'work', projectId: 'dormant' }]);
 
   const panel = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx', {
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { useRouter: () => ({}) },
   }).default;
-  // The browser comment route accepts issue readers on legacy projects. Clearing also needs ASSIGN_TASK.
+  // The browser comment route accepts issue readers on legacy projects, for an answer and for Continue. Clearing also needs ASSIGN_TASK.
   for (const canAssign of [false, true]) {
     if (canAssign) await grant('ASSIGN_TASK');
     const data = await read({ actorId: 'other' });
     assert.deepEqual(Object.fromEntries(data.items.map(row => [row.issue.id, row.canAct])), {
-      'legacy-question': true, 'forge-question': false, review: false, 'lost-run': canAssign, 'due-item': false,
+      'legacy-question': true, 'forge-question': false, review: true, 'forge-note': false, 'lost-run': canAssign, 'due-item': false,
     });
 
     const document = JSDOM.fragment(renderToStaticMarkup(React.createElement(panel, {
@@ -435,9 +453,10 @@ test('canAct follows the permissions the comment and clear routes check', async 
     ]));
     const openIssue = [['a', 'Open issue']];
     assert.deepEqual(controls, {
-      'legacy-question': [['button', 'Answer']],
+      'legacy-question': [['button', 'Answer'], ['button', 'Continue']],
       'forge-question': [['a', 'Open issue'], ['button', 'Show details']],
-      review: [['a', 'Open issue'], ['button', 'Show details']],
+      review: [['a', 'Open issue'], ['button', 'Show details'], ['button', 'Continue']],
+      'forge-note': [['a', 'Open issue'], ['button', 'Show details']],
       'lost-run': canAssign ? [['button', 'Session has stopped: clear run']] : openIssue,
       'due-item': openIssue,
     });

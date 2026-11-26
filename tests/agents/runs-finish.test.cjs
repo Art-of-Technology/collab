@@ -1,6 +1,6 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { Prisma } = require('@prisma/client');
+const { Prisma, PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
 
@@ -668,7 +668,9 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
 
   await t.test('declared stops: an answer from Home is posted only while the stop it was shown for is still open', async () => {
     const events = [];
-    const replyRoute = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...deps, '@/lib/redis': { publishEvent: async (...sent) => events.push(sent) } }, globals);
+    // No answer here mentions anybody, so nothing is asked of the notification service.
+    const replyRoute = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...deps, '@/lib/redis': { publishEvent: async (...sent) => events.push(sent) },
+      '@/utils/mentions': load('src/utils/mentions.ts'), '@/lib/notification-service': {} }, globals);
     const reply = async (target, runId, content = 'split') => {
       const response = await replyRoute.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) }),
         { params: Promise.resolve({ issueId: target.id, runId }) });
@@ -684,9 +686,9 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
       return { target, run };
     };
     /** The press is refused and leaves the issue's comments as they were. */
-    const closed = async ({ target, run }, runId = run.id) => {
+    const closed = async ({ target, run }, runId = run.id, content) => {
       const before = await comments(target);
-      await refused(reply(target, runId), 409, 'stop_closed');
+      await refused(reply(target, runId, content), 409, 'stop_closed');
       assert.deepEqual(await comments(target), before);
     };
 
@@ -804,5 +806,90 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await link(blocker, 'BLOCKS', waits.target);
     assert.equal((await finish(devA, waits.run.id, { outcome: 'blocked', blockedBy: blocker.issueKey }))[0], 200);
     await closed(waits);
+
+    // Continue is the fixed answer the row's button sends. It is posted once, by anyone who may comment on the issue,
+    // on a stop that names somebody else: an older one that says nothing of what it asks, and work for a person's hands.
+    const { CONTINUE_ANSWER } = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx',
+      { react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'), 'next/navigation': {} });
+    for (const body of [{ askedUser: owner }, { askedUser: owner, ask: { kind: 'hands', steps: '1. Merge the pull request.', doneWord: 'merged' } }]) {
+      const other = await stopped(body);
+      for (const outsider of [null, 'cstranger001', gone]) {
+        session = outsider;
+        assert.equal((await reply(other.target, other.run.id, CONTINUE_ANSWER))[0], outsider ? 404 : 401);
+      }
+      session = person;
+      assert.equal((await reply(other.target, other.run.id, CONTINUE_ANSWER))[0], 200);
+      assert.deepEqual(await comments(other.target), [[person, 'Continue. Go on with the work as agreed.']]);
+      await closed(other, other.run.id, CONTINUE_ANSWER);
+      assert.deepEqual(await offered(devA, other.target), ['reply']);
+    }
+  });
+
+  await t.test('declared stops: an answer from Home does what the same comment on the issue page does besides being stored', async t => {
+    const events = [];
+    const observer = new PrismaClient({ datasources: { db: { url: db.url } } });
+    t.after(() => observer.$disconnect());
+    const commentsAtNotification = [];
+    const mentionsAtPublication = [];
+    const notifications = load('src/lib/notification-service.ts', { '@/lib/prisma': { prisma }, '@/lib/push-notifications': { sendPushNotification: async () => false },
+      '@/lib/permissions': load('src/lib/permission-types.ts'), 'date-fns': require('date-fns'), '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {} });
+    // The signed-in person as the session gives them, with their name: a mention's notification says who wrote it.
+    const told = { ...deps, '@/lib/session': { getCurrentUser: async () => raw.user.findUnique({ where: { id: session } }) },
+      '@/lib/redis': { publishEvent: async (...sent) => {
+        mentionsAtPublication.push(await observer.notification.count({ where: { type: 'ISSUE_MENTION', userId: owner, senderId: person } }));
+        events.push(sent);
+      } }, '@/utils/mentions': load('src/utils/mentions.ts'), '@/lib/notification-service': notifications };
+    const replyRoute = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', told, globals);
+    const commentRoute = load('src/app/api/issues/[issueId]/comments/route.ts', told, globals);
+    const request = content => new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) });
+    const stopped = async () => {
+      const { target, run } = await started(devA);
+      assert.equal((await finish(devA, run.id, { outcome: 'blocked', askedUser: person }))[0], 200);
+      return { target, run };
+    };
+    const content = `@[The owner](${owner}) Split it: the window is taken tonight.`;
+    const { target, run } = await stopped();
+    const notifyUsers = notifications.NotificationService.notifyUsers.bind(notifications.NotificationService);
+    t.mock.method(notifications.NotificationService, 'notifyUsers', async (...args) => {
+      commentsAtNotification.push(await observer.issueComment.count({ where: { issueId: target.id, authorId: person, content } }));
+      return notifyUsers(...args);
+    });
+    /** What a post left besides its comment: the notifications and the issue's new activity, without ids and times, and the events. */
+    const left = async post => {
+      const known = (await raw.issueActivity.findMany({ where: { itemId: target.id }, select: { id: true } })).map(row => row.id);
+      // A second notification with the same words to the same person is dropped as a repeat, so each post starts with none.
+      await raw.notification.deleteMany();
+      events.length = 0;
+      assert.ok((await post()).ok);
+      const rows = found => found.map(({ id: _id, createdAt: _createdAt, ...row }) => row);
+      return JSON.parse(JSON.stringify({ notifications: rows(await raw.notification.findMany()),
+        activity: rows(await raw.issueActivity.findMany({ where: { itemId: target.id, id: { notIn: known } } })), events }));
+    };
+    const fromHome = await left(() => replyRoute.POST(request(content), { params: Promise.resolve({ issueId: target.id, runId: run.id }) }));
+    const fromPage = await left(() => commentRoute.POST(request(content), { params: Promise.resolve({ issueId: target.id }) }));
+    assert.deepEqual(commentsAtNotification, [1, 2]);
+    assert.deepEqual(mentionsAtPublication, [1, 1]);
+    assert.deepEqual(fromHome, fromPage);
+    assert.deepEqual(fromPage.notifications.map(row => [row.type, row.userId, row.senderId, row.content]),
+      [['ISSUE_MENTION', owner, person, `@[${person}](${person}) mentioned you in a comment on #[${target.issueKey}](${target.id})`]]);
+    assert.deepEqual(fromPage.events, [['workspace:w:events', { type: 'issue.comments.changed', workspaceId: 'w', issueId: target.id }, 1000]]);
+    assert.equal(await raw.issueComment.count({ where: { issueId: target.id, authorId: person, content } }), 2);
+
+    // The answer is saved before anyone is told, so a notifier that fails does not fail it or undo it.
+    const second = await stopped();
+    await raw.notification.deleteMany();
+    const where = { issueId: second.target.id, authorId: person, content };
+    const visibleAtNotification = [];
+    const failing = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...told, '@/lib/notification-service': {
+      ...notifications, NotificationService: { notifyUsers: async () => {
+        visibleAtNotification.push(await observer.issueComment.count({ where }));
+        throw new Error('The notifier is down');
+      } },
+    } }, { ...globals, console: { error() {} } });
+    events.length = 0;
+    const response = await failing.POST(request(content), { params: Promise.resolve({ issueId: second.target.id, runId: second.run.id }) });
+    assert.deepEqual(visibleAtNotification, [1]);
+    assert.equal(mentionsAtPublication.at(-1), 0);
+    assert.deepEqual([response.status, events.length, await raw.issueComment.count({ where })], [200, 1, 1]);
   });
 });

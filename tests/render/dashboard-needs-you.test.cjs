@@ -191,6 +191,44 @@ test('a press on a row whose stop is no longer open says that nothing was posted
   }, async () => Response.json({ error: 'stop_closed', error_description: refusal }, { status: 409 }));
 });
 
+test('Continue is on every seat row the viewer may act on, and sends its fixed answer once for the stop the row shows', async () => {
+  const hands = { ask: 'none', options: [], question: '1. Merge the pull request.\n\nWhen it is done, reply: merged' };
+  const refusal = 'Nothing was posted: this is no longer waiting for an answer.';
+  let refuse = true;
+  await interact([
+    // What a seat row can be: one declared decision, work for the person's hands, an older row that says nothing of what it asks.
+    makeItem('question', 'q1'), makeItem('review', 'h1', hands), makeItem('question', 'old', { ask: 'none', options: [], question: null }),
+    makeItem('question', 'q2', { canAct: false }), makeItem('review', 'h2', { ...hands, canAct: false }), makeItem('question', 'gone', { runId: null }),
+    makeItem('failed', 'f1'), makeItem('due', 'd1'),
+  ], async ({ container, row, click, calls, refreshes, refreshWith }) => {
+    assert.deepEqual([...container.querySelectorAll('li')].map(item => [...item.querySelectorAll('button')].filter(button => button.textContent === 'Continue').length),
+      [1, 1, 1, 0, 0, 0, 0, 0]);
+    // Opening the answer and choosing its reply word, which here is "continue" too, sends nothing.
+    await click('Answer');
+    await click('continue');
+    assert.equal(row(0).querySelector('input').value, 'continue');
+    assert.deepEqual(calls, []);
+    // A refused press says what a refused answer says, in a row that has no form.
+    await click('Continue', 1);
+    assert.equal(row(1).querySelector('[role="alert"]').textContent, refusal);
+    assert.equal(refreshes(), 0);
+    refuse = false;
+    refreshWith([]);
+    await click('Continue', 0, 2);
+    const posts = calls.filter(([, options]) => options?.method === 'POST');
+    assert.deepEqual(posts.map(([url, options]) => [url, JSON.parse(options.body)]),
+      [
+        ['/api/issues/h1/runs/stop-of-h1/reply', { content: 'Continue. Go on with the work as agreed.' }],
+        ['/api/issues/q1/runs/stop-of-q1/reply', { content: 'Continue. Go on with the work as agreed.' }],
+      ]);
+    assert.equal(refreshes(), 1);
+    assert.equal(row(0), undefined);
+    assert.match(container.querySelector('[role="status"]').textContent, /Answer sent/);
+  }, async (url, options) => options?.method === 'POST' && refuse
+    ? Response.json({ error: 'stop_closed', error_description: refusal }, { status: 409 })
+    : Response.json({ authorId: 'viewer' }, { status: 201 }));
+});
+
 test('an answer draft survives opening another row and a refused comment', async () => {
   await interact([makeItem('question', 'q1'), makeItem('question', 'q2')], async ({ row, click, type, refreshes }) => {
     await click('Answer');
@@ -289,7 +327,7 @@ test('declared stops: what a finish asks is shown as text, and several questions
     assert.ok(row(0).textContent.includes(markup));
     for (const index of [1, 2]) {
       assert.deepEqual([...row(index).querySelectorAll('a, button')].map(control => [control.textContent, control.getAttribute('href')]),
-        [['Open issue', `/work/issues/${index === 1 ? 'Q2' : 'H1'}`], ['Show details', null]]);
+        [['Open issue', `/work/issues/${index === 1 ? 'Q2' : 'H1'}`], ['Show details', null], ['Continue', null]]);
       await click('Show details', index);
       assert.equal(row(index).querySelector('form, input'), null);
       assert.match(row(index).textContent, index === 1 ? /2\. Keep the old column\?\nReply words: keep, drop\./ : /When it is done, reply: webhook added/);
