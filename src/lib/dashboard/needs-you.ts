@@ -396,7 +396,10 @@ export async function loadNeedsYou({
         select: { projectId: true, fullName: true },
       }) : [],
       items.some(item => item.kind === 'failed') ? checkUserPermission(actorId, workspaceId, Permission.ASSIGN_TASK) : null,
-      items.some(item => item.kind === 'question' || item.kind === 'review') ? readForgeBindings().catch(() => null) : null,
+      items.some(item => item.kind === 'question' || item.kind === 'review') ? readForgeBindings().catch(() => {
+        console.error('Workspace Needs you could not read Forge bindings');
+        return null;
+      }) : null,
     ]);
     const repositories = [...github.map(row => ({ projectId: row.projectId, provider: 'github',
       baseUrl: 'https://github.com', repositoryPath: row.fullName })), ...connections];

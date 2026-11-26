@@ -42,7 +42,7 @@ before(async () => {
     'server-only': {}, '@/lib/prisma': { prisma }, '@/lib/permissions': permissions,
     '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
     '@/lib/forge/reader': forgeReader,
-  }, { URL, Date }));
+  }, { URL, Date, console }));
 });
 
 beforeEach(async () => {
@@ -402,6 +402,7 @@ test('a due issue of a dormant project is not listed', async () => {
 });
 
 test('an unreadable Forge configuration preserves rows and counts while disabling seat replies', async t => {
+  const diagnostic = t.mock.method(console, 'error', () => {});
   t.mock.method(forgeReader, 'readForgeBindings', async () => { throw new Error('Invalid project connection configuration'); });
   await waiting('hands', { ask: webhook });
   await waiting('legacy-review', { pullRequest: 'team/repo#7' });
@@ -410,6 +411,7 @@ test('an unreadable Forge configuration preserves rows and counts while disablin
   await issue('due-item', { assigneeId: 'viewer', dueDate: date(1) });
 
   const { items, counts } = await read();
+  assert.deepEqual(diagnostic.mock.calls.map(call => [...call.arguments]), [['Workspace Needs you could not read Forge bindings']]);
   assert.deepEqual(counts, { question: 2, review: 1, failed: 1, due: 1 });
   assert.deepEqual(Object.fromEntries(items.map(row => [row.issue.id, row.canAct])), {
     hands: false, 'legacy-review': false, decision: false, 'lost-run': true, 'due-item': false,

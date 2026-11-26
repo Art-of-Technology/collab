@@ -827,11 +827,18 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
 
   await t.test('declared stops: an answer from Home does what the same comment on the issue page does besides being stored', async t => {
     const events = [];
+    const observer = new PrismaClient({ datasources: { db: { url: db.url } } });
+    t.after(() => observer.$disconnect());
+    const commentsAtNotification = [];
+    const mentionsAtPublication = [];
     const notifications = load('src/lib/notification-service.ts', { '@/lib/prisma': { prisma }, '@/lib/push-notifications': { sendPushNotification: async () => false },
       '@/lib/permissions': load('src/lib/permission-types.ts'), 'date-fns': require('date-fns'), '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {} });
     // The signed-in person as the session gives them, with their name: a mention's notification says who wrote it.
     const told = { ...deps, '@/lib/session': { getCurrentUser: async () => raw.user.findUnique({ where: { id: session } }) },
-      '@/lib/redis': { publishEvent: async (...sent) => events.push(sent) }, '@/utils/mentions': load('src/utils/mentions.ts'), '@/lib/notification-service': notifications };
+      '@/lib/redis': { publishEvent: async (...sent) => {
+        mentionsAtPublication.push(await observer.notification.count({ where: { type: 'ISSUE_MENTION', userId: owner, senderId: person } }));
+        events.push(sent);
+      } }, '@/utils/mentions': load('src/utils/mentions.ts'), '@/lib/notification-service': notifications };
     const replyRoute = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', told, globals);
     const commentRoute = load('src/app/api/issues/[issueId]/comments/route.ts', told, globals);
     const request = content => new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) });
@@ -842,6 +849,11 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     };
     const content = `@[The owner](${owner}) Split it: the window is taken tonight.`;
     const { target, run } = await stopped();
+    const notifyUsers = notifications.NotificationService.notifyUsers.bind(notifications.NotificationService);
+    t.mock.method(notifications.NotificationService, 'notifyUsers', async (...args) => {
+      commentsAtNotification.push(await observer.issueComment.count({ where: { issueId: target.id, authorId: person, content } }));
+      return notifyUsers(...args);
+    });
     /** What a post left besides its comment: the notifications and the issue's new activity, without ids and times, and the events. */
     const left = async post => {
       const known = (await raw.issueActivity.findMany({ where: { itemId: target.id }, select: { id: true } })).map(row => row.id);
@@ -855,6 +867,8 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     };
     const fromHome = await left(() => replyRoute.POST(request(content), { params: Promise.resolve({ issueId: target.id, runId: run.id }) }));
     const fromPage = await left(() => commentRoute.POST(request(content), { params: Promise.resolve({ issueId: target.id }) }));
+    assert.deepEqual(commentsAtNotification, [1, 2]);
+    assert.deepEqual(mentionsAtPublication, [1, 1]);
     assert.deepEqual(fromHome, fromPage);
     assert.deepEqual(fromPage.notifications.map(row => [row.type, row.userId, row.senderId, row.content]),
       [['ISSUE_MENTION', owner, person, `@[${person}](${person}) mentioned you in a comment on #[${target.issueKey}](${target.id})`]]);
@@ -863,8 +877,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
 
     // The answer is saved before anyone is told, so a notifier that fails does not fail it or undo it.
     const second = await stopped();
-    const observer = new PrismaClient({ datasources: { db: { url: db.url } } });
-    t.after(() => observer.$disconnect());
+    await raw.notification.deleteMany();
     const where = { issueId: second.target.id, authorId: person, content };
     const visibleAtNotification = [];
     const failing = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...told, '@/lib/notification-service': {
@@ -876,6 +889,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     events.length = 0;
     const response = await failing.POST(request(content), { params: Promise.resolve({ issueId: second.target.id, runId: second.run.id }) });
     assert.deepEqual(visibleAtNotification, [1]);
+    assert.equal(mentionsAtPublication.at(-1), 0);
     assert.deepEqual([response.status, events.length, await raw.issueComment.count({ where })], [200, 1, 1]);
   });
 });
