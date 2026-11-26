@@ -10,7 +10,7 @@ type DB = Prisma.TransactionClient | typeof prisma;
  * The one place that decides who may be assigned an issue. Every path that sets an assignee calls it,
  * so a rule added here holds everywhere: the workspace's owner, or a member whose membership is on; and when
  * that member is a seat, only issues of the seat's project and role. A seat of the whole workspace (CLB-615) takes issues
- * of its role in any project of its workspace. A request is known by the field that only
+ * of its role in any project of its workspace; its Lead, only in a project without a lead of its own (CLB-952). A request is known by the field that only
  * filing a request sets, never by a label.
  */
 export async function assertAssignable(
@@ -35,4 +35,14 @@ export async function assertAssignable(
       : role?.requests.length ? `A ${seat.role} seat takes only ${role.requests.map(request => request.id).join(', ')} requests`
         : `A ${seat.role} seat does not take this kind of issue`, 422);
   }
+  if (seat.role === 'lead' && seat.projectId === null) await assertNoProjectLead(db, issue.projectId);
+}
+
+/**
+ * The workspace's Lead (CLB-952) leads only the projects that have no active lead seat of their own, so a project never
+ * has two assigners: it is not given an issue of such a project, and places none there. The refusal names that lead.
+ */
+export async function assertNoProjectLead(db: DB, projectId: string): Promise<void> {
+  const own = await db.agentSeat.findFirst({ where: { projectId, role: 'lead', retiredAt: null }, select: { name: true, project: { select: { name: true } } } });
+  if (own) throw new HandoffError('project_has_lead', `${own.project?.name ?? 'This project'} has its own lead seat, ${own.name}: the workspace's Lead leads only the projects that have no lead`, 409);
 }

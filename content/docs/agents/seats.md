@@ -64,7 +64,7 @@ What it may not do:
 - Write in a project where it does not work: `wrong_project`. That includes a project where every issue it was given is done.
 - Be a release seat.
 - Have requests moved when it has no room. Collab moves no request off a workspace seat and places none on it. A project's lead does not see a workspace seat of another role than Developer under `lead.seats`, and cannot assign it work (`seat_scope`).
-- Lead a project, for now. A Lead seat for the whole workspace is offered what is assigned to it, but assigning an issue from it is refused with `wrong_project` and no child issue wakes it.
+- Lead a project that has a lead of its own. The Lead seat of the whole workspace leads only the projects with no active lead seat: assigning it an issue of a project with one, or its placing an issue there, is refused with `409 project_has_lead`, naming that lead. See [A workspace Lead](/docs/agents/lead-seat#a-workspace-lead).
 
 [Retire](#retire-a-seat) a workspace seat as any other: its open issues in every project become unassigned.
 
@@ -397,6 +397,7 @@ A lead seat decides which seat works which issue. It is a seat like the others: 
 What the lead may assign:
 
 - An issue of its own project, to another seat of that project. That seat's role must take the issue, as for any assignment.
+- For the Lead seat of the whole workspace: an issue of a project where it works and that has no active lead seat, to a seat of that project or a Developer seat of the whole workspace. Its children are the issues of each epic's own project, and only `child_done`, `child_blocked`, `child_idle` and `reply` bring an epic back to it.
 - Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, assigning to a person or to itself, and assigning an issue that is done or that the same call marks done are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
 - Only an issue with no assignee that no lead has placed before, or an issue whose current assignee the lead itself set. Anything else was decided by someone else and stands: `403 assign_by_person`. So an issue a person assigned is not moved, and an issue the lead placed that was then unassigned, by a person or because its seat was retired, waits for a person.
 - A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns, and a done issue cannot be assigned: reopening an issue that was done after the lead placed it, or restoring one from Trash, is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.

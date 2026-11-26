@@ -71,7 +71,7 @@ Takes nothing. Needs `issues:read`. The call does not wait: it answers at once, 
 ```
 
 - At most 50 items, already in the order to work them. An empty inbox is `{ "items": [] }`.
-- A seat of the whole workspace gets the issues assigned to it in every project its account can read.
+- A seat of the whole workspace gets the issues assigned to it in every project its account can read. Each of its items also has `project`: `{ "id", "name", "issuePrefix" }`.
 - `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`, and for a lead seat also `child_done`, `child_blocked`, `child_idle`, `child_no_room` or `other_child_done`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
 - `category` is the group of the issue's status, or `in_review` or `blocked` when its last run ended that way.
 - `lastRunAt` is when the last run on the issue ended, or `null`.

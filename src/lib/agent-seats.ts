@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { AGENT_APP_SLUG, createAgentToken } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
-import { assertAssignable } from '@/lib/issue-assignee';
+import { assertAssignable, assertNoProjectLead } from '@/lib/issue-assignee';
 import { connectedRepositories } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import { SEAT_RANK_REFUSAL, seatOwnerAccess } from '@/lib/workspace-authority';
@@ -446,7 +446,8 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
  * The lead's exception to rule 7, where it is decided: inside the transaction that sets the assignee of an existing
  * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
  * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
- * project or to a developer seat of the whole workspace (CLB-951), when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
+ * project or to a developer seat of the whole workspace (CLB-951); the workspace's Lead does the same with the issues of
+ * a project that has no active lead seat (CLB-952), and is refused in any other (`project_has_lead`). It places when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
  * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`), and an issue a run is open on keeps its
  * seat (`already_running`). The placement is on
  * the issue's timeline under the lead's name. It returns the seat for the caller's two checks after its update, where
@@ -462,10 +463,13 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
     WHERE "userId" IN (${me}, ${to}) ORDER BY "id" FOR SHARE`;
   const lead = await tx.agentSeat.findFirst({ where: { userId: me, role: 'lead', retiredAt: null }, select: { id: true, projectId: true } });
   if (!lead) return null;
-  if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+  // The workspace's Lead (CLB-952) places the issues of a project that has no lead of its own, as that project's lead would.
+  if (lead.projectId === null) await assertNoProjectLead(tx, issue.projectId);
+  else if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
   const seat = rows.find(row => row.userId === to);
   const only = 'A lead seat assigns issues only to the other seats of its project and to the developer seats of the whole workspace';
-  if (!seat || to === me) throw new HandoffError('seat_scope', only, 403);
+  // Never to a lead: the workspace's own is refused here, before the rule that keeps it out of a project with a lead.
+  if (!seat || to === me || (seat.projectId === null && seat.role === 'lead')) throw new HandoffError('seat_scope', only, 403);
   await assertAssignable(tx, issue, to);
   // Of the seats of the whole workspace, a project's lead places work on the developers only (CLB-951).
   if (seat.projectId === null && seat.role !== 'developer') throw new HandoffError('seat_scope', only, 403);
