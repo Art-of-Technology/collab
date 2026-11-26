@@ -1,6 +1,6 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { Prisma } = require('@prisma/client');
+const { Prisma, PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
 
@@ -825,7 +825,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     }
   });
 
-  await t.test('declared stops: an answer from Home does what the same comment on the issue page does besides being stored', async () => {
+  await t.test('declared stops: an answer from Home does what the same comment on the issue page does besides being stored', async t => {
     const events = [];
     const notifications = load('src/lib/notification-service.ts', { '@/lib/prisma': { prisma }, '@/lib/push-notifications': { sendPushNotification: async () => false },
       '@/lib/permissions': load('src/lib/permission-types.ts'), 'date-fns': require('date-fns'), '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {} });
@@ -862,12 +862,20 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.equal(await raw.issueComment.count({ where: { issueId: target.id, authorId: person, content } }), 2);
 
     // The answer is saved before anyone is told, so a notifier that fails does not fail it or undo it.
-    let asked = 0;
-    const failing = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...told, '@/lib/notification-service': { ...notifications,
-      NotificationService: { notifyUsers: async () => { asked++; throw new Error('The notifier is down'); } } } }, { ...globals, console: { error() {} } });
     const second = await stopped();
+    const observer = new PrismaClient({ datasources: { db: { url: db.url } } });
+    t.after(() => observer.$disconnect());
+    const where = { issueId: second.target.id, authorId: person, content };
+    const visibleAtNotification = [];
+    const failing = load('src/app/api/issues/[issueId]/runs/[runId]/reply/route.ts', { ...told, '@/lib/notification-service': {
+      ...notifications, NotificationService: { notifyUsers: async () => {
+        visibleAtNotification.push(await observer.issueComment.count({ where }));
+        throw new Error('The notifier is down');
+      } },
+    } }, { ...globals, console: { error() {} } });
     events.length = 0;
     const response = await failing.POST(request(content), { params: Promise.resolve({ issueId: second.target.id, runId: second.run.id }) });
-    assert.deepEqual([response.status, asked, events.length, await raw.issueComment.count({ where: { issueId: second.target.id, authorId: person, content } })], [200, 1, 1, 1]);
+    assert.deepEqual(visibleAtNotification, [1]);
+    assert.deepEqual([response.status, events.length, await raw.issueComment.count({ where })], [200, 1, 1]);
   });
 });

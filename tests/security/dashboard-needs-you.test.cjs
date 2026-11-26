@@ -11,7 +11,7 @@ const now = new Date('2026-11-21T12:00:00Z');
 const date = days => new Date(now.getTime() + days * 86400000);
 const plain = value => JSON.parse(JSON.stringify(value));
 let db, raw, loadNeedsYou;
-let forgeBindings = [];
+const forgeReader = { readForgeBindings: async () => [] };
 
 before(async () => {
   db = await seatsDatabase(async prisma => {
@@ -41,12 +41,11 @@ before(async () => {
   ({ loadNeedsYou } = load('src/lib/dashboard/needs-you.ts', {
     'server-only': {}, '@/lib/prisma': { prisma }, '@/lib/permissions': permissions,
     '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
-    '@/lib/forge/reader': { readForgeBindings: async () => forgeBindings },
+    '@/lib/forge/reader': forgeReader,
   }, { URL, Date }));
 });
 
 beforeEach(async () => {
-  forgeBindings = [];
   await raw.issueActivity.deleteMany();
   await raw.issue.deleteMany();
   await raw.gitConnection.deleteMany();
@@ -402,7 +401,22 @@ test('a due issue of a dormant project is not listed', async () => {
   assert.deepEqual((await read({ scope: 'mine' })).items.map(item => item.issue.id), ['dormant-due']);
 });
 
-test('canAct follows the permissions the comment and clear routes check', async () => {
+test('an unreadable Forge configuration preserves rows and counts while disabling seat replies', async t => {
+  t.mock.method(forgeReader, 'readForgeBindings', async () => { throw new Error('Invalid project connection configuration'); });
+  await waiting('hands', { ask: webhook });
+  await waiting('legacy-review', { pullRequest: 'team/repo#7' });
+  await waiting('decision', { ask: { kind: 'decision', questions: [migration] } });
+  await failed('lost-run');
+  await issue('due-item', { assigneeId: 'viewer', dueDate: date(1) });
+
+  const { items, counts } = await read();
+  assert.deepEqual(counts, { question: 2, review: 1, failed: 1, due: 1 });
+  assert.deepEqual(Object.fromEntries(items.map(row => [row.issue.id, row.canAct])), {
+    hands: false, 'legacy-review': false, decision: false, 'lost-run': true, 'due-item': false,
+  });
+});
+
+test('canAct follows the permissions the comment and clear routes check', async t => {
   await raw.workspaceMember.create({ data: { workspaceId: 'work', userId: 'other', role: 'VIEWER' } });
   const grant = permission => raw.rolePermission.create({ data: { workspaceId: 'work', role: 'VIEWER', permission } });
   await grant('VIEW_TASKS');
@@ -414,7 +428,7 @@ test('canAct follows the permissions the comment and clear routes check', async 
   await waiting('forge-note', { projectId: 'dormant', assigneeId: 'other-seat-user' });
   await failed('lost-run');
   await issue('due-item', { assigneeId: 'other', dueDate: date(1) });
-  forgeBindings = [{ workspaceId: 'work', projectId: 'dormant' }];
+  t.mock.method(forgeReader, 'readForgeBindings', async () => [{ workspaceId: 'work', projectId: 'dormant' }]);
 
   const panel = load('src/app/(main)/[workspaceId]/dashboard/components/NeedsYouPanel.tsx', {
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'),

@@ -206,6 +206,7 @@ test('Continue is on every seat row the viewer may act on, and sends its fixed a
     // Opening the answer and choosing its reply word, which here is "continue" too, sends nothing.
     await click('Answer');
     await click('continue');
+    assert.equal(row(0).querySelector('input').value, 'continue');
     assert.deepEqual(calls, []);
     // A refused press says what a refused answer says, in a row that has no form.
     await click('Continue', 1);
@@ -213,10 +214,13 @@ test('Continue is on every seat row the viewer may act on, and sends its fixed a
     assert.equal(refreshes(), 0);
     refuse = false;
     refreshWith([]);
-    await click('Continue', 1, 2);
+    await click('Continue', 0, 2);
     const posts = calls.filter(([, options]) => options?.method === 'POST');
     assert.deepEqual(posts.map(([url, options]) => [url, JSON.parse(options.body)]),
-      Array(2).fill(['/api/issues/h1/runs/stop-of-h1/reply', { content: 'Continue. Go on with the work as agreed.' }]));
+      [
+        ['/api/issues/h1/runs/stop-of-h1/reply', { content: 'Continue. Go on with the work as agreed.' }],
+        ['/api/issues/q1/runs/stop-of-q1/reply', { content: 'Continue. Go on with the work as agreed.' }],
+      ]);
     assert.equal(refreshes(), 1);
     assert.equal(row(0), undefined);
     assert.match(container.querySelector('[role="status"]').textContent, /Answer sent/);
