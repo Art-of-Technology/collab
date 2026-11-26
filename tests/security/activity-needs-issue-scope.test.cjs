@@ -231,3 +231,50 @@ test('planning counts a cross-workspace blocker only for readers of that blocker
     assert.ok(Object.values(current).flat().every(issue => issue.key !== 'FOR-1'));
   }
 });
+
+test('planning shows a person who may read every issue what it showed before the issue read rule', async () => {
+  const prisma = db.prisma;
+  // A member of both workspaces: every issue, status and blocker below is theirs to read.
+  await prisma.user.create({ data: { id: 'reader', name: 'reader' } });
+  await prisma.workspaceMember.createMany({ data: [{ workspaceId: 'work', userId: 'reader' }, { workspaceId: 'foreign', userId: 'reader' }] });
+  await prisma.project.create({ data: { id: 'plan', workspaceId: 'work', name: 'Plan', slug: 'plan', issuePrefix: 'PL' } });
+  await prisma.projectStatus.createMany({ data: [['in_progress', false], ['in_review', false], ['done', true]].map(([name, isFinal], order) => (
+    { id: `plan-${name}`, projectId: 'plan', name, displayName: name, order, isFinal })) });
+  const issue = (number, data) => ({ id: `plan-${number}`, issueKey: `PL-${number}`, title: `Planned ${number}`, assigneeId: 'reader', workspaceId: 'work', projectId: 'plan', ...data });
+  await prisma.issue.createMany({ data: [
+    issue(1, { statusId: 'plan-in_progress' }), issue(2, { statusId: 'plan-in_progress' }), issue(3, { statusId: 'plan-in_review' }), issue(4, { statusId: 'plan-in_review' }),
+    issue(5, { statusId: 'plan-done' }), issue(6, { status: 'todo' }), issue(7, { statusId: 'foreign-status' }),
+    issue(8, { workspaceId: 'foreign', projectId: 'foreign-project', statusId: 'foreign-status' }),
+  ] });
+  // As planning reads a link: PL-2 waits for PL-1, PL-3 for PL-8 in the other workspace. A BLOCKS link is not read.
+  await prisma.issueRelation.createMany({ data: [
+    { sourceIssueId: 'plan-1', targetIssueId: 'plan-2', relationType: 'BLOCKED_BY' }, { sourceIssueId: 'plan-8', targetIssueId: 'plan-3', relationType: 'BLOCKED_BY' },
+    { sourceIssueId: 'plan-1', targetIssueId: 'plan-4', relationType: 'BLOCKS' },
+  ] });
+  await prisma.issueActivity.createMany({ data: [['plan-1', 'to_do', 'in_progress'], ['plan-5', 'in_progress', 'done']].map(([itemId, oldValue, newValue]) => (
+    { itemId, action: 'STATUS_CHANGED', fieldName: 'status', oldValue, newValue, userId: 'reader', workspaceId: 'work', projectId: 'plan' })) });
+  const read = async name => {
+    const served = await plan(name, 'reader', '&userIds=reader');
+    assert.equal(served.status, 200);
+    return JSON.parse(served.text);
+  };
+  const keys = rows => rows.map(row => row.issueKey).sort();
+
+  const { feed, hasMore } = await read('activity');
+  assert.deepEqual([feed.map(row => [row.issueKey, row.newValue]).sort(), hasMore], [[['PL-1', 'in_progress'], ['PL-5', 'done']], false]);
+
+  // Range lists the workspace's assigned issues whose status is one of a project and not final; one a `BLOCKED_BY` link points at is blocked, whatever its status.
+  const range = await read('range'), [member] = range.members;
+  assert.equal(range.members.length, 1);
+  assert.deepEqual(['assignedIssues', 'currentInProgress', 'currentInReview', 'currentBlocked', 'currentPlanned'].map(list => keys(member[list])),
+    [['PL-1', 'PL-2', 'PL-3', 'PL-4', 'PL-7'], ['PL-1'], ['PL-4'], ['PL-2', 'PL-3'], ['PL-7']]);
+  const { totalCompleted, totalStarted, totalInProgress, totalInReview, totalPlanned, totalBlocked } = range.summary;
+  assert.deepEqual([totalCompleted, totalStarted, totalInProgress, totalInReview, totalPlanned, totalBlocked], [1, 1, 1, 1, 1, 2]);
+
+  // The team view also lists an issue without a project's status, and names the first blocker.
+  const team = await read('team-activity'), [{ current, summary }] = team.members;
+  assert.equal(team.members.length, 1);
+  assert.deepEqual(Object.fromEntries(Object.entries(current).map(([list, rows]) => [list, rows.map(row => [row.key, row.blockedBy ?? null]).sort()])), {
+    inProgress: [['PL-1', null]], inReview: [['PL-4', null]], blocked: [['PL-2', 'PL-1'], ['PL-3', 'PL-8']], planned: [['PL-6', null], ['PL-7', null]] });
+  assert.deepEqual([summary, team.summary.blocked, team.summary.completed], [{ completed: 1, inReview: 1, inProgress: 1, blocked: 2, planned: 2, workload: 4 }, 2, 1]);
+});

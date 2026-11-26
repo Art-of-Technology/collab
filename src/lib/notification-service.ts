@@ -97,6 +97,9 @@ export enum NotificationType {
   COCLAW_ERROR = "COCLAW_ERROR",
 }
 
+// The mention types that name an issue: the app's own, and the two the mentions handler sends for an issue and for a comment on one.
+const ISSUE_MENTION_TYPES = new Set<string>([NotificationType.ISSUE_MENTION, "issue_mention", "issueComment_mention"]);
+
 export class NotificationService {
   /**
    * Bounce helper: returns true if the user's last notification content is the same.
@@ -276,7 +279,7 @@ export class NotificationService {
       }
 
       // The issue read rule: a mention on an issue tells only the people who may read the issue; any other mention is skipped.
-      if (issueId && type === NotificationType.ISSUE_MENTION) {
+      if (issueId && ISSUE_MENTION_TYPES.has(String(type))) {
         const readers: string[] = [];
         for (const userId of recipientIds) {
           const readable = await prisma.issue.findFirst({ where: { id: issueId, ...issueReadAccessWhere(userId) }, select: { id: true } });
