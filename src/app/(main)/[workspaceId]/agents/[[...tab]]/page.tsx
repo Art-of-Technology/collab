@@ -5,6 +5,7 @@ import { readRunnersTab, readSeats, usesHandoffs } from '@/lib/agents-page';
 import { readAgentFloor } from '@/lib/agent-floor';
 import { AgentSeatsView } from '@/components/agents/AgentSeatsView';
 import { AgentRunnersView } from '@/components/agents/AgentRunnersView';
+import { SeatRuleSwitch } from '@/components/agents/SeatRuleSwitch';
 import { AgentsTabs } from '@/components/agents/AgentsTabs';
 import { OrganisationFloor } from '@/components/agents/floor/OrganisationFloor';
 
@@ -32,6 +33,7 @@ export default async function AgentsPage({ params }: { params: Promise<{ workspa
     if (!view) notFound();
     return <main className="w-full space-y-6 p-6">
       <AgentsTabs base={`/${encodeURIComponent(view.workspace.slug || view.workspace.id)}`} current="runners" handoffs={await usesHandoffs(view.workspace.id)} />
+      <SeatRuleSwitch workspaceId={view.workspace.id} />
       <AgentRunnersView workspaceId={view.workspace.id} me={session.user.id} people={view.people} />
     </main>;
   }

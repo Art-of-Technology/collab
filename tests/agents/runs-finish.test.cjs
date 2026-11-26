@@ -171,7 +171,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await raw.appScope.create({ data: { appId: 'person-app', scope: 'projects:write' } });
     await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: person, installationId: null,
       accessToken: Buffer.from(token).toString('base64'), scopes: [...scopes, 'projects:write'] } });
-    const [made, project] = await call(load('src/app/api/apps/auth/projects/route.ts', deps, globals).POST, token, { body: { name: 'Data Flow', slug: 'data-flow', issuePrefix: 'DF' } });
+    const [made, project] = await call(load('src/app/api/apps/auth/projects/route.ts', { ...deps, '@/lib/agent-seat-setup': { applySeatRule: async () => ({ mode: 'handoffs', seats: [] }) } }, globals).POST, token, { body: { name: 'Data Flow', slug: 'data-flow', issuePrefix: 'DF' } });
     assert.equal(made, 201, JSON.stringify(project));
     assert.deepEqual(Object.fromEntries(project.statuses.map(status => [status.name, status.category])),
       { backlog: 'todo', todo: 'todo', in_progress: 'in_progress', in_review: 'in_review', done: 'done', cancelled: 'done' });

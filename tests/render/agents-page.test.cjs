@@ -125,6 +125,7 @@ function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, 
         '@/components/ui/button': { Button: ({ children, variant: _variant, onClick: _click, ...props }) => React.createElement('button', props, children) },
         '@/components/ui/checkbox': { Checkbox: ({ onCheckedChange: _change, ...props }) => React.createElement('input', { type: 'checkbox', readOnly: true, ...props }) },
         '@/hooks/use-toast': { useToast: () => ({}) } }) }),
+    '@/components/agents/SeatRuleSwitch': { SeatRuleSwitch: () => null },
     '@/components/agents/AgentRunnersView': { AgentRunnersView: props => React.createElement('section', null, `Runners of ${props.workspaceId} for ${props.me}, people: ${props.people.map(person => person.name)}`) },
     '@/components/agents/floor/OrganisationFloor': { OrganisationFloor: ({ initial }) => React.createElement('section', null, `Floor of ${initial.workspace.name}`) },
   }).default;

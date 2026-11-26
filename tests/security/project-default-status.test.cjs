@@ -36,7 +36,9 @@ test('a project has one default status, and a new issue starts in the first one 
   await t.test('web create: only the first to do status is the default', async () => {
     const { POST } = load('src/app/api/workspaces/[workspaceId]/projects/route.ts', { 'next/server': { NextResponse: Response }, '@/lib/request-session': session, '@/lib/auth': {},
       '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/slug-resolvers': { resolveWorkspaceSlug: async value => value },
-      '@/lib/utils': { generateUniqueViewSlug: async () => 'web-made-default' }, '@/constants/project-statuses': statuses }, { console });
+      '@/lib/utils': { generateUniqueViewSlug: async () => 'web-made-default' }, '@/constants/project-statuses': statuses,
+      // The workspace rule for seats (CLB-519) is off here; tests/agents/seat-rule.test.cjs runs it.
+      '@/lib/agent-seat-setup': { applySeatRule: async () => ({ mode: 'handoffs', seats: [] }) } }, { console });
     const response = await POST(request({ name: 'Web made' }), { params: Promise.resolve({ workspaceId: 'w' }) });
     assert.equal(response.status, 201, JSON.stringify(await response.clone().json()));
     const { id } = (await response.json()).project;
