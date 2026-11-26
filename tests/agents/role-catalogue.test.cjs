@@ -187,10 +187,6 @@ test('the shared part keeps its asking rules and says how a seat declares a stop
   assert.match(shared, /When you finish naming a person, declare what you ask with `collab run finish --ask-file FILE`/);
   assert.match(shared, /a Decision \(one to five questions, each with two to four short reply words without a slash, and the one you suggest\)/);
   assert.match(shared, /Your hands \(the steps, and the one word that says they are done\)/);
-  const examples = [...shared.matchAll(/`(\{"kind".*?\})`/g)].map(match => JSON.parse(match[1]));
-  assert.deepEqual(examples.map(example => example.kind), ['decision', 'hands']);
-  assert.ok(examples[0].questions[0].options.every(option => option.length <= 40 && !option.includes('/')));
-  assert.ok(examples[1].steps && examples[1].doneWord);
   // 2. A seat whose CLI lacks the option finishes as before.
   assert.match(shared, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0: finish again without `--ask-file`, exactly as before\./);
   // A seat is never told to read the whole command schema to learn its version.

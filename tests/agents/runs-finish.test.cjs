@@ -296,6 +296,19 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual(JSON.parse((await activities(second.target, 'AGENT_RUN_FINISHED'))[0].details).ask, hands);
   });
 
+  await t.test('a finish naming a person accepts both ask-file examples from the seat instructions', async () => {
+    const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+    const [platform] = ROLE_CATALOGUE.instructionLayers('developer', { ownerId: person });
+    const shared = platform.text.split('\n\nAsking a person.')[1];
+    const examples = Array.from(shared.matchAll(/`(\{[^`]*\})`/g), match => JSON.parse(match[1]));
+    assert.deepEqual(examples.map(ask => ask.kind).sort(), ['decision', 'hands']);
+    for (const ask of examples) {
+      const { run } = await started(devA);
+      const [status, body] = await finish(devA, run.id, { outcome: 'blocked', askedUser: person, ask });
+      assert.equal(status, 200, body.error_description);
+    }
+  });
+
   await t.test('declared stops: one setting of the deployment refuses a finish that names a person without ask, and it is off until set', async () => {
     const { target, run } = await started(devA);
     const blocker = await issue(null);

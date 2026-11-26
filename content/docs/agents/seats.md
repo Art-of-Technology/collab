@@ -422,7 +422,7 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
    | --- | --- |
    | Work that is already agreed | Goes on. It never stops to ask whether to continue. A real go or no-go is a `decision` with the reply words `go` and `hold`. |
    | A status note, or a wait on a review, a blocker or a child | Names no person: `in_review` with its `reviewRequest`, `blocked` with `blockedBy`, or a lead's `blocked` with nothing named. |
-   | A check on another service (CI, a review bot) still in progress after 20 minutes | Asks for it again once. 20 minutes later it finishes `blocked` naming a person, with `hands` saying what to look at. It never waits without limit and never pushes an empty commit to rerun a check. |
+   | A check on another service (CI, a review bot) still in progress after 20 minutes | Asks for it again once. If the check is still in progress 20 minutes later, it finishes `blocked` naming a person, with `hands` saying what to look at. It never waits without limit and never pushes an empty commit to rerun a check. |
 4. Give the facts the next session needs as fields, not only inside the note:
 
    | Field | CLI option | What it is | When |
