@@ -25,7 +25,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     }
     await prisma.app.create({ data: { id: 'agent-app', name: 'collab-agent', slug: 'collab-agent', publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
       scopes: { create: scopes.map(scope => ({ scope })) } } });
-    await prisma.taskLabel.createMany({ data: ['Review request', 'Release request', 'Docs request', 'Changelog request', 'backend'].map(name => ({ id: name, workspaceId: 'w', name, color: '#123456' })) });
+    await prisma.taskLabel.createMany({ data: ['Review request', 'Release request', 'Docs request', 'Changelog request', 'Design request', 'backend'].map(name => ({ id: name, workspaceId: 'w', name, color: '#123456' })) });
   });
   // The application's client, so Trash is hidden here as it is in production.
   const raw = db.prisma;
@@ -202,17 +202,18 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     assert.deepEqual(await requestsFor(unheard), []);
   });
 
-  for (const [role, requestLabel, name] of [
-    ['docs', 'Docs request', 'Documentation Manager'],
-    ['changelog', 'Changelog request', 'Changelog Manager'],
+  for (const [role, requestKind, requestLabel, name] of [
+    ['docs', 'docs', 'Docs request', 'Documentation Manager'],
+    ['changelog', 'changelog', 'Changelog request', 'Changelog Manager'],
+    ['architect', 'design', 'Design request', 'Software Architect'],
   ]) {
-    await t.test(`${role} requests reach the ${name} through the request schema or a label`, async () => {
+    await t.test(`${requestKind} requests reach the ${name} through the request schema or a label`, async () => {
       const manager = await seat(`${role}-s`, S, role);
       const source = await issue(S, { assigneeId: devS.userId });
-      const request = requests.requestSchema.parse({ role, title: requestLabel, body: 'Prepare the release update.', fromIssue: source.id });
+      const request = requests.requestSchema.parse({ role: requestKind, title: requestLabel, body: `Work on the ${requestKind} request.`, fromIssue: source.id });
       const { issue: filed } = await requests.fileRequest(context(devS.userId), request);
       assert.deepEqual((await requestsFor(source)).map(row => [row.id, row.agentRequestRole, row.assigneeId, row.labels.map(tag => tag.name)]),
-        [[filed.id, role, manager.userId, [requestLabel]]]);
+        [[filed.id, requestKind, manager.userId, [requestLabel]]]);
 
       const labelled = await issue(S);
       await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: `${role}-integration`, access: 'write', expiresInDays: 30 });
@@ -221,7 +222,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
       assert.deepEqual(await requestsFor(labelled), []);
       await label(person, labelled, [requestLabel]);
       assert.deepEqual((await requestsFor(labelled)).map(row => [row.agentRequestRole, row.assigneeId, row.labels.map(tag => tag.name)]),
-        [[role, manager.userId, [requestLabel]]]);
+        [[requestKind, manager.userId, [requestLabel]]]);
     });
   }
 
