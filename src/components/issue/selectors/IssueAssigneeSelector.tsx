@@ -18,7 +18,7 @@ import type { IssueSelectorProps, IssueUser } from "@/types/issue";
 
 interface IssueAssigneeSelectorProps extends IssueSelectorProps {
   workspaceId?: string;
-  /** The issue's project: a seat is offered only for issues of its own project. */
+  /** The issue's project: a seat is offered only for issues of its own project, a seat of the whole workspace for any project's. */
   projectId?: string;
   currentAssignee?: IssueUser | null;
 }
@@ -35,7 +35,8 @@ export function IssueAssigneeSelector({
   const { data: session } = useSession();
   const { data: members = [], isLoading } = useWorkspaceMemberUsers(workspaceId);
   // The server refuses a seat for another project's issue, so the picker does not offer it.
-  const users = members.filter(user => !user.agentSeat || (!user.agentSeat.retiredAt && user.agentSeat.projectId === projectId));
+  const users = members.filter(user => !user.agentSeat || (!user.agentSeat.retiredAt && !!projectId
+    && (user.agentSeat.projectId === projectId || user.agentSeat.projectId === null)));
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 

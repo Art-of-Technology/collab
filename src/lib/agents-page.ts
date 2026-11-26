@@ -60,11 +60,12 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   const inboxes: InboxItem[][] = [];
   // shortcut: one small read per seat, one after the other so a page view holds one database connection; fine for
   // tens of seats. Read all seats in one query when a workspace has hundreds.
-  // A seat of the whole workspace has no inbox until CLB-615: nothing waits for it here.
-  for (const seat of rows) inboxes.push(seat.projectId === null ? [] : (await inboxOf(workspace.id, seat.userId, { ...seat, projectId: seat.projectId })).items);
-  // The viewer's own read rule, asked once for everything the seats' inboxes named.
+  for (const seat of rows) inboxes.push((await inboxOf(workspace.id, seat.userId, seat)).items);
+  // The viewer's own read rule, asked once for everything the seats' inboxes named, with each issue's project: a seat of
+  // the whole workspace waits for issues of several (CLB-615).
   const ids = inboxes.flat().map(item => item.issueId);
-  const readable = new Set((ids.length ? await prisma.issue.findMany({ where: { id: { in: ids }, ...issueReadAccessWhere(userId) }, select: { id: true } }) : []).map(issue => issue.id));
+  const readable = new Map((ids.length ? await prisma.issue.findMany({ where: { id: { in: ids }, ...issueReadAccessWhere(userId) },
+    select: { id: true, project: { select: { name: true } } } }) : []).map(issue => [issue.id, issue.project.name]));
   const now = new Date();
   // A seat a runner runs works only while a runner holds a usable token for it: `expired` is a seat whose runner
   // stayed away long enough for the last token it fetched to run out.
@@ -86,7 +87,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
     projects: projects.map(({ agentSeats, agentMode, isArchived, ...project }) => ({ ...project, mine: [...new Set(agentSeats.map(seat => seat.role))],
       // Where seats can be added at all: the switch and the Add button are offered only there.
       addable: agentMode === 'seats' && !isArchived })),
-    seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, owner, room, roomProgram, roomAt, customRole, ...seat }, index) => ({
+    seats: rows.map(({ userId: account, runs, project, projectId, byRunner: runner, owner, room, roomProgram, roomAt, customRole, ...seat }, index) => ({
       // `role` is the role it behaves as; `customRole` the name of the workspace's own role it has (CLB-628), shown in its place.
       // `project` is null for a seat whose scope is the whole workspace.
       ...seat, customRole: customRole?.name ?? null, project: project?.name ?? null, noRunner: runner && !fetched.has(account),
@@ -100,7 +101,9 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
         // A lapsed lease is a lost run whether or not a seat has read its inbox since and marked it.
         lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) })),
       // Whose seat has no room is the lead's to read, not everyone's who may see the seat: the reason alone is shown.
-      waiting: inboxes[index].filter(item => readable.has(item.issueId)).map(({ noRoom: _noRoom, ...item }) => item),
+      // A seat of the whole workspace names the project of each issue (CLB-615); a project seat's are all of its project.
+      waiting: inboxes[index].filter(item => readable.has(item.issueId)).map(({ noRoom: _noRoom, ...item }) => ({ ...item,
+        ...(projectId === null && { project: readable.get(item.issueId)! }) })),
     })),
   };
 }
