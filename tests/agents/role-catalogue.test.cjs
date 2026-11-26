@@ -1,12 +1,7 @@
 const { assert, test, load } = require('../security/helpers.cjs');
 
-const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
-- Look up everything you can first. Ask only for what only that person can decide or do.
-- Do not pass on another seat's or an issue's question as you found it. Say in plain English what is being asked. An issue key or an internal name ("the waiting team", "the release tab") gets a few words saying what it is; if you could not find out what a name stands for, say that.
-- Number the questions. Each one is a single decision the person can answer without opening anything, with the fact that makes it needed and your suggested answer, worded so \`yes\` accepts it. Suggesting an answer is not answering for the person: wait for their reply.
-- For something the person must do by hand: how long it takes, the exact link, the label to press or the text to paste, and the reply word.
-- End the ask with the one-line reply you expect, for example \`1 yes, 2 none yet\`.
-- Do not ask again for something that is already asked and still open; point to that ask.`;
+// The shared part every role's prompt ends with, from its heading on.
+const sharedPart = prompt => prompt.slice(prompt.indexOf('\n\nAsking a person.') + 2);
 
 test('the built-in roles have platform instructions that end with the Asking a person rule', () => {
   const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
@@ -15,6 +10,8 @@ test('the built-in roles have platform instructions that end with the Asking a p
     ['developer', 'yes', null], ['reviewer', 'yes', null], ['release', 'yes', 1], ['security', 'read-only', null], ['lead', 'none', 1], ['planner', 'read-only', null],
     ['docs', 'yes', null], ['changelog', 'yes', null], ['architect', 'read-only', null],
   ]);
+  const askingAPerson = sharedPart(roles[0].platformPrompt);
+  assert.match(askingAPerson, /^Asking a person\./);
   for (const role of roles) {
     assert.ok(role.platformPrompt.endsWith(askingAPerson), role.id);
     assert.ok(role.platformPrompt.slice(0, -askingAPerson.length).trim(), role.id);
@@ -33,7 +30,7 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
   assert.deepEqual(Array.from(planner.issueKinds), [null]);
   assert.deepEqual(Array.from(planner.requests), []);
   assert.equal(ROLE_CATALOGUE.requests.some(request => request.seat === 'planner'), false);
-  const own = planner.platformPrompt.slice(0, -askingAPerson.length);
+  const own = planner.platformPrompt.slice(0, -sharedPart(planner.platformPrompt).length);
   // Short enough to read in a minute.
   assert.ok(own.split(/\s+/).filter(Boolean).length <= 280, `${own.split(/\s+/).length} words`);
   // Rounds of the whole frontier, one thread per question, each with a topic and an answer "yes" accepts.
@@ -74,7 +71,7 @@ test('the Documentation Manager takes docs requests and gets a short docs-only p
   const [platform] = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: null });
   assert.equal(platform.layer, 'platform');
   assert.equal(platform.text, role.platformPrompt);
-  assert.ok(platform.text.split(/\s+/).length <= 280);
+  assert.ok(platform.text.slice(0, -sharedPart(platform.text).length).split(/\s+/).length <= 280);
   assert.match(platform.text, /update the docs pages .* change touches/i);
   assert.match(platform.text, /picture or table first.*short steps.*detail at the end/i);
   assert.match(platform.text, /open a pull request/i);
@@ -95,7 +92,7 @@ test('the Changelog Manager takes changelog requests and gets a short draft-only
   const [platform] = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: null });
   assert.equal(platform.layer, 'platform');
   assert.equal(platform.text, role.platformPrompt);
-  assert.ok(platform.text.split(/\s+/).length <= 280);
+  assert.ok(platform.text.slice(0, -sharedPart(platform.text).length).split(/\s+/).length <= 280);
   assert.match(platform.text, /draft .*entry for what was released/i);
   assert.match(platform.text, /plain words a customer understands/i);
   assert.match(platform.text, /hand the draft to a person/i);
@@ -114,7 +111,7 @@ test('the Software Architect takes design requests and gets a short read-only pl
   const [platform] = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: null });
   assert.equal(platform.layer, 'platform');
   assert.equal(platform.text, role.platformPrompt);
-  assert.ok(platform.text.split(/\s+/).length <= 280);
+  assert.ok(platform.text.slice(0, -sharedPart(platform.text).length).split(/\s+/).length <= 280);
   assert.match(platform.text, /read the repository/i);
   assert.match(platform.text, /design note/i);
   assert.match(platform.text, /diagram/i);
@@ -174,4 +171,57 @@ test('a layer longer than its maximum is refused when it is saved', () => {
     assert.equal(layerText(layer, `  ${'y'.repeat(LAYER_LIMITS[layer])}  `).length, LAYER_LIMITS[layer]);
     assert.throws(() => layerText(layer, 'y'.repeat(LAYER_LIMITS[layer] + 1)), new RegExp(`${layer}.*${LAYER_LIMITS[layer]}`));
   }
+});
+
+test('the shared part keeps its asking rules and says how a seat declares a stop, never asks whether to continue, and waits with a limit (CLB-1227)', () => {
+  const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+  const shared = sharedPart(ROLE_CATALOGUE.getRole('developer').platformPrompt);
+  // What it said before.
+  assert.match(shared, /Look up everything you can first/);
+  assert.match(shared, /Do not pass on another seat's or an issue's question as you found it/);
+  assert.match(shared, /Number the questions.*worded so `yes` accepts it.*wait for their reply/);
+  assert.match(shared, /must do by hand: how long it takes, the exact link/);
+  assert.match(shared, /one-line reply you expect/);
+  assert.match(shared, /Do not ask again for something that is already asked and still open/);
+  // 1. A finish that names a person declares a Decision or Your hands, with an example of each that the server takes.
+  assert.match(shared, /When you finish naming a person, declare what you ask with `collab run finish --ask-file FILE`/);
+  assert.match(shared, /a Decision \(one to five questions, each with two to four short reply words without a slash, and the one you suggest\)/);
+  assert.match(shared, /Your hands \(the steps, and the one word that says they are done\)/);
+  const examples = [...shared.matchAll(/`(\{"kind".*?\})`/g)].map(match => JSON.parse(match[1]));
+  assert.deepEqual(examples.map(example => example.kind), ['decision', 'hands']);
+  assert.ok(examples[0].questions[0].options.every(option => option.length <= 40 && !option.includes('/')));
+  assert.ok(examples[1].steps && examples[1].doneWord);
+  // 2. A seat whose CLI lacks the option finishes as before.
+  assert.match(shared, /First run `collab --version`: if it is below 0\.17\.0, or `collab run finish` refuses `--ask-file` as an unknown flag, finish without `--ask-file`, exactly as before\./);
+  // 3. Agreed work goes on; a real go or no-go is a Decision with go and hold.
+  assert.match(shared, /Work that is already agreed goes on without asking\. Never stop to ask a person whether to continue\./);
+  assert.match(shared, /go or no-go is a Decision with the reply words `go` and `hold`/);
+  // 4. A status note or a wait names no person, and finishes with a wait the server takes.
+  assert.match(shared, /A status note, or a wait on a review, a blocker or a child, names no person: finish as `in_review` naming your review request, or `blocked` naming the blocking issue in `blockedBy` \(a lead names nothing while a child is not done\)/);
+  // 5. A check that stays in progress: one more ask, then a person, with no endless wait and no empty commit.
+  assert.match(shared, /still shows "in progress" after 20 minutes: ask for it again once\. If it still does 20 minutes later, finish as `blocked` naming the person in `askedUser`, as Your hands/);
+  assert.match(shared, /Never wait without limit, and never push an empty commit/);
+});
+
+test('only the lead is told to keep at most two epics in flight (CLB-1227)', () => {
+  const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+  for (const role of ROLE_CATALOGUE.roles) {
+    const own = role.platformPrompt.slice(0, -sharedPart(role.platformPrompt).length);
+    if (role.id !== 'lead') { assert.doesNotMatch(role.platformPrompt, /two epics/, role.id); continue; }
+    assert.match(own, /At most two epics are in flight in a project at the same time\. A third starts when one of the two is live and has been used\./);
+    assert.match(own, /work the two that come first in the order you were given them; on any other, assign nothing, say so in the note and finish as `blocked` naming nothing/);
+  }
+});
+
+test('a part that names --ask-file also says what a seat with an older CLI does (CLB-1227)', () => {
+  const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
+  const check = (id, prompt) => {
+    for (const part of prompt.split('\n\n')) {
+      if (part.includes('--ask-file')) assert.match(part, /`collab --version`: if it is below 0\.17\.0, or `collab run finish` refuses `--ask-file` as an unknown flag, finish without `--ask-file`/, id);
+    }
+  };
+  for (const role of ROLE_CATALOGUE.roles) check(role.id, role.platformPrompt);
+  assert.ok(ROLE_CATALOGUE.roles.every(role => role.platformPrompt.includes('--ask-file')));
+  // The check itself catches a part that names the option alone.
+  assert.throws(() => check('made up', 'Do the work.\n\nFinish with `--ask-file FILE`.'));
 });
