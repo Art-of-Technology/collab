@@ -68,7 +68,8 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
   deps['@/lib/agent-label-triggers'] = load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto'),
     '@/lib/agent-requests': load('src/lib/agent-requests.ts', deps, { Date }) });
   deps['@/lib/issue-mutation'] = load('src/lib/issue-mutation.ts', deps);
-  const route = path => load(`src/app/api/apps/auth/${path}/route.ts`, deps, globals);
+  // A seat is refused before a project is made, so the workspace rule for seats (CLB-519) is never reached here.
+  const route = path => load(`src/app/api/apps/auth/${path}/route.ts`, { '@/lib/agent-seat-setup': { applySeatRule: async () => ({ mode: 'handoffs', seats: [] }) }, ...deps }, globals);
   const issues = route('issues'), item = route('issues/[issueIdOrKey]'), assign = route('issues/[issueIdOrKey]/assign'),
     comments = route('issues/[issueIdOrKey]/comments'), relations = route('issues/[issueIdOrKey]/relations'),
     relation = route('issues/[issueIdOrKey]/relations/[relationId]'), restore = route('issues/[issueIdOrKey]/restore'),

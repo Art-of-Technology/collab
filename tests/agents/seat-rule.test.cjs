@@ -107,10 +107,10 @@ test('seats rule: a workspace rule gives every new project its four seats, with 
     assert.equal(await setup.seatRuleState('w', other), null, 'someone outside the workspace reads nothing');
   });
 
-  await t.test('a project created through the token API, by a person or a seat, gets four seats and seats mode, and no token', async () => {
+  await t.test("a project created through the token API, with a person's CLI token or an agent token, gets four seats and seats mode, and no token", async () => {
     const byPerson = await viaToken('collab-cli', member, 'Alpha');
-    const bySeat = await viaToken('collab-agent', admin, 'Bravo');
-    for (const [reply, name] of [[byPerson, 'Alpha'], [bySeat, 'Bravo']]) {
+    const byAgent = await viaToken('collab-agent', admin, 'Bravo');
+    for (const [reply, name] of [[byPerson, 'Alpha'], [byAgent, 'Bravo']]) {
       assert.deepEqual((await seatsOf(reply.id)).map(seat => [seat.role, seat.name, seat.byRunner, seat.ownerId]), [
         ['developer', `${name} Developer`, true, owner], ['release', `${name} Release`, true, owner],
         ['reviewer', `${name} Reviewer`, true, owner], ['security', `${name} Security`, true, owner]]);
