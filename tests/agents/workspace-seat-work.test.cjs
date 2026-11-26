@@ -160,6 +160,17 @@ test('a workspace seat works the issues assigned to it in any project (CLB-615)'
     assert.deepEqual([status, reply.error], [409, 'no_default_seat']);
   });
 
+  await t.test('a workspace seat files a request only into a project where it works (CLB-1245)', async () => {
+    // Project C holds nothing of its: naming it is refused, and nothing is written there.
+    const before = await raw.issue.count({ where: { projectId: C } });
+    const [status, reply] = await file(wsDev, inB, { project: 'CC' });
+    assert.deepEqual([status, reply.error], [403, 'wrong_project']);
+    assert.equal(await raw.issue.count({ where: { projectId: C } }), before);
+    // Project A, where it works too, may be named from an issue of project B.
+    const intoA = await filed(wsDev, inB, { project: 'AA' });
+    assert.deepEqual([intoA.projectId, intoA.assigneeId], [A, revA.userId]);
+  });
+
   await t.test('it gains no access its account does not have', async () => {
     await raw.workspaceMember.update({ where: { userId_workspaceId: { userId: wsDev.userId, workspaceId: 'w' } }, data: { status: false } });
     try {

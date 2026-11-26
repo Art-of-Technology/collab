@@ -162,7 +162,7 @@ A seat asks for a review, a release, a security review or work in another projec
 
 1. Choose the `role`. Use `review` for the reviewer, `release` for release, `security` for security, `developer` for the developer, `docs` for the Documentation Manager, `changelog` for the Changelog Manager, or `design` for the Software Architect.
 2. Name the issue the request comes from in `fromIssue`. It must be an issue of the seat's own project; for a seat of the whole workspace, an issue of a project where it works.
-3. For another project, add `project`: its id or its issue prefix. Without it the request stays in the seat's own project, or for a seat of the whole workspace in the project of `fromIssue`.
+3. For another project, add `project`: its id or its issue prefix. A seat of the whole workspace may name only a project where it works; any other is refused with `wrong_project`. Without it the request stays in the seat's own project, or for a seat of the whole workspace in the project of `fromIssue`.
 4. Write the `title` and the `body`. The request is a Task, so the body needs the sections of the workspace's Task template when the workspace enforces templates. State the problem and the evidence, not the fix.
 5. Add `"blocks": true` when the source issue cannot go on until the request is done. The request is then linked as blocking it; otherwise as related. A security request always blocks: see [Security review](#security-review).
 

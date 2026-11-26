@@ -48,6 +48,8 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     // A seat of the whole workspace asks in the project of the issue it works (CLB-615).
     : { id: seat.projectId ?? source.projectId };
   if (!target) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  // A request is a write in its target project: a seat of the whole workspace files only where it works (CLB-1245).
+  if (seat.projectId === null) await seatWriteGuard(prisma, context, target.id);
   // As on every other issue write: a Forge-connected project's issues change through its Forge board.
   await Promise.all([assertLegacyProjectWriteAllowed(target.id), assertLegacyIssueWriteAllowed(source.id)]).catch(error => {
     throw error instanceof ForgeProjectWriteError ? new HandoffError('forge_connected_project', error.message, 409) : error;
@@ -71,6 +73,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     await seatWriteGuard(tx, context, currentSource.projectId);
     const currentSeat = await requireSeat(tx, context);
     if (currentSeat.projectId !== seat.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+    if (currentSeat.projectId === null) await seatWriteGuard(tx, context, target.id);
     const refusal = enforced && createRefusal(sections, issueShape({ type: 'TASK', description: input.body }));
     if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
     return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId ?? currentSource.projectId, kind, title: input.title, body: input.body,
