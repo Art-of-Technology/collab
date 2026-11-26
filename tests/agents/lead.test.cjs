@@ -67,7 +67,7 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async () => {}, emitIssueDeleted: async () => {} },
   };
   deps['@/lib/issue-mutation'] = load('src/lib/issue-mutation.ts', deps);
-  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
+  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date, process: { env: {} } });
   const route = path => load(`src/app/api/apps/auth/${path}/route.ts`, deps, globals);
   const issues = route('issues'), item = route('issues/[issueIdOrKey]'), assign = route('issues/[issueIdOrKey]/assign'),
     comments = route('issues/[issueIdOrKey]/comments'), contextRoute = route('issues/[issueIdOrKey]/run-context'),
