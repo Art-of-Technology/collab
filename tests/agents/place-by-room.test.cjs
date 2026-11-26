@@ -48,7 +48,7 @@ test('place by room: the lead is given seats in order of room, and a request goe
   const deps = { zod, 'next/server': response, '@/lib/prisma': { prisma }, '@/lib/apps/auth-middleware': middleware, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
     '@/lib/forge/legacy-write-guard': { ForgeProjectWriteError: class extends Error {}, assertLegacyIssueWriteAllowed: async () => {}, assertLegacyProjectWriteAllowed: async () => {} },
-    '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens, '@/lib/event-bus': { emitIssueCreated: async () => {} } };
+    '@/lib/permissions': {}, '@/lib/agent-tokens': tokens, '@/lib/event-bus': { emitIssueCreated: async () => {} } };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
   const lib = deps['@/lib/agent-requests'] = load('src/lib/agent-requests.ts', deps, { Date });
   const route = path => load(`src/app/api/apps/auth/${path}/route.ts`, deps, globals);

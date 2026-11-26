@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 
 export async function GET(
   request: NextRequest,
@@ -21,31 +22,14 @@ export async function GET(
     const descriptionOnly = searchParams.get('descriptionOnly') === 'true';
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
-    // Find the issue to verify access
-    const issue = await prisma.issue.findUnique({
-      where: { id: issueId },
-      select: {
-        id: true,
-        workspaceId: true,
-      },
+    // The issue read rule, as on the issue itself: an issue this user may not read is answered as not found.
+    const issue = await prisma.issue.findFirst({
+      where: { id: issueId, ...issueReadAccessWhere(session.user.id) },
+      select: { id: true },
     });
 
     if (!issue) {
       return NextResponse.json({ error: 'Issue not found' }, { status: 404 });
-    }
-
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId: issue.workspaceId,
-        },
-      },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
     }
 
     // Fetch activities for this issue

@@ -769,16 +769,18 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * another account's, `movedFrom` names that seat, what its last run pushed and what to do before anything else (CLB-809). A run that ended without a note moves nothing:
  * what was said since the last note is still what the next session lacks. `instructions` are the three layers of the
  * assigned seat's instructions, platform, organisation and seat, each present and empty when it has nothing (CLB-607).
- * A read like any other: every token that reads the workspace's issues gets it.
+ * A read like any other: a token gets it for an issue of the workspace its account may read (the issue read rule), and
+ * the linked issues and children it lists are those the account may read; any other issue is not found.
  */
 export async function runContext(context: Caller, issueIdOrKey: string) {
-  const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
+  const readable: Prisma.IssueWhereInput = { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id, project: { workspaceId: context.workspace.id } };
+  const issue = await prisma.issue.findFirst({ where: { ...readable, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
     agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
-    sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
-    targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
+    sourceRelations: { where: { targetIssue: readable }, select: { relationType: true, targetIssue: { select: REF } } },
+    targetRelations: { where: { sourceIssue: readable }, select: { relationType: true, sourceIssue: { select: REF } } },
     // shortcut: the first 100 children, oldest first; page them when an epic outgrows that.
-    children: { where: { workspaceId: context.workspace.id }, orderBy: { createdAt: 'asc' }, take: 100, select: { ...REF, assigneeId: true, assignee: { select: { name: true } },
+    children: { where: readable, orderBy: { createdAt: 'asc' }, take: 100, select: { ...REF, assigneeId: true, assignee: { select: { name: true } },
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } } } },
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);

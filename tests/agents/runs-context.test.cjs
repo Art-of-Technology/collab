@@ -45,9 +45,9 @@ test('run context: what a fresh session needs to work an issue, in one read', as
   const middleware = load('src/lib/apps/auth-middleware.ts', { crypto: require('node:crypto'), 'next/server': response,
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
+  const runs = load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date });
   const route = load('src/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route.ts', { '@/lib/apps/auth-middleware': middleware,
-    '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
-    '@/lib/agent-runs': load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date }) }, globals);
+    '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals), '@/lib/agent-runs': runs }, globals);
 
   const seat = async (name, projectId) => {
     const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId, role: 'developer', ownerId: person, name, expiresInDays: 30 });
@@ -216,6 +216,45 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     const reply = await context(target);
     assert.deepEqual([reply.blockers, reply.requests, reply.requestFor], [[], [], []]);
   });
+
+  // A status of a project in a workspace these callers are not in: they may not read an issue that has it.
+  const unreadable = { statusId: 'cprojectx001-to_do' };
+
+  await t.test('a seat and a member read an issue as before, and of its children and related issues those they may read', async () => {
+    const parent = await issue({ description: 'Assigned work', assigneeId: devA.userId });
+    const child = await issue({ parentId: parent.id });
+    await issue({ parentId: parent.id, ...unreadable });
+    const blocker = await issue(), request = await issue({ agentRequestRole: 'review' });
+    await link(blocker, 'BLOCKS', parent); await link(request, 'RELATES_TO', parent);
+    await link(parent, 'BLOCKED_BY', await issue(unreadable)); await link(await issue({ agentRequestRole: 'review', ...unreadable }), 'RELATES_TO', parent);
+    await run(parent, 30, { note: 'Where it stands' }); await comment(parent, person, 5, 'since');
+    // The seat it is assigned to, another seat and a member.
+    for (const token of [devA.token, devB.token, personToken]) {
+      const [status, reply] = await read(token, parent.issueKey);
+      assert.equal(status, 200, JSON.stringify(reply));
+      assert.deepEqual([reply.issue.description, reply.lastExitNote, said(reply)], ['Assigned work', 'Where it stands', ['since']]);
+      assert.deepEqual([reply.children.map(row => row.id), reply.blockers.map(row => row.id), reply.requests.map(row => row.id)], [[child.id], [blocker.id], [request.id]]);
+    }
+  });
+
+  await t.test('an issue the caller may not read is answered as an issue that does not exist', async () => {
+    const target = await issue({ description: 'Not for these callers', ...unreadable });
+    await run(target, 30, { note: 'Its note' }); await comment(target, owner, 5, 'its comment');
+    const missing = await read(devA.token, 'K-0');
+    assert.deepEqual([missing[0], missing[1].error], [404, 'not_found']);
+    for (const token of [devA.token, personToken]) for (const name of [target.id, target.issueKey]) assert.deepEqual(await read(token, name), missing);
+  });
+
+  await t.test('a membership that is not active reads no run context', async () => {
+    const target = await issue({ description: 'For active members' }), inactive = 'cinactive01';
+    await raw.user.create({ data: { id: inactive, name: inactive } });
+    await raw.workspaceMember.create({ data: { workspaceId: 'w', userId: inactive, status: false } });
+    await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: inactive, installationId: null, accessToken: Buffer.from('collab_inactive_token').toString('base64'), scopes } });
+    // The token is refused as everywhere in the app API, and the read itself finds no issue.
+    assert.equal((await read('collab_inactive_token', target.issueKey))[0], 403);
+    await assert.rejects(runs.runContext({ user: { id: inactive }, workspace: { id: 'w' } }, target.issueKey), { code: 'not_found', status: 404 });
+  });
+
   await t.test('the instructions for the run, in three layers, for every role', async () => {
     const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
     const layers = reply => reply.instructions.map(layer => layer.layer);
