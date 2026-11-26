@@ -28,8 +28,8 @@ export interface AgentTokenRow {
   id: string;
   name: string;
   /**
-   * Set when the token's account is a seat: one project, one role, and the owner whose sign-in runs it. `customRole` is the
-   * name of the workspace's own role the seat has (CLB-628), shown in place of `role`, the built-in role it behaves as.
+   * Present when the token belongs to a seat. A null project means the seat covers the whole workspace.
+   * `owner` names the person whose sign-in runs the seat, if any. A custom role name is shown in place of its built-in base role.
    */
   seat: { id: string; role: string; customRole?: string | null; project: string | null; isDefault: boolean; retired: boolean; owner: string | null } | null;
   /** Other workspaces the token's agent was let into. */
@@ -58,7 +58,6 @@ const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
 const roleLabel = (id: string) => ROLE_CATALOGUE.getRole(id)?.name ?? id;
 /** A seat's role as people read it: the workspace's own role by its name, else the built-in one. */
 const seatRoleLabel = (seat: { role: string; customRole?: string | null }) => seat.customRole ?? roleLabel(seat.role);
-// What a seat without a project (CLB-613) is a seat of.
 const WHOLE_WORKSPACE = 'the whole workspace';
 // The role select holds a built-in role's id, or one of the workspace's own roles under this prefix.
 const CUSTOM = 'custom:';
