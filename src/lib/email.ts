@@ -41,9 +41,12 @@ export async function sendEmail({
   return { success: false, error: 'Email delivery could not be confirmed. Check the recipient inbox before retrying.' };
 }
 
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[character]!);
+
+/** Where links in an email point: the address people open Collab at. */
+export const appUrl = () => process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://collab.weez.boo';
 
 export async function sendWorkspaceInvitationEmail({
   to,
@@ -58,8 +61,7 @@ export async function sendWorkspaceInvitationEmail({
   invitationToken: string;
   invitationUrl?: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://collab.weez.boo';
-  const url = invitationUrl || new URL(`/workspace-invitation/${encodeURIComponent(invitationToken)}`, appUrl).href;
+  const url = invitationUrl || new URL(`/workspace-invitation/${encodeURIComponent(invitationToken)}`, appUrl()).href;
   const subject = `${inviterName} invited you to join ${workspaceName}`;
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

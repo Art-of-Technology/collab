@@ -6,6 +6,7 @@ import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, no
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
+import { emailDeclaredStop } from '@/lib/agent-stop-email';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -583,6 +584,7 @@ const askSchema = z.discriminatedUnion('kind', [
     .refine(({ options, suggested }) => suggested === undefined || options.includes(suggested), { path: ['suggested'] })).min(1).max(5) }).strict(),
   z.object({ kind: z.literal('hands'), steps: text(4000), doneWord: replyWord }).strict(),
 ]);
+export type Ask = z.infer<typeof askSchema>;
 
 /**
  * Declared stops: what a finish that names a person asks of them, so Home shows it from fields and not out of a comment.
@@ -724,6 +726,8 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
     return { unmapped };
   });
   if (!result) throw fenced();
+  // The person is told once the finish is committed and the issues are no longer held: an email in the lock would hold them for as long as the mail provider takes.
+  if (ask && input.askedUser) await emailDeclaredStop({ runId: run.id, userId: input.askedUser, ask });
   return result.unmapped;
 }
 
