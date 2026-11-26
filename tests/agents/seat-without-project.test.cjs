@@ -28,10 +28,11 @@ test('a seat without a project', async t => {
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
   const handoffs = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
     '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
-  const seats = load('src/lib/agent-seats.ts', { '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' },
+  const loadSeats = client => load('src/lib/agent-seats.ts', { '@/lib/prisma': { prisma: client }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' },
     '@/lib/issue-assignee': load('src/lib/issue-assignee.ts', { './agent-handoffs': handoffs }),
     // Every seat here has no owner, which the rank rule passes.
     '@/lib/workspace-authority': { SEAT_RANK_REFUSAL: 'outranked', seatOwnerAccess: async () => () => 'pass' } }, { Date });
+  const seats = loadSeats(prisma);
   const runs = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': finder,
     '@/lib/permissions': {}, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' } }, { Date });
   const runners = load('src/lib/agent-runners.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs,
@@ -94,5 +95,15 @@ test('a seat without a project', async t => {
     await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: 'ws-dev' });
     const defaults = await raw.agentSeat.findMany({ where: { projectId: null, role: 'developer', isDefault: true, retiredAt: null }, orderBy: { id: 'asc' }, select: { id: true } });
     assert.deepEqual(defaults.map(row => row.id), ['ws-dev-w2', 'ws-dev2']);
+  });
+
+  await t.test('a workspace can retire its seat while another workspace holds its retirement lock', async () => {
+    await prisma.$transaction(async tx => {
+      const first = loadSeats({ agentSeat: tx.agentSeat, $transaction: run => run(tx) });
+      await first.retireSeat({ workspaceId: 'w', actorId: owner, seatId: 'ws-dev2' });
+      await seats.retireSeat({ workspaceId: 'w2', actorId: owner, seatId: 'ws-dev-w2' });
+    }, { timeout: 15000 });
+    const retired = await raw.agentSeat.count({ where: { id: { in: ['ws-dev2', 'ws-dev-w2'] }, retiredAt: { not: null } } });
+    assert.equal(retired, 2);
   });
 });

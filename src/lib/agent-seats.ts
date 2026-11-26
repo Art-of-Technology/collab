@@ -460,10 +460,10 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
   return prisma.$transaction(async tx => {
     const found = await tx.agentSeat.findFirst({ where, select: { projectId: true } });
     if (!found) throw new HandoffError('not_found', 'Seat not found', 404);
-    // The same order as creating a seat: the project's lock, then the row.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${found.projectId}`}))`;
+    const lockKey = found.projectId === null ? `agent-seat-workspace:${input.workspaceId}` : `agent-seat:${found.projectId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${input.seatId} FOR UPDATE`;
-    const seat = await tx.agentSeat.findFirst({ where });
+    const seat = await tx.agentSeat.findFirst({ where: { ...where, projectId: found.projectId } });
     const verdict = seat && access(seat.ownerId);
     if (!seat || verdict === 'changed') throw new HandoffError('not_found', 'Seat not found', 404);
     if (verdict === 'refused') throw new HandoffError('outranked', SEAT_RANK_REFUSAL, 403);
