@@ -44,10 +44,10 @@ const changelogWork = `2. Check the release details and draft a changelog entry 
 4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
 Never publish a changelog entry.`;
 
-const architectWork = `2. Read the repository for the design request. Write a design note with a diagram and the trade-offs. Name the simplest option that works.
-3. Save it as a project note in Context and link it in your \`done\` result.
-4. If blocked, finish as \`blocked\` with \`blockedBy\` for a linked blocker or \`askedUser\` for a person.
-Never change code, commit, push or open a pull request.`;
+const architectWork = `2. Read the repository. Write a design note with a diagram and trade-offs. Name the simplest option that works.
+3. Post the full design as a comment on the design request. Link it in your \`done\` result. A person saves it as a project note in Context.
+4. Finish \`blocked\` with \`blockedBy\` for blockers or \`askedUser\` for people.
+Never change code, commit, push, open a pull request or create a note.`;
 
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
 - Look up everything you can first. Ask only for what only that person can decide or do.
