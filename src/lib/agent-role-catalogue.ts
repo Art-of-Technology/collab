@@ -46,8 +46,8 @@ Never publish a changelog entry.`;
 
 const architectWork = `2. Read the repository. Write a design note with a diagram and trade-offs. Name the simplest option that works.
 3. Post the full design as a comment on the design request. Link it in your \`done\` result. A person saves it as a project note in Context.
-4. Finish \`blocked\` with \`blockedBy\` for blockers or \`askedUser\` for people.
-Never change code, commit, push, open a pull request or create a note.`;
+4. If blocked, finish \`blocked\` with \`blockedBy\` for blockers or \`askedUser\` for people.
+Never change code, commit, push, open a pull request or create a Context note.`;
 
 const askingAPerson = `Asking a person. This applies whenever your result names a person, or a comment of yours asks one for something:
 - Look up everything you can first. Ask only for what only that person can decide or do.

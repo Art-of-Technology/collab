@@ -123,7 +123,8 @@ test('the Software Architect takes design requests and gets a short read-only pl
   assert.match(platform.text, /post the full design as a comment on the design request/i);
   assert.match(platform.text, /link it in your `done` result/i);
   assert.match(platform.text, /a person saves it as a project note in Context/i);
-  assert.match(platform.text, /never change code.*commit.*push.*open a pull request.*create a note/i);
+  assert.match(platform.text, /if blocked, finish `blocked` with `blockedBy`.*`askedUser`/i);
+  assert.match(platform.text, /never change code.*commit.*push.*open a pull request.*create a Context note/i);
 });
 
 test('a run\'s instructions are three layers in order, platform, organisation and seat, or four with a custom role\'s, each with a stated maximum length', () => {
