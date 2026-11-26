@@ -155,8 +155,7 @@ The exact order is under [Placed by room](/docs/agents/seats#placed-by-room).
 
 - `lead_cap`: the seat has its limit of open issues from you. Do not try another route. Finish and wait.
 - `assign_by_person`: someone else decided who has that issue. Leave it.
-- A child blocked on a question for a person: do not answer it. Finish `blocked` with `--asked-user`, naming the person.
-- At most two epics in flight in a project. A third starts when one of the two is live and has been used. If you hold more, work the two that come first in the order you were given them; on any other, assign nothing and say so in your note, and finish as above: `blocked` naming nothing while a child is not done, `done` when every child is done.
+- A child blocked on a question for a person: do not answer it and do not name the person again; the child already did. Finish `blocked` naming nothing. Use `--asked-user` only for a question you need answered yourself.
 - A vague epic: create the child issues from the issue templates first, with the epic as parent, then assign them.
 - The epic comes back with `other_child_done` when a child of another epic you hold reaches a final done status and an unassigned child you may place now has all its recorded blockers done. Record dependencies between children with `BLOCKS` or `BLOCKED_BY` so the completion can wake the dependent epic.
 

@@ -382,8 +382,7 @@ The rules:
 
 - Only a lead seat is woken by its issue's children, and only for an issue its last run finished `blocked`. A blocked status without such a run wakes nobody. The children are the issues of the lead's project whose parent is that issue.
 - A lead's run may finish `blocked` without `blockedBy` or `askedUser` while the issue has a child that is not done. With every child done, that finish is refused with `422 exit_state_required`: finish `done`.
-- A child blocked on a question for a person: the lead does not answer for the person. It finishes `blocked` with `askedUser`. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done.
-- At most two epics are in flight in a project at the same time; a third starts when one of the two is live and has been used. A lead that holds more works the two that come first in the order it was given them. On any other it assigns nothing, says so in its note and finishes as it would otherwise: `blocked` with nothing named while a child is not done, `done` when every child is done. Its role text says this; Collab does not refuse a third.
+- A child blocked on a question for a person: the lead does not answer for the person and does not name them again. The child already named them, so the lead finishes `blocked` with nothing named. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done. The lead names a person with `askedUser` only for a question it needs answered itself.
 - A lead may create child issues in its project, from the issue templates, like any seat, and then assign them.
 - The lead starts and restarts no runner, assigns nothing across projects, and gives no person work.
 - A project without a lead seat is not affected by any of this.
@@ -421,7 +420,8 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
    | Situation | What the seat does |
    | --- | --- |
    | Work that is already agreed | Goes on. It never stops to ask whether to continue. A real go or no-go is a `decision` with the reply words `go` and `hold`. |
-   | A status note, or a wait on a review, a blocker or a child | Names no person: `in_review` with its `reviewRequest`, `blocked` with `blockedBy`, or a lead's `blocked` with nothing named. |
+   | A progress note | Names nobody, and the work goes on. |
+   | A wait on a review, a blocker or a child | Names no person: `in_review` with its `reviewRequest`, `blocked` with `blockedBy`, or a lead's `blocked` with nothing named while a child is not done. |
    | A check on another service (CI, a review bot) still in progress after 20 minutes | Asks for it again once. If the check is still in progress 20 minutes later, it finishes `blocked` naming a person, with `hands` saying what to look at. It never waits without limit and never pushes an empty commit to rerun a check. |
 4. Give the facts the next session needs as fields, not only inside the note:
 

@@ -31,11 +31,13 @@ test('the Planner takes ordinary issues, reads its project\'s repository and gri
   assert.deepEqual(Array.from(planner.requests), []);
   assert.equal(ROLE_CATALOGUE.requests.some(request => request.seat === 'planner'), false);
   const own = planner.platformPrompt.slice(0, -sharedPart(planner.platformPrompt).length);
-  // Short enough to read in a minute.
-  assert.ok(own.split(/\s+/).filter(Boolean).length <= 280, `${own.split(/\s+/).length} words`);
+  // Short enough to read in a minute; 290 since a round holds at most five questions (CLB-1227).
+  assert.ok(own.split(/\s+/).filter(Boolean).length <= 290, `${own.split(/\s+/).length} words`);
   // Rounds of the whole frontier, one thread per question, each with a topic and an answer "yes" accepts.
   assert.match(own, /round/i);
   assert.match(own, /frontier/i);
+  // A finish declares at most five questions, so a round asks at most five.
+  assert.match(own, /at most five questions; keep the rest for the next round/);
   assert.match(own, /--parent-id/);
   assert.match(own, /topic/i);
   assert.match(own, /`yes`/);
@@ -189,37 +191,30 @@ test('the shared part keeps its asking rules and says how a seat declares a stop
   assert.match(shared, /Your hands \(the steps, and the one word that says they are done\)/);
   // 2. A seat whose CLI lacks the option finishes as before.
   assert.match(shared, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0: finish again without `--ask-file`, exactly as before\./);
-  // A seat is never told to read the whole command schema to learn its version.
-  assert.doesNotMatch(shared, /collab (--version|schema|--help)/);
   // 3. Agreed work goes on; a real go or no-go is a Decision with go and hold.
   assert.match(shared, /Work that is already agreed goes on without asking\. Never stop to ask a person whether to continue\./);
   assert.match(shared, /go or no-go is a Decision with the reply words `go` and `hold`/);
-  // 4. A status note or a wait names no person, and finishes with a wait the server takes.
-  assert.match(shared, /A status note, or a wait on a review, a blocker or a child, names no person: finish as `in_review` naming your review request, or `blocked` naming the blocking issue in `blockedBy` \(a lead names nothing while a child is not done\)/);
+  // 4. A progress note names nobody and the work goes on; only a real wait finishes, with a wait the server takes.
+  assert.match(shared, /A progress note names nobody, and the work goes on\. Only when you actually wait for something, finish with the wait you have: `in_review` naming your review request, or `blocked` naming the blocking issue in `blockedBy`; a lead names nothing while a child is not done\./);
   // 5. A check that stays in progress: one more ask, then a person, with no endless wait and no empty commit.
   assert.match(shared, /still shows "in progress" after 20 minutes: ask for it again once\. If it still does 20 minutes later, finish as `blocked` naming the person in `askedUser`, as Your hands/);
   assert.match(shared, /Never wait without limit, and never push an empty commit/);
 });
 
-test('only the lead is told to keep at most two epics in flight (CLB-1227)', () => {
+test('a lead names a person only for a question it needs answered itself, never for one a child asked (CLB-1227)', () => {
   const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
-  for (const role of ROLE_CATALOGUE.roles) {
-    const own = role.platformPrompt.slice(0, -sharedPart(role.platformPrompt).length);
-    if (role.id !== 'lead') { assert.doesNotMatch(role.platformPrompt, /two epics/, role.id); continue; }
-    assert.match(own, /At most two epics are in flight in a project at the same time\. A third starts when one of the two is live and has been used\./);
-    assert.match(own, /work the two that come first in the order you were given them; on any other, assign nothing and say so in the note, and finish as step 4 says\./);
-  }
+  const lead = ROLE_CATALOGUE.getRole('lead').platformPrompt;
+  assert.match(lead, /While a child is not done, finish as `blocked` and name nothing\./);
+  assert.match(lead, /For a question only a person can answer and that you yourself need answered, finish as `blocked` with `askedUser` set to \{\{ownerId\}\}; a question a child asked is the child's, so name nobody for it\./);
 });
 
-test('a part that names --ask-file also says what a seat with an older CLI does (CLB-1227)', () => {
+test('every built-in role\'s complete text that names --ask-file says what a seat with an older CLI does, and none sends a seat to the command schema (CLB-1227)', () => {
   const { ROLE_CATALOGUE } = load('src/lib/agent-role-catalogue.ts');
-  const check = (id, prompt) => {
-    for (const part of prompt.split('\n\n')) {
-      if (part.includes('--ask-file')) assert.match(part, /If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0\.17\.0: finish again without `--ask-file`/, id);
-    }
-  };
-  for (const role of ROLE_CATALOGUE.roles) check(role.id, role.platformPrompt);
-  assert.ok(ROLE_CATALOGUE.roles.every(role => role.platformPrompt.includes('--ask-file')));
-  // The check itself catches a part that names the option alone.
-  assert.throws(() => check('made up', 'Do the work.\n\nFinish with `--ask-file FILE`.'));
+  for (const role of ROLE_CATALOGUE.roles) {
+    const text = ROLE_CATALOGUE.instructionLayers(role.id, { ownerId: 'cowner00001' }).map(layer => layer.text).join('\n\n');
+    assert.ok(text.includes('--ask-file'), role.id);
+    if (text.includes('--ask-file')) assert.ok(text.includes('If `collab run finish` refuses `--ask-file` as an unknown flag, your CLI is older than 0.17.0: finish again without `--ask-file`, exactly as before.'), role.id);
+    // `collab --version` prints the whole command schema: no text sends a seat there to learn its version.
+    assert.doesNotMatch(text, /collab (--version|schema|--help)/, role.id);
+  }
 });
