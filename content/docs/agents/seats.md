@@ -51,6 +51,7 @@ What it may do:
 | What | The rule |
 | --- | --- |
 | Be given work | A person assigns it an issue of any project in the workspace that its role takes. The assignee picker offers it on every project's issues. |
+| Take work from a project's lead | A Developer seat is in every project lead's `lead.seats`, ordered [by room](#placed-by-room) with the project's developer seats, and the lead may assign it a child issue of its project. It holds at most 3 open issues from leads, counting every project's lead together. Stories a lead placed move between it and the project's developer seats as between two project seats. |
 | Read | Only what its token's account can read. The scope gives it no access to a project its account cannot see. |
 | List its work | Its [inbox](#what-a-seat-works-on-next) has its issues of every project its account can read, in the usual order. The **Seat inbox** page shows the project of each. |
 | Take an issue | It checks out an issue of any project: it is not refused with `wrong_project`. The reply names the repository of that issue's project. |
@@ -62,7 +63,7 @@ What it may not do:
 
 - Write in a project where it does not work: `wrong_project`. That includes a project where every issue it was given is done.
 - Be a release seat.
-- Take part in the moves when a seat has no room. Collab moves no work off a workspace seat and places none on it, and a project's lead is not shown it under `lead.seats`, so a person assigns its work.
+- Have requests moved when it has no room. Collab moves no request off a workspace seat and places none on it. A project's lead does not see a workspace seat of another role than Developer under `lead.seats`, and cannot assign it work (`seat_scope`).
 - Lead a project, for now. A Lead seat for the whole workspace is offered what is assigned to it, but assigning an issue from it is refused with `wrong_project` and no child issue wakes it.
 
 [Retire](#retire-a-seat) a workspace seat as any other: its open issues in every project become unassigned.
@@ -172,7 +173,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
 - `children`: when the issue has child issues, up to 100 of them, oldest first, each with its status, `assigneeId`, `assignee` and `lastRun` (`null`, `running`, `stopped` or the outcome of its last run).
-- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. When the lead seat itself reads, each seat also has `owner`, `room` and `openRuns`, and the seats of a role are in the order to prefer: see [Placed by room](#placed-by-room).
+- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats and the workspace's Developer seats, each with `userId`, `name`, `role` and `openFromLead`. A workspace seat's `openFromLead` counts the open issues every project's lead gave it. When the lead seat itself reads, each seat also has `owner`, `room` and `openRuns`, and the seats of a role are in the order to prefer: see [Placed by room](#placed-by-room).
 - `commands`: `collab` commands that fetch the rest (the project's context, the earlier comments and the timeline) and the two that end the session's work: a request and the finish.
 
 A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.

@@ -134,7 +134,7 @@ You do not do the work. You decide which seat gets which child issue of the epic
 
 | Step | What you do |
 | --- | --- |
-| 1 | Read the run context. `children` lists the epic's child issues with status, assignee and how the last run ended. `lead.seats` lists the project's other seats, each with `openFromLead`, `room` and its owner's `openRuns`, and `lead.cap` is the limit. |
+| 1 | Read the run context. `children` lists the epic's child issues with status, assignee and how the last run ended. `lead.seats` lists the project's other seats and the workspace's Developer seats, each with `openFromLead`, `room` and its owner's `openRuns`, and `lead.cap` is the limit. |
 | 2 | Assign child issues in the order the epic gives, each to the seat the table below names: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. |
 | 3 | Finish with outcome `blocked` and nothing named. That means: waiting for the children. |
 | 4 | When the epic comes back, read the reason and the context again, and decide again. |

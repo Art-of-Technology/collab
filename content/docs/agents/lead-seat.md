@@ -7,8 +7,8 @@ A lead seat hands an epic's child issues to the project's other seats, so the qu
 | What | It means |
 | --- | --- |
 | **One per project** | A seat with the role Lead. It wakes when something happens, decides once in a fresh session, and ends. |
-| **It assigns, nothing more** | It gives issues of its project to the project's other seats. Never to a person, to itself or across projects. |
-| **A limit Collab keeps** | A seat holds at most 3 open issues from the lead. |
+| **It assigns, nothing more** | It gives issues of its project to the project's other seats and to the workspace's Developer seats. Never to a person, to itself or across projects. |
+| **A limit Collab keeps** | A seat holds at most 3 open issues from the lead. A Developer seat of the whole workspace holds at most 3 from every project's lead together. |
 | **Your choice stands** | The lead cannot move an issue you assigned, or reassign one it placed that you then unassigned. |
 
 ## How work flows

@@ -53,7 +53,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
       owner: { select: { id: true, name: true, email: true } },
       // A runner works one issue at a time, but a lost run stays open until someone clears it, so a seat can have several.
       runs: { where: { endedAt: null, issue: issueReadAccessWhere(userId) }, orderBy: { startedAt: 'desc' },
-        select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { id: true, issueKey: true, title: true } } } },
+        select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { id: true, issueKey: true, title: true, project: { select: { name: true } } } } } },
     },
     orderBy: [{ project: { name: 'asc' } }, { role: 'asc' }, { name: 'asc' }],
   });
@@ -99,7 +99,9 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
       tokenExpired: runner && fetched.get(account)?.state === 'expired',
       working: runs.map(run => ({ id: run.id, issueId: run.issue.id, issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
         // A lapsed lease is a lost run whether or not a seat has read its inbox since and marked it.
-        lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) })),
+        lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now),
+        // A seat of the whole workspace works in several projects: each run names its issue's (CLB-951).
+        ...(projectId === null && { project: run.issue.project.name }) })),
       // Whose seat has no room is the lead's to read, not everyone's who may see the seat: the reason alone is shown.
       // A seat of the whole workspace names the project of each issue (CLB-615); a project seat's are all of its project.
       waiting: inboxes[index].filter(item => readable.has(item.issueId)).map(({ noRoom: _noRoom, ...item }) => ({ ...item,

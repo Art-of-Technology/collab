@@ -337,7 +337,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
 | `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. When the lead seat itself reads, each also has `movedOff`, the user IDs of seats the child was moved off. |
-| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
+| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats and the workspace's Developer seats, each with `userId`, `name`, `role` and `openFromLead` (for a workspace seat, from every project's lead together). For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
 An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.

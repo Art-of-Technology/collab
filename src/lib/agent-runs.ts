@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
+import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLeads, leadSeatsWithRoom, noRoomDue, seatFor, seatWriteGuard } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
@@ -125,16 +125,17 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
 
   // CLB-780. Developer work is the lead's to move, and only what the lead may move is offered: a child the lead itself
   // placed, on a developer seat. Its seat has had no room for long enough, and another developer seat has a number and
-  // is under its limit of issues from the lead: otherwise there is nowhere to move it. A child a run has started on
+  // is under its limit of issues from the lead: otherwise there is nowhere to move it. The developer seats of the whole
+  // workspace are among them, as in the lead's list (CLB-951). A child a run has started on
   // waits longer and moves only between runs, from what its last run pushed (CLB-809).
   const placed = children.filter(child => !isDone(child) && !child.agentRequestRole && child.assignee?.agentSeat?.role === 'developer'
     && child.helpers.some(row => row.userId === child.assigneeId && row.approvedBy === me));
   const full = new Map<string, { seat: string; reason: string; due: Date | null; started: { due: Date | null; pushed: Map<string, Pushed> } | null }>();
   if (lead && placed.length) {
-    const developers = await seatsWithRoom(db, lead.projectId, 'developer', new Date(now));
+    const developers = await leadSeatsWithRoom(db, workspaceId, lead.projectId, 'developer', new Date(now));
     let free = false;
     for (const developer of developers) {
-      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLead(lead.projectId, me, developer.userId) }) < LEAD_CAP;
+      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLeads(developer, lead.projectId, me) }) < LEAD_CAP;
     }
     for (const developer of free ? developers : []) {
       const held = placed.filter(child => child.assigneeId === developer.userId);
@@ -771,7 +772,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
  * filed for (the ones it blocks or relates to from its own side, which is how filing links it). An issue with child issues
  * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's, the project's other
- * seats come with it, each with the open issues it holds from the lead, and the limit. The lead itself gets each seat's
+ * seats and the workspace's developer seats (CLB-951) come with it, each with the open issues it holds from the lead
+ * (from every project's lead, for a seat of the whole workspace), and the limit. The lead itself gets each seat's
  * owner, room and the owner's open runs too, and the seats of one role in the order to prefer (`byRoom`); room is its
  * owner's figure, so no other reader is given it or the order that would say it. When the last run that finished was
  * another account's, `movedFrom` names that seat, what its last run pushed and what to do before anything else (CLB-809). A run that ended without a note moves nothing:
@@ -793,7 +795,8 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   const lead = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
-  const listed = lead ? (await seatsWithRoom(prisma, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
+  // The project's seats and the workspace's developer seats (CLB-951): those the lead may place work on.
+  const listed = lead ? (await leadSeatsWithRoom(prisma, context.workspace.id, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
   const asLead = lead?.userId === context.user.id;
   // Each role in its own order, in the places its seats had in the list: with nothing known the list is the one it was.
   const queues = new Map([...new Set(listed.map(seat => seat.role))].map(role => [role, byRoom(listed.filter(seat => seat.role === role))]));
@@ -871,7 +874,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
       ...(asLead && { movedOff: history.filter(row => row.itemId === child.id).map(row => row.oldValue).filter(Boolean) }),
       lastRun: child.agentRuns[0] ? child.agentRuns[0].endedAt ? child.agentRuns[0].outcome ?? 'stopped' : 'running' : null })) }),
     ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ userId: seat.userId, name: seat.name, role: seat.role,
-      openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }),
+      openFromLead: await prisma.issue.count({ where: fromLeads(seat, issue.projectId, lead.userId) }),
       ...(asLead && { owner: seat.owner, room: seat.room, openRuns: seat.openRuns }) }))) } }),
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
