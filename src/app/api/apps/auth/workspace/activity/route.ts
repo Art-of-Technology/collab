@@ -24,60 +24,65 @@ export const GET = withAppAuth(
 
       const skip = (page - 1) * limit;
 
-      const { activities, total, issues } = await prisma.$transaction(async tx => {
-        // shortcut: Activity parents lack a relation; keep the IDs of the issues this account may read until profiling justifies a database join.
-        const visibleIssues = await tx.issue.findMany({
-          where: { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
-            project: { workspaceId: context.workspace.id }, ...(projectId ? { projectId } : {}) },
-          select: { id: true },
-        });
-        const where = {
-          workspaceId: context.workspace.id,
-          itemId: { in: visibleIssues.map(issue => issue.id) },
-          ...(action && { action }),
-          ...(userId && { userId }),
-        };
+      // Build filter
+      const where: any = {
+        workspaceId: context.workspace.id,
+      };
 
-        const [activities, total] = await Promise.all([
-          tx.issueActivity.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: { createdAt: 'desc' },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  image: true,
-                },
-              },
-            },
-          }),
-          tx.issueActivity.count({ where }),
-        ]);
+      if (action) {
+        where.action = action;
+      }
 
-        // Get issue details for context
-        const activityIssueIds = [...new Set(activities.map(a => a.itemId))];
-        const issues = await tx.issue.findMany({
-          where: { id: { in: activityIssueIds } },
-          select: {
-            id: true,
-            issueKey: true,
-            title: true,
-            type: true,
-            project: {
+      if (userId) {
+        where.userId = userId;
+      }
+
+      // shortcut: Activity parents lack a relation; keep the IDs of the issues this account may read until profiling justifies a database join.
+      const visibleIssues = await prisma.issue.findMany({
+        where: { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
+          project: { workspaceId: context.workspace.id }, ...(projectId ? { projectId } : {}) },
+        select: { id: true },
+      });
+      where.itemId = { in: visibleIssues.map(issue => issue.id) };
+
+      const [activities, total] = await Promise.all([
+        prisma.issueActivity.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            user: {
               select: {
                 id: true,
                 name: true,
-                issuePrefix: true,
+                email: true,
+                image: true,
               },
             },
           },
-        });
-        return { activities, total, issues };
-      }, { isolationLevel: 'RepeatableRead' });
+        }),
+        prisma.issueActivity.count({ where }),
+      ]);
+
+      // Get issue details for context
+      const activityIssueIds = [...new Set(activities.map(a => a.itemId))];
+      const issues = await prisma.issue.findMany({
+        where: { id: { in: activityIssueIds } },
+        select: {
+          id: true,
+          issueKey: true,
+          title: true,
+          type: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+              issuePrefix: true,
+            },
+          },
+        },
+      });
       const issueMap = new Map(issues.map(i => [i.id, i]));
 
       return NextResponse.json({

@@ -17,7 +17,6 @@ function harness(scopes) {
   };
   const state = { historyReads: 0 };
   const db = {
-    $transaction(read) { return read(this); },
     workspace: { findFirst: async ({ where }) => matches(workspace, where) ? workspace : null },
     user: { findUnique: async () => ({ id: 'alice', email: 'alice@example.test', name: 'Alice' }) },
     appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: 'alice', scopes, tokenExpiresAt: null,
@@ -75,7 +74,7 @@ test('a project outside the token\'s workspace is still not found', async () => 
 
 // The issue read rule, against a real database: 'shown' is an issue the workspace's members may read, 'hidden' one they
 // may not (its status belongs to a project of a workspace they are not in).
-let db, signedIn, routes, prisma;
+let db, signedIn, routes;
 before(async () => {
   db = await seatsDatabase(async prisma => {
     await prisma.user.createMany({ data: ['work-owner', 'viewer', 'inactive', 'foreign-owner'].map(id => ({ id, name: id })) });
@@ -98,16 +97,12 @@ before(async () => {
       fieldName: 'description', oldValue: `${id}-old`, newValue: `${id}-new`, details: JSON.stringify({ content: `${id}-details` }) } });
   }
   // The application's client, so Trash is hidden here as it is in production.
-  prisma = db.prisma.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
-  routes = activityRoutes(prisma);
-});
-
-function activityRoutes(prisma) {
+  const prisma = db.prisma.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
   const deps = { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma },
     '@/lib/auth': { getAuthSession: async () => ({ user: { id: signedIn } }) }, '@/lib/apps/auth-middleware': { withAppAuth: handler => handler } };
   const route = path => load(`src/app/api/${path}/route.ts`, deps, { URL, console });
-  return { issue: route('issues/[issueId]/activities'), workspace: route('apps/auth/workspace/activity'), project: route('apps/auth/projects/[projectId]/activity') };
-}
+  routes = { issue: route('issues/[issueId]/activities'), workspace: route('apps/auth/workspace/activity'), project: route('apps/auth/projects/[projectId]/activity') };
+});
 after(() => db?.stop());
 
 const readIssue = async (user, issueId) => {
@@ -147,42 +142,3 @@ test('a membership that is not active reads no issue activity', async () => {
   assert.deepEqual(await readIssue('inactive', 'shown'), await readIssue('inactive', 'no-such-issue'));
   for (const feed of ['workspace', 'project']) assert.deepEqual(JSON.parse(await readFeed(feed, 'inactive')).activities, [], feed);
 });
-
-for (const path of ['workspace', 'project', 'issue']) {
-  test(`the ${path} activity response keeps the issue and its history as of the same read`, async () => {
-    const projectId = `snapshot-${path}`;
-    const issueId = `issue-${path}`;
-    await db.prisma.project.create({ data: { id: projectId, workspaceId: 'work', name: path, slug: projectId, issuePrefix: path.toUpperCase() } });
-    await db.prisma.issue.create({ data: { id: issueId, workspaceId: 'work', projectId, title: 'Original title' } });
-    const event = { itemId: issueId, itemType: 'ISSUE', projectId, workspaceId: 'work', userId: 'work-owner' };
-    await db.prisma.issueActivity.create({ data: { ...event, action: 'CREATED' } });
-
-    let trashed = false;
-    const reader = prisma.$extends({ query: { issue: { async $allOperations({ args, query }) {
-      const result = await query(args);
-      if (!trashed) {
-        await db.prisma.$transaction([
-          db.prisma.issue.update({ where: { id: issueId }, data: { deletedAt: new Date() } }),
-          db.prisma.issueActivity.create({ data: { ...event, action: 'TRASHED' } }),
-        ]);
-        trashed = true;
-      }
-      return result;
-    } } } });
-    const route = activityRoutes(reader)[path];
-    signedIn = 'viewer';
-    const request = new Request(`https://example.test/activity?projectId=${projectId}`);
-    const params = { params: Promise.resolve({ issueId, projectId }) };
-    const read = () => path === 'issue' ? route.GET(request, params) : route.GET(request, { user: { id: signedIn }, workspace: { id: 'work' } }, params);
-    const response = await read();
-    assert.equal(trashed, true);
-    assert.equal(response.status, 200);
-    const body = await response.json();
-    assert.deepEqual((path === 'issue' ? body : body.activities).map(row => row.action), ['CREATED']);
-    if (path === 'workspace') assert.equal(body.activities[0].issue.title, 'Original title');
-    if (path !== 'issue') assert.equal(body.pagination?.total ?? body.total, 1);
-    const next = await read();
-    if (path === 'issue') assert.equal(next.status, 404);
-    else assert.deepEqual((await next.json()).activities, []);
-  });
-}

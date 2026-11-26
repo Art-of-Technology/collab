@@ -123,7 +123,6 @@ test('activity search summary and workspace feed counts exclude retained histori
   const activityRows = ['active', 'deleted'].map(id => ({ id: `event-${id}`, itemId: id,
     itemType: 'ISSUE', workspaceId: 'workspace', action: 'UPDATED', userId: 'user', details: null }));
   const prisma = {
-    $transaction(read) { return read(this); },
     issue: { findMany: async () => [{ id: 'active', title: 'Visible' }], count: async () => 1 },
     issueActivity: {
       findMany: async ({ where }) => activityRows.filter(row => matches(row, where)),

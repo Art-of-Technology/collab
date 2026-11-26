@@ -773,12 +773,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * the linked issues and children it lists are those the account may read; any other issue is not found.
  */
 export async function runContext(context: Caller, issueIdOrKey: string) {
-  return prisma.$transaction(tx => readRunContext(tx, context, issueIdOrKey), { isolationLevel: 'RepeatableRead' });
-}
-
-async function readRunContext(tx: Prisma.TransactionClient, context: Caller, issueIdOrKey: string) {
   const readable: Prisma.IssueWhereInput = { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id, project: { workspaceId: context.workspace.id } };
-  const issue = await tx.issue.findFirst({ where: { ...readable, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
+  const issue = await prisma.issue.findFirst({ where: { ...readable, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
     agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
     sourceRelations: { where: { targetIssue: readable }, select: { relationType: true, targetIssue: { select: REF } } },
@@ -788,15 +784,15 @@ async function readRunContext(tx: Prisma.TransactionClient, context: Caller, iss
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } } } },
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
-  const lead = issue.assigneeId ? await tx.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
-  const listed = lead ? (await seatsWithRoom(tx, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
+  const lead = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
+  const listed = lead ? (await seatsWithRoom(prisma, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
   const asLead = lead?.userId === context.user.id;
   // Each role in its own order, in the places its seats had in the list: with nothing known the list is the one it was.
   const queues = new Map([...new Set(listed.map(seat => seat.role))].map(role => [role, byRoom(listed.filter(seat => seat.role === role))]));
   const seats = asLead ? listed.map(seat => queues.get(seat.role)!.shift()!) : listed;
   const last = issue.agentRuns[0];
   // The checked facts of that run's note are where finishing wrote them: in its entry on the timeline.
-  const entry = last && await tx.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
+  const entry = last && await prisma.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
   const facts = JSON.parse(entry?.details ?? '{}');
   // CLB-809: the last finished run was another account's, so the issue came here from another seat. A runner that never
   // had the issue starts from its pushed branch; one that had it before starts from what it holds, so the session brings
@@ -805,26 +801,26 @@ async function readRunContext(tx: Prisma.TransactionClient, context: Caller, iss
     ? { pullRequest: facts.pullRequest as string, headCommit: facts.headCommit as string } : null;
   const [, repo, number] = pushed?.pullRequest.match(/^(.+)#(\d+)$/) ?? [];
   const from = last?.seat?.name ?? 'another account';
-  const repository = await repositoryOfIssue(tx, issue.projectId, issue.assigneeId);
+  const repository = await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId);
   // The instructions are those of the seat that works the issue: its role's, then what this workspace adds for the role (CLB-608),
   // then the seat's own, saved on its page (CLB-610). A seat with the workspace's own role has its base role in `role`, and
   // that role's instructions come before the seat's (CLB-626), also when the role is retired.
-  const worker = issue.assigneeId ? await tx.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, retiredAt: null },
+  const worker = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, retiredAt: null },
     select: { role: true, ownerId: true, instructions: true, customRole: { select: { instructions: true } } } }) : null;
-  const organisation = worker ? (await tx.agentRoleInstructions.findUnique({ where: { workspaceId_role: { workspaceId: context.workspace.id, role: worker.role } }, select: { text: true } }))?.text ?? '' : '';
+  const organisation = worker ? (await prisma.agentRoleInstructions.findUnique({ where: { workspaceId_role: { workspaceId: context.workspace.id, role: worker.role } }, select: { text: true } }))?.text ?? '' : '';
   // A system admin's edit of the role's prompt (CLB-916): the version in force when the open run started, so a run keeps
   // what it received; with no run open, the latest. None, or one with no text, means the repository's text.
-  const open = worker ? await tx.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null, state: { in: LIVE } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }) : null;
-  const platform = worker ? (await tx.agentPlatformPrompt.findFirst({ where: { role: worker.role, createdAt: { lte: open?.startedAt ?? new Date() } }, orderBy: { version: 'desc' }, select: { text: true } }))?.text : null;
-  const matches = repo ? (await connectedRepositories(tx, issue.projectId)).filter(row => row.name.toLowerCase() === repo.toLowerCase()) : [];
+  const open = worker ? await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null, state: { in: LIVE } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } }) : null;
+  const platform = worker ? (await prisma.agentPlatformPrompt.findFirst({ where: { role: worker.role, createdAt: { lte: open?.startedAt ?? new Date() } }, orderBy: { version: 'desc' }, select: { text: true } }))?.text : null;
+  const matches = repo ? (await connectedRepositories(prisma, issue.projectId)).filter(row => row.name.toLowerCase() === repo.toLowerCase()) : [];
   const elsewhere = !!pushed && (matches.length !== 1 || matches[0].id !== repository?.id);
-  const branch = !elsewhere && repo ? (await tx.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { id: matches[0].id, projectId: issue.projectId, isActive: true } },
+  const branch = !elsewhere && repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { id: matches[0].id, projectId: issue.projectId, isActive: true } },
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   // A run that named a person may have been answered before it finished (`earlyAnswers`): the session that answer brings
   // back finds it here, with what was said from then on. The seat itself wrote nothing between that answer and its finish.
   const answer = last?.seat && last.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
-    ? (await earlyAnswers(tx, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
-  const commentsSince = await tx.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
+    ? (await earlyAnswers(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
@@ -834,12 +830,12 @@ async function readRunContext(tx: Prisma.TransactionClient, context: Caller, iss
   const reviewed = others.filter(other => other.issue.agentRequestRole === 'security').map(other => other.issue.id);
   // Oldest first, so a request that was reopened and judged again shows its last verdict.
   const verdicts = new Map<string, { verdict: string; reviewed: string }>();
-  for (const row of reviewed.length ? await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: reviewed }, action: 'SECURITY_VERDICT' },
+  for (const row of reviewed.length ? await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: reviewed }, action: 'SECURITY_VERDICT' },
     orderBy: { createdAt: 'asc' }, select: { itemId: true, details: true } }) : []) {
     const details = JSON.parse(row.details ?? '{}');
     if (details.requestId === row.itemId) verdicts.set(row.itemId, details);
   }
-  const history = asLead ? await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: issue.children.map(child => child.id) }, action: { in: ['LEAD_ASSIGNED', 'STORY_MOVED'] }, oldValue: { not: '' } }, select: { itemId: true, oldValue: true } }) : [];
+  const history = asLead ? await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: issue.children.map(child => child.id) }, action: { in: ['LEAD_ASSIGNED', 'STORY_MOVED'] }, oldValue: { not: '' } }, select: { itemId: true, oldValue: true } }) : [];
   const security = issue.agentRequestRole === 'security';
   return {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
@@ -867,7 +863,7 @@ async function readRunContext(tx: Prisma.TransactionClient, context: Caller, iss
       ...(asLead && { movedOff: history.filter(row => row.itemId === child.id).map(row => row.oldValue).filter(Boolean) }),
       lastRun: child.agentRuns[0] ? child.agentRuns[0].endedAt ? child.agentRuns[0].outcome ?? 'stopped' : 'running' : null })) }),
     ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ userId: seat.userId, name: seat.name, role: seat.role,
-      openFromLead: await tx.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }),
+      openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }),
       ...(asLead && { owner: seat.owner, room: seat.room, openRuns: seat.openRuns }) }))) } }),
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
