@@ -1,5 +1,6 @@
 import { notificationCommentAccessWhere } from "@/lib/notification-access";
 import { postAccessWhere } from "@/lib/post-access";
+import { issueReadAccessWhere } from "@/lib/issue-finder";
 import { prisma } from "@/lib/prisma";
 import {
   sendPushNotification,
@@ -272,6 +273,16 @@ export class NotificationService {
           if (access) allowed.push(userId);
         }
         recipientIds = allowed;
+      }
+
+      // The issue read rule: a mention on an issue tells only the people who may read the issue; any other mention is skipped.
+      if (issueId && type === NotificationType.ISSUE_MENTION) {
+        const readers: string[] = [];
+        for (const userId of recipientIds) {
+          const readable = await prisma.issue.findFirst({ where: { id: issueId, ...issueReadAccessWhere(userId) }, select: { id: true } });
+          if (readable) readers.push(userId);
+        }
+        recipientIds = readers;
       }
 
       if (filterPreferences) {

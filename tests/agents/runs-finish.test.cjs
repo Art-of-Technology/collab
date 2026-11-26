@@ -892,4 +892,21 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.equal(mentionsAtPublication.at(-1), 0);
     assert.deepEqual([response.status, events.length, await raw.issueComment.count({ where })], [200, 1, 1]);
   });
+  await t.test('a mention in a comment tells only the people who may read the issue, and the comment is stored as written', async () => {
+    const notifications = load('src/lib/notification-service.ts', { '@/lib/prisma': { prisma }, '@/lib/push-notifications': { sendPushNotification: async () => false },
+      '@/lib/permissions': load('src/lib/permission-types.ts'), 'date-fns': require('date-fns'), '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {} });
+    const commentRoute = load('src/app/api/issues/[issueId]/comments/route.ts', { ...deps, '@/lib/session': { getCurrentUser: async () => raw.user.findUnique({ where: { id: person } }) },
+      '@/lib/redis': { publishEvent: async () => {} }, '@/utils/mentions': load('src/utils/mentions.ts'), '@/lib/notification-service': notifications }, globals);
+    // Someone outside the workspace, and `gone`, whose membership is not active: neither may read the issue. The owner may.
+    const stranger = 'cmention0001';
+    await raw.user.create({ data: { id: stranger, name: stranger } });
+    const { target } = await started(devA);
+    await raw.notification.deleteMany();
+    const content = `@[The owner](${owner}) @[A stranger](${stranger}) @[Gone](${gone}) Please look at this.`;
+    const response = await commentRoute.POST(new Request('https://collab.test/api', { method: 'POST', body: JSON.stringify({ content }) }), { params: Promise.resolve({ issueId: target.id }) });
+    assert.equal(response.status, 201);
+    assert.deepEqual((await raw.notification.findMany()).map(row => [row.type, row.userId, row.senderId, row.content]),
+      [['ISSUE_MENTION', owner, person, `@[${person}](${person}) mentioned you in a comment on #[${target.issueKey}](${target.id})`]]);
+    assert.deepEqual((await raw.issueComment.findMany({ where: { issueId: target.id } })).map(row => [row.authorId, row.content]), [[person, content]]);
+  });
 });
