@@ -26,20 +26,22 @@ function wording(ask: Ask, seat: string, key: string, title: string, time: strin
 
 /**
  * Declared stops: one email to the person a seat's finish names, with what it asks of them and the link to the issue.
- * Called once the finish is committed, so everything is judged as it is at the moment of sending: the run finished
+ * Started once the finish is committed, so everything is judged as it is at the moment of sending: the run finished
  * and is a seat's; the named account is a person (it has an email address and is no seat's) who is the owner or an
- * active member of the issue's workspace, may read the issue and has not switched email off for that workspace, where
- * no stored preference means on; and nobody answered before the finish (`earlyAnswers`, as the inbox and Home read
- * it). Otherwise nothing is sent. The finish is stored by then, so a failure is logged and never thrown, and the log
- * names neither the person nor what was asked.
+ * active member of the issue's workspace, may read the issue and has not switched email off; and nobody answered before
+ * the finish (`earlyAnswers`, as the inbox and Home read it). Otherwise nothing is sent. Email is off when either of
+ * the person's preferences says so: the one for this workspace, which the settings page writes, or the one for no
+ * workspace, which the notification service and push read. No stored preference means on. The finish does not wait
+ * for this: a failure is logged and never thrown, and the log names neither the person nor what was asked.
  */
 export async function emailDeclaredStop({ runId, userId, ask }: { runId: string; userId: string; ask: Ask }) {
   try {
-    const person = { id: userId, email: { not: null }, agentSeat: { is: null } };
+    const off = { emailNotificationsEnabled: false };
+    const person = { id: userId, email: { not: null }, agentSeat: { is: null }, notificationPreferences: { none: { workspaceId: null, ...off } } };
     const run = await prisma.agentRun.findFirst({
       where: { id: runId, state: 'finished', endedAt: { not: null }, seatId: { not: null }, issue: { AND: [issueReadAccessWhere(userId)], workspace: {
         OR: [{ owner: person }, { members: { some: { status: true, user: person } } }],
-        notificationPreferences: { none: { userId, emailNotificationsEnabled: false } } } } },
+        notificationPreferences: { none: { userId, ...off } } } } },
       select: { userId: true, startedAt: true, endedAt: true, seat: { select: { name: true } }, issue: { select: { id: true, issueKey: true, title: true,
         workspace: { select: { slug: true, owner: { select: { id: true, email: true } }, members: { where: { userId, status: true }, select: { user: { select: { email: true } } } } } } } } },
     });
