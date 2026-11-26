@@ -18,10 +18,11 @@ test('a seat without a project', async t => {
     await prisma.user.createMany({ data: [owner, ...accounts].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'team', ownerId: owner } });
     await prisma.workspace.create({ data: { id: 'w2', name: 'w2', slug: 'elsewhere', ownerId: owner } });
-    await prisma.project.create({ data: { id: A, workspaceId: 'w', name: A, slug: A, issuePrefix: 'AL', agentMode: 'seats' } });
+    await prisma.project.create({ data: { id: A, workspaceId: 'w', name: A, slug: A, issuePrefix: 'AL' } });
     await prisma.projectStatus.createMany({ data: ['to_do', 'done'].map((name, order) => ({ id: `${A}-${name}`, projectId: A, name, displayName: name, order, isFinal: name === 'done' })) });
   });
   const raw = db.prisma;
+  await raw.project.update({ where: { id: A }, data: { agentMode: 'seats' } });
   const prisma = raw.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
   const handoffs = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
@@ -50,8 +51,9 @@ test('a seat without a project', async t => {
   const before = {
     room: plain((await seats.seatsWithRoom(prisma, A, 'developer')).map(row => row.id)),
     inbox: plain((await runs.seatInbox(caller('cseatdev001'))).items),
-    page: plain((await page.readSeats(owner, 'team')).seats.map(row => [row.id, row.project, row.waiting.map(item => item.issueKey)])),
+    page: plain(await page.readSeats(owner, 'team')),
   };
+  assert.deepEqual(before.page.projects.map(project => project.id), [A]);
 
   await t.test('the database takes a seat without a project and holds one default per role in a workspace', async () => {
     const column = await raw.$queryRaw`SELECT is_nullable FROM information_schema.columns WHERE table_name = 'AgentSeat' AND column_name = 'projectId'`;
@@ -77,7 +79,7 @@ test('a seat without a project', async t => {
   await t.test('the project seats get what they got before', async () => {
     assert.deepEqual(plain((await seats.seatsWithRoom(prisma, A, 'developer')).map(row => row.id)), before.room);
     assert.deepEqual(plain((await runs.seatInbox(caller('cseatdev001'))).items), before.inbox);
-    assert.deepEqual(plain((await page.readSeats(owner, 'team')).seats.map(row => [row.id, row.project, row.waiting.map(item => item.issueKey)])), before.page);
+    assert.deepEqual(plain(await page.readSeats(owner, 'team')), before.page);
   });
 
   await t.test('a seat without a project is refused where a project is needed, not treated as no seat', async () => {
