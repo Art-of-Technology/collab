@@ -16,13 +16,15 @@ You need the **Manage agent seats and tokens** permission.
 
 The owner is who pays for the seat's sessions: with an owner the seat runs on that person's own Claude Code or Codex sign-in, and with **No owner** it needs a runner that uses your organisation's API key, and no such runner exists yet. See [what a seat is](/docs/agents/seats#what-a-seat-is). The owner cannot be changed afterwards: retire the seat and create it again.
 
-The new seat is listed under **Agents**, **Seats** in the left menu. Everyone who can read its project sees it there.
+The new seat is listed under **Agents**, **Seats** in the left menu. Everyone who can read its project sees it there; a seat for the whole workspace is seen by everyone in the workspace.
 
 To have no token to copy at all, switch on **Run by the owner's runner** in step 3. The seat is created without a token, and its owner's runner fetches one: see [Connect a runner](/docs/agents/admit-a-runner).
 
 ## A seat for the whole workspace
 
-When you may manage the workspace's permissions, the form starts with **Scope**: **One project**, the default, or **Whole workspace**. A seat for the whole workspace can be assigned issues from every project in the workspace that fit its role. It names no project, and its **Repository** line says **From each issue**: each run works in the repository of the project its issue is in. People without that permission do not see the choice.
+When you may manage the workspace's permissions, the form starts with **Scope**: **One project**, the default, or **Whole workspace**. A seat for the whole workspace can be assigned issues from every project in the workspace that fit its role. It names no project, and its **Repository** line says **From each issue**: each run works in the repository of the project its issue is in. People without that permission do not see the choice, and the server refuses them with `workspace_scope_forbidden`.
+
+Assign it work as you would a project seat: the assignee picker offers it on the issues of every project. What it may and may not do is under [A seat of the whole workspace](/docs/agents/seats#a-seat-of-the-whole-workspace).
 
 A release seat cannot have the whole workspace as its scope: it deploys one project's changes, so each project keeps its own. In **Whole workspace** the release role, and your organisation's roles built on it, cannot be picked.
 
@@ -32,13 +34,13 @@ A release seat cannot have the whole workspace as its scope: it deploys one proj
 | --- | --- | --- |
 | Developer | Ordinary issues | A project can have several |
 | Reviewer | Review requests | A project can have several |
-| Release | Release requests | One per project |
+| Release | Release requests | One per project, never for the whole workspace |
 | Security | Security requests | A project can have several |
-| Lead | An epic, whose child issues it assigns to the other seats. See [Use a lead seat](/docs/agents/lead-seat) | One per project |
+| Lead | An epic, whose child issues it assigns to the other seats. See [Use a lead seat](/docs/agents/lead-seat) | One per project, and one for the whole workspace |
 | Planner | An idea to settle with a person, one question per comment thread | A project can have several |
 | Documentation Manager | Docs requests | A project can have several |
 
-The first seat of a role in a project is the default for that role: requests for that role go to it.
+The first seat of a role in a project is the default for that role: requests for that role go to it. The seats for the whole workspace have a default per role of their own. A project's requests for a role go to the workspace's seats of that role only when the project has no seat of it.
 
 The role list also shows your organisation's own roles, under **Your organisation**. A seat with one of them takes what its built-in role takes, counts as a seat of that role, and is listed by your role's name. A retired role is not offered. See [Your organisation's own roles](/docs/agents/roles-and-layers#your-organisations-own-roles).
 
