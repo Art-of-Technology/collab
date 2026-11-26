@@ -184,7 +184,7 @@ export async function setSeatRule(input: { workspaceId: string; actorId: string;
 export async function applySeatRule(input: { workspaceId: string; projectId: string; creatorId: string }) {
   const { workspaceId, projectId, creatorId } = input;
   const handoffs = { mode: 'handoffs' as const, seats: [] as string[] };
-  let ownerId: string | null = null;
+  let ownerId: string | null = null, claimedDay: string | null = null;
   const skipped = async (reason: string) => {
     if (!ownerId) return handoffs;
     try {
@@ -212,10 +212,23 @@ export async function applySeatRule(input: { workspaceId: string; projectId: str
       if (!(await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { autoSeats: true } }))?.autoSeats) return handoffs;
       return skipped(`the rule has given ${AUTO_SEATS_PER_DAY} new projects their seats today (UTC), its limit for a day`);
     }
+    claimedDay = day;
     const done = await applySetup(workspaceId, ownerId, preview, { carryOver: [] });
     return { mode: done.project.mode, seats: done.created };
   } catch (error) {
     console.error('The workspace rule could not give a new project its seats:', error);
+    // The place in the day goes back only when no seat was made, as when the preview stops the rule. Once a seat exists
+    // the place stays used, so trying again can never make seats past the day's limit.
+    if (claimedDay) {
+      try {
+        if (!await prisma.agentSeat.count({ where: { projectId, retiredAt: null } })) {
+          await prisma.$executeRaw`UPDATE "Workspace" SET "autoSeatsCount" = "autoSeatsCount" - 1
+            WHERE "id" = ${workspaceId} AND "autoSeatsDay" = ${claimedDay}::date AND "autoSeatsCount" > 0`;
+        }
+      } catch (release) {
+        console.error('The place in the day could not be given back:', release);
+      }
+    }
     return skipped(error instanceof HandoffError ? error.message : 'its seats could not be created');
   }
 }

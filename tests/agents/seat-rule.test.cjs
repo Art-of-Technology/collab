@@ -183,13 +183,38 @@ test('seats rule: a workspace rule gives every new project its four seats, with 
     assert.equal((await setup.seatRuleState('w', owner)).today, 1);
   });
 
+  await t.test('a setup that fails before any seat is made gives its place in the day back; one that made seats keeps it', async () => {
+    // Names the rule would give, already taken by seats made by hand in another project: the first, and the third in order.
+    const offline = await prisma.project.findFirstOrThrow({ where: { name: 'Offline' } });
+    for (const [role, name] of [['developer', 'Lima Developer'], ['release', 'Mike Release']]) {
+      assert.ok((await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: offline.id, role, ownerId: owner, name, expiresInDays: 30 })).seat);
+    }
+    const before = (await setup.seatRuleState('w', owner)).today;
+    const told = (await notices()).filter(notice => notice.userId === owner).length;
+
+    const lima = await viaToken('collab-cli', member, 'Lima');
+    assert.deepEqual([await seatsOf(lima.id), await modeOf(lima.id), lima.agentMode], [[], 'handoffs', 'handoffs']);
+    assert.equal((await setup.seatRuleState('w', owner)).today, before, 'no seat was made, so no place was used');
+
+    const mike = await viaToken('collab-cli', member, 'Mike');
+    assert.deepEqual((await seatsOf(mike.id)).map(seat => seat.role), ['developer', 'reviewer'], 'the seats made before the failure stay');
+    assert.equal(await modeOf(mike.id), 'handoffs');
+    assert.equal((await setup.seatRuleState('w', owner)).today, before + 1, 'seats were made, so the place stays used');
+
+    const latest = (await notices()).filter(notice => notice.userId === owner).slice(told);
+    assert.equal(latest.length, 2, 'the owner is told about each');
+    assert.match(latest[0].content, /Lima.*collab seat setup LIMA/);
+    assert.match(latest[1].content, /Mike.*collab seat setup MIKE/);
+  });
+
   await t.test('with the rule switched off new projects get no seats, and the seats already made stay', async () => {
     const before = await prisma.agentSeat.count({ where: { workspaceId: 'w', retiredAt: null } });
+    const told = (await notices()).filter(notice => notice.userId === owner).length;
     await setup.setSeatRule({ workspaceId: 'w', actorId: owner, on: false });
     const project = await viaWeb(member, 'Juliet');
     assert.deepEqual([await seatsOf(project.id), await modeOf(project.id)], [[], 'handoffs']);
     assert.equal(await prisma.agentSeat.count({ where: { workspaceId: 'w', retiredAt: null } }), before);
-    assert.equal((await notices()).filter(notice => notice.userId === owner).length, 2, 'a rule that is off tells nobody');
+    assert.equal((await notices()).filter(notice => notice.userId === owner).length, told, 'a rule that is off tells nobody');
   });
 
   await t.test('the route switches the rule for a signed-in person on Collab\'s own page only', async () => {

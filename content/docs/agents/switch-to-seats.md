@@ -32,7 +32,7 @@ The workspace's owner can switch on **New projects get their seats** under Agent
 
 - Only the workspace's owner can switch the rule. It cannot be switched on while no runner is connected. No agent or seat token can switch it.
 - At most five projects in a workspace get seats this way in one UTC day. Turning the rule off and on again does not reset that count.
-- A project past that limit is still created, in handoffs mode, and the owner gets a notification naming the project and who created it. The same happens if the rule cannot create the seats, for example because the runner was removed. `collab seat setup` can give that project its seats later.
+- A project past that limit is still created, in handoffs mode, and the owner gets a notification naming the project and who created it. The same happens if the rule cannot create the seats, for example because the runner was removed. A project the rule made no seat for does not count toward the day's limit. `collab seat setup` can give that project its seats later.
 - Switching the rule off affects only projects created afterwards. Seats it already created stay.
 - The project created at sign-up together with a new workspace is not covered.
 
