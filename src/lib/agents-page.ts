@@ -44,8 +44,9 @@ export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) 
 export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true } });
   if (!workspace) return null;
-  const rows = (await prisma.agentSeat.findMany({
-    where: { workspaceId: workspace.id, retiredAt: null, project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } },
+  const rows = await prisma.agentSeat.findMany({
+    // A seat of the whole workspace (no project, CLB-613) is listed to everyone who may see the workspace.
+    where: { workspaceId: workspace.id, retiredAt: null, OR: [{ projectId: null }, { project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } }] },
     select: {
       id: true, userId: true, name: true, role: true, isDefault: true, byRunner: true, projectId: true, project: { select: { name: true } },
       ownerId: true, room: true, roomProgram: true, roomAt: true, customRole: { select: { name: true } },
@@ -55,12 +56,12 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
         select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { id: true, issueKey: true, title: true } } } },
     },
     orderBy: [{ project: { name: 'asc' } }, { role: 'asc' }, { name: 'asc' }],
-  // The filter on the project already leaves out a seat without one: this page lists project seats only until CLB-613.
-  })).flatMap(({ project, projectId, ...seat }) => project && projectId ? [{ ...seat, project, projectId }] : []);
+  });
   const inboxes: InboxItem[][] = [];
   // shortcut: one small read per seat, one after the other so a page view holds one database connection; fine for
   // tens of seats. Read all seats in one query when a workspace has hundreds.
-  for (const seat of rows) inboxes.push((await inboxOf(workspace.id, seat.userId, seat)).items);
+  // A seat of the whole workspace has no inbox until CLB-615: nothing waits for it here.
+  for (const seat of rows) inboxes.push(seat.projectId === null ? [] : (await inboxOf(workspace.id, seat.userId, { ...seat, projectId: seat.projectId })).items);
   // The viewer's own read rule, asked once for everything the seats' inboxes named.
   const ids = inboxes.flat().map(item => item.issueId);
   const readable = new Set((ids.length ? await prisma.issue.findMany({ where: { id: { in: ids }, ...issueReadAccessWhere(userId) }, select: { id: true } }) : []).map(issue => issue.id));
@@ -87,7 +88,8 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
       addable: agentMode === 'seats' && !isArchived })),
     seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, owner, room, roomProgram, roomAt, customRole, ...seat }, index) => ({
       // `role` is the role it behaves as; `customRole` the name of the workspace's own role it has (CLB-628), shown in its place.
-      ...seat, customRole: customRole?.name ?? null, project: project.name, noRunner: runner && !fetched.has(account),
+      // `project` is null for a seat whose scope is the whole workspace.
+      ...seat, customRole: customRole?.name ?? null, project: project?.name ?? null, noRunner: runner && !fetched.has(account),
       // The name of the runner of the seat's person, for everyone; the room only for who may see it.
       runner: runnerOf(seat.ownerId)?.name ?? null,
       room: canManage || seat.ownerId === userId ? seatRoom({ byRunner: runner, room, roomProgram, roomAt }, runnerOf(seat.ownerId), now) : null,
