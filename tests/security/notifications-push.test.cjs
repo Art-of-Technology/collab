@@ -54,7 +54,10 @@ test('global push subscriptions reuse existing rows and clear only global prefer
 test('push delivery uses global subscriptions for direct, bulk and leave callers', async () => {
   const sent = [];
   const rows = ['alice', 'manager', 'hr'].flatMap(userId => [
-    { userId, workspaceId: 'joined', pushNotificationsEnabled: false, pushSubscription: 'workspace-setting' },
+    // Leave columns carry their schema defaults; the HR person switched the HR alert on, on the settings page of this workspace.
+    { userId, workspaceId: 'joined', pushNotificationsEnabled: false, pushSubscription: 'workspace-setting',
+      leaveRequestStatusChanged: true, leaveRequestEdited: true, leaveRequestManagerAlert: true,
+      leaveRequestHRAlert: userId === 'hr' },
     { userId, workspaceId: null, pushNotificationsEnabled: true,
       leaveRequestEdited: true, leaveRequestManagerAlert: true, leaveRequestHRAlert: true,
       pushSubscription: JSON.stringify({ endpoint: `https://push.test/${userId}`, keys: { auth: 'auth', p256dh: 'key' } }) },
