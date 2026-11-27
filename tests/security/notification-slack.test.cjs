@@ -131,3 +131,28 @@ test('nothing logs the address', async () => {
   await mod.postToSlack('https://hooks.slack.com.evil.example/services/a', 'x');
   assert.equal(JSON.stringify(logs).includes('hooks.slack.com'), false);
 });
+
+test('a fetch that never answers is aborted and fails', async () => {
+  const calls = [];
+  const timers = [];
+  const fetch = (url, init) => new Promise((_, reject) => {
+    calls.push(init);
+    init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+  });
+  const setTimeoutFake = (run, ms) => { timers.push({ run, ms }); return 1; };
+  const mod = load('src/lib/notification-slack.ts', {}, { fetch, AbortController, setTimeout: setTimeoutFake, clearTimeout() {}, URL, console });
+  const pending = mod.postToSlack(GOOD, 'x');
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].signal);
+  assert.equal(timers[0].ms, 5000);
+  timers[0].run();
+  assert.equal(await pending, 'failed');
+});
+
+test('the response body is released', async () => {
+  let cancelled = 0;
+  const fetch = async () => ({ status: 200, body: { cancel: async () => { cancelled++; } } });
+  const mod = load('src/lib/notification-slack.ts', {}, { fetch, AbortController, setTimeout, clearTimeout, URL, console });
+  assert.equal(await mod.postToSlack(GOOD, 'x'), 'ok');
+  assert.equal(cancelled, 1);
+});

@@ -51,8 +51,14 @@ export async function postToSlack(url: string, text: string): Promise<SlackResul
       body: JSON.stringify({ text }),
       signal: controller.signal,
     });
-    if (response.status === 200) return 'ok';
-    if (response.status === 404 || response.status === 410) return 'gone';
+    const status = response.status;
+    try {
+      void response.body?.cancel();
+    } catch {
+      // A response without a body has nothing to release.
+    }
+    if (status === 200) return 'ok';
+    if (status === 404 || status === 410) return 'gone';
     return 'failed';
   } catch {
     return 'failed';
