@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { findIssueByIdOrKey } from "@/lib/issue-finder";
 import { notifyCommentMentions } from "@/lib/issue-comment-mentions";
-import { commentAcks, type AckComment, type CommentAck } from "@/lib/issue-comment-acks";
+import { ACK_TYPE, commentAcks, type AckComment, type CommentAck } from "@/lib/issue-comment-acks";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -64,7 +64,9 @@ export async function GET(
     }
     let acks = new Map<string, CommentAck>();
     try { acks = await commentAcks(issue.id, [...flat.values()]); } catch { /* the list is answered without acks */ }
-    const withAck = <T extends { id: string }>(row: T) => ({ ...row, ack: acks.get(row.id) ?? null });
+    // The ack is in `ack`, so it is not listed among the reactions: those stay what people added.
+    const withAck = <T extends { id: string; reactions: { type: string }[] }>(row: T) =>
+      ({ ...row, reactions: row.reactions.filter(reaction => reaction.type !== ACK_TYPE), ack: acks.get(row.id) ?? null });
 
     return NextResponse.json(comments.map(comment => ({ ...withAck(comment), replies: comment.replies?.map(withAck) })));
   } catch (error) {

@@ -15,6 +15,7 @@ function library({ failRead, empty } = {}) {
   const calls = { record: [], read: [] };
   const acked = new Set();
   return { calls, acked, module: {
+    ACK_TYPE: 'ack',
     recordCommentAcks: async input => { calls.record.push(input); const ids = input.commentIds ?? []; ids.forEach(id => acked.add(id)); return ids.length; },
     commentAcks: async (issueId, comments) => {
       calls.read.push({ issueId, ids: comments.map(comment => comment.id), acked: [...acked], reactions: comments.map(comment => (comment.reactions ?? []).map(reaction => reaction.type)) });
@@ -189,5 +190,37 @@ test('a rejecting seat lookup or open-run lookup still answers 200 with the stat
     assert.equal(lib.calls.read.length, 1);
     assert.equal(body.comments[0].ack.state, 'acked');
     assert.equal(body.comments[1].ack.state, 'none');
+  }
+});
+
+test('an ack is not listed among reactions: both answers carry only the likes, and reactionCounts has no ack', async () => {
+  const like = { type: 'like', authorId: 'bob', createdAt: at, author: { id: 'bob', name: 'Bob', image: null } };
+  const ack = { type: 'ack', authorId: 'seat-user', createdAt: at, author: seatUser };
+  const seeded = () => {
+    const comments = tree();
+    comments[0].reactions = [like, ack];
+    comments[0].replies[0].reactions = [ack, like];
+    comments[2].reactions = comments[0].replies[0].reactions;
+    return comments;
+  };
+  const lib = library();
+  const browserBody = await (await browser(lib, seeded())()).json();
+  // The ack state was read from the ack rows, and the answer lists only the likes.
+  assert.equal(JSON.stringify(lib.calls.read[0].reactions.map(types => [...types].sort())), JSON.stringify([['ack', 'like'], ['ack', 'like'], []]));
+  assert.equal(browserBody[0].ack.state, 'acked');
+  assert.deepEqual(browserBody[0].reactions.map(reaction => reaction.type), ['like']);
+  assert.deepEqual(browserBody[0].replies[0].reactions.map(reaction => reaction.type), ['like']);
+
+  for (const url of ['https://example.test/x', SINCE]) {
+    const tokenLib = library();
+    const body = await (await token({ lib: tokenLib, comments: seeded(), url, seat: null })()).json();
+    const rows = url === SINCE ? body.comments : [body.comments[0], body.comments[0].replies[0]];
+    const first = rows[0], reply = url === SINCE ? rows.find(row => row.id === 'r1') : rows[1];
+    for (const row of [first, reply]) {
+      assert.equal(row.ack.state, 'acked');
+      assert.deepEqual(row.reactions.map(reaction => reaction.type), ['like']);
+      assert.deepEqual(row.reactionCounts, { like: 1 });
+      assert.equal('ack' in row.reactionCounts, false);
+    }
   }
 });

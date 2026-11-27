@@ -135,10 +135,12 @@ export const GET = withAppAuth(
         }));
       } catch { /* the list is answered without acks */ }
 
-      // Transform comments to include reaction counts
+      // Transform comments to include reaction counts. The ack is in `ack`, so it is neither listed nor counted among the
+      // reactions: those stay what people added.
       const transformComment = (comment: any): any => {
+        const reactions = (comment.reactions || []).filter((reaction: any) => reaction.type !== ACK_TYPE);
         const reactionCounts: Record<string, number> = {};
-        for (const reaction of comment.reactions || []) {
+        for (const reaction of reactions) {
           reactionCounts[reaction.type] = (reactionCounts[reaction.type] || 0) + 1;
         }
         return {
@@ -149,7 +151,7 @@ export const GET = withAppAuth(
           updatedAt: comment.updatedAt,
           parentId: comment.parentId,
           author: comment.author,
-          reactions: comment.reactions,
+          reactions,
           reactionCounts,
           replies: comment.replies?.map(transformComment),
           ack: acks.get(comment.id) ?? null,
