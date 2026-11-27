@@ -26,14 +26,21 @@ async function shown(element, then = async () => {}) {
 }
 const render = (ack, updatedAt) => shown(React.createElement('div', { className: 'comment-body' }, React.createElement(CommentAck, { ack, createdAt: created, updatedAt })));
 
-test('sinceText rounds to s, min, h and d, at least 1', () => {
+test('sinceText rounds down to s, min, h and d, each from the raw seconds, at least 1', () => {
   assert.equal(sinceText(0), '1 s');
+  assert.equal(sinceText(0.4), '1 s');
   assert.equal(sinceText(45), '45 s');
   assert.equal(sinceText(59.4), '59 s');
+  assert.equal(sinceText(59.9), '59 s');
   assert.equal(sinceText(60), '1 min');
-  assert.equal(sinceText(150), '3 min');
+  assert.equal(sinceText(150), '2 min');
+  assert.equal(sinceText(3570), '59 min');
+  assert.equal(sinceText(3599), '59 min');
   assert.equal(sinceText(3600), '1 h');
+  assert.equal(sinceText(23 * 3600 + 59 * 60), '23 h');
+  assert.equal(sinceText(86399), '23 h');
   assert.equal(sinceText(86400), '1 d');
+  assert.equal(sinceText(36 * 3600), '1 d');
   assert.equal(sinceText(86400 * 3), '3 d');
 });
 
