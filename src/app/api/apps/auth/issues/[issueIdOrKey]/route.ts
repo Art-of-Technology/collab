@@ -17,6 +17,7 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { z } from 'zod';
 import { emitIssueUpdated } from '@/lib/event-bus';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
@@ -472,6 +473,15 @@ export const PATCH = withAppAuth(
         }
         return changed;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+      // The write is committed: tell the notifier, without waiting for it.
+      if (existingIssue.statusId !== updatedIssue.statusId) {
+        tellIssueEvent({ kind: 'status', issueId: existingIssue.id, actorId: context.user.id,
+          fromStatusId: existingIssue.statusId ?? null, toStatusId: updatedIssue.statusId ?? null });
+      }
+      if (updatedIssue.assigneeId && updatedIssue.assigneeId !== existingIssue.assigneeId) {
+        tellIssueEvent({ kind: 'assigned', issueId: existingIssue.id, actorId: context.user.id, assigneeId: updatedIssue.assigneeId });
+      }
 
       // Create activity records
       for (const change of changes) {

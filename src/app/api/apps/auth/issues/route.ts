@@ -21,6 +21,7 @@ import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { emitIssueCreated } from '@/lib/event-bus';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
@@ -435,6 +436,11 @@ export const POST = withAppAuth(
 
         return created;
       }, issueData.milestoneId ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
+
+      // The write is committed: tell the notifier, without waiting for it.
+      if (newIssue.assigneeId) {
+        tellIssueEvent({ kind: 'assigned', issueId: newIssue.id, actorId: context.user.id, assigneeId: newIssue.assigneeId });
+      }
 
       // Fire-and-forget Qdrant sync
       emitIssueCreated(

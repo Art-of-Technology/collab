@@ -12,6 +12,7 @@ import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueCreated } from "@/lib/event-bus";
+import { tellIssueEvent } from "@/lib/notification-issue-events";
 import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
 import { assertAssignable, HandoffError } from "@/lib/issue-assignee";
 import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
@@ -578,6 +579,11 @@ export async function POST(request: NextRequest) {
       return newIssue;
     });
 
+    // The write is committed: tell the notifier, without waiting for it.
+    if (created.assigneeId) {
+      tellIssueEvent({ kind: 'assigned', issueId: created.id, actorId: session.user.id, assigneeId: created.assigneeId });
+    }
+
     // Track creation as activity
     await trackCreation('ISSUE', created.id, session.user.id, workspace.id, undefined, created);
 
@@ -656,6 +662,7 @@ export async function POST(request: NextRequest) {
         const mentionedUserIds = extractMentionUserIds(description);
         const recipients = mentionedUserIds.filter((id) => id !== session.user.id);
         if (recipients.length > 0) {
+          tellIssueEvent({ kind: 'described', issueId: created.id, actorId: session.user.id, mentionedIds: recipients });
           await NotificationService.notifyUsers(
             recipients,
             NotificationType.ISSUE_MENTION,

@@ -63,8 +63,9 @@ export async function postToSlack(url: string, text: string): Promise<SlackResul
 
 type Sleep = (ms: number) => Promise<void>;
 
+// The first try has no wait: resolving at once starts no timer, so nothing depends on the process staying alive for it.
 const defaultSleep: Sleep = (ms) =>
-  new Promise((resolve) => {
+  ms <= 0 ? Promise.resolve() : new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
     (timer as { unref?: () => void }).unref?.();
   });
