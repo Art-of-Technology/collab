@@ -39,6 +39,8 @@ function fixture(overrides = {}) {
     workspaceAcks: [{ createdAt: new Date(AFTER.getTime() - 60 * MIN) }], finished: null,
     issue: { id: 'i', workspaceId: 'w', assigneeId: 'seat', status: 'In Progress', statusValue: null, projectStatus: { category: 'started', isFinal: false } },
     failCreate: false, noReactionModel: false,
+    // Per comment id, the error `create` throws for it (a code string becomes an error with that `code`): a concurrent ack, a vanished comment.
+    createErrors: {}, bulkCalls: 0, attempts: [],
     ...overrides,
   };
   const pick = (rows, where, args = {}) => {
@@ -69,11 +71,23 @@ function fixture(overrides = {}) {
       const all = [...db.workspaceAcks, ...db.reactions.filter(r => r.type === 'ack')].sort((a, b) => a.createdAt - b.createdAt);
       return all[0] ? { createdAt: all[0].createdAt } : null;
     },
-    createMany: async args => {
+    // The real client's write guard refuses a bulk create of rows that link to issue-related records.
+    createMany: async () => {
+      db.bulkCalls++;
+      throw new Error('Create or link issue-related records individually through a guarded operation');
+    },
+    create: async ({ data }) => {
       db.creates++;
+      db.attempts.push(data.commentId);
       if (db.failCreate) throw new Error('synthetic failure');
-      for (const row of args.data) if (!db.reactions.some(r => r.commentId === row.commentId && r.authorId === row.authorId && r.type === row.type)) db.reactions.push({ ...row, createdAt: NOW });
-      return { count: args.data.length };
+      const planned = db.createErrors[data.commentId];
+      if (planned) throw typeof planned === 'string' ? Object.assign(new Error(`synthetic ${planned}`), { code: planned }) : planned;
+      if (db.reactions.some(r => r.commentId === data.commentId && r.authorId === data.authorId && r.type === data.type)) {
+        throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      }
+      const row = { ...data, createdAt: NOW };
+      db.reactions.push(row);
+      return row;
     },
   };
   const lib = load('src/lib/issue-comment-acks.ts', {
@@ -105,14 +119,54 @@ test('the same comment is acked once, and a second call publishes nothing', asyn
   assert.equal(db.events.length, 1);
 });
 
-test('at most 200 rows in one write, the newest comments first', async () => {
+test('at most 200 rows are written, the newest comments first', async () => {
   const { db, lib } = fixture();
   for (let n = 0; n < 250; n++) db.comments.push(comment(`c${n}`, 'p', n));
   assert.equal(await lib.recordCommentAcks(base), 200);
-  assert.equal(db.creates, 1);
+  assert.equal(db.creates, 200);
   const acked = new Set(db.reactions.map(r => r.commentId));
   for (let n = 0; n < 50; n++) assert.equal(acked.has(`c${n}`), false, `c${n} is among the oldest 50`);
   for (let n = 50; n < 250; n++) assert.equal(acked.has(`c${n}`), true);
+});
+
+test('acks are written with create, one per comment, and createMany is never called', async () => {
+  const { db, lib } = fixture();
+  db.comments.push(comment('c1', 'p', 0), comment('c2', 'p', 1), comment('c3', 'p', 2));
+  assert.equal(await lib.recordCommentAcks(base), 3);
+  assert.equal(db.bulkCalls, 0);
+  assert.deepEqual(db.attempts, ['c3', 'c2', 'c1']);
+  assert.deepEqual(db.errors, []);
+  assert.equal(db.events.length, 1);
+});
+
+for (const code of ['P2002', 'P2025']) {
+  test(`a row that fails with ${code} is skipped without a log line and is not counted`, async () => {
+    const { db, lib } = fixture({ createErrors: { c2: code } });
+    db.comments.push(comment('c1', 'p', 0), comment('c2', 'p', 1), comment('c3', 'p', 2));
+    assert.equal(await lib.recordCommentAcks(base), 2);
+    assert.deepEqual(db.reactions.map(r => r.commentId), ['c3', 'c1']);
+    assert.deepEqual(db.errors, []);
+    assert.equal(db.events.length, 1);
+  });
+}
+
+test('another error stops the loop, keeps the rows already written, logs once and publishes once', async () => {
+  const { db, lib } = fixture({ createErrors: { c2: new Error('boom') } });
+  db.comments.push(comment('c1', 'p', 0), comment('c2', 'p', 1), comment('c3', 'p', 2));
+  assert.equal(await lib.recordCommentAcks(base), 1);
+  assert.deepEqual(db.reactions.map(r => r.commentId), ['c3']);
+  assert.deepEqual(db.attempts, ['c3', 'c2']);
+  assert.equal(db.errors.length, 1);
+  assert.equal(db.errors[0][0], '[comment-acks] recording stopped early');
+  assert.equal(db.events.length, 1);
+});
+
+test('when every row is skipped nothing is published and the result is 0', async () => {
+  const { db, lib } = fixture({ createErrors: { c1: 'P2002', c2: 'P2002' } });
+  db.comments.push(comment('c1', 'p', 0), comment('c2', 'p', 1));
+  assert.equal(await lib.recordCommentAcks(base), 0);
+  assert.deepEqual(db.errors, []);
+  assert.deepEqual(db.events, []);
 });
 
 test('a comment from any day is acked: there is no release date', async () => {

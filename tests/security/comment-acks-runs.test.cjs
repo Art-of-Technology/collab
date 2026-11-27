@@ -71,7 +71,15 @@ function fixture(options = {}) {
         return state.comments.filter(comment => inRange(comment.createdAt, where.createdAt));
       },
     },
-    issueCommentReaction: { async createMany({ data }) { state.reactions.push(...data); return { count: data.length }; } },
+    issueCommentReaction: {
+      // Like the real client's write guard: no bulk create; a second row for the same comment and seat is refused.
+      async createMany() { throw new Error('Create or link issue-related records individually through a guarded operation'); },
+      async create({ data }) {
+        if (state.reactions.some(r => r.authorId === data.authorId && r.commentId === data.commentId && r.type === data.type)) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+        state.reactions.push(data);
+        return data;
+      },
+    },
   };
   const calls = [];
   const mode = { fail: false, hang: false };

@@ -47,8 +47,9 @@ function report(what: string, error: unknown) {
 
 /**
  * Records that a seat has taken in the person comments of an issue: one reaction row of type `ack` per comment, under
- * the seat's account. A comment already acked by that seat is left alone, so a second call writes nothing and says
- * nothing. Never throws: a failure resolves 0, since an ack is a courtesy and must not fail the run that gives it.
+ * the seat's account, written one at a time because the database write guard refuses a bulk create. A comment already
+ * acked by that seat is left alone, so a second call writes nothing and says nothing. Resolves the number of rows
+ * written. Never throws: an ack is a courtesy and must not fail the run that gives it.
  */
 export async function recordCommentAcks(input: { workspaceId: string; issueId: string; seatUserId: string;
   commentIds?: string[]; createdAt?: { gt?: Date; gte?: Date; lte?: Date } }): Promise<number> {
@@ -66,13 +67,24 @@ export async function recordCommentAcks(input: { workspaceId: string; issueId: s
       orderBy: { createdAt: 'desc' }, take: ACK_WRITE_CAP, select: { id: true },
     });
     if (!comments.length) return 0;
-    await prisma.issueCommentReaction.createMany({
-      data: comments.map(comment => ({ type: ACK_TYPE, commentId: comment.id, authorId: seatUserId })), skipDuplicates: true,
-    });
+    let written = 0;
+    for (const comment of comments) {
+      try {
+        await prisma.issueCommentReaction.create({ data: { type: ACK_TYPE, commentId: comment.id, authorId: seatUserId } });
+        written++;
+      } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code;
+        // Another call acked this comment first, or it or its issue is no longer visible to the write guard: nothing to record.
+        if (code === 'P2002' || code === 'P2025') continue;
+        report('recording stopped early', error);
+        break;
+      }
+    }
+    if (!written) return 0;
     // The workspace has an ack now: a remembered "none yet" no longer holds.
     if (ackStarts.get(workspaceId)?.at === null) ackStarts.delete(workspaceId);
     await publishEvent(`workspace:${workspaceId}:events`, { type: 'issue.comments.changed', workspaceId, issueId }, 1000);
-    return comments.length;
+    return written;
   } catch (error) {
     report('recording failed', error);
     return 0;
