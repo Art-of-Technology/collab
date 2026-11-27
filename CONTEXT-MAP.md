@@ -38,7 +38,7 @@ A path that is in no context yet is not free for all: add its context first. Pat
 | `repo-guides` | `AGENTS.md`, `CONTEXT-MAP.md`, `docs/plan-to-issues.md` | None automated: the reviewer runs each command and checks each path the files name | What an agent reads before it works here: the seats, the layout, how to build and test, this map, and how a plan becomes issues |
 | `plan-tools` | `scripts/plan-preflight.mjs`, `tests/render/plan-preflight.test.cjs` (both new with CLB-919) | `tests/render/plan-preflight.test.cjs` | The read-only check of a planned epic before it is filed |
 | `seat-checks` | `scripts/check-changed.mjs`, `tests/render/check-changed.test.cjs` (both new with CLB-919) | `tests/render/check-changed.test.cjs` | The one command a developer seat runs before a push |
-| `schema` | `prisma/**`, `scripts/bootstrap-empty-database.mjs`, `docs/database-bootstrap.md` | `tests/security/bootstrap-*.test.cjs`, `tests/agents/seats-schema.test.cjs`, `tests/security/issue-notification-setting-schema.test.cjs`, `tests/security/project-milestones-db.test.cjs`, `tests/integration/database-diagnostics-db.test.cjs` | The one database schema and its 43 migrations. See "Shared files" for who may change it |
+| `schema` | `prisma/**`, `scripts/bootstrap-empty-database.mjs`, `docs/database-bootstrap.md` | `tests/security/bootstrap-*.test.cjs`, `tests/agents/seats-schema.test.cjs`, `tests/security/issue-notification-setting-schema.test.cjs`, `tests/security/project-milestones-db.test.cjs`, `tests/integration/database-diagnostics-db.test.cjs` | The one database schema and its 44 migrations. See "Shared files" for who may change it |
 
 How to read the table:
 
@@ -51,7 +51,7 @@ How to read the table:
 
 These files cannot be owned by one row, because work in many contexts has to change them. The rule, the same as in stech.com: an issue that changes one of them says so on its card under "Shares a file with", with the order, and two such issues are never in the same wave.
 
-- `prisma/schema.prisma` (3,315 lines, 108 models, 43 enums) and `prisma/migrations/**`. A schema change is its own small task that holds `schema` alone and gets a security review. Unlike in stech.com, no person applies it: the release seat applies the migration to production in a short window with the app stopped, before the pull request is merged. The model groups by context:
+- `prisma/schema.prisma` (3,320 lines, 108 models, 43 enums) and `prisma/migrations/**`. A schema change is its own small task that holds `schema` alone and gets a security review. Unlike in stech.com, no person applies it: the release seat applies the migration to production in a short window with the app stopped, before the pull request is merged. The model groups by context:
   - `workspaces-and-access`: `User`, `Account`, `Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `CustomRole`, `RolePermission`
   - `issues`: `Issue`, `IssueComment`, `IssueCommentReaction`, `IssueRelation`, `IssueAssignee`, `IssueFollower`, `IssueActivity`, `IssueDeletionAudit`, `TaskLabel`, `WorkLog`
   - `issue-templates`: `IssueTemplate`

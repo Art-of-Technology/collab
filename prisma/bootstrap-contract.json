@@ -1,7 +1,7 @@
 {
   "format": "collab-empty-bootstrap-v1",
   "prismaVersion": "6.19.3",
-  "schemaSha256": "3abe68694a7fd667c39586e09dfd2a81f90b64e2287511d260cfb7ce74802721",
+  "schemaSha256": "1999d523ae7d11826d56d10d7c0465894cbe6fd7ce26619e21db0895813353c5",
   "migrations": [
     {
       "name": "20250101000000_remove_task_relations_foreign_key",
@@ -170,6 +170,10 @@
     {
       "name": "20261126000100_seat_without_project",
       "sha256": "959584c73ec2259d2a604409a41df2f048acb4a791ab51b617d76ad4f1b95059"
+    },
+    {
+      "name": "20261126000200_workspace_seat_rule",
+      "sha256": "88e0f8209e35fff1fc7290beed2841ef831f19781a84d4491ae0dcb04718a8c5"
     },
     {
       "name": "20261127000100_issue_notification_settings",

@@ -413,6 +413,11 @@ model Workspace {
   timeTrackingEnabled Boolean               @default(true)
   // Whether agents are refused when an issue lacks what its template requires
   issueTemplatesEnforced Boolean            @default(false)
+  // Seats rule 6 (CLB-519): the owner's rule that gives every new project its seats, and the UTC day and number of
+  // projects it gave seats that day, which caps it
+  autoSeats           Boolean               @default(false)
+  autoSeatsDay        DateTime?             @db.Date
+  autoSeatsCount      Int                   @default(0)
   contextFolders      ContextFolder[]
   customRoles         CustomRole[]
   featureRequests     FeatureRequest[]

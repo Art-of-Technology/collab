@@ -164,7 +164,7 @@ test('lexical search executes against PostgreSQL: exact, full-text, fuzzy, isola
       `CREATE TABLE "Workspace" (id text PRIMARY KEY, name text, slug text, description text, "logoUrl" text,
         "createdAt" timestamp DEFAULT now(), "updatedAt" timestamp DEFAULT now(), "ownerId" text,
         "dockEnabled" boolean DEFAULT true, "timeTrackingEnabled" boolean DEFAULT true,
-        "issueTemplatesEnforced" boolean DEFAULT false)`,
+        "issueTemplatesEnforced" boolean DEFAULT false, "autoSeats" boolean DEFAULT false, "autoSeatsDay" date, "autoSeatsCount" integer DEFAULT 0)`,
       'CREATE TABLE "WorkspaceMember" (id text PRIMARY KEY, "userId" text, "workspaceId" text, status boolean, "updatedAt" timestamp DEFAULT now())',
       'CREATE TABLE "Project" (id text PRIMARY KEY, "workspaceId" text)',
       'CREATE TABLE "ProjectStatus" (id text PRIMARY KEY, name text, "projectId" text)',

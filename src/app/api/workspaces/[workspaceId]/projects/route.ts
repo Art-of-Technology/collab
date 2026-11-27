@@ -6,6 +6,7 @@ import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { generateUniqueViewSlug } from '@/lib/utils';
 import { defaultStatusName, statusGroup } from '@/constants/project-statuses';
+import { applySeatRule } from '@/lib/agent-seat-setup';
 
 // Function to generate a unique issue prefix within a workspace
 async function generateUniqueIssuePrefix(workspaceId: string, requestedPrefix?: string, projectName?: string): Promise<string> {
@@ -385,8 +386,12 @@ export async function POST(
       }
     });
 
+    // The workspace's rule may give the project its seats; the reply names its mode, never a token.
+    const rule = await applySeatRule({ workspaceId, projectId: project.id, creatorId: user.id });
+
     // Transform the data for the frontend
     const transformedProject = {
+      agentMode: rule.mode,
       id: project.id,
       name: project.name,
       slug: project.slug,
