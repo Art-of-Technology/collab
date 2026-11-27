@@ -261,7 +261,7 @@ export default function NotificationSettings() {
         </div>
       </div>
 
-      <IssueNotificationSettings />
+      <IssueNotificationSettings key={workspaceId} />
 
       <div className="space-y-3">
         {filteredSettingGroups.map((group) => {

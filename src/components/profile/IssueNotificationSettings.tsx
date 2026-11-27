@@ -51,12 +51,12 @@ function sameChoices(a: IssueNotificationChoices, b: IssueNotificationChoices) {
   return CHOICE_KEYS.every((key) => a[key] === b[key]);
 }
 
-function ChoiceBox({ id, label, note, checked, onChange }: {
-  id: string; label: string; note?: string; checked: boolean; onChange: (checked: boolean) => void;
+function ChoiceBox({ id, label, note, checked, disabled, onChange }: {
+  id: string; label: string; note?: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void;
 }) {
   return (
     <div className="flex items-start gap-3">
-      <Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} className="mt-0.5" />
+      <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(value) => onChange(value === true)} className="mt-0.5" />
       <div className="space-y-1">
         <Label htmlFor={id} className="text-sm font-normal leading-none cursor-pointer">{label}</Label>
         {note && <p className="text-xs text-muted-foreground">{note}</p>}
@@ -98,6 +98,8 @@ export function IssueNotificationSettings() {
   const [replacing, setReplacing] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // One choice save at a time: a later answer can never be overtaken by an earlier one that failed.
+  const [saving, setSaving] = useState(false);
 
   // A fresh answer from the server (first load, or a cache update) replaces what the page shows.
   const [seen, setSeen] = useState(data);
@@ -131,19 +133,24 @@ export function IssueNotificationSettings() {
   const { slack } = current;
   const summary = summaryLine(current);
   const showAddressInput = !slack.address || replacing;
+  const choicesLocked = saving || update.isPending;
 
   const saveChoice = async (patch: Partial<IssueNotificationChoices>) => {
     setView({ ...current, ...patch });
+    setSaving(true);
     try {
       setView(await update.mutateAsync(patch));
     } catch {
       setView(current);
       failed();
+    } finally {
+      setSaving(false);
     }
   };
 
   const switchSlack = async (on: boolean) => {
     setView({ ...current, slack: { ...current.slack, on } });
+    setSaving(true);
     try {
       const answer = await update.mutateAsync({ slackOn: on });
       setView(answer);
@@ -153,6 +160,8 @@ export function IssueNotificationSettings() {
     } catch {
       setView(current);
       failed();
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -174,6 +183,9 @@ export function IssueNotificationSettings() {
       if (code === "not_slack" || status === 400) setAddressError("Only a Slack webhook address is accepted. It starts with https://hooks.slack.com/services/");
       else if (code === "not_configured" || status === 503) setAddressError("Slack addresses cannot be stored on this server yet.");
       else failed();
+    } finally {
+      // The typed address must not linger in the mutation's state once its answer is applied.
+      saveAddress.reset();
     }
   };
 
@@ -202,7 +214,7 @@ export function IssueNotificationSettings() {
   };
 
   const box = (key: BooleanChoice, id: string, label: string, note?: string) => (
-    <ChoiceBox id={id} label={label} note={note} checked={current[key]}
+    <ChoiceBox id={id} label={label} note={note} checked={current[key]} disabled={choicesLocked}
       onChange={(checked) => saveChoice({ [key]: checked } as Partial<IssueNotificationChoices>)} />
   );
 
@@ -278,7 +290,7 @@ export function IssueNotificationSettings() {
               id="issue-notifications-slack"
               aria-label="Send to Slack"
               checked={slack.on}
-              disabled={!slack.address || update.isPending}
+              disabled={!slack.address || choicesLocked}
               onCheckedChange={switchSlack}
               className="mt-1"
             />
@@ -316,8 +328,10 @@ export function IssueNotificationSettings() {
           {box("onStatus", "issue-notifications-on-status", "The status changes", "For example: moved from In Progress to In Review.")}
           {box("onAssigned", "issue-notifications-on-assigned", "An issue is assigned to me")}
           <div className="space-y-2">
-            <p className="text-sm">Comments</p>
+            <p id="issue-notifications-comments-label" className="text-sm">Comments</p>
             <RadioGroup
+              aria-labelledby="issue-notifications-comments-label"
+              disabled={choicesLocked}
               value={current.comments}
               onValueChange={(value) => saveChoice({ comments: value as CommentsChoice })}
               className="gap-2 pl-6"

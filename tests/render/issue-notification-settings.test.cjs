@@ -21,7 +21,7 @@ const ui = {
   '@/components/ui/checkbox': { Checkbox: ({ id, checked, onCheckedChange, disabled }) => React.createElement('input', {
     id, type: 'checkbox', checked: !!checked, disabled, onChange: event => onCheckedChange(event.target.checked) }) },
   '@/components/ui/radio-group': {
-    RadioGroup: ({ value, onValueChange, children, disabled }) => React.createElement(RadioContext.Provider, { value: { value, onValueChange, disabled } }, React.createElement('div', { role: 'radiogroup' }, children)),
+    RadioGroup: ({ value, onValueChange, children, disabled, ...rest }) => React.createElement(RadioContext.Provider, { value: { value, onValueChange, disabled } }, React.createElement('div', { role: 'radiogroup', 'aria-labelledby': rest['aria-labelledby'] }, children)),
     RadioGroupItem: ({ id, value }) => {
       const group = React.useContext(RadioContext);
       return React.createElement('input', { id, type: 'radio', value, checked: group.value === value, disabled: group.disabled, onChange: () => group.onValueChange(value) });
@@ -34,10 +34,13 @@ const notices = [];
 const calls = [];
 let data;
 let answers = {};
-const mutation = name => () => ({ isPending: false, mutateAsync: async body => {
+const resets = [];
+let workspaceId = 'w';
+const mutation = name => () => ({ isPending: false, reset: () => resets.push(name), mutateAsync: async body => {
   calls.push([name, body]);
   const answer = (answers[name] || []).shift();
   if (!answer) throw new Error(`no answer for ${name}`);
+  if (answer.wait) await answer.wait;
   if (answer.error) throw Object.assign(new Error(answer.error.message || 'failed'), answer.error);
   return answer.body;
 } });
@@ -50,7 +53,7 @@ const hooks = {
 };
 const common = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': icons,
   '@/hooks/use-toast': { useToast: () => ({ toast: notice => notices.push(notice) }) },
-  '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: 'w' } }) } };
+  '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: workspaceId } }) } };
 const { IssueNotificationSettings } = load('src/components/profile/IssueNotificationSettings.tsx', {
   ...common, ...ui, './issueNotificationSummary': summary, '@/hooks/queries/useNotificationPreferences': hooks,
 }, { Date });
@@ -75,7 +78,7 @@ const type = (input, value) => React.act(async () => {
 });
 
 async function shown(start, then, component = IssueNotificationSettings) {
-  data = start; answers = {}; calls.length = 0; notices.length = 0;
+  data = start; answers = {}; calls.length = 0; notices.length = 0; resets.length = 0; workspaceId = 'w';
   const root = createRoot(document.getElementById('root'));
   await React.act(async () => root.render(React.createElement(component)));
   try { await then(); } finally { await React.act(async () => root.unmount()); }
@@ -224,6 +227,7 @@ test('Remove calls the remove hook', () => shown(view({ onAssigned: true }, { ad
   assert.equal(byLabel('An issue is assigned to me').checked, true);
 }));
 
+let mounts = 0;
 function loadNotificationSettings() {
   const preferences = { emailNotificationsEnabled: true, pushNotificationsEnabled: false, leaveRequestStatusChanged: true, leaveRequestEdited: true, leaveRequestManagerAlert: false, leaveRequestHRAlert: false, taskUpdated: true, taskDeleted: true, boardTaskCreated: true, boardTaskStatusChanged: true, boardTaskDeleted: true };
   const { default: NotificationSettings } = load('src/components/profile/NotificationSettings.tsx', {
@@ -237,7 +241,10 @@ function loadNotificationSettings() {
     },
     '@/hooks/usePushNotifications': { usePushNotifications: () => ({ isSupported: true, isSubscribed: false, isLoading: false, toggleSubscription: async () => {} }) },
     '@/hooks/use-workspace-permissions': { useWorkspacePermissions: () => ({ canManageLeave: false }) },
-    './IssueNotificationSettings': { default: () => React.createElement('div', { 'data-testid': 'issue-settings' }, 'ISSUE SETTINGS'), IssueNotificationSettings: () => null },
+    './IssueNotificationSettings': { default: function IssueSettings() {
+      React.useEffect(() => { mounts += 1; }, []);
+      return React.createElement('div', { 'data-testid': 'issue-settings' }, 'ISSUE SETTINGS');
+    }, IssueNotificationSettings: () => null },
   });
   return NotificationSettings;
 }
@@ -262,3 +269,47 @@ test('the page no longer explains issue versus project notifications', () => sho
   assert.ok(text().includes('Email Delivery'));
   assert.ok(!text().includes('Issue vs Project Notifications'));
 }, loadNotificationSettings()));
+
+test('a workspace switch mounts the issue settings afresh, so no other workspace\'s settings stay on screen', () => {
+  const NotificationSettings = loadNotificationSettings();
+  return shown(view(), async () => {
+    const root = createRoot(document.createElement('div'));
+    mounts = 0;
+    await React.act(async () => root.render(React.createElement(NotificationSettings)));
+    assert.equal(mounts, 1);
+    workspaceId = 'v';
+    await React.act(async () => root.render(React.createElement(NotificationSettings)));
+    assert.equal(mounts, 2);
+    await React.act(async () => root.unmount());
+  }, () => null);
+});
+
+test('the typed address is cleared from the save mutation after a save and after a refusal', () => shown(view(), async () => {
+  answers.save = [{ error: { status: 400, code: 'not_slack' } }, { body: view({}, { address: MASK }) }];
+  await type(byLabel('Slack webhook address'), 'https://example.com/hook');
+  await click(button('Save'));
+  assert.deepEqual(resets, ['save']);
+  await type(byLabel('Slack webhook address'), FULL);
+  await click(button('Save'));
+  assert.deepEqual(resets, ['save', 'save']);
+}));
+
+test('the Comments radio group is named by its heading', () => shown(view(), async () => {
+  const group = document.querySelector('[role=radiogroup]');
+  const id = group.getAttribute('aria-labelledby');
+  assert.ok(id);
+  assert.equal(document.getElementById(id).textContent, 'Comments');
+}));
+
+test('the choices are disabled while a choice is being saved', () => shown(view({}, { address: MASK }), async () => {
+  let release;
+  answers.update = [{ wait: new Promise(resolve => { release = resolve; }), body: view({ mineFollowed: true }, { address: MASK }) }];
+  await click(byLabel('Issues I follow'));
+  assert.equal(byLabel('Issues I follow').checked, true);
+  for (const label of ['Issues assigned to me', 'The status changes', 'All comments']) assert.equal(byLabel(label).disabled, true, label);
+  assert.equal(slackSwitch().disabled, true);
+  await React.act(async () => { release(); });
+  assert.equal(byLabel('Issues assigned to me').disabled, false);
+  assert.equal(byLabel('All comments').disabled, false);
+  assert.equal(slackSwitch().disabled, false);
+}));
