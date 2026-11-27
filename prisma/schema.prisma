@@ -149,6 +149,7 @@ model User {
   coclawUsageLogs  CoclawUsageLog[]
   coclawChannelConfigs CoclawChannelConfig[]
   coclawChannelMessages CoclawChannelMessage[] @relation("CoclawChannelMessages")
+  issueNotificationSettings IssueNotificationSetting[] @relation("IssueNotificationSettings")
 }
 
 model Account {
@@ -457,6 +458,7 @@ model Workspace {
   coclawUsageLogs  CoclawUsageLog[]
   coclawChannelConfigs CoclawChannelConfig[]
   coclawChannelMessages CoclawChannelMessage[] @relation("CoclawChannelMessages")
+  issueNotificationSettings IssueNotificationSetting[] @relation("IssueNotificationSettings")
 }
 
 model WorkspaceMember {
@@ -3285,4 +3287,29 @@ model IssueTemplate {
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, issueType])
+}
+
+model IssueNotificationSetting {
+  id            String    @id @default(cuid())
+  userId        String
+  workspaceId   String
+  slackUrlEnc   Bytes?
+  slackOn       Boolean   @default(false)
+  slackEverOn   Boolean   @default(false)
+  slackOffAt    DateTime? // set when Collab switched Slack off because Slack no longer knows the address
+  slackFailedAt DateTime? // the last message that could not be delivered
+  mineAssigned  Boolean   @default(false)
+  mineReported  Boolean   @default(false)
+  mineFollowed  Boolean   @default(false)
+  onStatus      Boolean   @default(false)
+  onAssigned    Boolean   @default(false)
+  onReactions   Boolean   @default(false)
+  comments      String    @default("off") // off | mentions | all
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation("IssueNotificationSettings", fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation("IssueNotificationSettings", fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
 }
