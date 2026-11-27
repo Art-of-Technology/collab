@@ -29,15 +29,43 @@ function isMentionSpan(attributes: string) {
     || /class=["'][^"']*\bmention\b[^"']*["']/.test(attributes);
 }
 
+/**
+ * Drops every tag in one pass, so no tag can be rebuilt from the pieces of another (`<scr<script>ipt>`).
+ * A `<` followed by a letter or `/` starts a tag that runs to the next `>` (or to the end); block-level tags
+ * leave a space. A mention span's text is kept and reads `@name`.
+ */
+function stripTags(text: string): string {
+  let out = '';
+  let mention: { start: number; label: string } | null = null;
+  let i = 0;
+  while (i < text.length) {
+    const next = text[i + 1];
+    if (text[i] !== '<' || next === undefined || !(next === '/' || /[A-Za-z]/.test(next))) {
+      out += text[i];
+      i += 1;
+      continue;
+    }
+    const close = text.indexOf('>', i + 1);
+    const end = close === -1 ? text.length : close + 1;
+    const tag = text.slice(i, end);
+    i = end;
+    if (/^<span\b/i.test(tag) && !mention && isMentionSpan(tag)) {
+      mention = { start: out.length, label: tag.match(/data-label=["']([^"']*)["']/)?.[1] ?? '' };
+    } else if (/^<\/span\b/i.test(tag) && mention) {
+      const name = out.slice(mention.start).trim() || mention.label;
+      out = out.slice(0, mention.start) + (name.startsWith('@') ? name : `@${name}`);
+      mention = null;
+    } else if (BLOCK_TAG.test(tag)) {
+      out += ' ';
+    }
+  }
+  return out;
+}
+
 /** A comment's text as one short plain line: mentions read as `@name`, tags and entities are gone. */
 export function excerpt(text: string): string {
-  let out = String(text ?? '').slice(0, EXCERPT_INPUT_LIMIT).replace(/<span\b([^>]*)>([\s\S]*?)<\/span>/gi, (whole, attributes: string, inner: string) => {
-    if (!isMentionSpan(attributes)) return whole;
-    const label = inner.replace(/<[^>]*>/g, '').trim() || (attributes.match(/data-label=["']([^"']*)["']/)?.[1] ?? '');
-    return label.startsWith('@') ? label : `@${label}`;
-  });
+  let out = stripTags(String(text ?? '').slice(0, EXCERPT_INPUT_LIMIT));
   out = out.replace(/@\[([^\]]{1,100})\]\(([^)]{1,50})\)/g, '@$1');
-  out = out.replace(/<\/?[A-Za-z][^>]*>/g, tag => (BLOCK_TAG.test(tag) ? ' ' : ''));
   out = out.replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, name: string) => ENTITIES[name]);
   out = out.replace(/\s+/g, ' ').trim();
   const characters = Array.from(out);

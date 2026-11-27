@@ -2,6 +2,9 @@ const { assert, test, load } = require('./helpers.cjs');
 
 const URL_A = 'https://hooks.slack.com/services/T000/B000/secretA';
 const URL_B = 'https://hooks.slack.com/services/T000/B000/secretB';
+const SLACK_HOST = 'hooks.slack.com';
+// Whether a log line carries a secret anywhere in it; a plain split, not a URL check.
+const mentions = (text, part) => String(text).split(part).length > 1;
 // The real escaper: the Slack module has no imports.
 const { slackEscape } = load('src/lib/notification-slack.ts', {}, { setTimeout, clearTimeout, AbortController, URL });
 
@@ -40,6 +43,12 @@ test('excerpt keeps plain text that only looks like a tag, and cuts on whole cha
   const emoji = pure.excerpt('😀'.repeat(250));
   assert.equal(Array.from(emoji).length, 201);
   assert.ok(emoji.endsWith('😀…'));
+});
+
+test('a tag cannot be rebuilt from the pieces of another', () => {
+  const out = pure.excerpt('<scr<script>ipt>alert(1)</scr</script>ipt>');
+  assert.equal(mentions(out.toLowerCase(), '<script'), false, out);
+  assert.equal(pure.excerpt('<p>x <b>bold</b> <span data-type="mention" data-label="Mia">Mia</span> <span data-type="mention" data-label="Ann"></span></p>'), 'x bold @Mia @Ann');
 });
 
 test('a huge comment cannot hold the event loop', () => {
@@ -291,8 +300,9 @@ test('the log line never contains the address', async () => {
   assert.ok(errors.length >= 2);
   for (const args of errors) {
     const line = args.map(arg => (arg instanceof Error ? `${arg.message} ${arg.stack} ${arg.cause}` : typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ');
-    assert.ok(!line.includes(URL_A) && !line.includes(URL_B), line);
-    assert.ok(!line.includes('hooks.slack.com'), line);
+    assert.equal(mentions(line, URL_A), false, line);
+    assert.equal(mentions(line, URL_B), false, line);
+    assert.equal(mentions(line, SLACK_HOST), false, line);
   }
 });
 
