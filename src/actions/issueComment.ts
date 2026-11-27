@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { findIssueByIdOrKey } from '@/lib/issue-finder';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 
 /**
  * Toggle like on an issue comment
@@ -82,6 +83,7 @@ export async function toggleIssueCommentLike(issueId: string, commentId: string)
           authorId: user.id,
         },
       });
+      tellIssueEvent({ kind: 'like', issueId: issue.id, actorId: user.id, commentAuthorId: comment.authorId });
       status = 'added';
     }
     

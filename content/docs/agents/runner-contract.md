@@ -477,6 +477,10 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
+## People are told in Slack
+
+A seat's status change, assignment, comment, mention and ack can now reach people in Slack, when they chose so. See [Get told in Slack about your issues](/docs/notifications). The runner does nothing for it. No call's answer changed. The sending never delays or fails a call.
+
 ## What Collab leaves to the runner
 
 - Starting one fresh session per issue, and ending it.

@@ -13,6 +13,7 @@ import { NotificationService, NotificationType } from "@/lib/notification-servic
 import { emitIssueUpdated } from "@/lib/event-bus";
 import { findIssueByIdOrKey, getStandardIssueInclude, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { updateIssue } from "@/lib/issue-mutation";
+import { tellIssueEvent } from "@/lib/notification-issue-events";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -88,6 +89,14 @@ export async function PUT(
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
     const { issue: updatedIssue, oldIssue, assigneeChanged, updateData } = result;
+    // The write is committed: tell the notifier, without waiting for it.
+    if (oldIssue.statusId !== updatedIssue.statusId) {
+      tellIssueEvent({ kind: 'status', issueId: updatedIssue.id, actorId: currentUser.id,
+        fromStatusId: oldIssue.statusId ?? null, toStatusId: updatedIssue.statusId ?? null });
+    }
+    if (assigneeChanged && updatedIssue.assigneeId) {
+      tellIssueEvent({ kind: 'assigned', issueId: updatedIssue.id, actorId: currentUser.id, assigneeId: updatedIssue.assigneeId });
+    }
     const movedProject = oldIssue.projectId !== updatedIssue.projectId
       ? { previousProjectId: oldIssue.projectId }
       : {};
@@ -213,6 +222,7 @@ export async function PUT(
         const mentionedUserIds = extractMentionUserIds((updateData as any).description);
         const recipients = mentionedUserIds.filter((id: string) => id !== currentUser.id);
         if (recipients.length > 0) {
+          tellIssueEvent({ kind: 'described', issueId: updatedIssue.id, actorId: currentUser.id, mentionedIds: recipients });
           await NotificationService.notifyUsers(
             recipients,
             NotificationType.ISSUE_MENTION,

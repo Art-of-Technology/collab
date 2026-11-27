@@ -223,6 +223,8 @@ export class NotificationService {
     senderId: string,
     options: {
       filterPreferences?: boolean;
+      // Workspace whose notification preferences apply
+      workspaceId?: string | null;
       // Relation fields on Notification model
       postId?: string;
       commentId?: string;
@@ -241,6 +243,7 @@ export class NotificationService {
 
     const {
       filterPreferences = false,
+      workspaceId: preferenceWorkspaceId,
       postId,
       commentId,
       taskId,
@@ -297,7 +300,7 @@ export class NotificationService {
       if (filterPreferences) {
         const filtered: string[] = [];
         for (const userId of recipientIds) {
-          const preferences = await this.getUserPreferences(userId);
+          const preferences = await this.getUserPreferences(userId, preferenceWorkspaceId);
           // For string types not in enum mapping, shouldNotifyUser defaults to true
           const shouldNotify = this.shouldNotifyUser(
             preferences as any,
@@ -371,7 +374,8 @@ export class NotificationService {
     content: string,
     senderId: string,
     excludeUserIds: string[] = [],
-    additionalData: Record<string, any> = {}
+    additionalData: Record<string, any> = {},
+    workspaceId?: string | null
   ): Promise<void> {
     try {
       const followers = await followerQuery;
@@ -389,7 +393,7 @@ export class NotificationService {
         content
       );
       for (const follower of followers) {
-        const preferences = await this.getUserPreferences(follower.userId);
+        const preferences = await this.getUserPreferences(follower.userId, workspaceId);
         if (this.shouldNotifyUser(preferences, notificationType)) {
           if (bouncedSet.has(follower.userId)) continue;
           validNotifications.push({
@@ -495,13 +499,24 @@ export class NotificationService {
   /**
    * Get user notification preferences or return defaults
    * @param userId - User ID to get preferences for
+   * @param workspaceId - Workspace whose record the settings page saved; falls back to the record without a workspace
    * @returns User notification preferences
    */
-  static async getUserPreferences(userId: string): Promise<any> {
+  static async getUserPreferences(
+    userId: string,
+    workspaceId?: string | null
+  ): Promise<any> {
     try {
-      const preferences = await prisma.notificationPreferences.findFirst({
-        where: { userId, workspaceId: null },
-      });
+      let preferences = workspaceId
+        ? await prisma.notificationPreferences.findFirst({
+            where: { userId, workspaceId },
+          })
+        : null;
+      if (!preferences) {
+        preferences = await prisma.notificationPreferences.findFirst({
+          where: { userId, workspaceId: null },
+        });
+      }
 
       // Return default preferences if none exist
       if (!preferences) {
@@ -634,6 +649,17 @@ export class NotificationService {
     });
 
     const additionalData = skipIssueIdReference ? {} : { issueId };
+    let workspaceId: string | null | undefined;
+    try {
+      workspaceId = (
+        await prisma.issue.findUnique({
+          where: { id: issueId },
+          select: { workspaceId: true },
+        })
+      )?.workspaceId;
+    } catch {
+      workspaceId = undefined;
+    }
 
     await this.createFollowerNotifications(
       followerQuery,
@@ -641,7 +667,8 @@ export class NotificationService {
       content,
       senderId,
       excludeUserIds,
-      additionalData
+      additionalData,
+      workspaceId
     );
   }
 
@@ -775,12 +802,24 @@ export class NotificationService {
       },
     });
 
+    let workspaceId: string | null | undefined;
+    try {
+      workspaceId = (
+        await prisma.post.findUnique({
+          where: { id: postId },
+          select: { workspaceId: true },
+        })
+      )?.workspaceId;
+    } catch {
+      workspaceId = undefined;
+    }
+
     await this.notifyUsers(
       followers.map(follower => follower.userId),
       type,
       content,
       senderId,
-      { postId, filterPreferences: true }
+      { postId, filterPreferences: true, workspaceId }
     );
   }
 
@@ -1173,12 +1212,17 @@ export class NotificationService {
     actionById?: string
   ): Promise<void> {
     const preferences = await NotificationService.getUserPreferences(
-      leaveRequest.userId
+      leaveRequest.userId,
+      leaveRequest.policy.workspaceId
     );
 
     if (!NotificationService.shouldNotifyUser(preferences, notificationType)) {
       return;
     }
+    // Browser push stays on the record without a workspace
+    const pushPreferences = await NotificationService.getUserPreferences(
+      leaveRequest.userId
+    );
 
     const content = this.createLeaveNotificationContent(
       leaveRequest,
@@ -1202,7 +1246,10 @@ export class NotificationService {
     });
 
     // Send push notification if enabled
-    if (preferences.pushNotificationsEnabled && preferences.pushSubscription) {
+    if (
+      pushPreferences.pushNotificationsEnabled &&
+      pushPreferences.pushSubscription
+    ) {
       try {
         await sendPushNotification(leaveRequest.userId, {
           title: "Leave Request Update",
@@ -1273,13 +1320,18 @@ export class NotificationService {
     // Send push notifications
     for (const managerId of dedupedRecipientIds) {
       const preferences = await NotificationService.getUserPreferences(
+        managerId,
+        leaveRequest.policy.workspaceId
+      );
+      // Browser push stays on the record without a workspace
+      const pushPreferences = await NotificationService.getUserPreferences(
         managerId
       );
 
       if (
         NotificationService.shouldNotifyUser(preferences, notificationType) &&
-        preferences.pushNotificationsEnabled &&
-        preferences.pushSubscription
+        pushPreferences.pushNotificationsEnabled &&
+        pushPreferences.pushSubscription
       ) {
         try {
           await sendPushNotification(managerId, {
@@ -1347,12 +1399,17 @@ export class NotificationService {
 
     // Send push notifications
     for (const hrId of dedupedHrIds) {
-      const preferences = await NotificationService.getUserPreferences(hrId);
+      const preferences = await NotificationService.getUserPreferences(
+        hrId,
+        leaveRequest.policy.workspaceId
+      );
+      // Browser push stays on the record without a workspace
+      const pushPreferences = await NotificationService.getUserPreferences(hrId);
 
       if (
         NotificationService.shouldNotifyUser(preferences, notificationType) &&
-        preferences.pushNotificationsEnabled &&
-        preferences.pushSubscription
+        pushPreferences.pushNotificationsEnabled &&
+        pushPreferences.pushSubscription
       ) {
         try {
           await sendPushNotification(hrId, {

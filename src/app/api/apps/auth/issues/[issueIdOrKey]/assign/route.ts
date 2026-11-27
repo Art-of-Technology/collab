@@ -14,6 +14,7 @@ import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 import { assertTokenMayAssign } from '@/lib/agent-seats';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 
 const AssignIssueSchema = z.object({
   assigneeId: z.string().cuid().optional(),
@@ -165,6 +166,11 @@ export const POST = withAppAuth(
         });
         return updated;
       });
+
+      // The write is committed: tell the notifier, without waiting for it, when the assignee really changed.
+      if (assigneeId !== oldAssigneeId) {
+        tellIssueEvent({ kind: 'assigned', issueId: issue.id, actorId: context.user.id, assigneeId });
+      }
 
       // Log activity
       await prisma.issueActivity.create({

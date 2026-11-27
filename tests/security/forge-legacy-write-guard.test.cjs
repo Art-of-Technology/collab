@@ -93,6 +93,7 @@ function fixture() {
   dependencies['@/lib/issue-trash'] = load('src/lib/issue-trash.ts', dependencies);
   dependencies['@/lib/issue-trash-response'] = load('src/lib/issue-trash-response.ts', dependencies);
   dependencies['@/lib/issue-comment-acks'] = { commentAcks: async () => new Map(), recordCommentAcks: async () => 0 };
+  dependencies['@/lib/notification-issue-events'] = { tellIssueEvent() {}, issueEventsSettled: async () => {} };
   dependencies['@/lib/issue-comment-mentions'] = load('src/lib/issue-comment-mentions.ts', dependencies);
   return { guard, dependencies, issues, projects, relations, writes: () => writes, bind: value => { bindings = value; } };
 }

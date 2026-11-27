@@ -149,3 +149,62 @@ test('profile timeline and notification boundaries recheck current viewer access
     assert.deepEqual(writes.map(n => n.userId), ['bob']); assert.deepEqual(deliveries, ['bob']);
   });
 });
+
+test('senders read the preferences record of the workspace the settings page saves', async (t) => {
+  const rows = [];
+  const created = [];
+  const pushes = [];
+  const lookups = [];
+  const db = {
+    notificationPreferences: { findFirst: async ({ where }) => {
+      lookups.push({ ...where });
+      return rows.find(r => r.userId === where.userId && r.workspaceId === where.workspaceId) ?? null;
+    } },
+    post: { findUnique: async () => ({ workspaceId: 'w1' }), findFirst: async () => ({ id: 'p1' }) },
+    postFollower: { findMany: async () => [{ userId: 'alice' }] },
+    notification: { findMany: async () => [], createMany: async ({ data }) => { created.push(...data); return { count: data.length }; },
+      create: async ({ data }) => { created.push(data); return data; } },
+    comment: { findFirst: async () => ({ id: 'c1' }) },
+  };
+  const deps = {
+    '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: db } }),
+    '@/lib/user-utils': load('src/lib/user-utils.ts'), '@/lib/html-sanitizer': { sanitizeHtmlToPlainText: v => v },
+    '@/lib/push-notifications': { sendPushNotification: async id => { pushes.push(id); } },
+    '@/lib/permissions': {}, 'date-fns': { format: () => 'Jan 01' }, '@/lib/logger': { logger: { info() {}, error() {} } },
+    '@/utils/mentions': { extractMentionUserIds: () => [] },
+  };
+  deps['@/lib/view-access'] = load('src/lib/view-access.ts', { ...deps, 'next/server': { NextResponse: Response } });
+  const service = load('src/lib/notification-service.ts', deps, { console }).NotificationService;
+  const follow = async () => { created.length = 0; await service.notifyPostFollowers({ postId: 'p1', senderId: 'actor', type: 'POST_COMMENT_ADDED', content: `x${Math.random()}` }); return created.map(n => n.userId); };
+  const reset = (...r) => { rows.length = 0; rows.push(...r); };
+
+  await t.test('a post-comment notification is not sent to a follower who switched it off in that workspace', async () => {
+    reset({ userId: 'alice', workspaceId: 'w1', postCommentAdded: false });
+    assert.deepEqual(await follow(), []);
+  });
+  await t.test('it is sent when only the record without a workspace says off', async () => {
+    reset({ userId: 'alice', workspaceId: null, postCommentAdded: false }, { userId: 'alice', workspaceId: 'w1', postCommentAdded: true });
+    assert.deepEqual(await follow(), ['alice']);
+  });
+  await t.test('a person with no record of that workspace falls back to the record without one', async () => {
+    reset({ userId: 'alice', workspaceId: null, postCommentAdded: false });
+    assert.deepEqual(await follow(), []);
+    reset();
+    assert.deepEqual(await follow(), ['alice']);
+  });
+  await t.test('a leave notification follows the workspace record', async () => {
+    const request = { id: 'l1', userId: 'alice', user: { name: 'Alice' }, policyId: 'pol', policy: { workspaceId: 'w1', name: 'Annual' },
+      startDate: new Date(), endDate: new Date(), totalDays: 1, status: 'APPROVED' };
+    reset({ userId: 'alice', workspaceId: 'w1', leaveRequestStatusChanged: false });
+    created.length = 0;
+    await service.sendLeaveEmployeeNotification(request, 'LEAVE_REQUEST_STATUS_CHANGED', 'approved', 'boss');
+    assert.equal(created.length, 0);
+    reset({ userId: 'alice', workspaceId: null, leaveRequestStatusChanged: false }, { userId: 'alice', workspaceId: 'w1', leaveRequestStatusChanged: true });
+    await service.sendLeaveEmployeeNotification(request, 'LEAVE_REQUEST_STATUS_CHANGED', 'approved', 'boss');
+    assert.equal(created.length, 1);
+  });
+  await t.test('push still reads the record without a workspace', async () => {
+    const src = require('node:fs').readFileSync(resolve('src/lib/push-notifications.ts'), 'utf8');
+    assert.doesNotMatch(src, /notificationPreferences[\s\S]{0,200}workspaceId:\s*(?!null)\w/);
+  });
+});

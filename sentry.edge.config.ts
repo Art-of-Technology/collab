@@ -4,6 +4,7 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { scrubSlackRoute } from "./src/lib/notification-sentry";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -16,4 +17,8 @@ Sentry.init({
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
+
+  // The Slack address is a secret: keep it out of spans, breadcrumbs and request bodies.
+  beforeSend: scrubSlackRoute,
+  beforeSendTransaction: scrubSlackRoute,
 });

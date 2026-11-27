@@ -38,7 +38,7 @@ function fixture(overrides = {}) {
     // issue's last finished run, whose end opens the next run's window.
     workspaceAcks: [{ createdAt: new Date(AFTER.getTime() - 60 * MIN) }], finished: null,
     issue: { id: 'i', workspaceId: 'w', assigneeId: 'seat', status: 'In Progress', statusValue: null, projectStatus: { category: 'started', isFinal: false } },
-    failCreate: false, noReactionModel: false,
+    failCreate: false, noReactionModel: false, told: [],
     // Per comment id, the error `create` throws for it (a code string becomes an error with that `code`): a concurrent ack, a vanished comment.
     createErrors: {}, bulkCalls: 0, attempts: [],
     ...overrides,
@@ -55,7 +55,9 @@ function fixture(overrides = {}) {
     },
     user: { findMany: async ({ where }) => pick(db.users, where).filter(user => user.email != null && !db.seats.some(seat => seat.userId === user.id)) },
     issue: { findUnique: async () => db.issue },
-    issueComment: { findMany: async args => pick(db.comments.filter(c => c.issueId === args.where.issueId), (({ issueId, ...rest }) => rest)(args.where), args) },
+    // Answers only the selected fields, as the real client does.
+    issueComment: { findMany: async args => pick(db.comments.filter(c => c.issueId === args.where.issueId), (({ issueId, ...rest }) => rest)(args.where), args)
+      .map(row => (args.select ? Object.fromEntries(Object.keys(args.select).filter(key => args.select[key]).map(key => [key, row[key]])) : row)) },
     agentRun: {
       findMany: async ({ where }) => pick(db.runs, where),
       findFirst: async ({ where }) => (where.state === 'finished' && where.issueId === 'i' ? db.finished : null),
@@ -93,6 +95,7 @@ function fixture(overrides = {}) {
   const lib = load('src/lib/issue-comment-acks.ts', {
     '@/lib/prisma': { prisma },
     '@/lib/redis': { publishEvent: async (channel, message, timeout) => { db.events.push({ channel, message, timeout }); return true; } },
+    '@/lib/notification-issue-events': { tellIssueEvent: event => { db.told.push(event); }, issueEventsSettled: async () => {} },
   }, { console: { error: (...args) => db.errors.push(args) } });
   // Each case starts with no remembered first ack.
   lib.forgetAckStarts();
@@ -159,6 +162,21 @@ test('another error stops the loop, keeps the rows already written, logs once an
   assert.equal(db.errors.length, 1);
   assert.equal(db.errors[0][0], '[comment-acks] recording stopped early');
   assert.equal(db.events.length, 1);
+});
+
+test('acks tell the notifier once, with the authors of the rows written', async () => {
+  const { db, lib } = fixture({ createErrors: { c2: 'P2002' } });
+  db.comments.push(comment('c1', 'p', 0), comment('c2', 'p2', 1), comment('c3', 'p2', 2));
+  assert.equal(await lib.recordCommentAcks(base), 2);
+  assert.deepEqual(plain(db.told), [{ kind: 'ack', issueId: 'i', actorId: 'seat', commentAuthorIds: ['p2', 'p'] }]);
+});
+
+test('nothing is told when nothing was written', async () => {
+  const { db, lib } = fixture({ createErrors: { c1: 'P2002' } });
+  db.comments.push(comment('c1', 'p', 0));
+  assert.equal(await lib.recordCommentAcks(base), 0);
+  assert.equal(await lib.recordCommentAcks({ ...base, seatUserId: 'p' }), 0);
+  assert.deepEqual(db.told, []);
 });
 
 test('when every row is skipped nothing is published and the result is 0', async () => {
@@ -391,7 +409,7 @@ test('commentAcks resolves an empty map when the database fails', async () => {
   const { db, lib } = fixture();
   db.issue = null;
   db.comments.push(comment('c1', 'p'));
-  const broken = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/redis': { publishEvent: async () => true } });
+  const broken = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/redis': { publishEvent: async () => true }, '@/lib/notification-issue-events': { tellIssueEvent() {}, issueEventsSettled: async () => {} } });
   const map = await broken.commentAcks('i', [comment('c1', 'p')], NOW);
   assert.equal(Object.prototype.toString.call(map), '[object Map]');
   assert.equal(map.size, 0);
@@ -400,7 +418,7 @@ test('commentAcks resolves an empty map when the database fails', async () => {
 
 test('a failing ack read or write is logged, and still never throws', async () => {
   const errors = [];
-  const broken = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/redis': { publishEvent: async () => true } },
+  const broken = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/redis': { publishEvent: async () => true }, '@/lib/notification-issue-events': { tellIssueEvent() {}, issueEventsSettled: async () => {} } },
     { console: { error: (...args) => errors.push(args) } });
   assert.equal((await broken.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
   assert.equal(await broken.recordCommentAcks(base), 0);
@@ -412,13 +430,13 @@ test('a failing ack read or write is logged, and still never throws', async () =
   assert.equal(await failing.lib.recordCommentAcks(base), 0);
   assert.equal(failing.db.errors.length, 1);
   // A console that itself throws changes nothing.
-  const loud = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} } }, { console: { error() { throw new Error('no console'); } } });
+  const loud = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/notification-issue-events': { tellIssueEvent() {}, issueEventsSettled: async () => {} } }, { console: { error() { throw new Error('no console'); } } });
   assert.equal(await loud.recordCommentAcks(base), 0);
   assert.equal((await loud.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
 });
 
 test('the shared loader hands the real ack module to code that imports it', async () => {
-  const acks = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} } });
+  const acks = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/notification-issue-events': { tellIssueEvent() {}, issueEventsSettled: async () => {} } });
   assert.equal(acks.ACK_TYPE, 'ack');
   assert.equal(acks.ACK_WRITE_CAP, 200);
   assert.equal(await acks.recordCommentAcks(base), 0);

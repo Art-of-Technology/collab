@@ -8,6 +8,7 @@ import { IssueType } from '@prisma/client';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { findIssueByIdOrKey } from '@/lib/issue-finder';
 import { updateIssue } from '@/lib/issue-mutation';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, createRefusal, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
@@ -241,6 +242,7 @@ export async function POST(req: Request) {
           if (params.labels?.length) await enqueueLabelHandoff(tx, currentUser.id, created, []);
           return created;
         });
+        if (params.assigneeId) tellIssueEvent({ kind: 'assigned', issueId: issue.id, actorId: currentUser.id, assigneeId: params.assigneeId });
 
         return NextResponse.json({
           success: true,
@@ -277,6 +279,13 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: result.error }, { status: result.status });
         }
         const { id, title, issueKey, status, priority } = result.issue;
+        // Told once the update is written; never waited for, and it never fails the action.
+        if (result.oldIssue && result.oldIssue.statusId !== result.issue.statusId) {
+          tellIssueEvent({ kind: 'status', issueId: id, actorId: currentUser.id, fromStatusId: result.oldIssue.statusId, toStatusId: result.issue.statusId });
+        }
+        if (result.assigneeChanged && result.issue.assigneeId) {
+          tellIssueEvent({ kind: 'assigned', issueId: id, actorId: currentUser.id, assigneeId: result.issue.assigneeId });
+        }
         const issue = { id, title, issueKey, status, priority };
 
         return NextResponse.json({

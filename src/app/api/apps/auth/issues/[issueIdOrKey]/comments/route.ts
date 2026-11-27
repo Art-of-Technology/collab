@@ -12,6 +12,7 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { tokenIssueReadWhere } from '@/lib/issue-finder';
 import { HandoffError, seatFor, seatWriteGuard } from '@/lib/agent-seats';
 import { ACK_TYPE, commentAcks, recordCommentAcks, type AckComment, type CommentAck } from '@/lib/issue-comment-acks';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 import { z } from 'zod';
 
 const CreateCommentSchema = z.object({
@@ -244,6 +245,8 @@ export const POST = withAppAuth(
           },
         },
       });
+
+      tellIssueEvent({ kind: 'comment', issueId: issue.id, actorId: context.user.id, commentId: comment.id, text: data.content });
 
       // Log activity
       await prisma.issueActivity.create({

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { findIssueByIdOrKey } from "@/lib/issue-finder";
 import { notifyCommentMentions } from "@/lib/issue-comment-mentions";
 import { ACK_TYPE, commentAcks, type AckComment, type CommentAck } from "@/lib/issue-comment-acks";
+import { tellIssueEvent } from "@/lib/notification-issue-events";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -128,7 +129,9 @@ export async function POST(
       },
     });
 
-    await notifyCommentMentions(currentUser, issue, typeof html === "string" && html.trim().length > 0 ? html : content);
+    const text = typeof html === "string" && html.trim().length > 0 ? html : content;
+    await notifyCommentMentions(currentUser, issue, text);
+    tellIssueEvent({ kind: 'comment', issueId: issue.id, actorId: currentUser.id, commentId: comment.id, text });
 
     await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
     return NextResponse.json(comment, { status: 201 });
