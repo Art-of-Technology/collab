@@ -20,7 +20,7 @@ Collab posts through a Slack incoming webhook. You make one in Slack:
 
 Saving an address does not switch Slack on. Collab accepts only a Slack webhook address and refuses anything else. It stores the address encrypted and never shows it in full again, only a masked form.
 
-The first time you switch Slack on, Collab ticks a starting set for you: all three boxes under **Which issues**, the status changes, assignments to you, comments that mention you, and acks and likes. Change anything you like. Later switch-ons keep your own ticks.
+The first time you switch Slack on with nothing ticked, Collab ticks a starting set for you: all three boxes under **Which issues**, the status changes, assignments to you, comments that mention you, and acks and likes. Change anything you like. Ticks you already made are kept, also on later switch-ons.
 
 | Button | What it does |
 | --- | --- |
@@ -87,7 +87,7 @@ A cut comment ends with “…”. A comment that mentions you and would also re
 
 ## The limit
 
-At most 30 messages a minute go to one person. Past that, Collab drops the extra messages and posts one line that says how many.
+At most 30 messages a minute go to one person. Past that, Collab drops the extra messages and posts one line that says how many. The limit is counted by each Collab server process, so with more than one process the number can be higher.
 
 ## The bell does not change
 
