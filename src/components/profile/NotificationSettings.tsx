@@ -10,10 +10,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Bell,
   BellOff,
-  CheckSquare,
   MessageSquare,
   AlertTriangle,
-  Calendar,
   Mail,
   RotateCcw,
   Loader2,
@@ -32,6 +30,7 @@ import {
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
+import IssueNotificationSettings from "./IssueNotificationSettings";
 
 interface NotificationSetting {
   key: keyof NotificationPreferenceUpdate;
@@ -51,52 +50,6 @@ interface SettingGroup {
 }
 
 const settingGroups: SettingGroup[] = [
-  {
-    id: "issues",
-    title: "Issue Notifications",
-    description: "Get notified about activities on issues you follow",
-    icon: <CheckSquare className="h-5 w-5 text-blue-500" />,
-    settings: [
-      // Using taskUpdated and taskDeleted; 'taskCreated' not present in hook type
-      {
-        key: "taskUpdated",
-        label: "General Updates",
-        description: "When issue details or status are updated",
-        recommended: true,
-      },
-      {
-        key: "taskDeleted",
-        label: "Issue Deleted",
-        description: "When issues are deleted",
-      },
-    ],
-  },
-  {
-    id: "projects",
-    title: "Project Notifications",
-    description: "Get notified about activities on projects you follow (project-level notifications only)",
-    icon: <Calendar className="h-5 w-5 text-purple-500" />,
-    settings: [
-      {
-        key: "boardTaskCreated",
-        label: "New Issues",
-        description: "When new issues are created in projects you follow",
-        recommended: true,
-      },
-      {
-        key: "boardTaskStatusChanged",
-        label: "Status Changes",
-        description: "When issue statuses change in projects you follow",
-        recommended: true,
-      },
-      {
-        key: "boardTaskDeleted",
-        label: "Issues Deleted",
-        description: "When issues are deleted in projects you follow",
-        recommended: true,
-      },
-    ],
-  },
   {
     id: "email",
     title: "Email Notifications",
@@ -168,7 +121,7 @@ export default function NotificationSettings() {
   const { data: preferences, isLoading } = useNotificationPreferences(workspaceId);
   const updateMutation = useUpdateNotificationPreferences(workspaceId);
   const resetMutation = useResetNotificationPreferences(workspaceId);
-  const [openSections, setOpenSections] = useState<string[]>(["issues", "projects", "leave"]);
+  const [openSections, setOpenSections] = useState<string[]>(["leave"]);
   const {
     isSupported: isPushSupported,
     isSubscribed: isPushSubscribed,
@@ -308,6 +261,8 @@ export default function NotificationSettings() {
         </div>
       </div>
 
+      <IssueNotificationSettings />
+
       <div className="space-y-3">
         {filteredSettingGroups.map((group) => {
           const isOpen = openSections.includes(group.id);
@@ -427,23 +382,6 @@ export default function NotificationSettings() {
           );
         })}
       </div>
-
-      <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                Issue vs Project Notifications
-              </p>
-              <p className="text-xs text-amber-700/80 dark:text-amber-300/80 leading-relaxed">
-                <strong>Issue notifications</strong> apply when you follow individual issues.
-                <strong>Project notifications</strong> apply when you follow entire projects and generally notify for key status changes.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
