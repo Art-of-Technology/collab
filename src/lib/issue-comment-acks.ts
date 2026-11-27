@@ -3,6 +3,7 @@ import { publishEvent } from '@/lib/redis';
 import { PERSON, isStopIssueDone } from '@/lib/agent-stop-boundary';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { contextSince } from '@/lib/agent-context-since';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 
 /** The reaction type under which a seat's account says it has taken a person's comment in. */
 export const ACK_TYPE = 'ack';
@@ -64,14 +65,17 @@ export async function recordCommentAcks(input: { workspaceId: string; issueId: s
         ...(commentIds ? { id: { in: commentIds } } : {}),
         reactions: { none: { type: ACK_TYPE, authorId: seatUserId } },
       },
-      orderBy: { createdAt: 'desc' }, take: ACK_WRITE_CAP, select: { id: true },
+      orderBy: { createdAt: 'desc' }, take: ACK_WRITE_CAP, select: { id: true, authorId: true },
     });
     if (!comments.length) return 0;
     let written = 0;
+    // The author of each comment acked by this call, one entry per row written: the notifier counts them per person.
+    const commentAuthorIds: string[] = [];
     for (const comment of comments) {
       try {
         await prisma.issueCommentReaction.create({ data: { type: ACK_TYPE, commentId: comment.id, authorId: seatUserId } });
         written++;
+        commentAuthorIds.push(comment.authorId);
       } catch (error) {
         const code = (error as { code?: unknown } | null)?.code;
         // Another call acked this comment first, or it or its issue is no longer visible to the write guard: nothing to record.
@@ -81,6 +85,8 @@ export async function recordCommentAcks(input: { workspaceId: string; issueId: s
       }
     }
     if (!written) return 0;
+    // Telling is a courtesy too, and is never awaited: it must not turn the acks just written into a failure.
+    try { tellIssueEvent({ kind: 'ack', issueId, actorId: seatUserId, commentAuthorIds }); } catch (error) { report('telling the notifier failed', error); }
     // The workspace has an ack now: a remembered "none yet" no longer holds.
     if (ackStarts.get(workspaceId)?.at === null) ackStarts.delete(workspaceId);
     await publishEvent(`workspace:${workspaceId}:events`, { type: 'issue.comments.changed', workspaceId, issueId }, 1000);

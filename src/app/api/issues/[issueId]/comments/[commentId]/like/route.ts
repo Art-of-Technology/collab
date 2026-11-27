@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { findIssueByIdOrKey } from "@/lib/issue-finder";
+import { tellIssueEvent } from "@/lib/notification-issue-events";
 
 export async function POST(
   req: Request,
@@ -101,6 +102,7 @@ export async function POST(
         authorId: user.id,
       },
     });
+    tellIssueEvent({ kind: 'like', issueId: issue.id, actorId: user.id, commentAuthorId: comment.authorId });
     
     // Return the updated comment with reactions
     const updatedComment = await prisma.issueComment.findUnique({
