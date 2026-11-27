@@ -11,6 +11,7 @@ import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import { recordCommentAcks } from '@/lib/issue-comment-acks';
+import { tellIssueEvent } from '@/lib/notification-issue-events';
 import { contextSince } from '@/lib/agent-context-since';
 import { findIssueByIdOrKey, issueReadAccessWhere, tokenIssueReadWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
@@ -398,9 +399,12 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
   await forgeGuard(found.id);
   // Whether the transaction below started a run for a seat: only then are its comments acked.
   let seatStarted = false;
+  // The status the transaction below moved the issue from and to, told once it commits.
+  let moved: { fromStatusId: string | null; toStatusId: string } | null = null;
   try {
     const started = await prisma.$transaction(async tx => {
       seatStarted = false;
+      moved = null;
       // The seat's row, then the issue: the order retiring a seat takes them in. Held to the end, so a seat is not
       // retired and an issue is not reassigned between these checks and the run.
       await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "userId" = ${me} FOR SHARE`;
@@ -439,6 +443,7 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       if (status) {
         await tx.issueActivity.create({ data: { action: 'STATUS_CHANGED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: context.workspace.id,
           projectId: issue.projectId, fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
+        moved = { fromStatusId: issue.statusId, toStatusId: status.id };
       }
       seatStarted = !!seat;
       return { run, repository };
@@ -453,6 +458,11 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
           await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: window });
         } catch (error) { console.error('[comment-acks] recording at run start failed', error); }
       })().catch(() => {});
+    }
+    // Committed: people who follow the issue in Slack are told. Not waited for, and nothing of it reaches the run.
+    const move = moved as { fromStatusId: string | null; toStatusId: string } | null;
+    if (move) {
+      try { tellIssueEvent({ kind: 'status', issueId: found.id, actorId: me, ...move }); } catch { /* the notifier never fails a run */ }
     }
     return started;
   } catch (error) {
@@ -727,7 +737,8 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
     if (!security && (input.verdict || input.reviewed)) throw new HandoffError('invalid_request', 'Only a security request that finishes done takes a verdict');
 
     // Every issue here is in one project: when it has no status for the outcome, the first issue already says so.
-    const unmapped = await settle(tx, me, workspaceId, issue, input, now);
+    const { unmapped, moved } = await settle(tx, me, workspaceId, issue, input, now);
+    const moves = moved ? [moved] : [];
     await entry(issue, 'AGENT_RUN_FINISHED', { runId: run.id, ...waits, ...(ask && { ask }) });
     if (security) {
       // The issue the request was filed for is read from what filing wrote, never from the request's links: a link
@@ -752,12 +763,17 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
       if (await tx.agentRun.findFirst({ where: { issueId: extra.id, endedAt: null }, select: { id: true } })) throw new HandoffError('already_running', `A run is already open on ${key}`, 409);
       const batched = await tx.agentRun.create({ data: { workspaceId, issueId: extra.id, seatId: run.seatId, userId: me, runner: run.runner, generation: input.generation,
         state: 'finished', outcome: input.outcome, note: input.note, startedAt: now, endedAt: now }, select: { id: true } });
-      await settle(tx, me, workspaceId, extra, input, now);
+      const settled = await settle(tx, me, workspaceId, extra, input, now);
+      if (settled.moved) moves.push(settled.moved);
       await entry(extra, 'AGENT_RUN_FINISHED', { runId: batched.id, finishedWith: run.id });
     }
-    return { unmapped };
+    return { unmapped, moves };
   });
   if (!result) throw fenced();
+  // Committed: one status event for each issue the finish moved. Not waited for, and nothing of it reaches the run.
+  for (const move of result.moves) {
+    try { tellIssueEvent({ kind: 'status', actorId: me, ...move }); } catch { /* the notifier never fails a run */ }
+  }
   // Started once the finish is committed and the issues are no longer held, and not waited for: the reply to the seat does not
   // take as long as the mail provider does. It catches and logs its own failures, so nothing of it reaches the caller.
   if (run.seatId && ask && input.askedUser) void emailDeclaredStop({ runId: run.id, userId: input.askedUser, ask });
@@ -767,7 +783,8 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
 /**
  * Moves a finished issue to a status of its outcome's group: the one the caller named, else it stays when it is in
  * the group already, else the group's first active status by order, and for done a final one before the others.
- * Returns true when the project has no such status and the issue was left where it is.
+ * Returns `unmapped` true when the project has no such status and the issue was left where it is, and `moved` when the
+ * status changed.
  */
 async function settle(tx: Prisma.TransactionClient, me: string, workspaceId: string,
   issue: { id: string; projectId: string; statusId: string | null; projectStatus: { name: string; category: string | null; isFinal: boolean } | null }, input: Finish, now: Date) {
@@ -783,7 +800,7 @@ async function settle(tx: Prisma.TransactionClient, me: string, workspaceId: str
     await tx.issueActivity.create({ data: { action: 'STATUS_CHANGED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId, projectId: issue.projectId,
       fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
   }
-  return !status;
+  return { unmapped: !status, moved: moves ? { issueId: issue.id, fromStatusId: issue.statusId, toStatusId: status.id } : null };
 }
 
 const REF = { id: true, issueKey: true, title: true, projectId: true, agentRequestRole: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
