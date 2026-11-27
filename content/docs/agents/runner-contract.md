@@ -374,13 +374,15 @@ Under a person's comment, Collab shows whether a seat has taken it in. Collab re
 | When | For which comments |
 | --- | --- |
 | A seat starts a run: `POST /api/apps/auth/runs` | The person comments in that run's `commentsSince` window. |
-| The seat's own token reads `GET /api/apps/auth/issues/:key/comments` or the run context while the seat has a run open on that issue | The person comments in the answer. |
+| The seat's own token reads `GET /api/apps/auth/issues/:key/comments?since=…` (what `collab comments wait` sends) or the run context while the seat has a run open on that issue | The person comments in the answer. |
 
-A comment written while the seat is in a run is not acked by that run's start. It is acked when the session reads comments, or by the next run's start.
+The run start acks the comments written up to the run's start. A comment list without `since` records nothing, since `collab comments wait` sends one for its baseline and throws the answer away.
 
-- If recording fails, the run still starts and the read is still answered.
+A comment written while the seat is in a run is not acked by that run's start. It is acked when the session asks for new comments. If the run finishes without asking, no run is given it: the next run's window opens at the last finished run's end, and a comment does not wake a seat that was mid-run. Once the seat has no live run open on the issue, the comment's line says `not_given`, and the person comments again to send it.
+
+- If recording fails, the run still starts and the read is still answered. At a run start and a run-context read the ack is recorded after the answer is sent, so it never delays them.
 - An ack never wakes a seat and never changes an inbox.
-- An ack is stored as a comment reaction of type `ack`, under the seat's account. `reactionCounts` on the token route therefore gains an `ack` count. Likes are counted as before.
+- An ack is stored as a comment reaction of type `ack`, under the seat's account. It is not listed among a comment's `reactions` and not counted in `reactionCounts`: it is in `ack`. Likes are listed and counted as before.
 - The ack does not record which run took the comment in, or whether it was at the start of a run or by a later read.
 
 Each comment and reply in the comment list answer has one added field, `ack`. It is `null` when no line is shown, and otherwise:
@@ -396,11 +398,11 @@ Each comment and reply in the comment list answer has one added field, `ack`. It
 | --- | --- |
 | `state` | `acked`, `waiting` or `none`. |
 | `seats` | The seats that took the comment in, oldest first: `userId`, `name`, `at`. |
-| `waitingFor` | With `waiting` or `issue_done`: the seat that holds the issue. |
-| `reason` | `in_run` or `runner_silent` with `waiting`; `issue_done` or `not_holder` with `none`. |
+| `waitingFor` | With `waiting`, `issue_done` or `not_given`: the seat that holds the issue. |
+| `reason` | `in_run` or `runner_silent` with `waiting`; `issue_done`, `not_given` or `not_holder` with `none`. |
 | `missed` | Names of mentioned seats that do not hold the issue. |
 
-`waitingFor`, `reason` and `missed` are present only when they apply. Fields only get added: no existing field is removed or renamed. On the token route `reactions` now also carries `type: "ack"` entries, authored by the seat's account, so a client that counts likes should filter on `type: "like"`.
+`waitingFor`, `reason` and `missed` are present only when they apply. `waiting` and `none` are given only for comments written after the workspace's first ack; `acked` whenever an ack exists. Fields only get added: no existing field is removed or renamed. An ack is not listed among reactions: `reactions` and `reactionCounts` carry what people added, as before.
 
 ## File a request: POST seats/me/requests
 
