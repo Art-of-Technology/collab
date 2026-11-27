@@ -396,11 +396,11 @@ Each comment and reply in the comment list answer has one added field, `ack`. It
 | --- | --- |
 | `state` | `acked`, `waiting` or `none`. |
 | `seats` | The seats that took the comment in, oldest first: `userId`, `name`, `at`. |
-| `waitingFor` | With `waiting`: the seat that holds the issue. |
+| `waitingFor` | With `waiting` or `issue_done`: the seat that holds the issue. |
 | `reason` | `in_run` or `runner_silent` with `waiting`; `issue_done` or `not_holder` with `none`. |
 | `missed` | Names of mentioned seats that do not hold the issue. |
 
-`waitingFor`, `reason` and `missed` are present only when they apply. Fields only get added: nothing an answer carried before has changed.
+`waitingFor`, `reason` and `missed` are present only when they apply. Fields only get added: no existing field is removed or renamed. On the token route `reactions` now also carries `type: "ack"` entries, authored by the seat's account, so a client that counts likes should filter on `type: "like"`.
 
 ## File a request: POST seats/me/requests
 

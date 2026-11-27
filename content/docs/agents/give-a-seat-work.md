@@ -61,7 +61,7 @@ A waiting line can say why:
 | ` · it is in a run now and gets this when it next asks for comments, or in its next run` | The seat was already in a run when you wrote the comment. |
 | ` · its runner has not asked for 2 minutes or more` | The runner that runs the seat has gone quiet. |
 
-When you mention a seat that does not hold the issue, a second line says `{seat} does not hold this issue; a mention does not reach it`. Only the seat that holds the issue is woken by a comment.
+While a seat holds the issue and waits, a mention of another seat adds a second line: `{seat} does not hold this issue; a mention does not reach it`. Only the seat that holds the issue is woken by a comment.
 
 No line appears under:
 
