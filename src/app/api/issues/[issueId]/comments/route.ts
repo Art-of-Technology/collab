@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { findIssueByIdOrKey } from "@/lib/issue-finder";
 import { notifyCommentMentions } from "@/lib/issue-comment-mentions";
-import type { AckComment, CommentAck } from "@/lib/issue-comment-acks";
+import { commentAcks, type AckComment, type CommentAck } from "@/lib/issue-comment-acks";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -63,11 +63,7 @@ export async function GET(
       flat.set(row.id, { ...row, authorId: row.author?.id ?? row.authorId });
     }
     let acks = new Map<string, CommentAck>();
-    try {
-      // Loaded where it is used, so that a list without the ack library is still a list.
-      const { commentAcks } = await import("@/lib/issue-comment-acks");
-      acks = await commentAcks(issue.id, [...flat.values()]);
-    } catch { /* the list is answered without acks */ }
+    try { acks = await commentAcks(issue.id, [...flat.values()]); } catch { /* the list is answered without acks */ }
     const withAck = <T extends { id: string }>(row: T) => ({ ...row, ack: acks.get(row.id) ?? null });
 
     return NextResponse.json(comments.map(comment => ({ ...withAck(comment), replies: comment.replies?.map(withAck) })));

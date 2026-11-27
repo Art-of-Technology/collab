@@ -145,10 +145,18 @@ test('both lists answer when the ack library fails', async () => {
       }
     }
   }
-  // A record that rejects costs nothing either: the answer is whole, with no ack.
+});
+
+test('a failed record still leaves the state read: stored acks show, and the answer is 200', async () => {
   const lib = library();
+  lib.acked.add('c1');
+  const comments = tree();
+  comments[0].reactions = [{ type: 'ack', authorId: 'seat-user', createdAt: at, author: seatUser }];
   lib.module.recordCommentAcks = async () => { throw new Error('write down'); };
-  const response = await token({ lib })();
+  const response = await token({ lib, comments })();
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).comments[0].ack, null);
+  const body = await response.json();
+  assert.equal(lib.calls.read.length, 1);
+  assert.equal(body.comments[0].ack.state, 'acked');
+  assert.equal(body.comments[1].ack.state, 'none');
 });
