@@ -443,13 +443,16 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       seatStarted = !!seat;
       return { run, repository };
     });
-    // The seat has the comments it is about to read: an ack is a courtesy, so nothing here fails or changes the start.
+    // The seat has the comments it is about to read: an ack is a courtesy, so it is recorded after the answer leaves and
+    // nothing here fails, delays or changes the start (a runner's checkout has a short client timeout).
     if (seatStarted) {
-      try {
-        // Closed at the run's start, so a comment that lands after the run was inserted is not acked by this start.
-        const window = { ...await contextSince(prisma, found.id), lte: started.run.startedAt };
-        await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: window });
-      } catch { /* the run has started */ }
+      void (async () => {
+        try {
+          // Closed at the run's start, so a comment that lands after the run was inserted is not acked by this start.
+          const window = { ...await contextSince(prisma, found.id), lte: started.run.startedAt };
+          await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: window });
+        } catch (error) { console.error('[comment-acks] recording at run start failed', error); }
+      })().catch(() => {});
     }
     return started;
   } catch (error) {
@@ -860,13 +863,16 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const since = await contextSince(prisma, issue.id);
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(since && { createdAt: since }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
-  // A seat that reads its context with a run open on the issue has taken these comments in.
+  // A seat that reads its context with a run open on the issue has taken these comments in. Recorded after the answer
+  // leaves: nothing here fails or delays the read.
   if (commentsSince.length) {
-    try {
-      if (await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
-        await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: commentsSince.map(comment => comment.id) });
-      }
-    } catch { /* the read is answered */ }
+    void (async () => {
+      try {
+        if (await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
+          await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: commentsSince.map(comment => comment.id) });
+        }
+      } catch (error) { console.error('[comment-acks] recording on a run-context read failed', error); }
+    })().catch(() => {});
   }
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),

@@ -174,3 +174,20 @@ test('a failed record still leaves the state read: stored acks show, and the ans
   assert.equal(body.comments[0].ack.state, 'acked');
   assert.equal(body.comments[1].ack.state, 'none');
 });
+
+test('a rejecting seat lookup or open-run lookup still answers 200 with the state read', async () => {
+  const down = async () => { throw new Error('lookup down'); };
+  for (const options of [{ seatFor: down }, { findRun: down }]) {
+    const lib = library();
+    lib.acked.add('c1');
+    const comments = tree();
+    comments[0].reactions = [{ type: 'ack', authorId: 'seat-user', createdAt: at, author: seatUser }];
+    const response = await token({ lib, comments, url: SINCE, ...options })();
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(lib.calls.record, []);
+    assert.equal(lib.calls.read.length, 1);
+    assert.equal(body.comments[0].ack.state, 'acked');
+    assert.equal(body.comments[1].ack.state, 'none');
+  }
+});
