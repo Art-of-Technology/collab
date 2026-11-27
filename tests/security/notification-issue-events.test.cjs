@@ -2,7 +2,8 @@ const { assert, test, load } = require('./helpers.cjs');
 
 const URL_A = 'https://hooks.slack.com/services/T000/B000/secretA';
 const URL_B = 'https://hooks.slack.com/services/T000/B000/secretB';
-const slackEscape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// The real escaper: the Slack module has no imports.
+const { slackEscape } = load('src/lib/notification-slack.ts', {}, { setTimeout, clearTimeout, AbortController, URL });
 
 function lib({ prisma = {}, sendCapped, markSlackResult, decrypt, env = { NEXT_PUBLIC_APP_URL: 'https://c.example' }, errors = [] } = {}) {
   return load('src/lib/notification-issue-events.ts', {
@@ -31,6 +32,24 @@ test('excerpt: tags go, mentions stay as names', () => {
   const long = pure.excerpt('x'.repeat(250));
   assert.equal(long, 'x'.repeat(200) + '…');
   assert.equal(pure.excerpt('<p>a</p><p>b&nbsp;&lt;c&gt; &quot;d&quot; &#39;e&#39;</p>'), 'a b <c> "d" \'e\'');
+});
+
+test('excerpt keeps plain text that only looks like a tag, and cuts on whole characters', () => {
+  assert.equal(pure.excerpt('if a < b and c > d'), 'if a < b and c > d');
+  assert.equal(pure.excerpt('<p>if a < b and c > d</p>'), 'if a < b and c > d');
+  const emoji = pure.excerpt('😀'.repeat(250));
+  assert.equal(Array.from(emoji).length, 201);
+  assert.ok(emoji.endsWith('😀…'));
+});
+
+test('a huge comment cannot hold the event loop', () => {
+  for (const text of ['<'.repeat(1_000_000), '<span>'.repeat(170_000)]) {
+    const started = Date.now();
+    pure.excerpt(text);
+    pure.messagesFor({ kind: 'comment', issueId: 'i', actorId: 'x', commentId: 'c', text }, facts(), [on('a')]);
+    pure.messagesFor({ kind: 'comment', issueId: 'i', actorId: 'x', commentId: 'c', text }, facts(), []);
+    assert.ok(Date.now() - started < 1000, `took ${Date.now() - started} ms`);
+  }
 });
 
 test('status: assignee, reporter and follower are told, with the exact text', () => {
@@ -122,6 +141,17 @@ test('a title with < & > and a name with * cannot break the message', () => {
   assert.equal(nameless[0].text, `*Someone* assigned ${LINK} ${T} to you`);
   const comment = pure.messagesFor({ kind: 'comment', issueId: 'i', actorId: 'x', commentId: 'c', text: '<p>&lt;!channel&gt;</p>' }, facts(), [on('a')]);
   assert.equal(comment[0].text, `*Collab Developer* commented on ${LINK} ${T}: &lt;!channel&gt;`);
+  const evilKey = 'X> <https://evil.example|CLB';
+  const linked = pure.messagesFor({ kind: 'assigned', issueId: 'i', actorId: 'x', assigneeId: 'a' }, facts({ key: evilKey }), [on('a')]);
+  assert.equal(linked[0].text, `*Collab Developer* assigned <https://c.example/w/issues/CLB-123|X&gt; &lt;https://evil.example|CLB> ${T} to you`);
+  const unlinked = pure.messagesFor({ kind: 'assigned', issueId: 'i', actorId: 'x', assigneeId: 'a' }, facts({ key: evilKey, url: null }), [on('a')]);
+  assert.equal(unlinked[0].text, `*Collab Developer* assigned X&gt; &lt;https://evil.example|CLB ${T} to you`);
+});
+
+test('line breaks in a title, a name or a status name become one space', () => {
+  const out = pure.messagesFor({ kind: 'status', issueId: 'i', actorId: 'x', fromStatusId: 's1', toStatusId: 's2' },
+    facts({ title: 'Fix\n\nthe   login', actorName: 'Collab\r\nDeveloper', fromStatus: 'In\nProgress', toStatus: ' In \t Review ' }), [on('a')]);
+  assert.equal(out[0].text, `*Collab Developer* moved ${LINK} “Fix the login” from In Progress to In Review`);
 });
 
 test('without a site address the key is not a link', () => {
@@ -156,7 +186,7 @@ test('one event, two people with Slack on: two sends, keyed by workspace and per
   assert.equal(events.tellIssueEvent(statusEvent), undefined);
   await events.issueEventsSettled();
   const text = '*Actor* moved <https://c.example/acme/issues/CLB-9|CLB-9> “Title” from To Do to done';
-  assert.deepEqual(sends, [['w:a', URL_A, text], ['w:r', URL_B, text]]);
+  assert.deepEqual(sends.sort((x, y) => x[0].localeCompare(y[0])), [['w:a', URL_A, text], ['w:r', URL_B, text]]);
 });
 
 test('a person who cannot read the issue is skipped', async () => {
@@ -187,7 +217,47 @@ test('gone and failed are reported to the settings store, ok is not', async () =
   const events = lib({ prisma: database({ settings }), sendCapped: async key => results[key], markSlackResult: async (...args) => { marks.push(args); } });
   events.tellIssueEvent(statusEvent);
   await events.issueEventsSettled();
-  assert.deepEqual(marks, [['a', 'w', 'gone'], ['r', 'w', 'failed']]);
+  assert.deepEqual(marks.sort((x, y) => x[0].localeCompare(y[0])), [['a', 'w', 'gone'], ['r', 'w', 'failed']]);
+});
+
+test('an ok send clears an earlier failure, and only then', async () => {
+  const marks = [];
+  const settings = [{ ...on('a'), slackUrlEnc: Buffer.from(URL_A), slackFailedAt: new Date() }, { ...on('r'), slackUrlEnc: Buffer.from(URL_B), slackFailedAt: null }];
+  const prisma = database({ settings });
+  const events = lib({ prisma, sendCapped: async () => 'ok', markSlackResult: async (...args) => { marks.push(args); } });
+  events.tellIssueEvent(statusEvent);
+  await events.issueEventsSettled();
+  assert.deepEqual(marks, [['a', 'w', 'ok']]);
+  assert.equal(plain(prisma.calls.find(call => call[0] === 'settings')[1]).select.slackFailedAt, true);
+});
+
+test('followers are read only for status and comment events', async () => {
+  for (const [event, reads] of [
+    [statusEvent, true],
+    [{ kind: 'comment', issueId: 'i', actorId: 'x', commentId: 'c', text: 'hi' }, true],
+    [{ kind: 'assigned', issueId: 'i', actorId: 'x', assigneeId: 'a' }, false],
+    [{ kind: 'like', issueId: 'i', actorId: 'x', commentAuthorId: 'a' }, false],
+    [{ kind: 'ack', issueId: 'i', actorId: 'x', commentAuthorIds: ['a'] }, false],
+    [{ kind: 'described', issueId: 'i', actorId: 'x', mentionedIds: ['a'] }, false],
+  ]) {
+    const prisma = database();
+    const events = lib({ prisma });
+    events.tellIssueEvent(event);
+    await events.issueEventsSettled();
+    assert.equal(prisma.calls.some(call => call[0] === 'followers'), reads, event.kind);
+  }
+});
+
+test('one dead address does not hold the others', async () => {
+  const sends = [];
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const events = lib({ prisma: database(), sendCapped: async key => { sends.push(key); if (key === 'w:a') { await held; return 'failed'; } return 'ok'; } });
+  events.tellIssueEvent(statusEvent);
+  for (let i = 0; i < 50 && sends.length < 2; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(sends.sort(), ['w:a', 'w:r']);
+  release();
+  await events.issueEventsSettled();
 });
 
 test('a database that throws, and a sender that throws, are caught', async () => {
@@ -201,7 +271,7 @@ test('a database that throws, and a sender that throws, are caught', async () =>
   const sender = lib({ prisma: database(), errors, sendCapped: async (key, ...rest) => { sends.push(key); if (key === 'w:a') throw new Error('network'); return 'ok'; } });
   assert.doesNotThrow(() => sender.tellIssueEvent(statusEvent));
   await sender.issueEventsSettled();
-  assert.deepEqual(sends, ['w:a', 'w:r']);
+  assert.deepEqual(sends.sort(), ['w:a', 'w:r']);
   assert.ok(errors.every(args => String(args[0]).startsWith('[issue-notify]')));
 });
 

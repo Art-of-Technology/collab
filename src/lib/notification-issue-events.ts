@@ -19,6 +19,8 @@ export type SettingRow = { userId: string; mineAssigned: boolean; mineReported: 
   onStatus: boolean; onAssigned: boolean; onReactions: boolean; comments: string };
 
 const EXCERPT_LIMIT = 200;
+/** Only this much of a comment is read for its excerpt, so a huge comment cannot hold the event loop. */
+const EXCERPT_INPUT_LIMIT = 20_000;
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
 const BLOCK_TAG = /^<\/?(p|div|br|li|ul|ol|h[1-6]|blockquote|pre|tr|td|th|table|hr)\b/i;
 
@@ -29,16 +31,22 @@ function isMentionSpan(attributes: string) {
 
 /** A comment's text as one short plain line: mentions read as `@name`, tags and entities are gone. */
 export function excerpt(text: string): string {
-  let out = String(text ?? '').replace(/<span\b([^>]*)>([\s\S]*?)<\/span>/gi, (whole, attributes: string, inner: string) => {
+  let out = String(text ?? '').slice(0, EXCERPT_INPUT_LIMIT).replace(/<span\b([^>]*)>([\s\S]*?)<\/span>/gi, (whole, attributes: string, inner: string) => {
     if (!isMentionSpan(attributes)) return whole;
     const label = inner.replace(/<[^>]*>/g, '').trim() || (attributes.match(/data-label=["']([^"']*)["']/)?.[1] ?? '');
     return label.startsWith('@') ? label : `@${label}`;
   });
   out = out.replace(/@\[([^\]]{1,100})\]\(([^)]{1,50})\)/g, '@$1');
-  out = out.replace(/<[^>]*>/g, tag => (BLOCK_TAG.test(tag) ? ' ' : ''));
+  out = out.replace(/<\/?[A-Za-z][^>]*>/g, tag => (BLOCK_TAG.test(tag) ? ' ' : ''));
   out = out.replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, name: string) => ENTITIES[name]);
   out = out.replace(/\s+/g, ' ').trim();
-  return out.length > EXCERPT_LIMIT ? `${out.slice(0, EXCERPT_LIMIT)}…` : out;
+  const characters = Array.from(out);
+  return characters.length > EXCERPT_LIMIT ? `${characters.slice(0, EXCERPT_LIMIT).join('')}…` : out;
+}
+
+/** A name or title on one line: every run of white space, line breaks included, is one space. */
+function oneLine(text: string | null | undefined) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim();
 }
 
 function hasRoleBox(row: SettingRow, facts: IssueFacts) {
@@ -73,9 +81,11 @@ function candidateIds(event: IssueEvent, facts: Pick<IssueFacts, 'assigneeId' | 
 
 /** The Slack messages an event gives, one per person at most; pure. */
 export function messagesFor(event: IssueEvent, facts: IssueFacts, settings: SettingRow[]): { userId: string; text: string }[] {
-  const link = facts.url ? `<${facts.url}|${facts.key}>` : facts.key;
-  const T = slackEscape(facts.title ?? '');
-  const A = slackEscape(facts.actorName ?? '').replace(/\*/g, '').trim() || 'Someone';
+  if (!settings.length) return [];
+  const key = slackEscape(oneLine(facts.key));
+  const link = facts.url ? `<${facts.url}|${key}>` : key;
+  const T = slackEscape(oneLine(facts.title));
+  const A = slackEscape(oneLine(facts.actorName)).replace(/\*/g, '').trim() || 'Someone';
   const byId = new Map(settings.map(row => [row.userId, row]));
   const out: { userId: string; text: string }[] = [];
   const told = new Set<string>();
@@ -89,9 +99,9 @@ export function messagesFor(event: IssueEvent, facts: IssueFacts, settings: Sett
   switch (event.kind) {
     case 'status': {
       if (!facts.toStatus) return [];
-      const to = slackEscape(facts.toStatus);
+      const to = slackEscape(oneLine(facts.toStatus));
       const text = facts.fromStatus
-        ? `*${A}* moved ${link} “${T}” from ${slackEscape(facts.fromStatus)} to ${to}`
+        ? `*${A}* moved ${link} “${T}” from ${slackEscape(oneLine(facts.fromStatus))} to ${to}`
         : `*${A}* moved ${link} “${T}” to ${to}`;
       for (const id of roleIds(facts)) {
         const row = byId.get(id);
@@ -105,15 +115,17 @@ export function messagesFor(event: IssueEvent, facts: IssueFacts, settings: Sett
       break;
     }
     case 'comment': {
-      const body = slackEscape(excerpt(event.text));
+      // The excerpt is made only when someone will get it.
+      let cached: string | null = null;
+      const body = () => (cached ??= slackEscape(excerpt(event.text)));
       const mentioned = new Set(extractMentionUserIds(event.text));
       for (const id of mentioned) {
-        if (wantsMentions(byId.get(id))) tell(id, `*${A}* mentioned you on ${link} “${T}”: ${body}`);
+        if (wantsMentions(byId.get(id))) tell(id, `*${A}* mentioned you on ${link} “${T}”: ${body()}`);
       }
       for (const id of roleIds(facts)) {
         if (mentioned.has(id)) continue;
         const row = byId.get(id);
-        if (row?.comments === 'all' && hasRoleBox(row, facts)) tell(id, `*${A}* commented on ${link} “${T}”: ${body}`);
+        if (row?.comments === 'all' && hasRoleBox(row, facts)) tell(id, `*${A}* commented on ${link} “${T}”: ${body()}`);
       }
       break;
     }
@@ -179,7 +191,10 @@ async function deliver(event: IssueEvent) {
     toStatus = nameOf(event.toStatusId);
   }
   const actor = await prisma.user.findUnique({ where: { id: event.actorId }, select: { name: true } });
-  const followers = await prisma.issueFollower.findMany({ where: { issueId: issue.id }, select: { userId: true } });
+  // Followers matter only to the events that tell an issue's roles.
+  const followers = event.kind === 'status' || event.kind === 'comment'
+    ? await prisma.issueFollower.findMany({ where: { issueId: issue.id }, select: { userId: true } })
+    : [];
 
   const facts: IssueFacts = {
     key: issue.issueKey ?? issue.id,
@@ -197,24 +212,28 @@ async function deliver(event: IssueEvent) {
 
   const settings = await prisma.issueNotificationSetting.findMany({
     where: { workspaceId: issue.workspaceId, userId: { in: ids }, slackOn: true, slackUrlEnc: { not: null }, user: PERSON },
-    select: { userId: true, slackUrlEnc: true, mineAssigned: true, mineReported: true, mineFollowed: true, onStatus: true, onAssigned: true, onReactions: true, comments: true },
+    select: { userId: true, slackUrlEnc: true, mineAssigned: true, mineReported: true, mineFollowed: true, onStatus: true, onAssigned: true, onReactions: true, comments: true, slackFailedAt: true },
   });
-  const addressOf = new Map(settings.map(row => [row.userId, row.slackUrlEnc]));
+  const rowOf = new Map(settings.map(row => [row.userId, row]));
 
-  for (const message of messagesFor(event, facts, settings)) {
+  // Each person is sent to on their own, so one slow or dead address does not hold the others.
+  const sendOne = async (message: { userId: string; text: string }) => {
     let url = '';
     try {
       const readable = await prisma.issue.findFirst({ where: { id: issue.id, AND: [issueReadAccessWhere(message.userId)] }, select: { id: true } });
-      if (!readable) continue;
-      const stored = addressOf.get(message.userId);
-      if (!stored) continue;
-      url = await decrypt(Buffer.from(stored));
+      if (!readable) return;
+      const row = rowOf.get(message.userId);
+      if (!row?.slackUrlEnc) return;
+      url = await decrypt(Buffer.from(row.slackUrlEnc));
       const result = await sendCapped(`${issue.workspaceId}:${message.userId}`, url, message.text);
-      if (result === 'gone' || result === 'failed') await markSlackResult(message.userId, issue.workspaceId, result);
+      if (result === 'gone' || result === 'failed' || (result === 'ok' && row.slackFailedAt)) {
+        await markSlackResult(message.userId, issue.workspaceId, result);
+      }
     } catch (error) {
       console.error(`[issue-notify] sending a ${event.kind} message failed: ${describe(error, [url])}`);
     }
-  }
+  };
+  await Promise.allSettled(messagesFor(event, facts, settings).map(sendOne));
 }
 
 const pending = new Set<Promise<void>>();
