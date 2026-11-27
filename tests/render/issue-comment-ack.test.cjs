@@ -84,6 +84,16 @@ test('acked line is a button that opens the details, with the exact time as its 
   });
 });
 
+test('the acked button carries the time of the first ack as its title, in the viewer\'s local format', async () => {
+  const ack = { state: 'acked', seats: [seat('dev-a', 12), seat('rev-b', 200)] };
+  await shown(React.createElement(CommentAck, { ack, createdAt: created }), async () => {
+    const title = document.querySelector('button').getAttribute('title');
+    assert.equal(title, new Date(ack.seats[0].at).toLocaleString());
+    assert.notEqual(title, new Date(ack.seats[1].at).toLocaleString());
+    assert.ok(title.includes('2026'), title);
+  });
+});
+
 test('waiting and none lines are plain text, not buttons', async () => {
   for (const ack of [{ state: 'waiting', seats: [], waitingFor: 'dev-a', reason: 'in_run', missed: ['rev-b'] }, { state: 'none', seats: [], reason: 'issue_done', waitingFor: 'dev-a' }]) {
     await shown(React.createElement(CommentAck, { ack, createdAt: created }), async () => {

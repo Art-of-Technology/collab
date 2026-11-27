@@ -37,6 +37,7 @@ export function CommentAck({ ack, createdAt, updatedAt }: CommentAckProps) {
         <button
           type="button"
           aria-expanded={open}
+          suppressHydrationWarning
           title={ack.seats[0] ? new Date(ack.seats[0].at).toLocaleString() : undefined}
           onClick={() => setOpen(value => !value)}
           className="flex items-center gap-1 text-left hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-collab-500 rounded-sm"
