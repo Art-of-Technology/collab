@@ -11,10 +11,11 @@ import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import { recordCommentAcks } from '@/lib/issue-comment-acks';
+import { contextSince } from '@/lib/agent-context-since';
 import { findIssueByIdOrKey, issueReadAccessWhere, tokenIssueReadWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
-export { NOT_DONE };
+export { NOT_DONE, contextSince };
 export const INBOX_LIMIT = 50;
 export const LEASE_MS = 60_000;
 /** A child issue that a seat has held this long without starting a run brings its parent back to the lead. */
@@ -444,7 +445,11 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
     });
     // The seat has the comments it is about to read: an ack is a courtesy, so nothing here fails or changes the start.
     if (seatStarted) {
-      try { await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: await contextSince(prisma, found.id) }); } catch { /* the run has started */ }
+      try {
+        // Closed at the run's start, so a comment that lands after the run was inserted is not acked by this start.
+        const window = { ...await contextSince(prisma, found.id), lte: started.run.startedAt };
+        await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: window });
+      } catch { /* the run has started */ }
     }
     return started;
   } catch (error) {
@@ -783,21 +788,6 @@ type Ref = { id: string; issueKey: string | null; title: string; projectId: stri
 /** An issue as another issue's context names it: enough to tell what it is and whether it is done. */
 const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: issue.title, projectId: issue.projectId, status: issue.projectStatus?.name ?? null,
   category: categoryOf(issue.projectStatus), ...(issue.agentRequestRole && { requestRole: issue.agentRequestRole }) });
-
-/**
- * Where an issue's "comments since" window opens: the end of its last finished run, or, when that run named a person who
- * answered before it finished (`earlyAnswers`), that answer. Nothing before any run has finished.
- */
-export async function contextSince(db: DB, issueId: string): Promise<{ gt?: Date; gte?: Date } | undefined> {
-  const last = await db.agentRun.findFirst({ where: { issueId, state: 'finished' }, orderBy: { endedAt: 'desc' },
-    select: { id: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } });
-  if (!last?.endedAt) return undefined;
-  const entry = await db.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issueId, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
-  const facts = JSON.parse(entry?.details ?? '{}');
-  const answer = last.seat && facts.runId === last.id && typeof facts.askedUser === 'string'
-    ? (await earlyAnswers(db, [{ issueId, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issueId) : undefined;
-  return answer ? { gte: answer } : { gt: last.endedAt };
-}
 
 /**
  * What a fresh session needs to work an issue, in one read: the issue, the repository of its project (null when none is

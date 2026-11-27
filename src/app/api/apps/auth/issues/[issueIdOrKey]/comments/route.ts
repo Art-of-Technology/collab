@@ -117,11 +117,12 @@ export const GET = withAppAuth(
       const returned = new Map<string, any>(flatten(comments).map(comment => [comment.id, comment]));
       const asAck = (comment: any): AckComment => ({ ...comment, authorId: comment.author?.id });
       let acks = new Map<string, CommentAck>();
-      // A seat that reads the comments with a run open on the issue has taken them in: write that first, so the state
-      // this answer carries already shows it. A failed write still leaves the state to be read.
+      // A seat that reads new comments (`since`) with a run open on the issue has taken them in: write that first, so
+      // the state this answer carries already shows it. A failed write still leaves the state to be read. A plain list
+      // records nothing: `collab comments wait` sends one for its baseline and throws the answer away.
       let written = 0;
       try {
-        if (returned.size && await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
+        if (since && returned.size && await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
           written = await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: [...returned.keys()] });
         }
       } catch { /* the list is answered */ }

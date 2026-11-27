@@ -6,6 +6,7 @@ const MIN = 60_000;
 const AFTER = new Date('2026-12-01T00:00:00.000Z');
 const NOW = new Date('2026-12-01T12:00:00.000Z');
 
+const isDate = value => Object.prototype.toString.call(value) === '[object Date]';
 // The few Prisma predicates the ack library uses beyond what the shared `matches` knows.
 function ok(row, where, db) {
   return Object.entries(where).every(([key, value]) => {
@@ -14,8 +15,10 @@ function ok(row, where, db) {
     if (key === 'agentSeat' && value.is === null) return !db.seats.some(seat => seat.userId === row.id);
     if (key === 'email' && value.not === null) return row.email != null;
     if (key === 'reactions' && value.none) return !db.reactions.some(reaction => reaction.commentId === row.id && ok(reaction, value.none, db));
-    if (key === 'createdAt' && value && 'gt' in value) return row.createdAt > value.gt;
-    if (key === 'createdAt' && value && 'lte' in value) return row.createdAt <= value.lte;
+    if (key === 'createdAt' && value && typeof value === 'object' && !isDate(value)) {
+      return (!('gt' in value) || row.createdAt > value.gt) && (!('gte' in value) || row.createdAt >= value.gte)
+        && (!('lte' in value) || row.createdAt <= value.lte) && (!('lt' in value) || row.createdAt < value.lt);
+    }
     if (key === 'endedAt' && value === null) return row.endedAt == null;
     if (key === 'lastSeenAt') return true;
     return matches(row, { [key]: value });
@@ -30,7 +33,10 @@ function fixture(overrides = {}) {
       { userId: 'rev', name: 'Reviewer', byRunner: false, ownerId: 'owner', retiredAt: null, workspaceId: 'w' },
     ],
     runners: [{ workspaceId: 'w', ownerId: 'owner', removedAt: null, lastSeenAt: NOW }],
-    runs: [], reactions: [], comments: [], events: [], creates: 0,
+    runs: [], reactions: [], comments: [], events: [], creates: 0, errors: [],
+    // The workspace's first ack, an hour before the comments: where waiting and nobody lines start. `finished` is the
+    // issue's last finished run, whose end opens the next run's window.
+    workspaceAcks: [{ createdAt: new Date(AFTER.getTime() - 60 * MIN) }], finished: null,
     issue: { id: 'i', workspaceId: 'w', assigneeId: 'seat', status: 'In Progress', statusValue: null, projectStatus: { category: 'started', isFinal: false } },
     failCreate: false, noReactionModel: false,
     ...overrides,
@@ -48,10 +54,20 @@ function fixture(overrides = {}) {
     user: { findMany: async ({ where }) => pick(db.users, where).filter(user => user.email != null && !db.seats.some(seat => seat.userId === user.id)) },
     issue: { findUnique: async () => db.issue },
     issueComment: { findMany: async args => pick(db.comments.filter(c => c.issueId === args.where.issueId), (({ issueId, ...rest }) => rest)(args.where), args) },
-    agentRun: { findMany: async ({ where }) => pick(db.runs, where) },
+    agentRun: {
+      findMany: async ({ where }) => pick(db.runs, where),
+      findFirst: async ({ where }) => (where.state === 'finished' && where.issueId === 'i' ? db.finished : null),
+    },
+    issueActivity: { findFirst: async () => null },
     agentRunner: { findMany: async ({ where }) => pick(db.runners, where) },
   };
   if (!db.noReactionModel) prisma.issueCommentReaction = {
+    // The oldest ack of the workspace, asked for by type and by the workspace of the comment's issue.
+    findFirst: async ({ where, orderBy }) => {
+      if (where.type !== 'ack' || where.comment?.issue?.workspaceId !== 'w' || orderBy?.createdAt !== 'asc') return null;
+      const all = [...db.workspaceAcks, ...db.reactions.filter(r => r.type === 'ack')].sort((a, b) => a.createdAt - b.createdAt);
+      return all[0] ? { createdAt: all[0].createdAt } : null;
+    },
     createMany: async args => {
       db.creates++;
       if (db.failCreate) throw new Error('synthetic failure');
@@ -62,7 +78,7 @@ function fixture(overrides = {}) {
   const lib = load('src/lib/issue-comment-acks.ts', {
     '@/lib/prisma': { prisma },
     '@/lib/redis': { publishEvent: async (channel, message, timeout) => { db.events.push({ channel, message, timeout }); return true; } },
-  });
+  }, { console: { error: (...args) => db.errors.push(args) } });
   return { db, lib };
 }
 
@@ -96,10 +112,15 @@ test('at most 200 rows in one write, the newest comments first', async () => {
   for (let n = 50; n < 250; n++) assert.equal(acked.has(`c${n}`), true);
 });
 
-test("a comment older than ACKS_SINCE, a retired seat and a person's account ack nothing", async () => {
-  const old = fixture();
-  old.db.comments.push({ ...comment('c1', 'p'), createdAt: new Date('2026-11-27T23:59:59.000Z') });
-  assert.equal(await old.lib.recordCommentAcks(base), 0);
+test('a comment from any day is acked: there is no release date', async () => {
+  const { db, lib } = fixture();
+  assert.equal('ACKS_SINCE' in lib, false);
+  db.comments.push({ ...comment('c1', 'p'), createdAt: new Date('2020-01-01T00:00:00.000Z') });
+  assert.equal(await lib.recordCommentAcks(base), 1);
+  assert.deepEqual(db.reactions.map(r => r.commentId), ['c1']);
+});
+
+test("a retired seat and a person's account ack nothing", async () => {
   const retired = fixture();
   retired.db.seats[0].retiredAt = NOW;
   retired.db.comments.push(comment('c1', 'p'));
@@ -107,7 +128,7 @@ test("a comment older than ACKS_SINCE, a retired seat and a person's account ack
   const person = fixture();
   person.db.comments.push(comment('c1', 'p2'));
   assert.equal(await person.lib.recordCommentAcks({ ...base, seatUserId: 'p' }), 0);
-  for (const { db } of [old, retired, person]) { assert.equal(db.creates, 0); assert.deepEqual(db.reactions, []); assert.deepEqual(db.events, []); }
+  for (const { db } of [retired, person]) { assert.equal(db.creates, 0); assert.deepEqual(db.reactions, []); assert.deepEqual(db.events, []); }
 });
 
 test('a failing database resolves 0 and does not throw', async () => {
@@ -132,6 +153,11 @@ test('commentIds and createdAt narrow what is acked', async () => {
   const orLater = fixture();
   orLater.db.comments.push(comment('c1', 'p', 0), comment('c2', 'p', 1), comment('c3', 'p', 2));
   assert.equal(await orLater.lib.recordCommentAcks({ ...base, createdAt: { gte: new Date(AFTER.getTime() + 1 * MIN) } }), 2);
+  // A run start's window is closed at the run's start: a comment that lands after the run began is not acked by it.
+  const bounded = fixture();
+  bounded.db.comments.push(comment('c1', 'p', 0), comment('c2', 'p', 1), comment('c3', 'p', 2));
+  assert.equal(await bounded.lib.recordCommentAcks({ ...base, createdAt: { gt: AFTER, lte: new Date(AFTER.getTime() + 1 * MIN) } }), 1);
+  assert.deepEqual(bounded.db.reactions.map(r => r.commentId), ['c2']);
 });
 
 test('commentAcks: acked, waiting, the two reasons, done, not the holder, and no entry', async () => {
@@ -165,14 +191,25 @@ test('commentAcks: acked, waiting, the two reasons, done, not the holder, and no
   // in_run: an open run that started before the comment; one that started after does not count
   {
     const { db, lib } = fixture();
-    db.runs.push({ issueId: 'i', userId: 'seat', endedAt: null, startedAt: new Date(AFTER.getTime() + 5 * MIN) });
+    db.runs.push({ issueId: 'i', userId: 'seat', endedAt: null, state: 'running', startedAt: new Date(AFTER.getTime() + 5 * MIN) });
     const map = await lib.commentAcks('i', [comment('c1', 'p', 10), comment('c2', 'p', 1)], new Date(AFTER.getTime() + 10 * MIN));
     assert.equal(map.get('c1').reason, 'in_run');
     assert.equal(map.get('c2').reason, undefined);
   }
-  // runner_silent: the owner's runner last seen 5 minutes ago, or no runner at all
+  // a lost run is not "in a run now"
   {
     const { db, lib } = fixture();
+    db.runs.push({ issueId: 'i', userId: 'seat', endedAt: null, state: 'lost', startedAt: new Date(AFTER.getTime() + 5 * MIN) });
+    const map = await lib.commentAcks('i', [comment('c1', 'p', 10)], new Date(AFTER.getTime() + 10 * MIN));
+    assert.equal(map.get('c1').state, 'waiting');
+    assert.equal(map.get('c1').reason, undefined);
+  }
+  // runner_silent: the owner's runner last seen 5 minutes ago, or no runner at all; 150 s ago is a runner that asks once a minute
+  {
+    const { db, lib } = fixture();
+    assert.equal(lib.RUNNER_SILENT_MS, 180_000);
+    db.runners[0].lastSeenAt = new Date(NOW.getTime() - 150_000);
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).get('c1').reason, undefined);
     db.runners[0].lastSeenAt = new Date(NOW.getTime() - 5 * MIN);
     assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).get('c1').reason, 'runner_silent');
     db.runners.length = 0;
@@ -192,11 +229,67 @@ test('commentAcks: acked, waiting, the two reasons, done, not the holder, and no
     assert.deepEqual(JSON.parse(JSON.stringify(map.get('c1'))), { state: 'none', seats: [], reason: 'not_holder', missed: ['Reviewer'] });
     assert.equal(map.has('c2'), false);
   }
-  // before ACKS_SINCE: no entry
+});
+
+test("commentAcks starts waiting and nobody lines at the workspace's first ack; acked is always shown", async () => {
+  const ack = { type: 'ack', authorId: 'seat', createdAt: NOW, author: { id: 'seat', name: 'Dev 1' } };
+  // No ack in the workspace yet: no waiting or nobody line for any comment, done or not.
+  {
+    const { db, lib } = fixture({ workspaceAcks: [] });
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
+    db.issue.projectStatus = { category: 'done', isFinal: true };
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
+  }
+  // A comment written before the first ack has no line; one written at or after it has; an acked one always shows.
+  {
+    const { lib } = fixture({ workspaceAcks: [{ createdAt: new Date(AFTER.getTime() + 2 * MIN) }] });
+    const map = await lib.commentAcks('i', [comment('c1', 'p', 1), comment('c2', 'p', 2), comment('c3', 'p', 0, { reactions: [ack] })], NOW);
+    assert.equal(map.has('c1'), false);
+    assert.equal(map.get('c2').state, 'waiting');
+    assert.equal(map.get('c3').state, 'acked');
+  }
+  // Years-old acked comments are acked.
+  {
+    const { lib } = fixture({ workspaceAcks: [] });
+    const map = await lib.commentAcks('i', [{ ...comment('c1', 'p', 0, { reactions: [ack] }), createdAt: new Date('2020-01-01T00:00:00.000Z') }], NOW);
+    assert.equal(map.get('c1').state, 'acked');
+  }
+});
+
+test('commentAcks: a comment that no run will be given says so, and a live run or the next window keeps it waiting', async () => {
+  // The last run ended 5 minutes after AFTER: the next run's window opens there.
+  const finished = { id: 'r0', startedAt: AFTER, endedAt: new Date(AFTER.getTime() + 5 * MIN), userId: 'seat', seat: { name: 'Dev 1' } };
+  const later = new Date(AFTER.getTime() + 20 * MIN);
+  {
+    const { lib } = fixture({ finished });
+    const map = await lib.commentAcks('i', [comment('c1', 'p', 1), comment('c2', 'p', 5), comment('c3', 'p', 10)], later);
+    assert.deepEqual(plain(map.get('c1')), { state: 'none', seats: [], waitingFor: 'Dev 1', reason: 'not_given' });
+    // The window opens after the run's end: a comment at that very moment is not given either.
+    assert.equal(map.get('c2').reason, 'not_given');
+    assert.deepEqual(plain(map.get('c3')), { state: 'waiting', seats: [], waitingFor: 'Dev 1' });
+  }
+  // A live open run on the issue: still waiting, as the session may still ask.
+  {
+    const { db, lib } = fixture({ finished });
+    db.runs.push({ issueId: 'i', userId: 'seat', endedAt: null, state: 'waiting', startedAt: new Date(AFTER.getTime() + 15 * MIN) });
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p', 1)], later)).get('c1').state, 'waiting');
+  }
+  // A lost open run, or another account's live run, is no live run of the seat.
+  for (const run of [{ userId: 'seat', state: 'lost' }, { userId: 'rev', state: 'running' }]) {
+    const { db, lib } = fixture({ finished });
+    db.runs.push({ issueId: 'i', endedAt: null, startedAt: new Date(AFTER.getTime() + 15 * MIN), ...run });
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p', 1)], later)).get('c1').reason, 'not_given');
+  }
+  // No run has finished yet: the next run is given everything, so nothing is "not given".
   {
     const { lib } = fixture();
-    const map = await lib.commentAcks('i', [{ ...comment('c1', 'p'), createdAt: new Date('2026-11-27T10:00:00.000Z') }], NOW);
-    assert.equal(map.size, 0);
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p', 1)], later)).get('c1').state, 'waiting');
+  }
+  // A done issue still says done.
+  {
+    const { db, lib } = fixture({ finished });
+    db.issue.projectStatus = { category: 'done', isFinal: true };
+    assert.equal((await lib.commentAcks('i', [comment('c1', 'p', 1)], later)).get('c1').reason, 'issue_done');
   }
 });
 
@@ -209,6 +302,25 @@ test('commentAcks resolves an empty map when the database fails', async () => {
   assert.equal(Object.prototype.toString.call(map), '[object Map]');
   assert.equal(map.size, 0);
   assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
+});
+
+test('a failing ack read or write is logged, and still never throws', async () => {
+  const errors = [];
+  const broken = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} }, '@/lib/redis': { publishEvent: async () => true } },
+    { console: { error: (...args) => errors.push(args) } });
+  assert.equal((await broken.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
+  assert.equal(await broken.recordCommentAcks(base), 0);
+  assert.equal(errors.length, 2);
+  assert.match(String(errors[0][0]), /^\[comment-acks\]/);
+  assert.match(String(errors[1][0]), /^\[comment-acks\]/);
+  const failing = fixture({ failCreate: true });
+  failing.db.comments.push(comment('c1', 'p'));
+  assert.equal(await failing.lib.recordCommentAcks(base), 0);
+  assert.equal(failing.db.errors.length, 1);
+  // A console that itself throws changes nothing.
+  const loud = load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': { prisma: {} } }, { console: { error() { throw new Error('no console'); } } });
+  assert.equal(await loud.recordCommentAcks(base), 0);
+  assert.equal((await loud.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
 });
 
 test('the shared loader hands the real ack module to code that imports it', async () => {

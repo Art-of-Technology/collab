@@ -31,7 +31,7 @@ export function ackLine(ack: CommentAck, createdAt: string, updatedAt?: string):
 
   if (ack.state === "waiting") {
     const why = ack.reason === "in_run"
-      ? " · it is in a run now and gets this when it next asks for comments, or in its next run"
+      ? " · it is in a run now and gets this when it next asks for new comments"
       : ack.reason === "runner_silent" ? " · its runner has not asked for 2 minutes or more" : "";
     return {
       tone: "waiting",
@@ -43,6 +43,8 @@ export function ackLine(ack: CommentAck, createdAt: string, updatedAt?: string):
 
   const text = ack.reason === "issue_done"
     ? `No agent will pick this up · the issue is done. Reopen it to send this to ${ack.waitingFor}`
+    : ack.reason === "not_given"
+    ? `No agent will pick this up · it was not given to a run of ${ack.waitingFor}. Comment again to send it`
     : `No agent will pick this up · ${(ack.missed ?? []).join(", ")} does not hold this issue. Assign the issue to it to send this`;
   return { tone: "none", text, more: [], details: [] };
 }

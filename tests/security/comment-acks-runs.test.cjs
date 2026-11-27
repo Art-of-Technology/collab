@@ -62,7 +62,7 @@ function fixture(options = {}) {
     issueComment: {
       async findMany({ where }) {
         // The real ack module asks for the person's comments by id; a run context asks for the ones since the last run.
-        if (where.AND) return state.comments.filter(comment => where.id.in.includes(comment.id)).map(comment => ({ id: comment.id }));
+        if (where.reactions) return state.comments.filter(comment => where.id.in.includes(comment.id)).map(comment => ({ id: comment.id }));
         return state.comments.filter(comment => within(comment.createdAt, where.createdAt));
       },
     },
@@ -106,7 +106,8 @@ test("a seat's new run records acks for its comments-since window", async () => 
   assert.equal(plain(answer).run.id, 'run1');
   assert.deepEqual(Object.keys(answer).sort(), ['repository', 'run']);
   assert.equal(state.runs.length, 1);
-  assert.deepEqual(plain(calls), [{ workspaceId: WORKSPACE, issueId: ISSUE, seatUserId: SEAT, createdAt: { gt: at(2).toISOString() } }]);
+  // The window is closed at the new run's start: a comment landing after the insert is not acked "by start".
+  assert.deepEqual(plain(calls), [{ workspaceId: WORKSPACE, issueId: ISSUE, seatUserId: SEAT, createdAt: { gt: at(2).toISOString(), lte: state.runs[0].startedAt.toISOString() } }]);
 });
 
 test('a person\'s run, and a run that was already open, record nothing', async () => {

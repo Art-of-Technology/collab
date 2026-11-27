@@ -53,7 +53,7 @@ test('an edit after the ack adds edited since, an edit before it does not', () =
 test('waiting: in a run, runner silent, and the seats a mention does not reach', () => {
   const inRun = ackLine({ state: 'waiting', seats: [], waitingFor: 'dev-a', reason: 'in_run' }, created);
   assert.equal(inRun.tone, 'waiting');
-  assert.equal(inRun.text, 'Waiting for dev-a · it is in a run now and gets this when it next asks for comments, or in its next run');
+  assert.equal(inRun.text, 'Waiting for dev-a · it is in a run now and gets this when it next asks for new comments');
   const silent = ackLine({ state: 'waiting', seats: [], waitingFor: 'dev-a', reason: 'runner_silent', missed: ['rev-b', 'qa-c'] }, created);
   assert.equal(silent.text, 'Waiting for dev-a · its runner has not asked for 2 minutes or more');
   assert.deepEqual(silent.more, ['rev-b does not hold this issue; a mention does not reach it', 'qa-c does not hold this issue; a mention does not reach it']);
@@ -66,6 +66,8 @@ test('none: the issue is done, or the mentioned seat does not hold it', () => {
   assert.equal(done.text, 'No agent will pick this up · the issue is done. Reopen it to send this to dev-a');
   const held = ackLine({ state: 'none', seats: [], reason: 'not_holder', missed: ['rev-b', 'qa-c'] }, created);
   assert.equal(held.text, 'No agent will pick this up · rev-b, qa-c does not hold this issue. Assign the issue to it to send this');
+  const notGiven = ackLine({ state: 'none', seats: [], reason: 'not_given', waitingFor: 'dev-a' }, created);
+  assert.deepEqual(notGiven, { tone: 'none', text: 'No agent will pick this up · it was not given to a run of dev-a. Comment again to send it', more: [], details: [] });
 });
 
 test('acked line is a button that opens the details, with the exact time as its title', async () => {

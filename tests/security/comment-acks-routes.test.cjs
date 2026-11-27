@@ -43,23 +43,28 @@ function browser(lib, comments = tree()) {
   return () => GET(new Request('https://example.test'), { params: Promise.resolve({ issueId: 'i' }) });
 }
 
-function token({ lib, seat = { userId: 'seat-user' }, run = { id: 'run' }, comments = tree(), calls = [] }) {
+// What `collab comments wait` sends after its baseline: only comments made after a moment.
+const SINCE = 'https://example.test/x?since=2026-11-01T00:00:00.000Z';
+
+function token({ lib, seat = { userId: 'seat-user' }, run = { id: 'run' }, comments = tree(), calls = [], url = 'https://example.test/x', seatFor, findRun }) {
   const reactionStore = [];
   const { GET } = load('src/app/api/apps/auth/issues/[issueIdOrKey]/comments/route.ts', {
     'next/server': { NextResponse: Response }, zod: require('zod'), '@/lib/redis': { publishEvent: async () => {} },
     '@/lib/apps/auth-middleware': { withAppAuth: handler => handler },
     '@/lib/issue-finder': { tokenIssueReadWhere: () => ({}) },
-    '@/lib/agent-seats': { HandoffError: class extends Error {}, seatWriteGuard: async () => {}, seatFor: async () => seat },
+    '@/lib/agent-seats': { HandoffError: class extends Error {}, seatWriteGuard: async () => {}, seatFor: seatFor ?? (async () => seat) },
     '@/lib/forge/legacy-write-guard': { ForgeProjectWriteError: class extends Error {}, assertLegacyIssueWriteAllowed: async () => {} },
     '@/lib/issue-comment-acks': lib.module,
     '@/lib/prisma': { prisma: {
       issue: { findFirst: async () => ({ id: 'i', issueKey: 'CLB-1', projectId: 'p' }) },
-      agentRun: { findFirst: async args => { calls.push(['run', args.where]); return run; } },
-      issueComment: { findMany: async () => comments.filter(comment => !comment.parentId), count: async () => 3 },
+      agentRun: { findFirst: findRun ?? (async args => { calls.push(['run', args.where]); return run; }) },
+      // A flat list (`flat=true`, or a `since` read) is every comment and reply in one list, without nesting.
+      issueComment: { findMany: async ({ where }) => ('parentId' in where ? comments.filter(comment => !comment.parentId)
+        : comments.map(({ replies, ...comment }) => comment)), count: async () => 3 },
       issueCommentReaction: { findMany: async args => { calls.push(['reactions', args.where]); return [...lib.acked].map(commentId => ({ commentId, type: 'ack', authorId: 'seat-user', createdAt: new Date(at), author: seatUser })); } },
     } },
   }, { console: { error() {} }, URL });
-  return () => GET(new Request('https://example.test/x'), { user: { id: 'seat-user' }, workspace: { id: 'w' } }, { params: Promise.resolve({ issueIdOrKey: 'CLB-1' }) });
+  return () => GET(new Request(url), { user: { id: 'seat-user' }, workspace: { id: 'w' } }, { params: Promise.resolve({ issueIdOrKey: 'CLB-1' }) });
 }
 const callToken = get => get();
 
@@ -103,10 +108,20 @@ test('the token list gives the same, and every field it had before', async () =>
   assert.deepEqual([...lib.calls.read[0].ids].sort(), ['c1', 'c2', 'r1']);
 });
 
-test("a seat's token read with a run open records the comments returned, replies included, before the state is read", async () => {
+test("a seat's plain list, the baseline `collab comments wait` throws away, records nothing even with a run open", async () => {
+  for (const url of ['https://example.test/x', 'https://example.test/x?flat=true']) {
+    const lib = library();
+    const response = await callToken(token({ lib, url }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(lib.calls.record, []);
+    assert.equal(lib.acked.size, 0);
+  }
+});
+
+test("a seat's since read with a run open records exactly the comments returned, before the state is read", async () => {
   const lib = library();
   const calls = [];
-  const body = await (await callToken(token({ lib, calls }))).json();
+  const body = await (await callToken(token({ lib, calls, url: SINCE }))).json();
   assert.equal(lib.calls.record.length, 1);
   assert.deepEqual({ ...lib.calls.record[0], commentIds: [...lib.calls.record[0].commentIds].sort() },
     { workspaceId: 'w', issueId: 'i', seatUserId: 'seat-user', commentIds: ['c1', 'c2', 'r1'] });
@@ -114,15 +129,14 @@ test("a seat's token read with a run open records the comments returned, replies
   // The state is read after the rows are written, and sees them.
   assert.deepEqual([...lib.calls.read[0].acked].sort(), ['c1', 'c2', 'r1']);
   assert.equal(JSON.stringify(lib.calls.read[0].reactions.flat()), JSON.stringify(['ack', 'ack', 'ack']));
-  assert.equal(body.comments[0].ack.state, 'acked');
-  assert.equal(body.comments[0].replies[0].ack.state, 'acked');
-  assert.equal(body.comments[1].ack.state, 'acked');
+  assert.deepEqual(body.comments.map(comment => comment.ack.state), ['acked', 'acked', 'acked']);
+  assert.deepEqual(body.comments.map(comment => comment.id), ['c1', 'c2', 'r1']);
 });
 
 test('a token read without an open run, or by a token that is not a seat, records nothing', async () => {
   for (const options of [{ run: null }, { seat: null }]) {
     const lib = library();
-    const response = await callToken(token({ lib, ...options }));
+    const response = await callToken(token({ lib, url: SINCE, ...options }));
     assert.equal(response.status, 200);
     assert.equal(lib.calls.record.length, 0);
     assert.equal(lib.acked.size, 0);
@@ -153,7 +167,7 @@ test('a failed record still leaves the state read: stored acks show, and the ans
   const comments = tree();
   comments[0].reactions = [{ type: 'ack', authorId: 'seat-user', createdAt: at, author: seatUser }];
   lib.module.recordCommentAcks = async () => { throw new Error('write down'); };
-  const response = await token({ lib, comments })();
+  const response = await token({ lib, comments, url: SINCE })();
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(lib.calls.read.length, 1);
