@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { findIssueByIdOrKey } from "@/lib/issue-finder";
 import { notifyCommentMentions } from "@/lib/issue-comment-mentions";
+import { ACK_TYPE, commentAcks, type AckComment, type CommentAck } from "@/lib/issue-comment-acks";
 
 // GET /api/issues/[issueId]/comments - Get all comments for an issue
 export async function GET(
@@ -56,7 +57,18 @@ export async function GET(
       orderBy: { createdAt: "asc" },
     });
 
-    return NextResponse.json(comments);
+    // Every comment the answer carries, replies included, once. A failed read of the acks leaves `ack` null.
+    const flat = new Map<string, AckComment>();
+    for (const comment of comments) for (const row of [comment, ...(comment.replies ?? [])]) {
+      flat.set(row.id, { ...row, authorId: row.author?.id ?? row.authorId });
+    }
+    let acks = new Map<string, CommentAck>();
+    try { acks = await commentAcks(issue.id, [...flat.values()]); } catch { /* the list is answered without acks */ }
+    // The ack is in `ack`, so it is not listed among the reactions: those stay what people added.
+    const withAck = <T extends { id: string; reactions: { type: string }[] }>(row: T) =>
+      ({ ...row, reactions: row.reactions.filter(reaction => reaction.type !== ACK_TYPE), ack: acks.get(row.id) ?? null });
+
+    return NextResponse.json(comments.map(comment => ({ ...withAck(comment), replies: comment.replies?.map(withAck) })));
   } catch (error) {
     console.error("[ISSUE_COMMENTS_GET]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

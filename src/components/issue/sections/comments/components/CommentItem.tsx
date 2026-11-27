@@ -16,6 +16,7 @@ import {
 } from "@/hooks/queries/useIssueComment";
 import { flattenCommentIds } from "../utils/commentArrivals";
 import type { CommentItemProps } from "../types/comment";
+import { CommentAck } from "./CommentAck";
 import { CommentActions } from "./CommentActions";
 import { CommentReplyForm } from "./CommentReplyForm";
 
@@ -206,6 +207,8 @@ export function CommentItem({
               />
             )}
           </div>
+
+          {!isEditing && <CommentAck ack={comment.ack} createdAt={comment.createdAt} updatedAt={comment.updatedAt} />}
 
           <CommentActions
             comment={comment}

@@ -89,6 +89,7 @@ export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canM
             {seat.tokenExpired && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">Token expired: its <Link className="underline" href={`${base}/agents/runners`}>runner</Link> has not asked since, so its work waits</span>}</th>
           <td className="p-3">{seat.project ?? WHOLE_WORKSPACE}</td>
           <td className="space-y-2 p-3">{seat.working.length ? seat.working.map(run => <div key={run.id}>{issue(run.issueId, run.issueKey, run.title)}
+            {run.project && <span className="ml-2 rounded border px-2 py-0.5 text-xs text-muted-foreground">{run.project}</span>}
             {run.lost && <span className="block text-xs text-muted-foreground">The run is lost: clear it on the issue&apos;s Activity tab.</span>}</div>) : <span className="text-muted-foreground">Nothing</span>}</td>
           <td className="p-3">{seat.waiting.length ? <Link className="text-primary hover:underline" href={`${base}/agents/inbox#seat-${seat.id}`}>{seat.waiting.length}</Link> : <span className="text-muted-foreground">0</span>}</td>
         </tr>)}</tbody>

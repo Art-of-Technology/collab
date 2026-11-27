@@ -145,6 +145,7 @@ test('incoming replies expand collapsed ancestors and stay open after the highli
     '@/hooks/use-toast': { useToast: () => ({ toast: noOp }) },
     '@/hooks/queries/useIssueComment': Object.fromEntries(['useToggleIssueCommentLike', 'useUpdateIssueComment', 'useDeleteIssueComment'].map(name => [name, () => ({})])),
     '../utils/commentArrivals': load(file + 'utils/commentArrivals.ts'),
+    './CommentAck': { CommentAck: noOp },
     './CommentActions': { CommentActions: ({ onToggleReplies }) => h('button', { onClick: onToggleReplies }, 'Toggle replies') },
     './CommentReplyForm': { CommentReplyForm: noOp },
   });

@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
+import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLeads, leadSeatsWithRoom, noRoomDue, seatFor, seatWriteGuard } from '@/lib/agent-seats';
 import { connectedRepositories, repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import { ROLE_CATALOGUE } from '@/lib/agent-role-catalogue';
 import { earlyAnswers, isStopIssueDone, lastAssigned } from '@/lib/agent-stop-boundary';
@@ -10,10 +10,12 @@ import { emailDeclaredStop } from '@/lib/agent-stop-email';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
+import { recordCommentAcks } from '@/lib/issue-comment-acks';
+import { contextSince } from '@/lib/agent-context-since';
 import { findIssueByIdOrKey, issueReadAccessWhere, tokenIssueReadWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
-export { NOT_DONE };
+export { NOT_DONE, contextSince };
 export const INBOX_LIMIT = 50;
 export const LEASE_MS = 60_000;
 /** A child issue that a seat has held this long without starting a run brings its parent back to the lead. */
@@ -34,6 +36,8 @@ export interface InboxItem {
    * a child a run has started on the pull request its last run pushed (CLB-809).
    */
   noRoom?: { issueKey: string | null; seat: string; reason: string; pullRequest?: string }[];
+  /** For a seat of the whole workspace only: the issue's project (CLB-952). */
+  project?: { id: string; name: string; issuePrefix: string };
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -78,6 +82,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     },
     select: {
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, status: true, statusValue: true, projectStatus: statusSelect,
+      project: { select: { name: true, issuePrefix: true } },
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { id: true, seatId: true, userId: true, outcome: true, startedAt: true, endedAt: true } },
@@ -112,35 +117,41 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const early = await answeredEarly(db, me, candidates.flatMap(({ issue, last, since }) => last?.seatId && last.userId === me && last.endedAt && last.endedAt >= since
     ? [{ issueId: issue.id, runId: last.id, startedAt: last.startedAt, endedAt: last.endedAt, reply: details.get(issue.id)?.comments[0]?.createdAt }] : []));
 
-  // Only a lead waits for children, so nobody else pays for this read. A lead of the whole workspace leads no project's
-  // children yet (CLB-952): it is offered what is assigned to it, as any seat is.
-  const lead = seat?.role === 'lead' && seat.projectId !== null ? { ...seat, projectId: seat.projectId } : null;
-  const children = lead && waiting.length ? await db.issue.findMany({ where: { workspaceId, parentId: { in: waiting }, projectId: lead.projectId }, select: {
+  // Only a lead waits for children, so nobody else pays for this read. The workspace's Lead (CLB-952) waits for each
+  // epic's children in that epic's project, as that project's lead would.
+  const lead = seat?.role === 'lead' ? seat : null;
+  const epics = candidates.filter(({ issue }) => waiting.includes(issue.id)).map(({ issue }) => ({ parentId: issue.id, projectId: issue.projectId }));
+  const children = lead && waiting.length ? await db.issue.findMany({ where: { workspaceId, ...(lead.projectId !== null
+    ? { parentId: { in: waiting }, projectId: lead.projectId } : { OR: epics }) }, select: {
     id: true, parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
     assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
     helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
     agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
   } }) : [];
   const now = Date.now();
+  // A project's lead's alone: the moves of CLB-780 and CLB-809 and the completions under its other epics (CLB-1196).
+  // The workspace's Lead is woken by an epic's own children only.
+  const own = lead?.projectId ?? null;
 
   // CLB-780. Developer work is the lead's to move, and only what the lead may move is offered: a child the lead itself
   // placed, on a developer seat. Its seat has had no room for long enough, and another developer seat has a number and
-  // is under its limit of issues from the lead: otherwise there is nowhere to move it. A child a run has started on
+  // is under its limit of issues from the lead: otherwise there is nowhere to move it. The developer seats of the whole
+  // workspace are among them, as in the lead's list (CLB-951). A child a run has started on
   // waits longer and moves only between runs, from what its last run pushed (CLB-809).
   const placed = children.filter(child => !isDone(child) && !child.agentRequestRole && child.assignee?.agentSeat?.role === 'developer'
     && child.helpers.some(row => row.userId === child.assigneeId && row.approvedBy === me));
   const full = new Map<string, { seat: string; reason: string; due: Date | null; started: { due: Date | null; pushed: Map<string, Pushed> } | null }>();
-  if (lead && placed.length) {
-    const developers = await seatsWithRoom(db, lead.projectId, 'developer', new Date(now));
+  if (own && placed.length) {
+    const developers = await leadSeatsWithRoom(db, workspaceId, own, 'developer', new Date(now));
     let free = false;
     for (const developer of developers) {
-      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLead(lead.projectId, me, developer.userId) }) < LEAD_CAP;
+      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLeads(developer, own, me) }) < LEAD_CAP;
     }
     for (const developer of free ? developers : []) {
       const held = placed.filter(child => child.assigneeId === developer.userId);
       if (developer.room.kind !== 'no_room' || !held.length) continue;
       const started = held.some(child => child.agentRuns.length)
-        ? { due: await noRoomDue(db, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, lead.projectId, developer, db) } : null;
+        ? { due: await noRoomDue(db, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, own, developer, db) } : null;
       full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due: await noRoomDue(db, developer, new Date(now)), started });
     }
   }
@@ -162,17 +173,17 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     select: { itemId: true } }) : []).map(entry => entry.itemId));
   const toPlace = loose.filter(child => !placedBefore.has(child.id)).map(child => child.id);
   const readyEpics = new Set<string>();
-  if (lead && toPlace.length) {
+  if (own && toPlace.length) {
     const blockerScope = { workspaceId, ...issueReadAccessWhere(me) };
     // A recorded blocker outside this scope prevents an offer without its status being read.
     const hiddenBlocker = { NOT: { AND: [blockerScope] } };
     const blockerSelect = {
       projectId: true, projectStatus: statusSelect, finishedAt: true,
-      parent: { where: { workspaceId, projectId: lead.projectId, assigneeId: me }, select: { id: true } },
+      parent: { where: { workspaceId, projectId: own, assigneeId: me }, select: { id: true } },
     } as const;
     const linkedChildren = await db.issue.findMany({
       where: {
-        id: { in: toPlace }, workspaceId, projectId: lead.projectId, assigneeId: null, agentRequestRole: null, ...NOT_DONE,
+        id: { in: toPlace }, workspaceId, projectId: own, assigneeId: null, agentRequestRole: null, ...NOT_DONE,
         sourceRelations: { none: { relationType: 'BLOCKED_BY', targetIssue: hiddenBlocker } },
         targetRelations: { none: { relationType: 'BLOCKS', sourceIssue: hiddenBlocker } },
       },
@@ -188,7 +199,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       if (!ranBlocked) continue;
       const blockers = [...child.sourceRelations.map(relation => relation.targetIssue), ...child.targetRelations.map(relation => relation.sourceIssue)];
       // finishedAt records entry into a final status, so editing an old done blocker does not offer the epic again.
-      if (blockers.every(isDone) && blockers.some(blocker => blocker.projectId === lead.projectId && blocker.parent
+      if (blockers.every(isDone) && blockers.some(blocker => blocker.projectId === own && blocker.parent
         && blocker.parent.id !== child.parentId && blocker.finishedAt && blocker.finishedAt > ranBlocked)) {
         readyEpics.add(child.parentId);
       }
@@ -240,7 +251,9 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
     .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
-      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
+      category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }),
+      // A seat of the whole workspace works in many projects: each item says which (CLB-952).
+      ...(seat?.projectId === null && { project: { id: issue.projectId, name: issue.project.name, issuePrefix: issue.project.issuePrefix } }) })) };
 }
 
 async function runsNamingPerson(db: DB, issueIds: string[]) {
@@ -383,8 +396,11 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
   if (!found) throw new HandoffError('not_found', 'Issue not found', 404);
   // As on every other issue write: a Forge-connected project's issues change through its Forge board.
   await forgeGuard(found.id);
+  // Whether the transaction below started a run for a seat: only then are its comments acked.
+  let seatStarted = false;
   try {
-    return await prisma.$transaction(async tx => {
+    const started = await prisma.$transaction(async tx => {
+      seatStarted = false;
       // The seat's row, then the issue: the order retiring a seat takes them in. Held to the end, so a seat is not
       // retired and an issue is not reassigned between these checks and the run.
       await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "userId" = ${me} FOR SHARE`;
@@ -424,8 +440,21 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
         await tx.issueActivity.create({ data: { action: 'STATUS_CHANGED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: context.workspace.id,
           projectId: issue.projectId, fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
       }
+      seatStarted = !!seat;
       return { run, repository };
     });
+    // The seat has the comments it is about to read: an ack is a courtesy, so it is recorded after the answer leaves and
+    // nothing here fails, delays or changes the start (a runner's checkout has a short client timeout).
+    if (seatStarted) {
+      void (async () => {
+        try {
+          // Closed at the run's start, so a comment that lands after the run was inserted is not acked by this start.
+          const window = { ...await contextSince(prisma, found.id), lte: started.run.startedAt };
+          await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: window });
+        } catch (error) { console.error('[comment-acks] recording at run start failed', error); }
+      })().catch(() => {});
+    }
+    return started;
   } catch (error) {
     // The index that allows one open run per issue is the rule itself; any insert it refuses is this answer.
     if ((error as { code?: string }).code === 'P2002') throw new HandoffError('already_running', 'A run is already open on this issue', 409);
@@ -770,8 +799,9 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
  * filed for (the ones it blocks or relates to from its own side, which is how filing links it). An issue with child issues
- * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's, the project's other
- * seats come with it, each with the open issues it holds from the lead, and the limit. The lead itself gets each seat's
+ * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's (the project's, or the
+ * workspace's Lead in a project without one, CLB-952), the project's other seats and the workspace's developer seats (CLB-951) come with it, each with the open issues it holds from the lead
+ * (from every project's lead, for a seat of the whole workspace), and the limit. The lead itself gets each seat's
  * owner, room and the owner's open runs too, and the seats of one role in the order to prefer (`byRoom`); room is its
  * owner's figure, so no other reader is given it or the order that would say it. When the last run that finished was
  * another account's, `movedFrom` names that seat, what its last run pushed and what to do before anything else (CLB-809). A run that ended without a note moves nothing:
@@ -792,8 +822,12 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } } } },
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
-  const lead = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
-  const listed = lead ? (await seatsWithRoom(prisma, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
+  // The project's lead, or the workspace's Lead (CLB-952) while the project has no active lead seat of its own.
+  const assigned = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, workspaceId: context.workspace.id, role: 'lead', retiredAt: null,
+    OR: [{ projectId: issue.projectId }, { projectId: null }] }, select: { userId: true, projectId: true } }) : null;
+  const lead = assigned && (assigned.projectId !== null || !await prisma.agentSeat.count({ where: { projectId: issue.projectId, role: 'lead', retiredAt: null } })) ? assigned : null;
+  // The project's seats and the workspace's developer seats (CLB-951): those the lead may place work on.
+  const listed = lead ? (await leadSeatsWithRoom(prisma, context.workspace.id, issue.projectId)).filter(seat => seat.userId !== lead.userId) : [];
   const asLead = lead?.userId === context.user.id;
   // Each role in its own order, in the places its seats had in the list: with nothing known the list is the one it was.
   const queues = new Map([...new Set(listed.map(seat => seat.role))].map(role => [role, byRoom(listed.filter(seat => seat.role === role))]));
@@ -826,10 +860,20 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   // A run that named a person may have been answered before it finished (`earlyAnswers`): the session that answer brings
   // back finds it here, with what was said from then on. The seat itself wrote nothing between that answer and its finish.
-  const answer = last?.seat && last.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
-    ? (await earlyAnswers(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
-  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
+  const since = await contextSince(prisma, issue.id);
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(since && { createdAt: since }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
+  // A seat that reads its context with a run open on the issue has taken these comments in. Recorded after the answer
+  // leaves: nothing here fails or delays the read.
+  if (commentsSince.length) {
+    void (async () => {
+      try {
+        if (await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
+          await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: commentsSince.map(comment => comment.id) });
+        }
+      } catch (error) { console.error('[comment-acks] recording on a run-context read failed', error); }
+    })().catch(() => {});
+  }
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
     ...issue.targetRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKS', filedFor: false, issue: relation.sourceIssue })),
@@ -871,7 +915,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
       ...(asLead && { movedOff: history.filter(row => row.itemId === child.id).map(row => row.oldValue).filter(Boolean) }),
       lastRun: child.agentRuns[0] ? child.agentRuns[0].endedAt ? child.agentRuns[0].outcome ?? 'stopped' : 'running' : null })) }),
     ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ userId: seat.userId, name: seat.name, role: seat.role,
-      openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }),
+      openFromLead: await prisma.issue.count({ where: fromLeads(seat, issue.projectId, lead.userId) }),
       ...(asLead && { owner: seat.owner, room: seat.room, openRuns: seat.openRuns }) }))) } }),
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,

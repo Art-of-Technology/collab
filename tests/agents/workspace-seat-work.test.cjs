@@ -189,4 +189,13 @@ test('a workspace seat works the issues assigned to it in any project (CLB-615)'
     // A project seat's are all of its project: they are listed as before.
     assert.deepEqual(view.seats.find(row => row.name === 'dev-a').waiting.map(item => [item.issueKey, 'project' in item]), [[ownA.issueKey, false]]);
   });
+
+  await t.test('the Seats tab names the project of what a workspace seat works on now (CLB-951)', async () => {
+    const [status, reply] = await checkout(devA, ownA);
+    assert.equal(status, 200, JSON.stringify(reply));
+    const view = plain(await page.readSeats(owner, 'w'));
+    assert.deepEqual(view.seats.find(row => row.name === 'ws-dev').working.map(run => [run.issueKey, run.project]), [[inB.issueKey, 'Beta']]);
+    // A project seat's are all of its project, as before.
+    assert.deepEqual(view.seats.find(row => row.name === 'dev-a').working.map(run => [run.issueKey, 'project' in run]), [[ownA.issueKey, false]]);
+  });
 });

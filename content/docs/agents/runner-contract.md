@@ -71,7 +71,7 @@ Takes nothing. Needs `issues:read`. The call does not wait: it answers at once, 
 ```
 
 - At most 50 items, already in the order to work them. An empty inbox is `{ "items": [] }`.
-- A seat of the whole workspace gets the issues assigned to it in every project its account can read.
+- A seat of the whole workspace gets the issues assigned to it in every project its account can read. Each of its items also has `project`: `{ "id", "name", "issuePrefix" }`.
 - `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`, and for a lead seat also `child_done`, `child_blocked`, `child_idle`, `child_no_room` or `other_child_done`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
 - `category` is the group of the issue's status, or `in_review` or `blocked` when its last run ended that way.
 - `lastRunAt` is when the last run on the issue ended, or `null`.
@@ -337,7 +337,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
 | `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. When the lead seat itself reads, each also has `movedOff`, the user IDs of seats the child was moved off. |
-| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
+| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats and the workspace's Developer seats, each with `userId`, `name`, `role` and `openFromLead` (for a workspace seat, from every project's lead together). For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
 An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
@@ -366,6 +366,43 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 - Each maximum is checked when the layer is saved.
 - How the session hands its result back is the runner's own rule and not a layer.
 - `collab seat run` 0.16.0 and later writes the layers to a file named in `COLLAB_INSTRUCTIONS_FILE`: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
+
+## Acks
+
+Under a person's comment, Collab shows whether a seat has taken it in. Collab records this itself. A runner and a session call nothing new, and no scope, command or CLI version is added.
+
+| When | For which comments |
+| --- | --- |
+| A seat starts a run: `POST /api/apps/auth/runs` | The person comments in that run's `commentsSince` window. |
+| The seat's own token reads `GET /api/apps/auth/issues/:key/comments?since=…` (what `collab comments wait` sends) or the run context while the seat has a run open on that issue | The person comments in the answer. |
+
+The run start acks the comments written up to the run's start. A comment list without `since` records nothing, since `collab comments wait` sends one for its baseline and throws the answer away.
+
+A comment written while the seat is in a run is not acked by that run's start. It is acked when the session asks for new comments. If the run finishes without asking, no run is given it: the next run's window opens at the last finished run's end, and a comment does not wake a seat that was mid-run. Once the seat has no live run open on the issue, the comment's line says `not_given`, and the person comments again to send it.
+
+- If recording fails, the run still starts and the read is still answered. At a run start and a run-context read the ack is recorded after the answer is sent, so it never delays them.
+- An ack never wakes a seat and never changes an inbox.
+- An ack is stored as a comment reaction of type `ack`, under the seat's account. It is not listed among a comment's `reactions` and not counted in `reactionCounts`: it is in `ack`. Likes are listed and counted as before.
+- The ack does not record which run took the comment in, or whether it was at the start of a run or by a later read.
+
+Each comment and reply in the comment list answer has one added field, `ack`. It is `null` when no line is shown, and otherwise:
+
+```json
+{
+  "state": "acked",
+  "seats": [{ "userId": "cm3user000001", "name": "Developer", "at": "2026-11-27T10:00:09.000Z" }]
+}
+```
+
+| Key | What it is |
+| --- | --- |
+| `state` | `acked`, `waiting` or `none`. |
+| `seats` | The seats that took the comment in, oldest first: `userId`, `name`, `at`. |
+| `waitingFor` | With `waiting`, `issue_done` or `not_given`: the seat that holds the issue. |
+| `reason` | `in_run` or `runner_silent` with `waiting`; `issue_done`, `not_given` or `not_holder` with `none`. |
+| `missed` | Names of mentioned seats that do not hold the issue. |
+
+`waitingFor`, `reason` and `missed` are present only when they apply. `waiting` and `none` are given only for comments written after the workspace's first ack; `acked` whenever an ack exists. Fields only get added: no existing field is removed or renamed. An ack is not listed among reactions: `reactions` and `reactionCounts` carry what people added, as before.
 
 ## File a request: POST seats/me/requests
 

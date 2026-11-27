@@ -107,6 +107,7 @@ test('issue comment display and edit form both receive formatted content, includ
       '@/hooks/use-toast': { useToast: () => ({ toast: noOp }) },
       '@/hooks/queries/useIssueComment': Object.fromEntries(['useToggleIssueCommentLike', 'useUpdateIssueComment', 'useDeleteIssueComment'].map(name => [name, () => ({})])),
       '../utils/commentArrivals': load('src/components/issue/sections/comments/utils/commentArrivals.ts'),
+      './CommentAck': { CommentAck: noOp },
       './CommentActions': { CommentActions: noOp },
       './CommentReplyForm': { CommentReplyForm: noOp },
     });
