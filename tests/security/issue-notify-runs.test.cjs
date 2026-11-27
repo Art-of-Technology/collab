@@ -157,7 +157,9 @@ test('the run answers are unchanged, and a notifier that throws does not fail th
   assert.equal(loud.told.length, 1);
   assert.deepEqual(Object.keys(started).sort(), ['repository', 'run']);
   const reference = await quiet.agentRuns.checkout(quiet.context, quiet.start);
-  const strip = answer => ({ ...plain(answer), run: { ...plain(answer).run, startedAt: null } });
+  // Two runs started a moment apart differ in every time they carry (start, lease), and in nothing else.
+  const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  const strip = answer => JSON.parse(JSON.stringify(plain(answer), (key, value) => (typeof value === 'string' && TIME.test(value) ? '<time>' : value)));
   assert.deepEqual(strip(started), strip(reference));
 
   const finishing = fixture({ status: PROGRESS, throwing: true });
