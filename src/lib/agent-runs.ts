@@ -10,10 +10,12 @@ import { emailDeclaredStop } from '@/lib/agent-stop-email';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
+import { recordCommentAcks } from '@/lib/issue-comment-acks';
+import { contextSince } from '@/lib/agent-context-since';
 import { findIssueByIdOrKey, issueReadAccessWhere, tokenIssueReadWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
-export { NOT_DONE };
+export { NOT_DONE, contextSince };
 export const INBOX_LIMIT = 50;
 export const LEASE_MS = 60_000;
 /** A child issue that a seat has held this long without starting a run brings its parent back to the lead. */
@@ -394,8 +396,11 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
   if (!found) throw new HandoffError('not_found', 'Issue not found', 404);
   // As on every other issue write: a Forge-connected project's issues change through its Forge board.
   await forgeGuard(found.id);
+  // Whether the transaction below started a run for a seat: only then are its comments acked.
+  let seatStarted = false;
   try {
-    return await prisma.$transaction(async tx => {
+    const started = await prisma.$transaction(async tx => {
+      seatStarted = false;
       // The seat's row, then the issue: the order retiring a seat takes them in. Held to the end, so a seat is not
       // retired and an issue is not reassigned between these checks and the run.
       await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "userId" = ${me} FOR SHARE`;
@@ -435,8 +440,21 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
         await tx.issueActivity.create({ data: { action: 'STATUS_CHANGED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: context.workspace.id,
           projectId: issue.projectId, fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
       }
+      seatStarted = !!seat;
       return { run, repository };
     });
+    // The seat has the comments it is about to read: an ack is a courtesy, so it is recorded after the answer leaves and
+    // nothing here fails, delays or changes the start (a runner's checkout has a short client timeout).
+    if (seatStarted) {
+      void (async () => {
+        try {
+          // Closed at the run's start, so a comment that lands after the run was inserted is not acked by this start.
+          const window = { ...await contextSince(prisma, found.id), lte: started.run.startedAt };
+          await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: window });
+        } catch (error) { console.error('[comment-acks] recording at run start failed', error); }
+      })().catch(() => {});
+    }
+    return started;
   } catch (error) {
     // The index that allows one open run per issue is the rule itself; any insert it refuses is this answer.
     if ((error as { code?: string }).code === 'P2002') throw new HandoffError('already_running', 'A run is already open on this issue', 409);
@@ -842,10 +860,20 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   // A run that named a person may have been answered before it finished (`earlyAnswers`): the session that answer brings
   // back finds it here, with what was said from then on. The seat itself wrote nothing between that answer and its finish.
-  const answer = last?.seat && last.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
-    ? (await earlyAnswers(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
-  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
+  const since = await contextSince(prisma, issue.id);
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(since && { createdAt: since }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
+  // A seat that reads its context with a run open on the issue has taken these comments in. Recorded after the answer
+  // leaves: nothing here fails or delays the read.
+  if (commentsSince.length) {
+    void (async () => {
+      try {
+        if (await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
+          await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: commentsSince.map(comment => comment.id) });
+        }
+      } catch (error) { console.error('[comment-acks] recording on a run-context read failed', error); }
+    })().catch(() => {});
+  }
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
     ...issue.targetRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKS', filedFor: false, issue: relation.sourceIssue })),

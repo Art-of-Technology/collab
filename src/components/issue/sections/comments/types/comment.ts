@@ -1,8 +1,12 @@
+import type { CommentAck } from "@/lib/issue-comment-acks";
+
 export interface IssueComment {
   id: string;
   content: string;
   html?: string;
   createdAt: string;
+  updatedAt?: string;
+  ack?: CommentAck | null;
   author: {
     id: string;
     name: string | null;
