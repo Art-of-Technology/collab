@@ -10,6 +10,7 @@ import { emailDeclaredStop } from '@/lib/agent-stop-email';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
+import { recordCommentAcks } from '@/lib/issue-comment-acks';
 import { findIssueByIdOrKey, issueReadAccessWhere, tokenIssueReadWhere } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
@@ -394,8 +395,11 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
   if (!found) throw new HandoffError('not_found', 'Issue not found', 404);
   // As on every other issue write: a Forge-connected project's issues change through its Forge board.
   await forgeGuard(found.id);
+  // Whether the transaction below started a run for a seat: only then are its comments acked.
+  let seatStarted = false;
   try {
-    return await prisma.$transaction(async tx => {
+    const started = await prisma.$transaction(async tx => {
+      seatStarted = false;
       // The seat's row, then the issue: the order retiring a seat takes them in. Held to the end, so a seat is not
       // retired and an issue is not reassigned between these checks and the run.
       await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "userId" = ${me} FOR SHARE`;
@@ -435,8 +439,14 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
         await tx.issueActivity.create({ data: { action: 'STATUS_CHANGED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: context.workspace.id,
           projectId: issue.projectId, fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
       }
+      seatStarted = !!seat;
       return { run, repository };
     });
+    // The seat has the comments it is about to read: an ack is a courtesy, so nothing here fails or changes the start.
+    if (seatStarted) {
+      try { await recordCommentAcks({ workspaceId: context.workspace.id, issueId: found.id, seatUserId: me, createdAt: await contextSince(prisma, found.id) }); } catch { /* the run has started */ }
+    }
+    return started;
   } catch (error) {
     // The index that allows one open run per issue is the rule itself; any insert it refuses is this answer.
     if ((error as { code?: string }).code === 'P2002') throw new HandoffError('already_running', 'A run is already open on this issue', 409);
@@ -775,6 +785,21 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
   category: categoryOf(issue.projectStatus), ...(issue.agentRequestRole && { requestRole: issue.agentRequestRole }) });
 
 /**
+ * Where an issue's "comments since" window opens: the end of its last finished run, or, when that run named a person who
+ * answered before it finished (`earlyAnswers`), that answer. Nothing before any run has finished.
+ */
+export async function contextSince(db: DB, issueId: string): Promise<{ gt?: Date; gte?: Date } | undefined> {
+  const last = await db.agentRun.findFirst({ where: { issueId, state: 'finished' }, orderBy: { endedAt: 'desc' },
+    select: { id: true, startedAt: true, endedAt: true, userId: true, seat: { select: { name: true } } } });
+  if (!last?.endedAt) return undefined;
+  const entry = await db.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issueId, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
+  const facts = JSON.parse(entry?.details ?? '{}');
+  const answer = last.seat && facts.runId === last.id && typeof facts.askedUser === 'string'
+    ? (await earlyAnswers(db, [{ issueId, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issueId) : undefined;
+  return answer ? { gte: answer } : { gt: last.endedAt };
+}
+
+/**
  * What a fresh session needs to work an issue, in one read: the issue, the repository of its project (null when none is
  * worked out or the assignee's role needs none), the exit note of the last run that finished and
  * its checked facts (the pull request, the commit it was left at, the next step; null where it gave none), the
@@ -842,10 +867,17 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     select: { headBranchName: true } }))?.headBranchName ?? null : null;
   // A run that named a person may have been answered before it finished (`earlyAnswers`): the session that answer brings
   // back finds it here, with what was said from then on. The seat itself wrote nothing between that answer and its finish.
-  const answer = last?.seat && last.endedAt && facts.runId === last.id && typeof facts.askedUser === 'string'
-    ? (await earlyAnswers(prisma, [{ issueId: issue.id, seatUserId: last.userId, startedAt: last.startedAt, endedAt: last.endedAt }])).get(issue.id) : undefined;
-  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: answer ? { gte: answer } : { gt: last.endedAt } }) },
+  const since = await contextSince(prisma, issue.id);
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(since && { createdAt: since }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
+  // A seat that reads its context with a run open on the issue has taken these comments in.
+  if (commentsSince.length) {
+    try {
+      if (await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
+        await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: commentsSince.map(comment => comment.id) });
+      }
+    } catch { /* the read is answered */ }
+  }
   const others = [
     ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
     ...issue.targetRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKS', filedFor: false, issue: relation.sourceIssue })),
