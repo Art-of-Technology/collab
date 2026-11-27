@@ -115,6 +115,8 @@ function load(file, dependencies = {}, globals = {}) {
       if (!(name in dependencies) && name === '@/lib/agent-stop-boundary') return load('src/lib/agent-stop-boundary.ts');
       // A fixture that says nothing about the declared-stop email sends none: `tests/agents/runs-finish.test.cjs` runs the real one.
       if (!(name in dependencies) && name === '@/lib/agent-stop-email') return { emailDeclaredStop: async () => {} };
+      // A fixture that says nothing about Slack notifications sends none: `notification-issue-events.test.cjs` runs the real one.
+      if (!(name in dependencies) && name === '@/lib/notification-issue-events') return { tellIssueEvent() {}, issueEventsSettled: async () => {} };
       // The status rules are pure, so no fixture has to stand in for them.
       if (!(name in dependencies) && name === '@/constants/project-statuses') return load('src/constants/project-statuses.ts');
       if (!(name in dependencies) && name === '@/lib/issue-requests') return load('src/lib/issue-requests.ts');
