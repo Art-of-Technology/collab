@@ -33,7 +33,7 @@ function fixture(overrides = {}) {
       { userId: 'rev', name: 'Reviewer', byRunner: false, ownerId: 'owner', retiredAt: null, workspaceId: 'w' },
     ],
     runners: [{ workspaceId: 'w', ownerId: 'owner', removedAt: null, lastSeenAt: NOW }],
-    runs: [], reactions: [], comments: [], events: [], creates: 0, errors: [],
+    runs: [], reactions: [], comments: [], events: [], creates: 0, errors: [], firstAckLookups: 0,
     // The workspace's first ack, an hour before the comments: where waiting and nobody lines start. `finished` is the
     // issue's last finished run, whose end opens the next run's window.
     workspaceAcks: [{ createdAt: new Date(AFTER.getTime() - 60 * MIN) }], finished: null,
@@ -64,6 +64,7 @@ function fixture(overrides = {}) {
   if (!db.noReactionModel) prisma.issueCommentReaction = {
     // The oldest ack of the workspace, asked for by type and by the workspace of the comment's issue.
     findFirst: async ({ where, orderBy }) => {
+      db.firstAckLookups++;
       if (where.type !== 'ack' || where.comment?.issue?.workspaceId !== 'w' || orderBy?.createdAt !== 'asc') return null;
       const all = [...db.workspaceAcks, ...db.reactions.filter(r => r.type === 'ack')].sort((a, b) => a.createdAt - b.createdAt);
       return all[0] ? { createdAt: all[0].createdAt } : null;
@@ -79,6 +80,8 @@ function fixture(overrides = {}) {
     '@/lib/prisma': { prisma },
     '@/lib/redis': { publishEvent: async (channel, message, timeout) => { db.events.push({ channel, message, timeout }); return true; } },
   }, { console: { error: (...args) => db.errors.push(args) } });
+  // Each case starts with no remembered first ack.
+  lib.forgetAckStarts();
   return { db, lib };
 }
 
@@ -291,6 +294,43 @@ test('commentAcks: a comment that no run will be given says so, and a live run o
     db.issue.projectStatus = { category: 'done', isFinal: true };
     assert.equal((await lib.commentAcks('i', [comment('c1', 'p', 1)], later)).get('c1').reason, 'issue_done');
   }
+});
+
+test("the workspace's first ack is looked up once while it exists", async () => {
+  const { db, lib } = fixture();
+  assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).get('c1').state, 'waiting');
+  assert.equal((await lib.commentAcks('i', [comment('c2', 'p', 1)], new Date(NOW.getTime() + 24 * 60 * MIN))).get('c2').state, 'waiting');
+  assert.equal(db.firstAckLookups, 1);
+  // The reset for tests forgets it.
+  lib.forgetAckStarts();
+  await lib.commentAcks('i', [comment('c1', 'p')], NOW);
+  assert.equal(db.firstAckLookups, 2);
+});
+
+test('with no ack yet, the lookup is repeated only after 60 seconds', async () => {
+  const { db, lib } = fixture({ workspaceAcks: [] });
+  assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
+  assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], new Date(NOW.getTime() + 59_000))).size, 0);
+  assert.equal(db.firstAckLookups, 1);
+  // An ack appears elsewhere in the workspace; it is seen once the 60 seconds have passed.
+  db.workspaceAcks.push({ createdAt: AFTER });
+  assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], new Date(NOW.getTime() + 60_000))).get('c1').state, 'waiting');
+  assert.equal(db.firstAckLookups, 2);
+});
+
+test("recording an ack forgets the workspace's \"none yet\", so waiting lines appear at once", async () => {
+  const { db, lib } = fixture({ workspaceAcks: [] });
+  db.comments.push(comment('c1', 'p'));
+  assert.equal((await lib.commentAcks('i', [comment('c1', 'p')], NOW)).size, 0);
+  assert.equal(db.firstAckLookups, 1);
+  assert.equal(await lib.recordCommentAcks(base), 1);
+  // c1 is acked (the row was written at NOW); c2 is written after the workspace's first ack, within the 60 seconds.
+  const acked = comment('c1', 'p', 0, { reactions: db.reactions.map(row => ({ ...row, author: { id: 'seat', name: 'Dev 1' } })) });
+  const newer = { ...comment('c2', 'p'), createdAt: new Date(NOW.getTime() + 1000) };
+  const map = await lib.commentAcks('i', [acked, newer], new Date(NOW.getTime() + 2000));
+  assert.equal(map.get('c1').state, 'acked');
+  assert.equal(map.get('c2').state, 'waiting');
+  assert.equal(db.firstAckLookups, 2);
 });
 
 test('commentAcks resolves an empty map when the database fails', async () => {

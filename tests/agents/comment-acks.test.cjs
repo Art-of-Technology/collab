@@ -69,7 +69,7 @@ test('comment acks: recorded by a run start, a run-context read and a since read
   const contextRoute = load('src/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route.ts', deps, globals);
   const commentsRoute = load('src/app/api/apps/auth/issues/[issueIdOrKey]/comments/route.ts', deps, globals);
   const likeRoute = load('src/app/api/issues/[issueId]/comments/[commentId]/like/route.ts', deps, globals);
-  const { commentAcks } = deps['@/lib/issue-comment-acks'];
+  const { commentAcks, forgetAckStarts } = deps['@/lib/issue-comment-acks'];
 
   const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role: 'developer', ownerId: person, name: 'dev-a', expiresInDays: 30 });
   const devA = { ...made.seat, token: made.token.token };
@@ -183,6 +183,9 @@ test('comment acks: recorded by a run start, a run-context read and a since read
     const afterwards = await comment(other, person, 'after the run', ago(300));
     const rows = await raw.issueComment.findMany({ where: { issueId: other.id },
       include: { reactions: { include: { author: { select: { id: true, name: true } } } } } });
+    // The first ack this process remembered for the workspace is the later one of the cases above: forget it, so the
+    // older ack written here is the start.
+    forgetAckStarts();
     // The library runs in its own context: its answer is compared as data.
     const acks = new Map([...await commentAcks(other.id, rows)].map(([id, ack]) => [id, JSON.parse(JSON.stringify(ack))]));
     assert.equal(acks.get(old.id).state, 'acked');

@@ -26,6 +26,20 @@ export type CommentAck = {
 export type AckComment = { id: string; authorId: string; createdAt: Date | string; content: string; html?: string | null;
   reactions?: { type: string; authorId?: string; createdAt: Date | string; author?: { id: string; name: string | null } }[] };
 
+/** How long a workspace's "no ack yet" is believed before it is looked up again. */
+const NO_ACK_YET_MS = 60_000;
+/**
+ * Each workspace's first ack, remembered for the life of the process: the lookup joins reactions to comments to issues,
+ * and lists are read often. A found start is kept (it moves earlier only if rows are deleted, and then the lines start a
+ * little late); "none yet" (`at: null`) is kept for `NO_ACK_YET_MS`, or until this process records an ack there.
+ */
+const ackStarts = new Map<string, { at: number | null; checked: number }>();
+
+/** Forgets every remembered first ack: for tests. */
+export function forgetAckStarts(): void {
+  ackStarts.clear();
+}
+
 /** Says what failed, and never throws itself: a missing or broken console must not turn a courtesy into a failure. */
 function report(what: string, error: unknown) {
   try { console.error(`[comment-acks] ${what}`, error); } catch { /* nothing more to do */ }
@@ -55,6 +69,8 @@ export async function recordCommentAcks(input: { workspaceId: string; issueId: s
     await prisma.issueCommentReaction.createMany({
       data: comments.map(comment => ({ type: ACK_TYPE, commentId: comment.id, authorId: seatUserId })), skipDuplicates: true,
     });
+    // The workspace has an ack now: a remembered "none yet" no longer holds.
+    if (ackStarts.get(workspaceId)?.at === null) ackStarts.delete(workspaceId);
     await publishEvent(`workspace:${workspaceId}:events`, { type: 'issue.comments.changed', workspaceId, issueId }, 1000);
     return comments.length;
   } catch (error) {
@@ -88,10 +104,15 @@ export async function commentAcks(issueId: string, comments: AckComment[], now: 
     });
     if (!issue) return result;
     // The moment this workspace's acks began: before it, no comment could have been acked, so none is said to wait.
-    const first = await prisma.issueCommentReaction.findFirst({
-      where: { type: ACK_TYPE, comment: { issue: { workspaceId: issue.workspaceId } } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true },
-    });
-    const start = first ? first.createdAt.getTime() : Infinity;
+    let known = ackStarts.get(issue.workspaceId);
+    if (!known || (known.at === null && now.getTime() - known.checked >= NO_ACK_YET_MS)) {
+      const first = await prisma.issueCommentReaction.findFirst({
+        where: { type: ACK_TYPE, comment: { issue: { workspaceId: issue.workspaceId } } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true },
+      });
+      known = { at: first ? first.createdAt.getTime() : null, checked: now.getTime() };
+      ackStarts.set(issue.workspaceId, known);
+    }
+    const start = known.at ?? Infinity;
     const holder = issue.assigneeId
       ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, retiredAt: null }, select: { userId: true, name: true, byRunner: true, ownerId: true } })
       : null;
