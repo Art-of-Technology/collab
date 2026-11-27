@@ -367,6 +367,41 @@ An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueK
 - How the session hands its result back is the runner's own rule and not a layer.
 - `collab seat run` 0.16.0 and later writes the layers to a file named in `COLLAB_INSTRUCTIONS_FILE`: see [Run a seat from the CLI](/docs/agents/seats#run-a-seat-from-the-cli).
 
+## Acks
+
+Under a person's comment, Collab shows whether a seat has taken it in. Collab records this itself. A runner and a session call nothing new, and no scope, command or CLI version is added.
+
+| When | For which comments |
+| --- | --- |
+| A seat starts a run: `POST /api/apps/auth/runs` | The person comments in that run's `commentsSince` window. |
+| The seat's own token reads `GET /api/apps/auth/issues/:key/comments` or the run context while the seat has a run open on that issue | The person comments in the answer. |
+
+A comment written while the seat is in a run is not acked by that run's start. It is acked when the session reads comments, or by the next run's start.
+
+- If recording fails, the run still starts and the read is still answered.
+- An ack never wakes a seat and never changes an inbox.
+- An ack is stored as a comment reaction of type `ack`, under the seat's account. `reactionCounts` on the token route therefore gains an `ack` count. Likes are counted as before.
+- The ack does not record which run took the comment in, or whether it was at the start of a run or by a later read.
+
+Each comment and reply in the comment list answer has one added field, `ack`. It is `null` when no line is shown, and otherwise:
+
+```json
+{
+  "state": "acked",
+  "seats": [{ "userId": "cm3user000001", "name": "Developer", "at": "2026-11-27T10:00:09.000Z" }]
+}
+```
+
+| Key | What it is |
+| --- | --- |
+| `state` | `acked`, `waiting` or `none`. |
+| `seats` | The seats that took the comment in, oldest first: `userId`, `name`, `at`. |
+| `waitingFor` | With `waiting`: the seat that holds the issue. |
+| `reason` | `in_run` or `runner_silent` with `waiting`; `issue_done` or `not_holder` with `none`. |
+| `missed` | Names of mentioned seats that do not hold the issue. |
+
+`waitingFor`, `reason` and `missed` are present only when they apply. Fields only get added: nothing an answer carried before has changed.
+
 ## File a request: POST seats/me/requests
 
 Needs `issues:write`. Only a seat may call it.
