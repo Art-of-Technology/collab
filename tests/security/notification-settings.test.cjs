@@ -3,17 +3,11 @@ const { assert, test, load } = require('./helpers.cjs');
 const URL_OK = 'https://hooks.slack.com/services/T024ABCDE/B07ABCDEF/x9y8z7w6v5u4h3Qz';
 const SECRET_TAIL = 'x9y8z7w6v5u4';
 
-// The Slack helpers as a fixture with the brief's rules for the check and the mask.
+// The real Slack helpers (the check, the mask and the test text); only the sending is a fake.
+const realSlack = load('src/lib/notification-slack.ts', {}, { URL, setTimeout, clearTimeout, AbortController });
 function slackFake(results = []) {
   const sent = [];
-  return { sent, module: {
-    SLACK_TEST_TEXT: 'This is a test from Collab. Your notifications will arrive in this channel.',
-    isSlackWebhookUrl: value => typeof value === 'string' && value.startsWith('https://hooks.slack.com/services/'),
-    maskSlackWebhookUrl: url => {
-      const parts = url.split('/services/')[1].split('/');
-      const last = parts.pop();
-      return 'https://hooks.slack.com/services/' + [...parts.map(part => part.slice(0, 3) + '•••'), '••••••' + last.slice(-4)].join('/');
-    },
+  return { sent, module: { ...realSlack,
     postToSlack: async (url, text) => { sent.push({ url, text }); return results.shift() ?? 'ok'; },
   } };
 }
@@ -108,7 +102,9 @@ test('saving an address does not switch Slack on, and the view shows only the ma
 test("an address that is not Slack's is refused", async () => {
   const { lib, db, crypto } = setup();
   assert.deepEqual(plain(await lib.saveSlackAddress('u', 'w', 'https://example.com/x')), { error: 'not_slack' });
-  assert.deepEqual(plain(await lib.saveSlackAddress('u', 'w', 42)), { error: 'not_slack' });
+  for (const bad of [42, 'https://hooks.slack.com.evil.example/services/T/B/x', 'http://hooks.slack.com/services/T/B/x']) {
+    assert.deepEqual(plain(await lib.saveSlackAddress('u', 'w', bad)), { error: 'not_slack' });
+  }
   assert.equal(db.writes.length, 0);
   assert.equal(crypto.encrypted.length, 0);
 });
@@ -119,7 +115,7 @@ test('a server without an encryption key says so', async () => {
   assert.equal(db.writes.length, 0);
 });
 
-test('the first switch-on ticks the starting set; the second keeps my ticks', async () => {
+test('first switch-on with nothing ticked ticks the starting set', async () => {
   const { lib, db } = setup();
   await lib.saveSlackAddress('u', 'w', URL_OK);
   db.rows.set('u|w', { ...db.get(), slackFailedAt: new Date(), slackOffAt: new Date() });
@@ -137,6 +133,23 @@ test('the first switch-on ticks the starting set; the second keeps my ticks', as
   assert.equal(again.slack.on, true);
   assert.equal(again.onReactions, false);
   assert.equal(again.comments, 'off');
+});
+
+test('first switch-on keeps ticks made while Slack was off', async () => {
+  const { lib, db } = setup();
+  await lib.updateChoices('u', 'w', { onStatus: true });
+  await lib.saveSlackAddress('u', 'w', URL_OK);
+  const on = await lib.setSlackOn('u', 'w', true);
+  assert.equal(on.slack.on, true);
+  assert.deepEqual({ ...plain(on), slack: undefined }, { ...plain(lib.NO_CHOICES), onStatus: true, slack: undefined });
+  assert.equal(db.get().slackEverOn, true);
+  const comments = setup();
+  await comments.lib.updateChoices('u', 'w', { comments: 'all' });
+  await comments.lib.saveSlackAddress('u', 'w', URL_OK);
+  const kept = await comments.lib.setSlackOn('u', 'w', true);
+  assert.equal(kept.comments, 'all');
+  assert.equal(kept.mineAssigned, false);
+  assert.equal(comments.db.get().slackEverOn, true);
 });
 
 test('Slack cannot be switched on without an address', async () => {
@@ -190,10 +203,13 @@ test('markSlackResult never throws', async () => {
   for (const result of ['ok', 'gone', 'failed']) assert.equal(await lib.markSlackResult('u', 'w', result), undefined);
   const healthy = setup();
   await healthy.lib.saveSlackAddress('u', 'w', URL_OK);
-  const before = healthy.db.writes.length;
-  await healthy.lib.markSlackResult('u', 'w', 'ok');
-  assert.equal(healthy.db.writes.length, before);
   await healthy.lib.markSlackResult('u', 'w', 'failed');
   assert.ok(healthy.db.get().slackFailedAt instanceof Date);
+  await healthy.lib.markSlackResult('u', 'w', 'ok');
+  assert.equal(healthy.db.get().slackFailedAt, null);
+  assert.deepEqual(plain(healthy.db.writes.at(-1)), ['update', { slackFailedAt: null }]);
+  await healthy.lib.markSlackResult('u', 'w', 'gone');
+  assert.equal(healthy.db.get().slackOn, false);
+  assert.ok(healthy.db.get().slackOffAt instanceof Date);
   assert.equal(db.get().slackOn, false);
 });

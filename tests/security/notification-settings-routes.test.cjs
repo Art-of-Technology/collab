@@ -25,12 +25,9 @@ function setup({ user = { id: 'u' }, cookie = 'w', member = true, encryptThrows 
     issueNotificationSetting: table,
     workspace: { findFirst: async args => { calls.workspace.push(args); return member ? { id: args.where.id } : null; } },
   };
-  const slack = {
-    SLACK_TEST_TEXT: 'This is a test from Collab. Your notifications will arrive in this channel.',
-    isSlackWebhookUrl: value => typeof value === 'string' && value.startsWith('https://hooks.slack.com/services/'),
-    maskSlackWebhookUrl: url => 'https://hooks.slack.com/services/T02•••/B07•••/••••••' + url.slice(-4),
-    postToSlack: async () => results.shift() ?? 'ok',
-  };
+  // The real check, mask and test text; only the sending is a fake.
+  const slack = { ...load('src/lib/notification-slack.ts', {}, { URL, setTimeout, clearTimeout, AbortController }),
+    postToSlack: async () => results.shift() ?? 'ok' };
   const crypto = {
     encrypt: async data => { if (encryptThrows) throw new Error('no key'); return Buffer.from('enc:' + data); },
     decrypt: async data => Buffer.from(data).toString().replace(/^enc:/, ''),
@@ -98,13 +95,19 @@ test('GET, PATCH, PUT, DELETE and POST answer as the rules say', async () => {
   assert.equal(rows.size, 0);
   answer = await call(choices.PATCH, { slackOn: true });
   assert.deepEqual(answer, { status: 409, body: { error: 'no_address' } });
+  // A refused switch-on writes nothing, not even the choices in the same body.
+  answer = await call(choices.PATCH, { onStatus: true, slackOn: true });
+  assert.deepEqual(answer, { status: 409, body: { error: 'no_address' } });
+  assert.equal(rows.size, 0);
   answer = await call(choices.PATCH, { onStatus: true, comments: 'all' });
   assert.equal(answer.status, 200);
   assert.equal(answer.body.onStatus, true);
   assert.equal(answer.body.comments, 'all');
 
-  answer = await call(slackRoute.PUT, { url: 'https://example.com/x' });
-  assert.deepEqual(answer, { status: 400, body: { error: 'not_slack', message: NOT_SLACK } });
+  for (const url of ['https://example.com/x', 'https://hooks.slack.com.evil.example/services/T/B/x', 'http://hooks.slack.com/services/T/B/x']) {
+    answer = await call(slackRoute.PUT, { url });
+    assert.deepEqual(answer, { status: 400, body: { error: 'not_slack', message: NOT_SLACK } });
+  }
   answer = await call(slackRoute.PUT, { url: URL_OK });
   assert.equal(answer.status, 200);
   assert.equal(answer.body.slack.address, 'https://hooks.slack.com/services/T02•••/B07•••/••••••h3Qz');
@@ -113,7 +116,10 @@ test('GET, PATCH, PUT, DELETE and POST answer as the rules say', async () => {
   answer = await call(choices.PATCH, { slackOn: true });
   assert.equal(answer.status, 200);
   assert.equal(answer.body.slack.on, true);
-  assert.equal(answer.body.onAssigned, true);
+  // onStatus and comments were ticked while Slack was off, so the starting set leaves them as they are.
+  assert.equal(answer.body.onAssigned, false);
+  assert.equal(answer.body.onStatus, true);
+  assert.equal(answer.body.comments, 'all');
 
   answer = await call(slackRoute.POST);
   assert.equal(answer.status, 200);
@@ -132,6 +138,17 @@ test('GET, PATCH, PUT, DELETE and POST answer as the rules say', async () => {
   answer = await call(broken.slackRoute.PUT, { url: URL_OK });
   assert.equal(answer.status, 503);
   assert.ok(!JSON.stringify(answer.body).includes('hooks.slack.com'));
+});
+
+test('on the first switch-on, choices sent in the same body win over the starting set', async () => {
+  const { choices, slackRoute } = setup();
+  await call(slackRoute.PUT, { url: URL_OK });
+  const answer = await call(choices.PATCH, { slackOn: true, onReactions: false, comments: 'all' });
+  assert.equal(answer.status, 200);
+  assert.equal(answer.body.slack.on, true);
+  assert.equal(answer.body.onStatus, true);
+  assert.equal(answer.body.onReactions, false);
+  assert.equal(answer.body.comments, 'all');
 });
 
 test('no answer contains the address', () => {

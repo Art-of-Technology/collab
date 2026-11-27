@@ -149,7 +149,12 @@ export async function setSlackOn(userId: string, workspaceId: string, on: boolea
   }
   if (!row?.slackUrlEnc) return { error: 'no_address' };
   const data: Record<string, unknown> = { slackOn: true, slackOffAt: null, slackFailedAt: null };
-  if (!row.slackEverOn) Object.assign(data, STARTING_SET, { slackEverOn: true });
+  if (!row.slackEverOn) {
+    data.slackEverOn = true;
+    // The starting set only fills an empty sheet: ticks made while Slack was off stay as they are.
+    const nothingTicked = BOOLEAN_KEYS.every(name => !row[name]) && row.comments === 'off';
+    if (nothingTicked) Object.assign(data, STARTING_SET);
+  }
   return view(await upsert(userId, workspaceId, data));
 }
 
@@ -164,15 +169,7 @@ export async function sendSlackTest(userId: string, workspaceId: string): Promis
   const url = await storedUrl(row);
   if (!url) return { result: 'no_address', settings: await view(row) };
   const result = await postToSlack(url, SLACK_TEST_TEXT);
-  if (result === 'ok') {
-    try {
-      await prisma.issueNotificationSetting.update({ where: key(userId, workspaceId), data: { slackFailedAt: null } });
-    } catch {
-      // The test message went through; a failed bookkeeping write does not change that.
-    }
-  } else {
-    await markSlackResult(userId, workspaceId, result);
-  }
+  await markSlackResult(userId, workspaceId, result);
   return { result, settings: await readSettings(userId, workspaceId) };
 }
 
@@ -182,6 +179,8 @@ export async function markSlackResult(userId: string, workspaceId: string, resul
       await prisma.issueNotificationSetting.update({ where: key(userId, workspaceId), data: { slackOn: false, slackOffAt: new Date() } });
     } else if (result === 'failed') {
       await prisma.issueNotificationSetting.update({ where: key(userId, workspaceId), data: { slackFailedAt: new Date() } });
+    } else if (result === 'ok') {
+      await prisma.issueNotificationSetting.update({ where: key(userId, workspaceId), data: { slackFailedAt: null } });
     }
   } catch {
     // Bookkeeping only: it never throws, and it never logs, because the error could carry the address.

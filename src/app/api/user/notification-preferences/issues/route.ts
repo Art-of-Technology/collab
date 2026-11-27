@@ -43,13 +43,14 @@ export async function PATCH(req: NextRequest) {
     }
     // Check everything before writing anything.
     if (!parseChoices(choices)) return NextResponse.json({ error: 'invalid' }, { status: 400 });
-    let settings = await updateChoices(caller.userId, caller.workspaceId, choices);
-    if ('error' in settings) return NextResponse.json({ error: 'invalid' }, { status: 400 });
+    // The switch goes first: a refused switch-on writes nothing, and on a first switch-on
+    // the choices in the same body win over the starting set.
     if (typeof slackOn === 'boolean') {
       const switched = await setSlackOn(caller.userId, caller.workspaceId, slackOn);
       if ('error' in switched) return NextResponse.json({ error: 'no_address' }, { status: 409 });
-      settings = switched;
     }
+    const settings = await updateChoices(caller.userId, caller.workspaceId, choices);
+    if ('error' in settings) return NextResponse.json({ error: 'invalid' }, { status: 400 });
     return NextResponse.json(settings);
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
