@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { tokenIssueReadWhere } from '@/lib/issue-finder';
-import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
+import { HandoffError, seatFor, seatWriteGuard } from '@/lib/agent-seats';
+import { ACK_TYPE, commentAcks, recordCommentAcks, type AckComment, type CommentAck } from '@/lib/issue-comment-acks';
 import { z } from 'zod';
 
 const CreateCommentSchema = z.object({
@@ -111,8 +112,28 @@ export const GET = withAppAuth(
         },
       });
 
+      // Every comment the answer carries, replies included, once.
+      const flatten = (list: any[]): any[] => list.flatMap(comment => [comment, ...flatten(comment.replies ?? [])]);
+      const returned = new Map<string, any>(flatten(comments).map(comment => [comment.id, comment]));
+      const asAck = (comment: any): AckComment => ({ ...comment, authorId: comment.author?.id });
+      let acks = new Map<string, CommentAck>();
+      try {
+        // A seat that reads the comments with a run open on the issue has taken them in: write that first, so the state
+        // this answer carries already shows it.
+        let written = 0;
+        if (returned.size && await seatFor(prisma, context) && await prisma.agentRun.findFirst({ where: { issueId: issue.id, userId: context.user.id, endedAt: null }, select: { id: true } })) {
+          written = await recordCommentAcks({ workspaceId: context.workspace.id, issueId: issue.id, seatUserId: context.user.id, commentIds: [...returned.keys()] });
+        }
+        const fresh = written ? await prisma.issueCommentReaction.findMany({ where: { commentId: { in: [...returned.keys()] }, type: ACK_TYPE },
+          select: { commentId: true, type: true, authorId: true, createdAt: true, author: { select: { id: true, name: true } } } }) : [];
+        acks = await commentAcks(issue.id, [...returned.values()].map(comment => {
+          const have = new Set((comment.reactions ?? []).filter((reaction: any) => reaction.type === ACK_TYPE).map((reaction: any) => reaction.authorId));
+          return asAck({ ...comment, reactions: [...(comment.reactions ?? []), ...fresh.filter(row => row.commentId === comment.id && !have.has(row.authorId))] });
+        }));
+      } catch { /* the list is answered without acks */ }
+
       // Transform comments to include reaction counts
-      const transformComment = (comment: any) => {
+      const transformComment = (comment: any): any => {
         const reactionCounts: Record<string, number> = {};
         for (const reaction of comment.reactions || []) {
           reactionCounts[reaction.type] = (reactionCounts[reaction.type] || 0) + 1;
@@ -128,6 +149,7 @@ export const GET = withAppAuth(
           reactions: comment.reactions,
           reactionCounts,
           replies: comment.replies?.map(transformComment),
+          ack: acks.get(comment.id) ?? null,
         };
       };
 
