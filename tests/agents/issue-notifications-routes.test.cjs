@@ -104,12 +104,7 @@ test('issue notifications from the token routes: status, assignment and create r
     return created;
   };
   const link = target => `<https://collab.example/w/issues/${target.issueKey}|${target.issueKey}>`;
-  // The sender sleeps on unref'd timers, which do not keep this process alive: hold it open while the deliveries end.
-  const settled = async () => {
-    const hold = setInterval(() => {}, 50);
-    try { await events.issueEventsSettled(); } finally { clearInterval(hold); }
-    return sent.splice(0);
-  };
+  const settled = async () => { await events.issueEventsSettled(); return sent.splice(0); };
 
   await t.test("a seat's status change through the token PATCH reaches the reporter's Slack", async () => {
     const target = await issue();
@@ -128,6 +123,16 @@ test('issue notifications from the token routes: status, assignment and create r
     // Unassigning tells nothing.
     const [unassigned] = await call(assignRoute.POST, ownerToken, 'POST', target.issueKey, { unassign: true });
     assert.equal(unassigned, 200);
+    assert.deepEqual(await settled(), []);
+  });
+
+  await t.test('assigning the issue again to the person who already holds it sends nothing', async () => {
+    const target = await issue();
+    const [first] = await call(assignRoute.POST, ownerToken, 'POST', target.issueKey, { assigneeId: person });
+    assert.equal(first, 200);
+    assert.equal((await settled()).length, 1);
+    const [again, reply] = await call(assignRoute.POST, ownerToken, 'POST', target.issueKey, { assigneeId: person });
+    assert.equal(again, 200, JSON.stringify(reply));
     assert.deepEqual(await settled(), []);
   });
 

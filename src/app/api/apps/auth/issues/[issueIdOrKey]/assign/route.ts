@@ -167,8 +167,10 @@ export const POST = withAppAuth(
         return updated;
       });
 
-      // The write is committed: tell the notifier, without waiting for it.
-      tellIssueEvent({ kind: 'assigned', issueId: issue.id, actorId: context.user.id, assigneeId });
+      // The write is committed: tell the notifier, without waiting for it, when the assignee really changed.
+      if (assigneeId !== oldAssigneeId) {
+        tellIssueEvent({ kind: 'assigned', issueId: issue.id, actorId: context.user.id, assigneeId });
+      }
 
       // Log activity
       await prisma.issueActivity.create({
