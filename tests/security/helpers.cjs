@@ -18,6 +18,11 @@ function load(file, dependencies = {}, globals = {}) {
     dependencies['./permission-types'] = load('src/lib/permission-types.ts');
     dependencies['./workspace-authority'] ||= load('src/lib/workspace-authority.ts', { './prisma': dependencies['./prisma'] });
   }
+  if (file === 'src/lib/issue-comment-acks.ts') {
+    // A fixture that says nothing about the realtime channel publishes nowhere; the mention reader is pure.
+    dependencies['@/lib/redis'] ||= { publishEvent: async () => {} };
+    dependencies['@/utils/mentions'] ||= load('src/utils/mentions.ts');
+  }
   const database = dependencies['@/lib/prisma'];
   if (file === 'src/lib/apps/auth-middleware.ts' && database?.prisma && !database.prisma.agentSeat) {
     // A fixture database that says nothing about seats has none, so no caller is a seat.
@@ -123,6 +128,8 @@ function load(file, dependencies = {}, globals = {}) {
       if (!(name in dependencies) && name === '@/lib/agent-label-triggers') return load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });
       // The real authority module, read through whatever database the fixture hands the code under test.
       if (!(name in dependencies) && name === '@/lib/workspace-authority') return load('src/lib/workspace-authority.ts', { './prisma': dependencies['@/lib/prisma'] });
+      // The real ack module, read through whatever database the fixture hands the code under test.
+      if (!(name in dependencies) && name === '@/lib/issue-comment-acks') return load('src/lib/issue-comment-acks.ts', { '@/lib/prisma': dependencies['@/lib/prisma'], '@/lib/redis': dependencies['@/lib/redis'] }, globals);
       if (!(name in dependencies) && name === '@prisma/client') return require('@prisma/client');
       if (!(name in dependencies) && name === 'crypto') return require('node:crypto');
       if (!(name in dependencies) && name === '@/lib/avatar-settings') return load('src/lib/avatar-settings.ts', { ...dependencies, zod: require('zod') }, globals);
