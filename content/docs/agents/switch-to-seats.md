@@ -26,6 +26,16 @@ With `--yes` the missing seats are created to be run by your [runner](/docs/agen
 
 It stops after the preview, and creates nothing, when a status group the switch needs is missing, when no runner is connected to the workspace, when several runners are connected and none of them is yours, or when the project is archived. A runner that is away does not stop it: the seats show no runner until it asks.
 
+## Every new project, by a rule
+
+The workspace's owner can switch on **New projects get their seats** under Agents, Runners. While it is on, every project created afterwards gets the same four seats the command creates and uses seats from the start. This covers projects created in the web app, with the CLI or through a token. The seats go to the owner's runner, or to the workspace's only runner, which fetches their tokens on its next ask. Whoever created the project gets no token, and their own token does not change.
+
+- Only the workspace's owner can switch the rule. It cannot be switched on while no runner is connected. No agent or seat token can switch it.
+- At most five projects in a workspace get seats this way in one UTC day. Turning the rule off and on again does not reset that count.
+- A project past that limit is still created, in handoffs mode, and the owner gets a notification naming the project and who created it. The same happens if the rule cannot create the seats, for example because the runner was removed. A project the rule made no seat for does not count toward the day's limit. `collab seat setup` can give that project its seats later.
+- Switching the rule off affects only projects created afterwards. Seats it already created stay.
+- The project created at sign-up together with a new workspace is not covered.
+
 ## Before and after
 
 | | With handoffs | With seats |

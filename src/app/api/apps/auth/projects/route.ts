@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { statusGroup } from '@/constants/project-statuses';
+import { applySeatRule } from '@/lib/agent-seat-setup';
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -196,7 +197,9 @@ export const POST = withAppAuth(
         return { ...newProject, statuses: createdStatuses };
       });
 
-      return NextResponse.json(project, { status: 201 });
+      // The workspace's rule may give the project its seats; the reply names its mode, never a token.
+      const rule = await applySeatRule({ workspaceId: context.workspace.id, projectId: project.id, creatorId: context.user.id });
+      return NextResponse.json({ ...project, agentMode: rule.mode }, { status: 201 });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return NextResponse.json(

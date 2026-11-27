@@ -49,7 +49,18 @@ async function managingPerson(context: Caller) {
  */
 export async function seatSetupState(context: Caller, projectRef: string) {
   await managingPerson(context);
-  const workspaceId = context.workspace.id;
+  return previewSetup(context.workspace.id, context.user.id, projectRef);
+}
+
+/** The runner a person's new seats go to: their own, or with none of their own the workspace's single runner. */
+async function setupRunner(workspaceId: string, personId: string) {
+  const runners = await prisma.agentRunner.findMany({ where: { workspaceId, removedAt: null }, orderBy: { admittedAt: 'asc' },
+    select: { id: true, name: true, ownerId: true, lastSeenAt: true } });
+  return { runners, runner: runners.find(runner => runner.ownerId === personId) ?? (runners.length === 1 ? runners[0] : null) };
+}
+
+/** The preview of `seatSetupState` for `actorId`, who is known to set projects up here: a person who manages agents, or the owner's rule. */
+async function previewSetup(workspaceId: string, actorId: string, projectRef: string) {
   const project = await prisma.project.findFirst({ where: { workspaceId, OR: [{ id: projectRef }, { issuePrefix: projectRef }] },
     select: { id: true, name: true, issuePrefix: true, isArchived: true } });
   if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
@@ -63,23 +74,20 @@ export async function seatSetupState(context: Caller, projectRef: string) {
       : { role, name: seatName(project.name, role), exists: false, byRunner: true, isDefault: true };
   });
   // The person's own runner runs the new seats; with none of their own, the workspace's single runner does.
-  const runners = await prisma.agentRunner.findMany({ where: { workspaceId, removedAt: null }, orderBy: { admittedAt: 'asc' },
-    select: { id: true, name: true, ownerId: true, lastSeenAt: true } });
-  const mine = runners.find(runner => runner.ownerId === context.user.id);
-  const runner = mine ?? (runners.length === 1 ? runners[0] : null);
+  const { runners, runner } = await setupRunner(workspaceId, actorId);
   // Only the switch needs the groups, so a project already on seats is not held up by them.
   const missingGroups = state.mode === 'seats' ? []
     : (['in_progress', 'done'] as const).filter(group => !state.statuses.some(status => status.category === group));
   const missing = seats.filter(seat => !seat.exists);
   // The seats would be the runner's person's, and someone else's seat follows the rank rule (CLB-1185): the apply would refuse.
-  const above = !!missing.length && !!runner && (await seatOwnerAccess(context.user.id, workspaceId, runner.ownerId))() === 'refused';
+  const above = !!missing.length && !!runner && (await seatOwnerAccess(actorId, workspaceId, runner.ownerId))() === 'refused';
   const blocked = project.isArchived ? 'project_archived' : missingGroups.length ? 'status_groups'
     : !missing.length ? null : !runner ? runners.length ? 'runner_choice' : 'no_runner' : above ? 'runner_above' : null;
 
   return {
     project: { id: project.id, name: project.name, issuePrefix: project.issuePrefix, mode: state.mode },
     seats, missing: missing.map(seat => seat.role), statuses: state.statuses, missingGroups,
-    runner: runner ? { id: runner.id, name: runner.name, ownerId: runner.ownerId, lastSeenAt: runner.lastSeenAt, yours: runner.ownerId === context.user.id } : null,
+    runner: runner ? { id: runner.id, name: runner.name, ownerId: runner.ownerId, lastSeenAt: runner.lastSeenAt, yours: runner.ownerId === actorId } : null,
     claims: state.claims.map(claim => ({ issueId: claim.issueId, issueKey: claim.issueKey, title: claim.title, agent: claim.agent, touchedAt: claim.touchedAt })),
     blocked, reason: blocked ? STOPS[blocked] : null,
   };
@@ -95,7 +103,12 @@ export async function seatSetupState(context: Caller, projectRef: string) {
 export async function setupSeats(context: Caller, projectRef: string, input: z.infer<typeof setupSchema>) {
   const preview = await seatSetupState(context, projectRef);
   if (preview.blocked) throw Object.assign(new HandoffError('setup_blocked', preview.reason!, 409), { body: { blocked: preview.blocked, missingGroups: preview.missingGroups } });
-  const workspaceId = context.workspace.id, actorId = context.user.id, projectId = preview.project.id;
+  return applySetup(context.workspace.id, context.user.id, preview, input);
+}
+
+/** What `setupSeats` does once its preview stops nothing, for `actorId`. */
+async function applySetup(workspaceId: string, actorId: string, preview: Awaited<ReturnType<typeof previewSetup>>, input: z.infer<typeof setupSchema>) {
+  const projectId = preview.project.id;
 
   const created: string[] = [];
   for (const seat of preview.seats.filter(row => !row.exists)) {
@@ -115,6 +128,120 @@ export async function setupSeats(context: Caller, projectRef: string, input: z.i
     // Each seat with whether a runner has fetched its token yet. The token itself is never part of this.
     seats: await runnerSeats(prisma, projectId),
   };
+}
+
+/** Seats rule 6: how many new projects a workspace's rule gives seats in one UTC day. Fixed here: nothing a caller sends changes it. */
+export const AUTO_SEATS_PER_DAY = 5;
+const utcDay = () => new Date().toISOString().slice(0, 10);
+const inWorkspace = (workspaceId: string, userId: string) =>
+  ({ id: workspaceId, OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }] });
+
+/**
+ * Seats rule 6: whether the workspace's rule is on, how many projects it gave seats today (UTC) out of how many it may,
+ * and whether the viewer is the owner, who alone switches it. The owner also sees the runner new seats would go to.
+ * Null for someone who is not in the workspace.
+ */
+export async function seatRuleState(workspaceId: string, viewerId: string) {
+  const workspace = await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, viewerId),
+    select: { ownerId: true, autoSeats: true, autoSeatsDay: true, autoSeatsCount: true } });
+  if (!workspace) return null;
+  const owner = workspace.ownerId === viewerId;
+  const runner = owner ? (await setupRunner(workspaceId, workspace.ownerId)).runner : null;
+  return { on: workspace.autoSeats, owner, perDay: AUTO_SEATS_PER_DAY,
+    today: workspace.autoSeatsDay?.toISOString().slice(0, 10) === utcDay() ? workspace.autoSeatsCount : 0, runner: runner?.name ?? null };
+}
+
+/**
+ * Seats rule 6: the workspace's owner switches the rule. Switching it on needs the runner its seats would go to, the
+ * owner's own or the workspace's single one; switching it off is always possible, and leaves every seat it made.
+ * Called from a signed-in person's session only: no token reaches it.
+ */
+export async function setSeatRule(input: { workspaceId: string; actorId: string; on: boolean }) {
+  const { workspaceId, actorId } = input;
+  const workspace = await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, actorId), select: { ownerId: true, autoSeats: true } });
+  if (!workspace) throw new HandoffError('not_found', 'Workspace not found', 404);
+  if (workspace.ownerId !== actorId) throw new HandoffError('owner_only', "Only the workspace's owner switches the rule that gives new projects their seats", 403);
+  if (input.on) {
+    const { runners, runner } = await setupRunner(workspaceId, actorId);
+    if (!runner) throw new HandoffError(runners.length ? 'runner_choice' : 'no_runner', runners.length ? 'Several runners are connected here and none of them is yours. Connect a runner for yourself first' : STOPS.no_runner, 409);
+  }
+  if (input.on !== workspace.autoSeats) {
+    await prisma.$transaction([
+      prisma.workspace.update({ where: { id: workspaceId }, data: { autoSeats: input.on } }),
+      prisma.appAuditLog.create({ data: { workspaceId, actorId, action: 'workspace.auto_seats', details: { to: input.on } } }),
+    ]);
+  }
+  return (await seatRuleState(workspaceId, actorId))!;
+}
+
+/**
+ * Seats rule 6: a project was just created. With the workspace's rule on, it gets its four seats as `collab seat setup`
+ * gives them, on the owner's word: run by the owner's runner (or the single one), which fetches their tokens on its
+ * next ask, and the project switches to seats. Nothing is minted here, so whoever created the project is handed no
+ * token and their own token is unchanged. Past the day's limit, or when the setup is stopped, the project stays in
+ * handoffs and the owner is told once, with the project and who created it. It never throws: the project exists either way.
+ */
+export async function applySeatRule(input: { workspaceId: string; projectId: string; creatorId: string }) {
+  const { workspaceId, projectId, creatorId } = input;
+  const handoffs = { mode: 'handoffs' as const, seats: [] as string[] };
+  let ownerId: string | null = null, claimedDay: string | null = null;
+  let preview: Awaited<ReturnType<typeof previewSetup>> | null = null;
+  // `nameHeld`: a seat's name was held by another agent. The owner can free it, or give that role a seat under another
+  // name, which the setup then leaves alone.
+  const skipped = async (reason: string, nameHeld = false) => {
+    if (!ownerId) return handoffs;
+    try {
+      const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { name: true, issuePrefix: true } });
+      // A setup stopped part of the way keeps the seats it made: say which, and that the setup makes only the rest.
+      const made = new Set((await prisma.agentSeat.findMany({ where: { projectId, retiredAt: null }, select: { role: true } })).map(seat => seat.role));
+      const have = SETUP_ROLES.filter(role => made.has(role)), still = SETUP_ROLES.filter(role => !made.has(role));
+      // The seats are made in the preview's order, so the first one still missing is the one that failed.
+      const failed = nameHeld ? preview?.seats.find(seat => !seat.exists && !made.has(seat.role)) : undefined;
+      const got = have.length ? `got only its ${have.length > 1 ? `${have.slice(0, -1).join(', ')} and ${have[have.length - 1]}` : have[0]} seat${have.length > 1 ? 's' : ''} and stays in handoffs` : 'got no seats';
+      const then = failed ? `, or add its ${failed.role} seat under another name. Then, to` : '. To';
+      await prisma.notification.create({ data: { type: 'AGENT_SEATS_SKIPPED', userId: ownerId, senderId: creatorId,
+        content: `created the project ${project.name} (${project.issuePrefix}), which ${got}: ${reason.replace(/\.$/, '')}${then} give it the seats still missing (${still.join(', ')}), run collab seat setup ${project.issuePrefix}.` } });
+    } catch (error) {
+      console.error('The owner could not be told that a project got no seats:', error);
+    }
+    return handoffs;
+  };
+  try {
+    const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { ownerId: true, autoSeats: true } });
+    if (!workspace?.autoSeats) return handoffs;
+    ownerId = workspace.ownerId;
+    preview = await previewSetup(workspaceId, ownerId, projectId);
+    if (preview.blocked) return skipped(preview.reason!);
+    // A place in the day is taken in one statement, so two projects created at once cannot both take the last one.
+    const day = utcDay();
+    const taken = await prisma.$executeRaw`UPDATE "Workspace" SET
+        "autoSeatsCount" = CASE WHEN "autoSeatsDay" = ${day}::date THEN "autoSeatsCount" + 1 ELSE 1 END, "autoSeatsDay" = ${day}::date
+      WHERE "id" = ${workspaceId} AND "autoSeats" AND ("autoSeatsDay" IS DISTINCT FROM ${day}::date OR "autoSeatsCount" < ${AUTO_SEATS_PER_DAY})`;
+    if (!taken) {
+      // Switched off since it was read: as if it had been off.
+      if (!(await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { autoSeats: true } }))?.autoSeats) return handoffs;
+      return skipped(`the rule has given ${AUTO_SEATS_PER_DAY} new projects their seats today (UTC), its limit for a day`);
+    }
+    claimedDay = day;
+    const done = await applySetup(workspaceId, ownerId, preview, { carryOver: [] });
+    return { mode: done.project.mode, seats: done.created };
+  } catch (error) {
+    console.error('The workspace rule could not give a new project its seats:', error);
+    // The place in the day goes back only when no seat was made, as when the preview stops the rule. Once a seat exists
+    // the place stays used, so trying again can never make seats past the day's limit.
+    if (claimedDay) {
+      try {
+        if (!await prisma.agentSeat.count({ where: { projectId, retiredAt: null } })) {
+          await prisma.$executeRaw`UPDATE "Workspace" SET "autoSeatsCount" = "autoSeatsCount" - 1
+            WHERE "id" = ${workspaceId} AND "autoSeatsDay" = ${claimedDay}::date AND "autoSeatsCount" > 0`;
+        }
+      } catch (release) {
+        console.error('The place in the day could not be given back:', release);
+      }
+    }
+    if (!(error instanceof HandoffError)) return skipped('its seats could not be created');
+    return skipped(error.message, ['seat_exists', 'name_taken'].includes(error.code));
+  }
 }
 
 type Own = { workspaceId: string; userId: string; projectId: string };
