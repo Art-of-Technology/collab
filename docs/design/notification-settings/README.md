@@ -49,8 +49,8 @@ Under the choices, one sentence says in words what Slack will get with the curre
 ## Rules
 
 1. Settings are kept per person per workspace.
-2. Everything is off for everyone until that person acts. Saving an address does not switch Slack on.
-3. The first time a person switches Slack on with nothing ticked, Collab ticks a starting set: all three "which issues" boxes, status changes, assigned to me, comments set to "only comments that mention me", and acks and likes. Ticks the person already made are kept, also on later switch-ons.
+2. Everything is off for everyone until that person acts. Saving an address switches Slack on; the switch beside it switches it off and on again.
+3. The first time Slack is switched on, by saving an address or with the switch, and nothing is ticked, Collab ticks a starting set: all three "which issues" boxes, status changes, assigned to me, comments set to "only comments that mention me", and acks and likes. Ticks the person already made are kept, also on later switch-ons.
 4. Removing the address switches Slack off and keeps the ticks.
 5. Who is told about what:
 

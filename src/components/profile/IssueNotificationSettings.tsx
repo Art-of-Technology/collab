@@ -177,7 +177,12 @@ export function IssueNotificationSettings() {
       setAddress("");
       setReplacing(false);
       setAddressError(null);
-      setNotice({ text: answer.slack.on ? "New address saved." : "Address saved. Slack stays off until you switch it on.", tone: "ok" });
+      setNotice({
+        text: sameChoices(current, answer)
+          ? "Address saved. Slack is on."
+          : "Address saved. Slack is on, and a starting set was ticked for you. Change anything.",
+        tone: "ok",
+      });
     } catch (error) {
       const { status, code } = failure(error);
       if (code === "not_slack" || status === 400) setAddressError("Only a Slack webhook address is accepted. It starts with https://hooks.slack.com/services/");
@@ -274,6 +279,9 @@ export function IssueNotificationSettings() {
                   </div>
                 )}
 
+                {slack.address && !slack.on && !slack.offAt && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">Slack is switched off. Nothing is sent until you switch it on.</p>
+                )}
                 {slack.offAt && !slack.on && (
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     {`Switched off on ${new Date(slack.offAt).toLocaleDateString()}: Slack says this address no longer exists. Paste a new address to switch Slack on again. Your ticks are kept.`}

@@ -14,13 +14,12 @@ Collab posts through a Slack incoming webhook. You make one in Slack:
 ## Paste it and switch Slack on
 
 1. Open **Profile → Notifications**.
-2. Under **Where to send**, paste the address into **Slack webhook address** and choose **Save**.
+2. Under **Where to send**, paste the address into **Slack webhook address** and choose **Save**. Saving switches Slack on.
 3. Choose **Send test message** and look in your channel.
-4. Switch on **Send to Slack**.
 
-Saving an address does not switch Slack on. Collab accepts only a Slack webhook address and refuses anything else. It stores the address encrypted and never shows it in full again, only a masked form.
+Saving an address switches Slack on, also when you replace an address while Slack is off. Use the **Send to Slack** switch to switch Slack off and on again later. While an address is saved and Slack is off, the page says so. Collab accepts only a Slack webhook address and refuses anything else. It stores the address encrypted and never shows it in full again, only a masked form.
 
-The first time you switch Slack on with nothing ticked, Collab ticks a starting set for you: all three boxes under **Which issues**, the status changes, assignments to you, comments that mention you, and acks and likes. Change anything you like. Ticks you already made are kept, also on later switch-ons.
+The first time Slack is switched on, by saving an address or with the switch, and nothing is ticked, Collab ticks a starting set for you: all three boxes under **Which issues**, the status changes, assignments to you, comments that mention you, and acks and likes. Change anything you like. Ticks you already made are kept, also on later switch-ons.
 
 | Button | What it does |
 | --- | --- |

@@ -130,6 +130,11 @@ export async function updateChoices(userId: string, workspaceId: string, patch: 
   return view(await upsert(userId, workspaceId, choices));
 }
 
+/**
+ * Stores a Slack webhook address (encrypted) and switches Slack on, also when it replaces an
+ * address while Slack is off. It clears the switched-off and failure dates. On the first
+ * switch-on ever, the starting set is ticked only when nothing is ticked yet (see `setSlackOn`).
+ */
 export async function saveSlackAddress(userId: string, workspaceId: string, url: unknown): Promise<IssueNotificationView | { error: 'not_slack' | 'not_configured' }> {
   if (!isSlackWebhookUrl(url)) return { error: 'not_slack' };
   let slackUrlEnc: Buffer;
@@ -138,7 +143,11 @@ export async function saveSlackAddress(userId: string, workspaceId: string, url:
   } catch {
     return { error: 'not_configured' };
   }
-  return view(await upsert(userId, workspaceId, { slackUrlEnc, slackOffAt: null, slackFailedAt: null }));
+  await upsert(userId, workspaceId, { slackUrlEnc, slackOffAt: null, slackFailedAt: null });
+  const switched = await setSlackOn(userId, workspaceId, true);
+  // The address was stored just above, so `no_address` means the row vanished in between.
+  if ('error' in switched) throw new Error('The Slack address could not be read back after saving it.');
+  return switched;
 }
 
 export async function setSlackOn(userId: string, workspaceId: string, on: boolean): Promise<IssueNotificationView | { error: 'no_address' }> {
