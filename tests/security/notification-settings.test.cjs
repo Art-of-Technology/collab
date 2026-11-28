@@ -84,19 +84,53 @@ test('choices are saved one key at a time; an unknown key, a wrong type and a wr
   assert.equal(db.get().comments, 'all');
 });
 
-test('saving an address does not switch Slack on, and the view shows only the mask', async () => {
+test('saving an address switches Slack on, and the view shows only the mask', async () => {
   const { lib, db } = setup();
   await lib.updateChoices('u', 'w', { onStatus: true });
   db.rows.set('u|w', { ...db.get(), slackOffAt: new Date(), slackFailedAt: new Date() });
   const saved = await lib.saveSlackAddress('u', 'w', URL_OK);
-  assert.equal(saved.slack.on, false);
+  assert.equal(saved.slack.on, true);
   assert.equal(saved.slack.address, 'https://hooks.slack.com/services/T02•••/B07•••/••••••h3Qz');
   assert.equal(saved.slack.offAt, null);
   assert.equal(saved.slack.failedAt, null);
   assert.ok(!JSON.stringify(saved).includes(SECRET_TAIL));
   assert.equal(Buffer.from(db.get().slackUrlEnc).toString(), 'enc:' + URL_OK);
-  assert.equal(db.get().slackOn, false);
+  assert.equal(db.get().slackOn, true);
+  assert.equal(db.get().slackEverOn, true);
   assert.equal((await lib.readSettings('u', 'w')).slack.address, saved.slack.address);
+});
+
+test('saving the first address with nothing ticked ticks the starting set', async () => {
+  const { lib, db } = setup();
+  const saved = await lib.saveSlackAddress('u', 'w', URL_OK);
+  assert.equal(saved.slack.on, true);
+  assert.deepEqual({ ...plain(saved), slack: undefined }, { ...plain(lib.STARTING_SET), slack: undefined });
+  assert.equal(db.get().slackEverOn, true);
+});
+
+test('saving an address keeps ticks made before', async () => {
+  const { lib, db } = setup();
+  await lib.updateChoices('u', 'w', { onStatus: true, comments: 'all' });
+  const saved = await lib.saveSlackAddress('u', 'w', URL_OK);
+  assert.equal(saved.slack.on, true);
+  assert.deepEqual({ ...plain(saved), slack: undefined }, { ...plain(lib.NO_CHOICES), onStatus: true, comments: 'all', slack: undefined });
+  assert.equal(db.get().slackEverOn, true);
+});
+
+test('replacing the address while Slack is off switches it on', async () => {
+  const { lib, db } = setup();
+  await lib.saveSlackAddress('u', 'w', URL_OK);
+  await lib.updateChoices('u', 'w', { onReactions: false, comments: 'off' });
+  const off = await lib.setSlackOn('u', 'w', false);
+  assert.equal(off.slack.on, false);
+  const replaced = await lib.saveSlackAddress('u', 'w', URL_OK.replace('h3Qz', 'k9Wp'));
+  assert.equal(replaced.slack.on, true);
+  assert.equal(replaced.slack.address, 'https://hooks.slack.com/services/T02•••/B07•••/••••••k9Wp');
+  // Not the first switch-on: the choices made since stay as they are.
+  assert.equal(replaced.onReactions, false);
+  assert.equal(replaced.comments, 'off');
+  assert.equal(replaced.onStatus, true);
+  assert.equal(db.get().slackOn, true);
 });
 
 test("an address that is not Slack's is refused", async () => {
@@ -211,5 +245,7 @@ test('markSlackResult never throws', async () => {
   await healthy.lib.markSlackResult('u', 'w', 'gone');
   assert.equal(healthy.db.get().slackOn, false);
   assert.ok(healthy.db.get().slackOffAt instanceof Date);
-  assert.equal(db.get().slackOn, false);
+  // The failing store kept the row as saving left it: Slack on, no dates.
+  assert.equal(db.get().slackOn, true);
+  assert.equal(db.get().slackOffAt, null);
 });

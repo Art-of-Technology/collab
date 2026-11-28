@@ -113,16 +113,48 @@ test('an empty address shows the hint and calls nothing', () => shown(view(), as
 }));
 
 test('saving calls the save hook with the typed address and then shows the mask and the three buttons', () => shown(view(), async () => {
-  answers.save = [{ body: view({}, { address: MASK }) }];
+  const starting = { mineAssigned: true, mineReported: true, mineFollowed: true, onStatus: true, onAssigned: true, onReactions: true, comments: 'mentions' };
+  answers.save = [{ body: view(starting, { address: MASK, on: true }) }];
   await type(byLabel('Slack webhook address'), FULL);
   await click(button('Save'));
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['save', { url: FULL }]]);
   assert.ok(text().includes(MASK));
   for (const label of ['Send test message', 'Replace', 'Remove']) assert.ok(button(label), label);
-  assert.ok(text().includes('Address saved. Slack stays off until you switch it on.'));
-  assert.ok(text().includes('Saved, switched off'));
+  assert.ok(text().includes('Address saved. Slack is on, and a starting set was ticked for you. Change anything.'));
+  assert.ok(!text().includes('Slack stays off'));
+  assert.equal(slackSwitch().getAttribute('aria-checked'), 'true');
   assert.equal(slackSwitch().disabled, false);
 }));
+
+test('saving with ticks already made says Slack is on and nothing more', () => shown(view({ onAssigned: true }), async () => {
+  answers.save = [{ body: view({ onAssigned: true }, { address: MASK, on: true }) }];
+  await type(byLabel('Slack webhook address'), FULL);
+  await click(button('Save'));
+  assert.ok(text().includes('Address saved. Slack is on.'));
+  assert.ok(!text().includes('starting set'));
+}));
+
+test('an address with Slack off shows the switched-off line', () => shown(view({ onAssigned: true }, { address: MASK }), async () => {
+  assert.ok(text().includes('Saved, switched off'));
+  const line = [...document.querySelectorAll('p')].find(candidate => candidate.textContent === 'Slack is switched off. Nothing is sent until you switch it on.');
+  assert.ok(line, 'no switched-off line');
+  assert.ok(line.className.includes('text-amber-700'));
+}));
+
+test('…and it is gone once Slack is on', () => shown(view({ onAssigned: true }, { address: MASK }), async () => {
+  answers.update = [{ body: view({ onAssigned: true }, { address: MASK, on: true }) }];
+  await click(slackSwitch());
+  assert.ok(!text().includes('Slack is switched off. Nothing is sent until you switch it on.'));
+}));
+
+test('the switched-off line is not shown when Collab switched Slack off, nor without an address', () => {
+  const offAt = '2026-11-20T09:30:00.000Z';
+  return shown(view({}, { address: MASK, offAt }), async () => {
+    assert.ok(!text().includes('Slack is switched off. Nothing is sent'));
+  }).then(() => shown(view(), async () => {
+    assert.ok(!text().includes('Slack is switched off. Nothing is sent'));
+  }));
+});
 
 test('the address input is gone after saving and the full address is nowhere in the document', () => shown(view(), async () => {
   answers.save = [{ body: view({}, { address: MASK }) }];
@@ -216,7 +248,8 @@ test('Replace shows the input with Cancel, and Cancel brings the mask back', () 
   await click(button('Replace'));
   await type(byLabel('Slack webhook address'), FULL);
   await click(button('Save'));
-  assert.ok(text().includes('New address saved.'));
+  assert.ok(text().includes('Address saved. Slack is on.'));
+  assert.ok(!text().includes('starting set'));
 }));
 
 test('Remove calls the remove hook', () => shown(view({ onAssigned: true }, { address: MASK, on: true }), async () => {

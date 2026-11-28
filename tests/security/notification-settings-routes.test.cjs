@@ -111,8 +111,13 @@ test('GET, PATCH, PUT, DELETE and POST answer as the rules say', async () => {
   answer = await call(slackRoute.PUT, { url: URL_OK });
   assert.equal(answer.status, 200);
   assert.equal(answer.body.slack.address, 'https://hooks.slack.com/services/T02•••/B07•••/••••••h3Qz');
-  assert.equal(answer.body.slack.on, false);
+  // Saving an address switches Slack on.
+  assert.equal(answer.body.slack.on, true);
+  assert.equal(answer.body.onAssigned, false);
 
+  answer = await call(choices.PATCH, { slackOn: false });
+  assert.equal(answer.status, 200);
+  assert.equal(answer.body.slack.on, false);
   answer = await call(choices.PATCH, { slackOn: true });
   assert.equal(answer.status, 200);
   assert.equal(answer.body.slack.on, true);
@@ -141,7 +146,7 @@ test('GET, PATCH, PUT, DELETE and POST answer as the rules say', async () => {
   assert.equal(JSON.stringify(answer.body).split('hooks.slack.com').length, 1);
 });
 
-test('on the first switch-on, choices sent in the same body win over the starting set', async () => {
+test('choices sent in the same body as slackOn win over the starting set', async () => {
   const { choices, slackRoute } = setup();
   await call(slackRoute.PUT, { url: URL_OK });
   const answer = await call(choices.PATCH, { slackOn: true, onReactions: false, comments: 'all' });
